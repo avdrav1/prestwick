@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="BuilderTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://course/builder_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+brush_sizes = PackedInt32Array(1, 3, 5)
+undo_limit = 200

@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
 [ext_resource type="Script" path="res://scenes/course_camera.gd" id="3_camera"]
+[ext_resource type="Script" path="res://scenes/build_tool.gd" id="4_tool"]
+[ext_resource type="Script" path="res://scenes/build_palette.gd" id="5_palette"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -10,6 +12,9 @@ script = ExtResource("1_main")
 [node name="CourseView" type="Node2D" parent="."]
 y_sort_enabled = true
 script = ExtResource("2_view")
+
+[node name="BuildTool" type="Node2D" parent="."]
+script = ExtResource("4_tool")
 
 [node name="Camera" type="Camera2D" parent="."]
 script = ExtResource("3_camera")
@@ -22,3 +27,15 @@ offset_top = 16.0
 offset_right = 200.0
 offset_bottom = 40.0
 text = "BUILD"
+
+[node name="BuildPalette" type="PanelContainer" parent="HUD"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_top = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("5_palette")

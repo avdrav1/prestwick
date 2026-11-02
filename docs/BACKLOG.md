@@ -38,7 +38,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: TileMapLayer draws surfaces, risers per height step, Y-sort on. A 20x20 course with heights 0 to 7 has no overlap artifacts at 0.5x, 1x and 2x. Pan with middle mouse or WASD. Tile-to-screen and screen-to-tile projection live in one shared helper.
   - Test: `tests/test_iso_projection.gd` round-trips tile to screen to tile at every height. Screenshot at each zoom.
   - Touches: `course/`, `scenes/`, `tests/`
-- [ ] E1-S5 Paint terrain. Let the player shape land through the builder, the only writer.
+- [x] E1-S5 Paint terrain. Let the player shape land through the builder, the only writer.
   - Accept: surface palette for the 8 surfaces, raise and lower, brush 1/3/5, undo stack. The tile under the cursor is picked correctly on raised ground, including a tile partly hidden by a nearer hill. 50 edits then 50 undos restore the original CourseData hash. Heights clamp at 0 and 7.
   - Test: `tests/test_builder.gd`
   - Touches: `course/`, `scenes/`, `tests/`

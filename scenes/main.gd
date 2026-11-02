@@ -19,10 +19,14 @@ var course: CourseData
 @onready var mode_label: Label = $HUD/ModeLabel
 @onready var course_view: CourseView = $CourseView
 @onready var camera: CourseCamera = $Camera
+@onready var build_tool: BuildTool = $BuildTool
+@onready var build_palette: BuildPalette = $HUD/BuildPalette
 
 
 func _ready() -> void:
 	_refresh_label()
+	build_palette.bind(build_tool)
+	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
 	if not course_path.is_empty():
@@ -34,11 +38,14 @@ func _ready() -> void:
 	show_course(loaded)
 
 
-## Shows `c` and frames the camera on it.
+## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
 func show_course(c: CourseData) -> void:
 	course = c
 	course_view.show_course(c)
 	camera.frame(course_view.screen_bounds())
+	var builder := CourseBuilder.new(c)
+	builder.tiles_changed.connect(_on_tiles_changed)
+	build_tool.builder = builder
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -56,7 +63,19 @@ func set_mode(new_mode: Mode) -> void:
 		return
 	mode = new_mode
 	_refresh_label()
+	_apply_mode()
 	mode_changed.emit(mode)
+
+
+## The build tool and its palette exist only in Build mode.
+func _apply_mode() -> void:
+	build_tool.active = mode == Mode.BUILD
+	build_palette.visible = mode == Mode.BUILD
+
+
+func _on_tiles_changed(cells: Array[Vector2i]) -> void:
+	for cell: Vector2i in cells:
+		course_view.refresh_cell(cell)
 
 
 func _refresh_label() -> void:
