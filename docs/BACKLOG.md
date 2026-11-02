@@ -26,7 +26,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: `git init` done with a first commit, since `/next-story` commits and this folder is not yet a repo. Pick the engine version and record it with `/decision`: the repo says 4.3 and `scripts/install_godot.sh` pins it, but `godot` on this machine is 4.7.2. GUT is pinned to a release that runs on that version and installed in `addons/gut`. `scenes/main.tscn` exists (`project.godot` already points at it) and a key toggles Build and Play with no scene load. `.gitignore` is reviewed: it currently ignores `*.import`, which loses per-asset import settings on a fresh clone.
   - Test: `scripts/run_tests.sh` exits 0 with one real test in `tests/test_main_states.gd`. It exits 3 without GUT, so GUT is part of this story.
   - Touches: `scenes/`, `scripts/`, `tests/`
-- [ ] E1-S2 Build the CourseData resource. Give every system one source of truth.
+- [x] E1-S2 Build the CourseData resource. Give every system one source of truth.
   - Accept: a 2D tile array (height 0 to 7, surface enum), a holes list, and `to_dict` / `from_dict` in course format version 1 from `/course-file`, including the base64 `tiles` packing and `oob` as surface 8. A 20x20 course round-trips through JSON with no loss. Out-of-range heights are rejected on load.
   - Test: `tests/test_course_data.gd`
   - Touches: `course/`, `tests/`
