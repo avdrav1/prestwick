@@ -1,0 +1,22 @@
+; Engine configuration file.
+; Prestwick
+
+config_version=5
+
+[application]
+
+config/name="Prestwick"
+config/version="0.0.1"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+run/main_scene="res://scenes/main.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+textures/canvas_textures/default_texture_filter=0
+renderer/rendering_method="gl_compatibility"
