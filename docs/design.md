@@ -41,6 +41,31 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 - Parabola in 3D over height map, 60 Hz, deterministic by seed.
 - One bounce on landing by surface, then roll down slope with surface friction.
 - Water and OB: one-stroke penalty, drop at last entry point.
+- Code: `golf/ball.gd` (Ball, RefCounted, no scene) over `golf/height_field.gd`. Units are yards and seconds, x and y on the ground from the map corner, z up. Randomness comes only from the ball's own seeded generator.
+- Height between tiles is bilinear between tile centres, so a one-step rise is a slope from one centre to the next. Past the map edge the edge height holds.
+- A flight that meets the ground (including a hillside) touches down at the contact point found inside the tick. That first contact is the landing position.
+
+Starting values from E1-S6, in `golf/ball_params.tres`. Tune with `/balance`:
+
+- Yards per height step: 2.0 (14 yards at height 7). Matches the 16 px riser on a 64x32 tile at 5 yards per tile.
+- Gravity: 10.7 yd/s² (Earth). There is no drag yet, so carry comes from launch speed and angle alone. A 75 yd/s drive at 14 degrees carries about 247 yd and finishes about 299 yd on fairway.
+- Rolling friction has two parts at roll factor 1.0: a constant 1.5 yd/s² (`roll_decel`) plus grass drag of 0.6 per second times the speed (`roll_drag`). A surface's friction is that divided by its Roll column, and roll 0 stops the ball where it touches down. The drag stops fast balls; the small constant lets slow balls feel the slope.
+- Slope pull along the ground is gravity × gradient / (1 + gradient²), at most gravity / 2. A one-step slope pulls about 3.7 yd/s², so `roll_decel` / roll must stay below that on every rolling surface (a GUT test guards it), or balls never start down a slope.
+- Rest speed 0.1 yd/s. A ball slower than that stays put only when the slope's pull is weaker than the constant friction; otherwise it starts rolling downhill, so an uphill putt that stops short rolls back. A 4 yd/s putt runs about 3.7 yd on a flat green.
+- Minimum bounce speed 1.0 yd/s. Below it the ball rolls instead of bouncing. Safety cap: 3600 ticks (60 s).
+
+Per-surface ball numbers live in `course/surfaces.tres` (the path `/balance surfaces` reads), one row per surface. Roll is the table above. Bounce is the restitution of the speed into the ground. Bounce friction is the share of the speed along the ground lost at each touchdown. Scatter is the largest random turn of the bounce, either way.
+
+| Surface | Bounce | Bounce friction | Scatter (deg) |
+| --- | --- | --- | --- |
+| fairway, tee | 0.25 | 0.5 | 2 |
+| rough | 0.15 | 0.6 | 8 |
+| green | 0.2 | 0.45 | 1 |
+| bunker, water, oob | 0 (roll 0: stops) | 1.0 | 0 |
+| trees | 0.15 (as rough, until E2-S6) | 0.6 | 8 |
+| cart_path | 0.5 | 0.25 | 4 |
+
+Hazard behaviour (water and OB penalty, tree scatter, oob roll) comes in E2-S6. Until then the ball stops dead on water and off the map.
 
 ## Guests and reactions
 

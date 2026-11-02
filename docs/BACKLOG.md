@@ -42,7 +42,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: surface palette for the 8 surfaces, raise and lower, brush 1/3/5, undo stack. The tile under the cursor is picked correctly on raised ground, including a tile partly hidden by a nearer hill. 50 edits then 50 undos restore the original CourseData hash. Heights clamp at 0 and 7.
   - Test: `tests/test_builder.gd`
   - Touches: `course/`, `scenes/`, `tests/`
-- [ ] E1-S6 Step the ball over the height map. Custom 3D physics at 60 Hz, no scene needed, so guests can reuse it.
+- [x] E1-S6 Step the ball over the height map. Custom 3D physics at 60 Hz, no scene needed, so guests can reuse it.
   - Accept: gravity, one bounce by surface, roll downhill with surface friction read from a resource, height interpolated between tiles. A flying ball that meets a hillside lands there. Randomness comes from a seeded generator owned by the ball, never the global one. The same seed and inputs give the identical landing position 100 of 100 runs, not just the same tile.
   - Test: `tests/test_ball.gd`
   - Touches: `golf/`, `tests/`

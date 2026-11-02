@@ -1,0 +1,80 @@
+[gd_resource type="Resource" script_class="SurfaceTable" format=3]
+
+[ext_resource type="Script" path="res://course/surface_row.gd" id="1_n812f"]
+[ext_resource type="Script" path="res://course/surface_table.gd" id="2_m0h0f"]
+
+[sub_resource type="Resource" id="Resource_th53x"]
+script = ExtResource("1_n812f")
+name = "fairway"
+roll = 1.0
+bounce = 0.25
+bounce_friction = 0.5
+scatter_deg = 2.0
+
+[sub_resource type="Resource" id="Resource_vtwqi"]
+script = ExtResource("1_n812f")
+name = "rough"
+roll = 0.6
+bounce = 0.15
+bounce_friction = 0.6
+scatter_deg = 8.0
+
+[sub_resource type="Resource" id="Resource_dotdi"]
+script = ExtResource("1_n812f")
+name = "green"
+roll = 1.4
+bounce = 0.2
+bounce_friction = 0.45
+scatter_deg = 1.0
+
+[sub_resource type="Resource" id="Resource_r4a1k"]
+script = ExtResource("1_n812f")
+name = "tee"
+roll = 1.0
+bounce = 0.25
+bounce_friction = 0.5
+scatter_deg = 2.0
+
+[sub_resource type="Resource" id="Resource_stf3s"]
+script = ExtResource("1_n812f")
+name = "bunker"
+roll = 0.0
+bounce = 0.0
+bounce_friction = 1.0
+scatter_deg = 0.0
+
+[sub_resource type="Resource" id="Resource_tqkpo"]
+script = ExtResource("1_n812f")
+name = "water"
+roll = 0.0
+bounce = 0.0
+bounce_friction = 1.0
+scatter_deg = 0.0
+
+[sub_resource type="Resource" id="Resource_3v5xk"]
+script = ExtResource("1_n812f")
+name = "trees"
+roll = 0.6
+bounce = 0.15
+bounce_friction = 0.6
+scatter_deg = 8.0
+
+[sub_resource type="Resource" id="Resource_q3epg"]
+script = ExtResource("1_n812f")
+name = "cart_path"
+roll = 1.6
+bounce = 0.5
+bounce_friction = 0.25
+scatter_deg = 4.0
+
+[sub_resource type="Resource" id="Resource_wfrxw"]
+script = ExtResource("1_n812f")
+name = "oob"
+roll = 0.0
+bounce = 0.0
+bounce_friction = 1.0
+scatter_deg = 0.0
+
+[resource]
+script = ExtResource("2_m0h0f")
+rows = Array[ExtResource("1_n812f")]([SubResource("Resource_th53x"), SubResource("Resource_vtwqi"), SubResource("Resource_dotdi"), SubResource("Resource_r4a1k"), SubResource("Resource_stf3s"), SubResource("Resource_tqkpo"), SubResource("Resource_3v5xk"), SubResource("Resource_q3epg"), SubResource("Resource_wfrxw")])
