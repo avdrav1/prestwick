@@ -55,11 +55,21 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: `scripts/playtest.gd` runs headless and asserts only what the current milestone has built. For E1 that is firing a shot and landing it. `/playtest` smoke is updated to say so: its full bar (holed out, guest reaction, money changed) cannot pass before E4, yet `/ship-it` requires it at every milestone. `docs/export.md` and `export_presets.cfg` exist for Linux and Windows.
   - Test: run smoke headless. Export a Linux build and launch it. Export templates must be installed first.
   - Touches: `scripts/`, `docs/`
-- [ ] E1-S9 Decide grid size and height model. Close the two open questions the design doc assigns to this milestone.
+- [x] E1-S9 Decide grid size and height model. Close the two open questions the design doc assigns to this milestone.
   - Accept: paint a 3-step green contour and a hillside, fire shots across them, take screenshots, then record two `/decision` entries. They answer whether 5 yards per tile is too coarse for green contours and whether sub-step ramps are needed. The design doc already assumes ramp tiles, so the decision states what "ramp" means. If either answer changes the data model, file a story here before closing the epic.
   - Test: screenshots attached to the decisions in `docs/DECISIONS.md`. `/godot-check` green.
   - Touches: `docs/`
   - Settles: design doc open questions "Grid size" and "Height model".
+- [ ] E1-S10 Show rises that face away from the camera. Make every slope visible without camera rotation.
+  - Note: found by E1-S9 (D5). Risers are drawn only on faces that point at the camera. A rise along +x or +y shows no riser and identical tops, so the 3-step green contour and the 7-step hillside in `docs/decisions/e1-s9-green.png` and `e1-s9-hill.png` look flat. No data model change.
+  - Accept: a tile higher than its back neighbour (x - 1 or y - 1) draws an edge cue along that back edge, because that rise faces away from the camera and has no riser. A tile whose back neighbour is higher draws no cue there, since the neighbour's riser already shows it (`CourseView.riser_frame` draws faces toward x + 1 and y + 1). The cue uses palette colors, has a pattern as well as a color, and differs by step count, or at least marks a step of one versus more. Every step of `GridHeightEvidence.green_contour()` and `hillside()` can be counted at 0.5x, 1x and 2x. The cue depends on the back neighbours, so `refresh_cell` also redraws (x + 1, y) and (x, y + 1), and editing a tile's height updates the cues in front of it. Picking and draw order are unchanged.
+  - Test: cases in `tests/test_course_view.gd` check that the cue is present on a tile higher than its back neighbour, absent on a flat tile, and absent where the back neighbour is higher. A further case raises a tile and checks that `refresh_cell` adds the cue on its front neighbours. Screenshots: `EVIDENCE_CASE=green` and `EVIDENCE_CASE=hill scripts/screenshot.sh tests/fixtures/grid_height_shot.tscn`.
+  - Touches: `course/`, `art/`, `tests/`
+- [ ] E1-S11 Make green contours putt as breaks. A one-step contour on a green should bend a putt, not wall it off.
+  - Note: found by E1-S9 (D5). One step is a 40% slope. On a contoured green, 7 to 9 yd/s uphill putts finish within 0.7 yd of where they started, and a sidehill putt falls 5 yd sideways (`docs/decisions/e1-s9-probe.txt`). No data model change. This could move to E2, before E2-S5, at `/next-epic`.
+  - Accept: a per-surface `slope_scale` in `course/surfaces.tres` (green about 0.075, every other surface 1.0) scales the slope pull on a rolling ball and the tilt of the ground normal at touchdown on that surface. The ball's height still follows the terrain. Scaling the pull alone breaks the rest rule: on green a scaled one-step pull is about 10.7 x 0.03 = 0.32 yd/s², below the constant friction `roll_decel` / roll = 1.5 / 1.4 = 1.07 yd/s², so a still or slow ball on a green slope would never start downhill. So the constant friction gets a per-surface value too (for example a `roll_decel` column, or the global one scaled by `slope_scale`), set so the scaled one-step pull beats it on every rolling surface, and the green's drag is retuned so a 4 yd/s putt still runs about 3.7 yd on a flat green. On `GridHeightEvidence.green_contour()`, a 9 yd/s uphill putt from the front tier ends within 1.5 yd of its flat-green distance, a 3 yd/s sidehill putt across a step breaks between 0.1 and 1 yd, a ball set down still on a step's slope rolls down to the lower shelf, and an uphill putt that stops short on a step rolls back. Shots on other surfaces are unchanged and the non-green ball tests pass as they are. The green-slope tests (`test_ball_at_rest_on_a_green_slope_rolls_down`, `test_ball_rolling_downhill_on_green_speeds_up`, `test_uphill_putt_that_stops_short_rolls_back`) keep their assertions but may change their ramp or speeds, and `test_slope_pull_beats_rest_friction` compares the scaled pull with each surface's constant friction. The `docs/design.md` Ball lines on friction, slope pull and rest speed are updated in this story, and it gets a `/balance surfaces` target. `docs/decisions/e1-s9-probe.txt` gains still-ball and slow-ball cases on the scaled green.
+  - Test: cases in `tests/test_ball.gd`.
+  - Touches: `golf/`, `course/`, `tests/`
 
 ## E2: One hole — planned
 
@@ -221,7 +231,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Touches: `art/`, `docs/`
   - Settles: design doc open question "Art pipeline".
 - [ ] E5-S2 Replace terrain art. Final surfaces and risers.
-  - Accept: 8 surfaces, risers and whatever ramps E1-S9 kept, all from the palette, each with its pattern. Surfaces stay distinguishable in a grayscale screenshot. No placeholder terrain remains.
+  - Accept: 8 surfaces, risers and the E1-S10 edge cue (no ramp tiles, D5), all from the palette, each with its pattern. Surfaces stay distinguishable in a grayscale screenshot. No placeholder terrain remains.
   - Test: screenshots in color and grayscale at all three zooms.
   - Touches: `art/`
 - [ ] E5-S3 Replace sprites and decor. Final golfer, ball, trees and decor that does nothing to the ball.

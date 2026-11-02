@@ -50,6 +50,7 @@ height; `both` is the common case.
 - Keep `risers_<state>.png`, 3 frames, 64x32, 1 px gutter, order `both`, `left`, `right`.
 - Keep the band shape exactly; anything outside it is hidden by or overlaps the tile above.
 - Optional later frames (append, do not reorder): a grass lip under the top step, a water
-  edge for tiles next to water, ramps if E1-S9 keeps them.
+  edge for tiles next to water, and whatever E1-S10 needs to show rises that face away from
+  the camera. There are no ramp frames: D5 dropped ramp tiles.
 - Only colors from `art/palette.gpl`. Drop the labels.
 - Regenerate the placeholder with `python3 scripts/placeholder.py risers`.

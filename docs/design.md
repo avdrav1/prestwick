@@ -5,6 +5,8 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 ## Grid and terrain
 
 - Tile = 5 yards. Isometric 2:1, 64x32 footprint. Height 0 to 7 steps, 16 px riser per step.
+- Grid size (D4): 5 yards per tile everywhere, greens included. A 30 yd green is about 6x6 tiles.
+- Height model (D5): heights are whole steps, drawn as terraces with risers. There are no ramp tiles and no sub-step heights. A "ramp" is the slope the ball feels between two neighbouring tile centres one step apart: 2 yd over 5 yd, 40% (21.8 degrees), from the interpolated height in `golf/height_field.gd` (see Ball). Two follow-ups are filed and not built yet. E1-S10 draws an edge on rises that face away from the camera, which today show no riser and look flat. E1-S11 adds a per-surface slope scale (about 0.075 on green) so a green step putts as a 3% break.
 - Projection (`course/iso.gd`, the only one): tile (i, j) at height h has its center at screen `x = (i - j) * 32`, `y = (i + j) * 16 - h * 16`. Draw order is back to front by i + j, then risers bottom up, then the top.
 - Camera: zoom steps 0.5x, 1x, 2x; WASD pan 600 screen px/s at every zoom; middle-mouse drag; center may go 128 px past the course edge. Tuned in `scenes/camera_tuning.tres`.
 - Brush sizes 1, 3, 5: an n x n square centered on the cursor tile, clipped to the map. Sizes and the undo depth (200 steps) are tuned in `course/builder_tuning.tres`.
