@@ -15,7 +15,7 @@ echo "== import"
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || { echo "import failed"; exit 1; }
 
 echo "== parse"
-find . -name '*.gd' -not -path './addons/*' -not -path './.bin/*' | while read -r f; do
+find . -name '*.gd' -not -path './addons/*' -not -path './.bin/*' -not -path './.claude/*' -not -path './.godot/*' | while read -r f; do
   "$GODOT" --headless --check-only -s "$f" >/dev/null || { echo "parse error: $f"; exit 1; }
 done
 
