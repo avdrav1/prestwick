@@ -66,7 +66,11 @@ func gradient_at(x: float, y: float) -> Vector2:
 
 ## Unit ground normal at (x, y), z up.
 func normal_at(x: float, y: float) -> Vector3:
-	var g := gradient_at(x, y)
+	return normal_for(gradient_at(x, y))
+
+
+## Unit normal of ground with slope `g` (dh/dx, dh/dy), z up.
+static func normal_for(g: Vector2) -> Vector3:
 	return Vector3(-g.x, -g.y, 1.0).normalized()
 
 

@@ -8,6 +8,20 @@ extends Resource
 ## Roll factor from the docs/design.md surface table. Rolling friction is
 ## (BallParams.roll_decel + BallParams.roll_drag * speed) / roll; 0 stops the ball dead where it touches down.
 @export var roll: float = 1.0
+## Share of the terrain's slope the ball feels here (E1-S11, D5): it scales the slope pull
+## on a rolling ball and the tilt of the ground normal at touchdown. The ball's height still
+## follows the terrain. 1.0 everywhere but green, where a 40% one-step contour putts as a break.
+@export var slope_scale: float = 1.0
+## Share of the constant friction (BallParams.roll_decel / roll) that holds a still ball
+## here. It rises linearly back to the full constant friction at decel_ramp_speed, so fast
+## balls roll as before. Keep the one-step pull, scaled by slope_scale, above it, or a still
+## ball never starts down a slope (a GUT test guards it). 1.0 leaves the friction as it is.
+@export var rest_decel_scale: float = 1.0
+## Speed (yd/s) at which the constant friction is back to full, when rest_decel_scale < 1.
+@export var decel_ramp_speed: float = 1.0
+## Multiplies the grass drag (BallParams.roll_drag / roll) here. On green it wins back the
+## distance the lighter constant friction gives slow putts. 1.0 leaves the drag as it is.
+@export var drag_scale: float = 1.0
 ## Share of the speed into the ground that comes back out as the bounce (restitution).
 @export_range(0.0, 1.0) var bounce: float = 0.25
 ## Share of the speed along the ground lost at each touchdown.

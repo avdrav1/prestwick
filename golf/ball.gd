@@ -161,7 +161,8 @@ func _touch_down(at: Vector3, v: Vector3) -> void:
 	if row.roll <= 0.0:
 		_rest()
 		return
-	var n := field.normal_at(at.x, at.y)
+	# The normal tilts by the slope this surface lets the ball feel (slope_scale).
+	var n := HeightField.normal_for(field.gradient_at(at.x, at.y) * row.slope_scale)
 	var into := v.dot(n)
 	var along := (v - n * into) * (1.0 - row.bounce_friction)
 	# Always draw, so the generator stream does not depend on which branch runs.
@@ -183,10 +184,13 @@ func _step_roll() -> void:
 		_rest()
 		return
 	var grad := field.gradient_at(position.x, position.y)
-	# Gravity along the slope, projected onto the ground plane. Peaks at gravity / 2.
-	var pull := -grad * params.gravity / (1.0 + grad.length_squared())
+	# Gravity along the slope the surface lets the ball feel, projected onto the ground
+	# plane. Peaks at gravity / 2.
+	var feel := grad * row.slope_scale
+	var pull := -feel * params.gravity / (1.0 + feel.length_squared())
 	var v := Vector2(velocity.x, velocity.y)
-	var hold := params.roll_decel / row.roll
+	var full := params.roll_decel / row.roll
+	var hold := full * row.rest_decel_scale
 	if v.length() < params.rest_speed:
 		# Static: stays put unless the slope pulls harder than the constant friction.
 		if pull.length() <= hold:
@@ -194,8 +198,12 @@ func _step_roll() -> void:
 			return
 		v += pull.normalized() * (pull.length() - hold) * DT
 	else:
-		# Friction = constant part + grass drag that grows with speed.
-		var friction := hold + params.roll_drag * v.length() / row.roll
+		# Friction = constant part + grass drag that grows with speed. Where the surface holds
+		# a still ball more lightly, the constant part rises back to full by decel_ramp_speed.
+		var constant := full
+		if row.rest_decel_scale != 1.0 and v.length() < row.decel_ramp_speed:
+			constant = lerpf(hold, full, v.length() / row.decel_ramp_speed)
+		var friction := constant + params.roll_drag * row.drag_scale * v.length() / row.roll
 		v += pull * DT
 		var speed := v.length() - friction * DT
 		v = v.normalized() * speed if speed > 0.0 else Vector2.ZERO

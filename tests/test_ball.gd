@@ -185,28 +185,40 @@ func _green_ramp() -> CourseData:
 
 
 func test_slope_pull_beats_rest_friction() -> void:
-	# A design guard: the steepest pull must beat the static friction on every rolling
-	# surface, or balls never start down a slope.
+	# A design guard: the steepest pull, scaled by the surface's slope_scale, must beat the
+	# constant friction that holds a still ball on every rolling surface, or balls never
+	# start down a slope.
 	var params := BallParams.load_default()
 	var table := SurfaceTable.load_default()
-	var grad := params.yards_per_step / params.yards_per_tile
-	var pull := params.gravity * grad / (1.0 + grad * grad)
-	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.GREEN, Surface.Type.TEE, Surface.Type.CART_PATH]:
-		assert_gt(pull, params.roll_decel / table.row(s).roll, "a one-step slope moves a ball on %s" % Surface.NAMES[s])
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.GREEN,
+			Surface.Type.TEE, Surface.Type.TREES, Surface.Type.CART_PATH]:
+		var row := table.row(s)
+		var grad := row.slope_scale * params.yards_per_step / params.yards_per_tile
+		var pull := params.gravity * grad / (1.0 + grad * grad)
+		var hold := params.roll_decel * row.rest_decel_scale / row.roll
+		assert_gt(pull, hold, "a one-step slope moves a still ball on %s" % Surface.NAMES[s])
 
 
 func test_ball_at_rest_on_a_green_slope_rolls_down() -> void:
+	# The green feels a one-step ramp as 3% (E1-S11), so a still ball trickles down it at
+	# about 0.17 yd/s: set it down 3 yd above the mark rather than 10.
 	var course := _green_ramp()
 	var ball := Ball.new(course, 3)
-	ball.start_roll(Vector2(20, 100), Vector2.ZERO)
+	ball.start_roll(Vector2(13, 100), Vector2.ZERO)
 	ball.run_to_rest()
 	assert_lt(ball.position.x, 10.0, "a ball set down on the slope runs down it")
 
 
 func test_ball_rolling_downhill_on_green_speeds_up() -> void:
-	var course := _green_ramp()
+	# Green feels slope_scale of the slope (E1-S11), so a one-step ramp is a 3% break whose
+	# pull only keeps a slow ball trickling. A three-steps-per-tile green (120%, felt as 9%)
+	# pulls hard enough to speed a 0.5 yd/s ball up. Heights 0, 3, 6, 7 from x = 10.
+	var course := _flat(Surface.Type.GREEN, 40)
+	for y in 40:
+		for x in 40:
+			course.set_tile(x, y, clampi((x - 10) * 3, 0, 7), Surface.Type.GREEN)
 	var ball := Ball.new(course, 3)
-	ball.start_roll(Vector2(35, 100), Vector2(-0.5, 0))
+	ball.start_roll(Vector2(62, 100), Vector2(-0.5, 0))
 	for i in 30:
 		ball.step()
 	assert_eq(ball.state, Ball.State.ROLLING)
@@ -250,6 +262,119 @@ func test_flying_ball_meets_hillside_and_lands_there() -> void:
 		if p.z < field.height_at(p.x, p.y) - EPS:
 			below += 1
 	assert_eq(below, 0, "never passes through the terrain")
+
+
+# --- green contours (E1-S11, D5): a one-step green contour putts as a break ---
+
+## Ground point in yards for a fractional tile coordinate as GridHeightEvidence uses it
+## (integer = tile centre).
+func _yd(tile: Vector2) -> Vector2:
+	return (tile + Vector2(0.5, 0.5)) * 5.0
+
+
+func _putt(course: CourseData, from_tile: Vector2, v: Vector2) -> Ball:
+	var ball := Ball.new(course, 1)
+	ball.record_path = true
+	ball.start_roll(_yd(from_tile), v)
+	ball.run_to_rest()
+	return ball
+
+
+func test_green_slope_columns_come_from_the_table() -> void:
+	var table := SurfaceTable.load_default()
+	var green := table.row(Surface.Type.GREEN)
+	assert_between(green.slope_scale, 0.05, 0.1, "a green step feels like a 3% break, not 40%")
+	assert_lt(green.rest_decel_scale, 1.0, "a still ball on green is held more lightly")
+	for i: int in Surface.COUNT:
+		if i == Surface.Type.GREEN:
+			continue
+		var row := table.row(i)
+		assert_eq(row.slope_scale, 1.0, "%s feels the full slope" % row.name)
+		assert_eq(row.rest_decel_scale, 1.0, "%s keeps its constant friction" % row.name)
+
+
+func test_flat_green_4_yds_putt_runs_about_3_7_yd() -> void:
+	var ball := _putt(CourseData.create(16, 12, Surface.Type.GREEN, 0), Vector2(1.5, 5.5), Vector2(4, 0))
+	assert_almost_eq(ball.position.x - _yd(Vector2(1.5, 5.5)).x, 3.7, 0.2, "docs/design.md Ball")
+
+
+func test_contour_uphill_9_yds_ends_near_its_flat_distance() -> void:
+	var from := Vector2(4.5, 5.5)
+	var flat := _putt(CourseData.create(16, 12, Surface.Type.GREEN, 0), from, Vector2(9, 0))
+	var up := _putt(GridHeightEvidence.green_contour(), from, Vector2(9, 0))
+	var flat_d := flat.position.x - _yd(from).x
+	var up_d := up.position.x - _yd(from).x
+	assert_gt(up_d, 0.0, "goes up the green")
+	assert_lt(up_d, flat_d, "the contour costs some distance")
+	assert_almost_eq(up_d, flat_d, 1.5, "but only a little: %.2f yd against %.2f flat" % [up_d, flat_d])
+	assert_eq(up.field.surface_at(up.position.x, up.position.y), Surface.Type.GREEN)
+
+
+func test_contour_sidehill_3_yds_breaks_a_little() -> void:
+	# Along +y through the middle of the slope band between tier 0 and tier 1 (x 27.5 to
+	# 32.5 yd), which falls towards -x. The break is the sideways offset when the putt runs
+	# out of pace (forward speed under rest speed): what a cup at the putt's length sees.
+	# After that the ball trickles on down to the lower shelf, as any still ball does there.
+	var from := _yd(Vector2(5.5, 2.5))
+	var ball := Ball.new(GridHeightEvidence.green_contour(), 1)
+	ball.start_roll(from, Vector2(0, 3))
+	var brk := -1.0
+	while not ball.is_at_rest():
+		ball.step()
+		if brk < 0.0 and ball.velocity.y < ball.params.rest_speed:
+			brk = from.x - ball.position.x
+			assert_gt(ball.position.y - from.y, 2.0, "it rolled forward first")
+	assert_between(brk, 0.1, 1.0, "a 3 yd/s sidehill putt breaks %.2f yd downhill" % brk)
+	assert_lt(ball.position.x, 27.5 + EPS, "then settles on the lower shelf")
+
+
+func test_contour_still_ball_on_a_step_rolls_to_the_lower_shelf() -> void:
+	var course := GridHeightEvidence.green_contour()
+	# Points across each of the three green step bands (x 27.5-32.5, 37.5-42.5, 47.5-52.5).
+	for band: int in 3:
+		var lower := 27.5 + 10.0 * band
+		for into: float in [0.5, 2.5, 4.5]:
+			var ball := Ball.new(course, 1)
+			ball.start_roll(Vector2(lower + into, 27.5), Vector2.ZERO)
+			ball.run_to_rest()
+			assert_lt(ball.steps, ball.params.max_steps, "came to rest on its own")
+			assert_between(ball.position.x, lower - 5.0, lower + EPS,
+					"set down %.1f yd up step %d, rests on the shelf below" % [into, band + 1])
+			assert_almost_eq(ball.field.gradient_at(ball.position.x, ball.position.y).length(), 0.0, EPS,
+					"on flat ground")
+
+
+func test_contour_uphill_putt_that_stops_short_on_a_step_rolls_back() -> void:
+	var from := Vector2(4.5, 5.5)
+	var ball := _putt(GridHeightEvidence.green_contour(), from, Vector2(6, 0))
+	var furthest := 0.0
+	for p in ball.path:
+		furthest = maxf(furthest, p.x)
+	assert_between(furthest, 27.5, 32.5, "it stops on the step's slope")
+	assert_lt(ball.position.x, 27.5 + EPS, "and rolls back to the front tier")
+	assert_gt(ball.position.x, _yd(from).x, "ahead of where it started")
+
+
+func test_green_touchdown_normal_tilt_is_scaled() -> void:
+	# Dropped straight down onto the middle of a step band, the bounce kicks downhill by the
+	# tilt of the ground normal. On green that tilt is scaled down with the pull.
+	var table: SurfaceTable = SurfaceTable.load_default().duplicate(true)
+	for r: SurfaceRow in table.rows:
+		r.scatter_deg = 0.0
+	var kick := {}
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.GREEN]:
+		var course := GridHeightEvidence.green_contour()
+		for y: int in course.height:
+			for x: int in course.width:
+				course.set_tile(x, y, course.get_height(x, y), s)
+		var ball := Ball.new(course, 1, null, table)
+		ball.launch(Vector3(30, 27.5, 6), Vector3(0, 0, -8))
+		while ball.bounces == 0 and not ball.is_at_rest():
+			ball.step()
+		kick[s] = -ball.velocity.x
+	assert_gt(kick[Surface.Type.FAIRWAY], 1.0, "fairway kicks the bounce downhill")
+	assert_gt(kick[Surface.Type.GREEN], 0.0, "green tilts the same way")
+	assert_lt(kick[Surface.Type.GREEN], kick[Surface.Type.FAIRWAY] * 0.15, "by far less")
 
 
 # --- determinism ---
