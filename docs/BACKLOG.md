@@ -34,7 +34,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: `art/palette.gpl` (about 32 colors), `scripts/placeholder.py`, `scripts/screenshot.sh <scene>`, and specs plus placeholders for surfaces and risers. Each surface has its colorblind pattern from day one. `screenshot.sh` writes a real PNG: Godot's `--headless` mode has a dummy renderer and draws no pixels, so it needs a display (`xvfb-run` is not installed on this machine).
   - Test: by hand. Run the screenshot script on a test scene and open the PNG.
   - Touches: `art/`, `scripts/`
-- [ ] E1-S4 Render the course isometrically. Draw any CourseData with heights correct and a usable camera.
+- [x] E1-S4 Render the course isometrically. Draw any CourseData with heights correct and a usable camera.
   - Accept: TileMapLayer draws surfaces, risers per height step, Y-sort on. A 20x20 course with heights 0 to 7 has no overlap artifacts at 0.5x, 1x and 2x. Pan with middle mouse or WASD. Tile-to-screen and screen-to-tile projection live in one shared helper.
   - Test: `tests/test_iso_projection.gd` round-trips tile to screen to tile at every height. Screenshot at each zoom.
   - Touches: `course/`, `scenes/`, `tests/`

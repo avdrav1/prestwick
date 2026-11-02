@@ -147,10 +147,14 @@ def in_riser_band(x: int, y: int) -> bool:
 
     The band is what the diamond sweeps as it rises one step (RISER_PX), minus the
     raised diamond itself, so it fills exactly the gap between the two tops.
+
+    The sweep is sampled every half pixel: whole-pixel steps miss the corner columns 0
+    and 63 (the diamond never covers them), which left a 1 px seam between neighboring
+    walls in the course renderer (found in E1-S4).
     """
     if in_diamond(x, y, -RISER_PX):
         return False
-    return any(in_diamond(x, y, -s) for s in range(RISER_PX + 1))
+    return any(in_diamond(x, y, -s / 2) for s in range(2 * RISER_PX + 1))
 
 
 # --- surfaces --------------------------------------------------------------

@@ -8,13 +8,37 @@ signal mode_changed(new_mode: Mode)
 
 const TOGGLE_ACTION: StringName = &"toggle_mode"
 
+## Course loaded at start. Until a plot exists (E2-S1 sets the blank plot), this is the
+## 20x20 heights fixture. An empty path or a failed load gives a flat 20x20 rough plot.
+@export_file("*.json") var course_path: String = "res://courses/heights_20x20.json"
+
 var mode: Mode = Mode.BUILD
+## The course being built and played. Only course/builder.gd and course/save.gd write it.
+var course: CourseData
 
 @onready var mode_label: Label = $HUD/ModeLabel
+@onready var course_view: CourseView = $CourseView
+@onready var camera: CourseCamera = $Camera
 
 
 func _ready() -> void:
 	_refresh_label()
+	var errors: Array[String] = []
+	var loaded: CourseData = null
+	if not course_path.is_empty():
+		loaded = CourseSave.load_file(course_path, errors)
+	if loaded == null:
+		if not errors.is_empty():
+			push_warning("main: %s" % "; ".join(errors))
+		loaded = CourseData.create(20, 20)
+	show_course(loaded)
+
+
+## Shows `c` and frames the camera on it.
+func show_course(c: CourseData) -> void:
+	course = c
+	course_view.show_course(c)
+	camera.frame(course_view.screen_bounds())
 
 
 func _unhandled_input(event: InputEvent) -> void:

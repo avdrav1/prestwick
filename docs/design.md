@@ -5,6 +5,8 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 ## Grid and terrain
 
 - Tile = 5 yards. Isometric 2:1, 64x32 footprint. Height 0 to 7 steps, 16 px riser per step.
+- Projection (`course/iso.gd`, the only one): tile (i, j) at height h has its center at screen `x = (i - j) * 32`, `y = (i + j) * 16 - h * 16`. Draw order is back to front by i + j, then risers bottom up, then the top.
+- Camera: zoom steps 0.5x, 1x, 2x; WASD pan 600 screen px/s at every zoom; middle-mouse drag; center may go 128 px past the course edge. Tuned in `scenes/camera_tuning.tres`.
 - Brush sizes 1, 3, 5.
 - Every surface has a pattern as well as a color (colorblind rule); patterns are named in `art/specs/surfaces.md`. Art uses only `art/palette.gpl` (32 colors). Terrain sheets load by name through `art/tiles/surfaces.tres`.
 

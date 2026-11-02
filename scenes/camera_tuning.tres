@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CameraTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/camera_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+pan_speed = 600.0
+zoom_levels = PackedFloat32Array(0.5, 1, 2)
+start_zoom_index = 1
+edge_margin = 128.0

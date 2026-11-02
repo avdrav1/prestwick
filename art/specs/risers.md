@@ -24,7 +24,9 @@ counted. Clear and blocky, like Mean 18's terrain edges; no grass overhang yet.
 
 - Shape: the V-shaped band between the bottom edges of a diamond and the same edges 16 px
   higher. It is exactly what a diamond sweeps rising one step, minus the raised diamond, so
-  it fills the gap between two tops with no overlap and no hole.
+  it fills the gap between two tops with no overlap and no hole. Each face owns its corner
+  column (column 0 for the left face, 63 for the right, rows 0 to 15) even though no top
+  diamond does: walls repeat every 32 px, so without it a 1 px seam shows between them.
 - Left face `earth_dark` with `ink` strata, right face `earth` with `earth_dark` strata,
   strata every 6 px parallel to the top edge, `ink` foot line, `earth_light` front corner.
 

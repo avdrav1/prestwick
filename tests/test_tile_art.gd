@@ -125,3 +125,16 @@ func test_sheets_use_only_palette_colors() -> void:
 				if c.a != 1.0 or not palette.has(c.to_html(false)):
 					bad[c.to_html()] = true
 		assert_eq(bad.size(), 0, "off-palette colors in %s: %s" % [sheet.texture.resource_path, bad.keys()])
+
+
+func test_riser_faces_reach_the_corner_columns() -> void:
+	# Walls of neighboring tiles repeat every 32 px, so each face must own all 32 columns,
+	# including the vertical corner edge (column 0 left, 63 right), or a 1 px seam shows (E1-S4).
+	var left: Image = _frame_image(_art.risers, 1)
+	var right: Image = _frame_image(_art.risers, 2)
+	for y: int in 16:
+		assert_eq(left.get_pixel(0, y).a, 1.0, "left face corner column at y=%d" % y)
+		assert_eq(right.get_pixel(63, y).a, 1.0, "right face corner column at y=%d" % y)
+	assert_eq(left.get_pixel(0, 16).a, 0.0, "corner column stops at the left tip")
+	assert_eq(left.get_pixel(31, 31).a, 1.0, "left face reaches the front corner")
+	assert_eq(right.get_pixel(32, 31).a, 1.0, "right face reaches the front corner")
