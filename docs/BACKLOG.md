@@ -51,7 +51,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: a button fires the ball at fixed power and angle. The sprite follows the projected path and a ground shadow shows its height. The ball lands on the predicted tile, within 1 tile, on flat and sloped terrain. The prediction comes from running the same step function ahead of time.
   - Test: `tests/test_shot_prediction.gd` covers flat and sloped courses. Screenshot mid-flight.
   - Touches: `golf/`, `scenes/`, `tests/`
-- [ ] E1-S8 Make `/ship-it` runnable. Its smoke test and export setup do not exist yet.
+- [x] E1-S8 Make `/ship-it` runnable. Its smoke test and export setup do not exist yet.
   - Accept: `scripts/playtest.gd` runs headless and asserts only what the current milestone has built. For E1 that is firing a shot and landing it. `/playtest` smoke is updated to say so: its full bar (holed out, guest reaction, money changed) cannot pass before E4, yet `/ship-it` requires it at every milestone. `docs/export.md` and `export_presets.cfg` exist for Linux and Windows.
   - Test: run smoke headless. Export a Linux build and launch it. Export templates must be installed first.
   - Touches: `scripts/`, `docs/`

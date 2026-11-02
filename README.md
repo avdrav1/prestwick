@@ -6,6 +6,7 @@ Design a golf course, then play it. Godot 4.7, GDScript, isometric 2D.
 - `docs/design.md` holds the numbers and rules; the full design doc is in Claude Docs.
 - `docs/BACKLOG.md` is the plan. Start with `/next-story`.
 - `bash scripts/run_tests.sh` runs parse, scene and GUT checks headless.
+- `bash scripts/playtest.sh` runs the headless smoke; `docs/export.md` covers builds.
 
 ## Setup
 

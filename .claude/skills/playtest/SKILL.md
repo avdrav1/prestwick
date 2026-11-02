@@ -9,7 +9,18 @@ Two modes. Pick by argument: `smoke` (default) or `full`.
 
 ## Smoke
 
-Headless run of `scripts/playtest.gd`: load `courses/example_par3.json`, play one hole with a scripted swing, spawn one guest, run one in-game day. Pass if the ball holes out, the guest leaves a reaction, and the day ends with money changed. Takes under a minute. Used by `/ship-it`.
+Run `bash scripts/playtest.sh`. It drives the real main scene headless at a fixed 60 fps with `scripts/playtest.gd`, prints one `ok` or `FAIL` line per check, and exits 0 only when every check passes and Godot printed no error or warning. Expected values (the course it must load, where the debug shot lands and rests) come from `data/playtest_smoke.json`, copied from `docs/design.md`, so a fallback course or a physics change fails it. Takes a few seconds. Used by `/ship-it`.
+
+The smoke asserts only what the milestones shipped so far have built, so it can pass at every milestone. Each stage is added by the epic that builds it, which also raises `BUILT_MILESTONE` in `scripts/playtest.gd`:
+
+| Milestone | Stage | Pass if |
+| --- | --- | --- |
+| E1 Ball on a tile (built) | switch to Play, fire the debug shot | the ball lands on the course, on the ground, on the predicted tile, and comes to rest on the course on the predicted tile |
+| E2 One hole | load `courses/example_par3.json`, play the hole with a scripted swing | the ball holes out |
+| E3 Nine holes and guests | spawn one guest | the guest leaves a reaction |
+| E4 Economy | run one in-game day | the day ends with money changed |
+
+The full bar (holed out, guest reaction, money changed) is the E4 smoke. Before E4 a passing smoke means every stage built so far passed, not that the full bar did.
 
 ## Full
 
