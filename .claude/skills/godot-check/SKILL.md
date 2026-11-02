@@ -19,7 +19,7 @@ Runs `scripts/run_tests.sh`, which does three things in order and stops at the f
 
 ## If godot is missing
 
-Say so. Suggest `scripts/install_godot.sh` (downloads the pinned 4.3 headless binary to `.bin/`). Do not run it without asking; it downloads ~50 MB.
+Say so. Suggest `scripts/install_godot.sh` (downloads the pinned 4.7.2 binary to `.bin/`). Do not run it without asking; it downloads ~50 MB.
 
 ## Rules
 

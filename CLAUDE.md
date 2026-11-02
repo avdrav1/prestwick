@@ -1,6 +1,6 @@
 # Prestwick
 
-Isometric golf game: design a course, then play it. Inspired by Sid Meier's SimGolf (build and manage) and Mean 18 (overhead golf, course architect). Godot 4.3+, GDScript, 2D renderer.
+Isometric golf game: design a course, then play it. Inspired by Sid Meier's SimGolf (build and manage) and Mean 18 (overhead golf, course architect). Godot 4.7 (D3), GDScript, 2D renderer.
 
 The full design doc lives in Claude Docs (Prestwick, Game Design Doc). `docs/design.md` carries the parts that matter for code. When they disagree, `docs/design.md` wins for implementation and the design doc wins for intent; fix the loser.
 
