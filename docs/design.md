@@ -67,6 +67,10 @@ Per-surface ball numbers live in `course/surfaces.tres` (the path `/balance surf
 | trees | 0.15 (as rough, until E2-S6) | 0.6 | 8 |
 | cart_path | 0.5 | 0.25 | 4 |
 
+Shot prediction (E1-S7): `golf/shot_prediction.gd` runs a seeded Ball with the same `step` to rest before the live ball flies, so the prediction and the flight agree tick for tick. The live ball (`scenes/shot_view.gd`) steps in whole 1/60 s ticks from frame time, never once per frame. Its sprite sits at the projected 3D point, its shadow on the ground straight below (bilinear height), both Y-sorted as an object on the tile under the ball.
+
+Debug shot (E1-S7, until the swing in E2-S7), in `golf/debug_shot.tres`: struck from the centre of tile (15, 4), the 7-step tee pillar of `courses/heights_20x20.json`, at 20 yd/s, 30 degrees up, heading 180 (along -x), seed 1. It lands on the pyramid's face at tile (7, 4), bounces and rolls back down to (12, 4).
+
 Hazard behaviour (water and OB penalty, tree scatter, oob roll) comes in E2-S6. Until then the ball stops dead on water and off the map.
 
 ## Guests and reactions

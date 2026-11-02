@@ -11,6 +11,8 @@ const TOGGLE_ACTION: StringName = &"toggle_mode"
 ## Course loaded at start. Until a plot exists (E2-S1 sets the blank plot), this is the
 ## 20x20 heights fixture. An empty path or a failed load gives a flat 20x20 rough plot.
 @export_file("*.json") var course_path: String = "res://courses/heights_20x20.json"
+## The fixed shot the Play-mode debug button fires (E1-S7). Null loads golf/debug_shot.tres.
+@export var debug_shot: DebugShot
 
 var mode: Mode = Mode.BUILD
 ## The course being built and played. Only course/builder.gd and course/save.gd write it.
@@ -21,9 +23,14 @@ var course: CourseData
 @onready var camera: CourseCamera = $Camera
 @onready var build_tool: BuildTool = $BuildTool
 @onready var build_palette: BuildPalette = $HUD/BuildPalette
+@onready var shot_view: ShotView = $CourseView/ShotView
+@onready var fire_button: Button = $HUD/FireButton
 
 
 func _ready() -> void:
+	if debug_shot == null:
+		debug_shot = DebugShot.load_default()
+	fire_button.pressed.connect(fire_debug_shot)
 	_refresh_label()
 	build_palette.bind(build_tool)
 	_apply_mode()
@@ -41,6 +48,7 @@ func _ready() -> void:
 ## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
 func show_course(c: CourseData) -> void:
 	course = c
+	shot_view.clear()
 	course_view.show_course(c)
 	camera.frame(course_view.screen_bounds())
 	var builder := CourseBuilder.new(c)
@@ -64,6 +72,8 @@ func set_mode(new_mode: Mode) -> void:
 	mode = new_mode
 	_refresh_label()
 	_apply_mode()
+	if mode != Mode.PLAY:
+		shot_view.clear()
 	mode_changed.emit(mode)
 
 
@@ -78,5 +88,14 @@ func _on_tiles_changed(cells: Array[Vector2i]) -> void:
 		course_view.refresh_cell(cell)
 
 
+## Fires the debug shot at its fixed power and angle, predicting the landing first.
+func fire_debug_shot() -> void:
+	if course == null:
+		return
+	var field := HeightField.new(course, BallParams.load_default())
+	shot_view.fire(course, debug_shot.start_position(field), debug_shot.velocity(), debug_shot.rng_seed)
+
+
 func _refresh_label() -> void:
 	mode_label.text = Mode.keys()[mode]
+	fire_button.visible = mode == Mode.PLAY

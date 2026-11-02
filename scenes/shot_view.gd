@@ -1,0 +1,171 @@
+class_name ShotView
+extends Node2D
+## Shows one shot on the isometric map (E1-S7): the ball sprite at its projected 3D position,
+## a ground shadow straight below it so its height reads, and a marker on the predicted
+## landing point. A reader only: it never writes the course.
+##
+## The live ball is a golf/ball.gd Ball stepped at a fixed 60 Hz from frame time (never per
+## frame), so it follows the ShotPrediction made at fire time tick for tick.
+##
+## Place it as a child of CourseView: it is Y-sorted, and each piece sits at y = its
+## Iso.object_sort_key and draws itself offset back to its screen point, so hills nearer the
+## camera hide the ball and farther ones do not.
+
+signal landed(at: Vector3)
+signal came_to_rest(at: Vector3)
+
+## Placeholder look, from art/palette.gpl (chalk, ink, flag_red) until E5-S3 brings a sprite.
+@export var ball_color: Color = Color8(240, 236, 224)
+@export var outline_color: Color = Color8(26, 28, 34)
+@export var shadow_color: Color = Color8(26, 28, 34, 150)
+@export var marker_color: Color = Color8(216, 58, 58)
+## Ball radius in screen px at 1x.
+@export var ball_radius: float = 4.0
+## Shadow half-width in screen px at ground level; it shrinks to `shadow_min_scale` of that
+## as the ball climbs to `shadow_fade_steps` height steps above the ground.
+@export var shadow_radius: float = 6.0
+@export var shadow_min_scale: float = 0.7
+@export var shadow_fade_steps: float = 8.0
+## Half-size of the landing marker cross, screen px.
+@export var marker_radius: float = 5.0
+
+var ball: Ball
+var prediction: ShotPrediction
+## True from fire until the ball comes to rest.
+var playing: bool = false
+## The ball and its shadow.
+var sprite: Node2D
+## The predicted landing point.
+var marker: Node2D
+
+var _elapsed: float = 0.0
+var _was_landed: bool = false
+
+
+func _init() -> void:
+	y_sort_enabled = true
+	visible = false
+	sprite = _Piece.new(_draw_ball)
+	sprite.name = "Ball"
+	add_child(sprite)
+	marker = _Piece.new(_draw_marker)
+	marker.name = "LandingMarker"
+	add_child(marker)
+
+
+func _process(delta: float) -> void:
+	if playing:
+		advance(delta)
+
+
+## Predicts the shot, then launches the live ball with the same course, seed and launch.
+func fire(course: CourseData, start: Vector3, velocity: Vector3, rng_seed: int) -> void:
+	prediction = ShotPrediction.run(course, rng_seed, start, velocity)
+	ball = Ball.new(course, rng_seed)
+	ball.launch(start, velocity)
+	_elapsed = 0.0
+	_was_landed = false
+	playing = true
+	visible = true
+	_place_marker()
+	_refresh()
+
+
+## Clears the shot from view.
+func clear() -> void:
+	playing = false
+	visible = false
+	ball = null
+	prediction = null
+
+
+## Runs the live ball forward by `delta` seconds of frame time, in whole 1/60 s ticks.
+func advance(delta: float) -> void:
+	if not playing:
+		return
+	_elapsed += delta
+	var target: int = floori(_elapsed * Ball.TICK_HZ + 1e-6)
+	while ball.steps < target and not ball.is_at_rest():
+		ball.step()
+		if ball.has_landed and not _was_landed:
+			_was_landed = true
+			landed.emit(ball.landing_position)
+	if ball.is_at_rest():
+		playing = false
+		came_to_rest.emit(ball.position)
+	_refresh()
+
+
+## Screen point (in this node's parent space) of the ball.
+func ball_screen() -> Vector2:
+	return Iso.point_to_screen(ball.field.iso_point(ball.position))
+
+
+## Screen point of the shadow: the ground straight below the ball.
+func shadow_screen() -> Vector2:
+	return Iso.point_to_screen(ball.field.iso_point(_ground_below(ball.position)))
+
+
+func _ground_below(p: Vector3) -> Vector3:
+	return Vector3(p.x, p.y, ball.field.height_at(p.x, p.y))
+
+
+## Moves `piece` to the sort key of the ground point `ground` (yards).
+func _sort_at(piece: Node2D, ground: Vector3) -> void:
+	var iso := ball.field.iso_point(ground)
+	var tile := Vector2(iso.x, iso.y)
+	piece.position = Vector2(Iso.point_to_screen(iso).x, Iso.object_sort_key(tile, sort_ground(tile, iso.z)))
+	piece.queue_redraw()
+
+
+## Ground height (steps) a piece at `tile` sorts on: the bilinear ground, but never below the
+## drawn top of the cell it stands in. Bilinear ground dips under that top wherever the cell
+## has a lower neighbour, and sorting on it would paint the cell's own top over the ball.
+func sort_ground(tile: Vector2, ground_steps: float) -> float:
+	var cell := Vector2i(floori(tile.x + 0.5), floori(tile.y + 0.5))
+	return maxf(ground_steps, float(ball.field.course.get_height(cell.x, cell.y)))
+
+
+func _refresh() -> void:
+	if ball == null:
+		return
+	_sort_at(sprite, _ground_below(ball.position))
+
+
+func _place_marker() -> void:
+	_sort_at(marker, prediction.landing)
+
+
+func _draw_ball(piece: Node2D) -> void:
+	if ball == null:
+		return
+	var shadow := shadow_screen() - piece.position
+	var at := ball_screen() - piece.position
+	var lift := (shadow.y - at.y) / Iso.STEP_PX
+	var s := lerpf(1.0, shadow_min_scale, clampf(lift / shadow_fade_steps, 0.0, 1.0))
+	# An ellipse 2:1 like the tile footprint.
+	piece.draw_set_transform(shadow, 0.0, Vector2(1.0, 0.5))
+	piece.draw_circle(Vector2.ZERO, shadow_radius * s, shadow_color)
+	piece.draw_set_transform(Vector2.ZERO)
+	piece.draw_circle(at, ball_radius + 1.0, outline_color)
+	piece.draw_circle(at, ball_radius, ball_color)
+
+
+func _draw_marker(piece: Node2D) -> void:
+	if prediction == null:
+		return
+	var at := Iso.point_to_screen(ball.field.iso_point(prediction.landing)) - piece.position
+	var r := marker_radius
+	piece.draw_line(at + Vector2(-r, -r * 0.5), at + Vector2(r, r * 0.5), marker_color, 2.0)
+	piece.draw_line(at + Vector2(-r, r * 0.5), at + Vector2(r, -r * 0.5), marker_color, 2.0)
+
+
+## One Y-sorted piece of the shot, drawn by a callback on the view.
+class _Piece extends Node2D:
+	var _draw_fn: Callable
+
+	func _init(draw_fn: Callable) -> void:
+		_draw_fn = draw_fn
+
+	func _draw() -> void:
+		_draw_fn.call(self)

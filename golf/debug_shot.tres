@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="DebugShot" format=3]
+
+[ext_resource type="Script" path="res://golf/debug_shot.gd" id="1_dbgsh"]
+
+[resource]
+script = ExtResource("1_dbgsh")
+start_tile = Vector2i(15, 4)
+speed = 20.0
+launch_deg = 30.0
+heading_deg = 180.0
+rng_seed = 1

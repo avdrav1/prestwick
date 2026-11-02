@@ -26,6 +26,12 @@ func tile_center(tile: Vector2i) -> Vector2:
 	return (Vector2(tile) + Vector2(0.5, 0.5)) * yards_per_tile
 
 
+## A point in yards as Iso coordinates: x, y in tiles (integer = tile centre, as course/iso.gd
+## expects) and z in height steps. Iso.point_to_screen takes the result.
+func iso_point(p: Vector3) -> Vector3:
+	return Vector3(p.x / yards_per_tile - 0.5, p.y / yards_per_tile - 0.5, p.z / yards_per_step)
+
+
 ## Surface under (x, y). Off the map is Surface.Type.OOB.
 func surface_at(x: float, y: float) -> Surface.Type:
 	var t := tile_at(x, y)

@@ -47,7 +47,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Test: `tests/test_ball.gd`
   - Touches: `golf/`, `tests/`
   - Settles: yards per height step, gravity and bounce values (none are in `docs/design.md` yet; add them there).
-- [ ] E1-S7 Fire a debug shot. See the physics on the projected map.
+- [x] E1-S7 Fire a debug shot. See the physics on the projected map.
   - Accept: a button fires the ball at fixed power and angle. The sprite follows the projected path and a ground shadow shows its height. The ball lands on the predicted tile, within 1 tile, on flat and sloped terrain. The prediction comes from running the same step function ahead of time.
   - Test: `tests/test_shot_prediction.gd` covers flat and sloped courses. Screenshot mid-flight.
   - Touches: `golf/`, `scenes/`, `tests/`
