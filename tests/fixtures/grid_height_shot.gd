@@ -6,6 +6,7 @@ extends Node
 ##
 ##   EVIDENCE_CASE=green scripts/screenshot.sh tests/fixtures/grid_height_shot.tscn out.png
 ##   EVIDENCE_CASE=hill  ...       EVIDENCE_CASE=riser ...   (2x close-up of a hillside landing)
+##   EVIDENCE_ZOOM=0.5|1|2 picks a camera zoom step for any case (E1-S10 edge cues).
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const COLORS: Array[Color] = [
@@ -37,9 +38,12 @@ func _ready() -> void:
 			_hill(true, 1)
 		"riser":
 			_hill(true, 2)
+		"steps":
+			_steps()
 		_:
 			push_error("grid_height_shot: unknown EVIDENCE_CASE %s" % case_name)
 	_main.course_view.add_child(_overlay)
+	_apply_zoom(OS.get_environment("EVIDENCE_ZOOM"))
 	var layer := CanvasLayer.new()
 	var label := Label.new()
 	label.position = Vector2(200, 12)
@@ -114,6 +118,33 @@ func _hill(mirrored: bool, zoom_index: int) -> void:
 	if zoom_index != _main.camera.zoom_index:
 		_main.camera.set_zoom_index(zoom_index)
 		_main.camera.position = Iso.point_to_screen(field.iso_point(shot.landing))
+
+
+## E1-S10: rises of 1, 2, 3 and 1 steps facing away from the camera, on green, fairway,
+## bunker and rough, so a 1-step cue (one lip line) sits next to 2+-step cues (two lines).
+func _steps() -> void:
+	var c := CourseData.create(12, 12, Surface.Type.ROUGH, 0)
+	var strips: Array = [[1, Surface.Type.GREEN], [2, Surface.Type.FAIRWAY], [3, Surface.Type.BUNKER],
+			[1, Surface.Type.ROUGH]]
+	for i: int in strips.size():
+		for y: int in range(1 + i * 3, 3 + i * 3):
+			for x: int in range(4, 10):
+				c.set_tile(x, y, strips[i][0], strips[i][1])
+	_main.show_course(c)
+	_overlay.caption = "Edge cues, back to front: rises of 1 (green), 2 (fairway), 3 (bunker), 1 (rough) step"
+
+
+## Sets the camera to the zoom step `zoom` (such as "0.5") and keeps its centre.
+func _apply_zoom(zoom: String) -> void:
+	if zoom.is_empty():
+		return
+	var levels: PackedFloat32Array = _main.camera.tuning.zoom_levels
+	var index: int = levels.find(zoom.to_float())
+	if index < 0:
+		push_error("grid_height_shot: EVIDENCE_ZOOM %s is not one of %s" % [zoom, levels])
+		return
+	_main.camera.set_zoom_index(index)
+	_overlay.caption += "\nzoom %sx" % zoom
 
 
 func _mirror(tile: Vector2, mirrored: bool) -> Vector2:

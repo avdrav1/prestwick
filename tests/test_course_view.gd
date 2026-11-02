@@ -150,3 +150,94 @@ func test_fixture_file_matches_its_generator() -> void:
 	assert_eq(c.width, 20)
 	assert_eq(heights.size(), CourseData.MAX_HEIGHT + 1, "every height 0..7")
 	assert_eq(surfaces.size(), Surface.COUNT, "every surface")
+
+
+# E1-S10: an edge cue on rises that face away from the camera (toward x - 1 or y - 1).
+
+func test_edge_cue_on_a_tile_higher_than_its_back_neighbours() -> void:
+	var c := CourseData.create(3, 3, Surface.Type.ROUGH, 0)
+	c.set_tile(1, 1, 1, Surface.Type.GREEN)
+	assert_eq(CourseView.edge_cue_frame(c, 1, 1), &"l1r1", "one step up from both back neighbours")
+	c.set_tile(1, 1, 3, Surface.Type.GREEN)
+	assert_eq(CourseView.edge_cue_frame(c, 1, 1), &"l2r2", "two or more steps read as 2")
+	c.set_tile(0, 1, 2, Surface.Type.GREEN)  # back-left neighbour (x - 1), one step lower
+	assert_eq(CourseView.edge_cue_frame(c, 1, 1), &"l1r2")
+	c.set_tile(1, 0, 3, Surface.Type.GREEN)  # back-right neighbour (y - 1), as tall
+	assert_eq(CourseView.edge_cue_frame(c, 1, 1), &"l1")
+	_view.show_course(c)
+	var layer: TileMapLayer = _view.edge_layer(3)
+	assert_eq(layer.get_cell_source_id(Vector2i(1, 1)), CourseView.EDGE_SOURCE, "drawn on the tile's height")
+	assert_eq(layer.get_cell_atlas_coords(Vector2i(1, 1)),
+			Vector2i(TileArt.load_default().edges.frame_index(&"l1"), 0))
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		if h != 3:
+			assert_eq(_view.edge_layer(h).get_cell_source_id(Vector2i(1, 1)), -1, "only at height 3, not %d" % h)
+
+
+func test_no_edge_cue_on_flat_ground_or_the_map_edge() -> void:
+	var c := CourseData.create(4, 4, Surface.Type.ROUGH, 2)
+	_view.show_course(c)
+	for y: int in c.height:
+		for x: int in c.width:
+			assert_eq(CourseView.edge_cue_frame(c, x, y), &"", "flat at (%d, %d)" % [x, y])
+			for h: int in CourseData.MAX_HEIGHT + 1:
+				assert_eq(_view.edge_layer(h).get_cell_source_id(Vector2i(x, y)), -1)
+
+
+func test_no_edge_cue_where_the_back_neighbour_is_higher() -> void:
+	# The higher neighbour's riser faces the camera and already shows that step.
+	var c := CourseData.create(3, 3, Surface.Type.ROUGH, 0)
+	c.set_tile(1, 1, 3, Surface.Type.GREEN)
+	_view.show_course(c)
+	assert_eq(CourseView.edge_cue_frame(c, 2, 1), &"", "x - 1 neighbour is higher")
+	assert_eq(CourseView.edge_cue_frame(c, 1, 2), &"", "y - 1 neighbour is higher")
+	assert_eq(CourseView.riser_frame(c, 1, 1, 0), &"both", "its riser shows the step instead")
+	assert_eq(_view.edge_layer(0).get_cell_source_id(Vector2i(2, 1)), -1)
+	assert_eq(_view.edge_layer(0).get_cell_source_id(Vector2i(1, 2)), -1)
+
+
+func test_refresh_cell_updates_the_edge_cues_in_front() -> void:
+	var c := CourseData.create(3, 3, Surface.Type.ROUGH, 0)
+	c.set_tile(2, 1, 2, Surface.Type.GREEN)
+	c.set_tile(1, 2, 2, Surface.Type.GREEN)
+	_view.show_course(c)
+	assert_eq(_view.edge_layer(2).get_cell_source_id(Vector2i(2, 1)), CourseView.EDGE_SOURCE)
+	assert_eq(_view.edge_layer(2).get_cell_source_id(Vector2i(1, 2)), CourseView.EDGE_SOURCE)
+	var edges: TileSheet = TileArt.load_default().edges
+	# Raise (1, 1) to 1: the rise in front of it drops from 2 steps to 1.
+	c.set_tile(1, 1, 1, Surface.Type.ROUGH)
+	_view.refresh_cell(Vector2i(1, 1))
+	assert_eq(_view.edge_layer(1).get_cell_source_id(Vector2i(1, 1)), CourseView.EDGE_SOURCE, "its own cue")
+	assert_eq(_view.edge_layer(2).get_cell_atlas_coords(Vector2i(2, 1)),
+			Vector2i(edges.frame_index(&"l1r2"), 0), "front-right neighbour (x + 1) redrawn")
+	assert_eq(_view.edge_layer(2).get_cell_atlas_coords(Vector2i(1, 2)),
+			Vector2i(edges.frame_index(&"l2r1"), 0), "front-left neighbour (y + 1) redrawn")
+	# Raise it to 2: level with them, so their cue on that edge goes.
+	c.set_tile(1, 1, 2, Surface.Type.ROUGH)
+	_view.refresh_cell(Vector2i(1, 1))
+	assert_eq(_view.edge_layer(2).get_cell_atlas_coords(Vector2i(2, 1)), Vector2i(edges.frame_index(&"r2"), 0))
+	assert_eq(_view.edge_layer(2).get_cell_atlas_coords(Vector2i(1, 2)), Vector2i(edges.frame_index(&"l2"), 0))
+	# Raise a flat front neighbour's back tile from scratch: a flat 3x3 gains cues in front.
+	var flat := CourseData.create(3, 3, Surface.Type.ROUGH, 1)
+	_view.show_course(flat)
+	flat.set_tile(1, 1, 0, Surface.Type.ROUGH)
+	_view.refresh_cell(Vector2i(1, 1))
+	assert_eq(_view.edge_layer(1).get_cell_atlas_coords(Vector2i(2, 1)), Vector2i(edges.frame_index(&"l1"), 0),
+			"cue added on the x + 1 neighbour")
+	assert_eq(_view.edge_layer(1).get_cell_atlas_coords(Vector2i(1, 2)), Vector2i(edges.frame_index(&"r1"), 0),
+			"cue added on the y + 1 neighbour")
+
+
+func test_edge_cue_draws_over_its_top_and_under_objects() -> void:
+	_view.show_course(HeightsFixture.build())
+	var cell := Vector2i(6, 7)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		var key: float = _sort_key(_view.edge_layer(h), cell)
+		assert_almost_eq(key, float(Iso.top_sort_key(cell, h)), 0.001, "ties with its top at %d" % h)
+		assert_lt(key, Iso.object_sort_key(Vector2(cell), h), "a ball on the tile draws over the cue")
+		# Ties break by tree order, so the cue layer must come after its top.
+		assert_gt(_view.edge_layer(h).get_index(), _view.top_layer(h).get_index(), "after top %d" % h)
+	var edges: TileSheet = TileArt.load_default().edges
+	var shift: int = edges.anchor.y - edges.frame_size.y / 2
+	assert_almost_eq(_view.edge_layer(3).position.y, _view.top_layer(3).position.y - shift, 0.001,
+			"the frame's anchor lands on the tile center")

@@ -12,10 +12,20 @@ extends Node2D
 ##
 ## Faces hidden by a neighbor at equal or greater height are skipped (`left` / `right` frames).
 ## Off-map neighbors read as height 0, so the map edge shows its walls.
+##
+## Edge cues (E1-S10, D5, art/specs/edge_cue.md): a rise toward x - 1 or y - 1 faces away
+## from the camera and has no riser, so the higher tile draws a lip line along that back edge
+## instead, one line for one step and two for two or more. One cue layer per height, at the
+## same sort key as that height's tops; Y-sort breaks the tie by tree order, so the cue layers
+## are added after every top and draw over their tile's top, still under objects on it.
+## A back edge on the map border gets no cue.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
 const RISER_SOURCE: int = 1
+const EDGE_SOURCE: int = 2
+## Rises of this many steps or more share one cue (two lines). Matches the art's frame names.
+const EDGE_MAX_STEPS: int = 2
 
 var course: CourseData:
 	get:
@@ -26,7 +36,9 @@ var _art: TileArt
 var _tile_set: TileSet
 var _tops: Array[TileMapLayer] = []
 var _risers: Array[TileMapLayer] = []
+var _edges: Array[TileMapLayer] = []
 var _riser_atlas: Dictionary = {}
+var _edge_atlas: Dictionary = {}
 
 
 func _init() -> void:
@@ -37,14 +49,20 @@ func _init() -> void:
 		if k < CourseData.MAX_HEIGHT:
 			_risers.append(_make_layer("Risers%d" % k, k, Iso.riser_sort_key(Vector2i.ZERO, k)))
 		_tops.append(_make_layer("Tops%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k)))
+	# After every top, so a cue wins its sort-key tie with its own top.
+	var edge_shift: int = _art.edges.anchor.y - _art.edges.frame_size.y / 2
+	for k: int in CourseData.MAX_HEIGHT + 1:
+		_edges.append(_make_layer("Edges%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k), edge_shift))
 	for frame: String in _art.risers.frames:
 		_riser_atlas[StringName(frame)] = Vector2i(_art.risers.frame_index(StringName(frame)), 0)
+	for frame: String in _art.edges.frames:
+		_edge_atlas[StringName(frame)] = Vector2i(_art.edges.frame_index(StringName(frame)), 0)
 
 
 ## Draws `c` from scratch. Pass null to clear.
 func show_course(c: CourseData) -> void:
 	_course = c
-	for layer: TileMapLayer in _tops + _risers:
+	for layer: TileMapLayer in _tops + _risers + _edges:
 		layer.clear()
 	if c == null:
 		return
@@ -54,11 +72,13 @@ func show_course(c: CourseData) -> void:
 
 
 ## Redraws one tile after an edit, plus the two back neighbors whose walls it may now hide
-## or reveal. Call from the builder after it writes a tile (E1-S5).
+## or reveal, and the two front neighbors whose edge cues depend on its height. Call from
+## the builder after it writes a tile (E1-S5).
 func refresh_cell(cell: Vector2i) -> void:
 	if _course == null:
 		return
-	for c: Vector2i in [cell, cell + Vector2i(-1, 0), cell + Vector2i(0, -1)]:
+	for c: Vector2i in [cell, cell + Vector2i(-1, 0), cell + Vector2i(0, -1),
+			cell + Vector2i(1, 0), cell + Vector2i(0, 1)]:
 		if _course.in_bounds(c.x, c.y):
 			_draw_cell(c)
 
@@ -71,6 +91,11 @@ func top_layer(h: int) -> TileMapLayer:
 ## The layer holding riser step `k` (the wall between height k and k + 1).
 func riser_layer(k: int) -> TileMapLayer:
 	return _risers[k]
+
+
+## The layer holding edge cues on tiles at height `h`.
+func edge_layer(h: int) -> TileMapLayer:
+	return _edges[h]
 
 
 ## Screen rectangle (local to this node) covering every tile at every height.
@@ -103,6 +128,28 @@ static func riser_frame(c: CourseData, x: int, y: int, k: int) -> StringName:
 	return &""
 
 
+## Which edge cue frame tile (x, y) shows: &"" for none, else "l<n>" for a rise from its
+## back-left neighbor (x - 1, y), "r<n>" from its back-right neighbor (x, y - 1), or both
+## ("l1r2"). n is the rise in steps, capped at EDGE_MAX_STEPS. Lower or level neighbors and
+## off-map ones give no cue; a higher neighbor's riser already shows that step.
+static func edge_cue_frame(c: CourseData, x: int, y: int) -> StringName:
+	var h: int = c.get_height(x, y)
+	var frame: String = ""
+	var left: int = _rise(c, h, x - 1, y)
+	var right: int = _rise(c, h, x, y - 1)
+	if left > 0:
+		frame += "l%d" % left
+	if right > 0:
+		frame += "r%d" % right
+	return StringName(frame)
+
+
+static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
+	if not c.in_bounds(x, y):
+		return 0
+	return clampi(h - c.get_height(x, y), 0, EDGE_MAX_STEPS)
+
+
 func _draw_cell(cell: Vector2i) -> void:
 	var h: int = _course.get_height(cell.x, cell.y)
 	for layer_h: int in _tops.size():
@@ -116,17 +163,25 @@ func _draw_cell(cell: Vector2i) -> void:
 			_risers[k].erase_cell(cell)
 		else:
 			_risers[k].set_cell(cell, RISER_SOURCE, _riser_atlas[frame])
+	var cue: StringName = edge_cue_frame(_course, cell.x, cell.y)
+	for layer_h: int in _edges.size():
+		if layer_h == h and not cue.is_empty():
+			_edges[layer_h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue])
+		else:
+			_edges[layer_h].erase_cell(cell)
 
 
-func _make_layer(layer_name: String, h: int, bias: int) -> TileMapLayer:
+## `shift` moves the layer up by that many pixels and its sort origin down by as many, for a
+## sheet whose anchor sits below its frame's center; the sort key stays the same.
+func _make_layer(layer_name: String, h: int, bias: int, shift: int = 0) -> TileMapLayer:
 	var layer := TileMapLayer.new()
 	layer.name = layer_name
 	layer.tile_set = _tile_set
 	layer.y_sort_enabled = true
 	# Godot puts cell (0, 0)'s center at (HALF_W, HALF_H); shift it onto Iso's origin, then up
 	# by the height. The sort origin undoes the height shift and adds the bias.
-	layer.position = Vector2(-Iso.HALF_W, -Iso.HALF_H - h * Iso.STEP_PX)
-	layer.y_sort_origin = h * Iso.STEP_PX + bias
+	layer.position = Vector2(-Iso.HALF_W, -Iso.HALF_H - h * Iso.STEP_PX - shift)
+	layer.y_sort_origin = h * Iso.STEP_PX + bias + shift
 	add_child(layer)
 	return layer
 
@@ -138,6 +193,7 @@ static func _make_tile_set(art: TileArt) -> TileSet:
 	ts.tile_size = Vector2i(Iso.TILE_W, Iso.TILE_H)
 	ts.add_source(_make_source(art.surfaces), SURFACE_SOURCE)
 	ts.add_source(_make_source(art.risers), RISER_SOURCE)
+	ts.add_source(_make_source(art.edges), EDGE_SOURCE)
 	return ts
 
 

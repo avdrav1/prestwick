@@ -52,7 +52,7 @@ func test_riser_frames() -> void:
 
 
 func test_sheet_layout_matches_art_spec() -> void:
-	for sheet: TileSheet in [_art.surfaces, _art.risers]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
 		assert_eq(sheet.frame_size, Vector2i(64, 32))
 		assert_eq(sheet.gutter, 1)
 		var n: int = sheet.frame_count()
@@ -62,7 +62,7 @@ func test_sheet_layout_matches_art_spec() -> void:
 
 
 func test_gutters_are_transparent() -> void:
-	for sheet: TileSheet in [_art.surfaces, _art.risers]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
 		var img: Image = sheet.texture.get_image()
 		for i: int in range(1, sheet.frame_count()):
 			var x: int = i * (sheet.frame_size.x + sheet.gutter) - 1
@@ -114,7 +114,7 @@ func test_every_surface_has_its_own_pattern() -> void:
 func test_sheets_use_only_palette_colors() -> void:
 	var palette: Dictionary = _palette()
 	assert_eq(palette.size(), 32, "palette has 32 colors")
-	for sheet: TileSheet in [_art.surfaces, _art.risers]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
 		var img: Image = sheet.texture.get_image()
 		var bad: Dictionary = {}
 		for y: int in img.get_height():
@@ -138,3 +138,50 @@ func test_riser_faces_reach_the_corner_columns() -> void:
 	assert_eq(left.get_pixel(0, 16).a, 0.0, "corner column stops at the left tip")
 	assert_eq(left.get_pixel(31, 31).a, 1.0, "left face reaches the front corner")
 	assert_eq(right.get_pixel(32, 31).a, 1.0, "right face reaches the front corner")
+
+
+# E1-S10: edge cue frames for rises that face away from the camera (art/specs/edge_cue.md).
+
+const EDGE_FRAMES: PackedStringArray = ["l1", "l2", "r1", "r2", "l1r1", "l1r2", "l2r1", "l2r2"]
+
+
+func _light_runs(img: Image, x: int, dark: bool = false) -> int:
+	# Bright (or dark) runs down one column: lip lines, counted without looking at hue.
+	var runs: int = 0
+	var inside: bool = false
+	for y: int in img.get_height():
+		var c: Color = img.get_pixel(x, y)
+		var lum: float = c.get_luminance()
+		var lit: bool = c.a == 1.0 and (lum < 0.2 if dark else lum > 0.8)
+		if lit and not inside:
+			runs += 1
+		inside = lit
+	return runs
+
+
+func test_edge_frames_and_anchor() -> void:
+	assert_eq(_art.edges.frames, EDGE_FRAMES)
+	assert_eq(_art.edges.anchor, Vector2i(32, 18), "2 px of headroom for the shadow over the top corner")
+
+
+func test_edge_frames_mark_one_step_versus_more_by_line_count() -> void:
+	# The pattern, not only the color: one dark-and-bright lip for one step, two for two or
+	# more, so the count reads on light and dark ground and in grayscale.
+	for frame: String in EDGE_FRAMES:
+		var img: Image = _frame_image(_art.edges, _art.edges.frame_index(StringName(frame)))
+		var left: int = 0 if not frame.contains("l") else (2 if frame.contains("l2") else 1)
+		var right: int = 0 if not frame.contains("r") else (2 if frame.contains("r2") else 1)
+		for x: int in [12, 20]:
+			assert_eq(_light_runs(img, x), left, "%s back-left lines at x=%d" % [frame, x])
+			assert_eq(_light_runs(img, x, true), left, "%s back-left dark lines at x=%d" % [frame, x])
+		for x: int in [43, 51]:
+			assert_eq(_light_runs(img, x), right, "%s back-right lines at x=%d" % [frame, x])
+			assert_eq(_light_runs(img, x, true), right, "%s back-right dark lines at x=%d" % [frame, x])
+		assert_eq(img.get_pixel(32, 30).a, 0.0, "%s leaves the front half clear" % frame)
+
+
+func test_edge_shadow_sits_outside_the_top_and_the_highlight_inside() -> void:
+	var img: Image = _frame_image(_art.edges, _art.edges.frame_index(&"l1r1"))
+	# Back-left edge at x = 16 runs through y = 18 - 16 + 8 = 10 (anchor y 18).
+	assert_lt(img.get_pixel(16, 9).get_luminance(), 0.2, "dark shadow just outside the edge")
+	assert_gt(img.get_pixel(16, 10).get_luminance(), 0.8, "bright lip just inside")

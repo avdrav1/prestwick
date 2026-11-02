@@ -48,3 +48,14 @@ Why: pillar 2 (shots are readable) needs every slope to be visible and putts tha
 Pays for it: drops ramp tiles, option c, from the art backlog and from `art/specs/risers.md`.
 Inconclusive: 0.075 is a starting number from one what-if run (0.15 yd per step on a green), not a tuned value. That run fired only moving putts. It did not set balls down still or check that short putts roll back, which is how the friction conflict in option d's cost was missed at first. `/balance` sets it once the putter exists. Whether the edge cue reads at 0.5x is unverified until E1-S10 takes its screenshot.
 Affects: docs/design.md Grid and terrain, art/specs/risers.md, docs/BACKLOG.md (E1-S10, E1-S11, filed and not built here), golf/ball.gd, course/surfaces.tres and course/course_view.gd once those stories land
+
+## D6: Does the edge cue read at 0.5x? (2026-11-02)
+Question: D5's open point, "whether the edge cue reads at 0.5x is unverified until E1-S10 takes its screenshot". Settled by E1-S10.
+Evidence: `docs/decisions/e1-s10-green-{0.5x,1x,2x}.png` and `e1-s10-hill-{0.5x,1x,2x}.png` (the D4/D5 courses, which looked flat in `e1-s9-green.png` and `e1-s9-hill.png`), `e1-s10-steps-{0.5x,1x}.png` (rises of 1, 2, 3 and 1 steps on green, fairway, sand and rough), and grayscale copies `e1-s10-steps-1x-gray.png` and `e1-s10-hill-1x-gray.png`. The 3 steps of the green contour and the 7 steps of each half of the hillside can be counted at all three zooms. At 0.5x the cue lines are about 1 px thick, and on the hillside's one-step-per-tile half they sit about 8 px apart: countable, but tight, and the placeholder label specks compete with them.
+Options:
+- a. One color line per edge (bright on dark ground). Cost: it vanished on sand and green in grayscale, and the doubled line for 2+ steps vanished with it (first attempt in E1-S10). Benefit: the lightest look.
+- b. A lip of a dark line plus a bright line, doubled for two or more steps, 2 px bands. Cost: a heavier edge. Benefit: the count reads on light and dark ground, in grayscale, and survives nearest sampling at 0.5x.
+Choice: b.
+Why: pillar 2 (shots are readable) and the colorblind rule; the count of lines is the pattern, not the hue.
+Inconclusive: the final art (E5-S2) must keep the count readable at 0.5x once the placeholder labels are gone; a 1 vs 2+ cue does not tell 2 steps from 7, which risers still do only on faces toward the camera.
+Affects: art/specs/edge_cue.md, art/tiles/edges_placeholder.png, course/course_view.gd, docs/design.md Grid and terrain

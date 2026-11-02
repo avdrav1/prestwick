@@ -4,7 +4,8 @@
 Usage:
   scripts/placeholder.py surfaces            -> art/tiles/surfaces_placeholder.png
   scripts/placeholder.py risers              -> art/tiles/risers_placeholder.png
-  scripts/placeholder.py all                 -> both of the above
+  scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
+  scripts/placeholder.py all                 -> all three of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
 
@@ -282,6 +283,52 @@ def build_risers(p: dict[str, Color]) -> Image:
     return sheet([riser_frame(w, lbl, p) for w, lbl in RISERS])
 
 
+# --- edge cue (E1-S10) -----------------------------------------------------
+
+# Frame names: "l" is the back-left edge (towards x - 1), "r" the back-right edge
+# (towards y - 1); the digit is the rise, 1 step or 2 for two or more. Order is fixed.
+EDGES = ["l1", "l2", "r1", "r2", "l1r1", "l1r2", "l2r1", "l2r2"]
+# The frame's anchor sits 2 px lower than a surface tile's, so the shadow line has room
+# above the diamond's top corner. Bands are measured straight down from the top edge.
+EDGE_ANCHOR_Y = 18
+# One lip per step class: a dark line, then a bright line 2 px below it. The first lip's
+# dark line lies outside the top (the shadow on the lower tile's side of the edge); the
+# second sits inside, so on light ground (sand, green) the count still reads as two dark
+# lines, and on dark ground as two bright ones. 2 px bands survive nearest sampling at 0.5x.
+EDGE_LIPS = [((-2, 0), (0, 2)), ((2, 4), (4, 6))]
+
+
+def edge_frame(name: str, p: dict[str, Color]) -> Image:
+    img = Image(TILE_W, TILE_H)
+    oy = EDGE_ANCHOR_Y - TILE_H // 2
+    rises = {"l": 0, "r": 0}
+    for side, n in zip(name[::2], name[1::2]):
+        rises[side] = int(n)
+    top_corner_y = EDGE_ANCHOR_Y - TILE_H / 2
+    for y in range(TILE_H):
+        for x in range(TILE_W):
+            inside = in_diamond(x, y, oy)
+            dx = x + 0.5 - TILE_W / 2
+            for side, sign in (("l", -1), ("r", 1)):
+                steps = rises[side]
+                if not steps:
+                    continue
+                # Straight down from the edge's whole line, not only its half of the frame,
+                # so the lines of neighbouring tiles along one edge join without gaps.
+                v = y + 0.5 - (top_corner_y + sign * dx / 2)
+                own_half = (dx < 0) if side == "l" else (dx >= 0)
+                for (d0, d1), (b0, b1) in EDGE_LIPS[:steps]:
+                    if d0 <= v < d1 and (inside or (own_half and d1 <= 0)):
+                        img.set(x, y, p["ink"])
+                    elif inside and b0 <= v < b1:
+                        img.set(x, y, p["chalk"])
+    return img
+
+
+def build_edges(p: dict[str, Color]) -> Image:
+    return sheet([edge_frame(n, p) for n in EDGES])
+
+
 # --- generic ---------------------------------------------------------------
 
 def build_generic(thing: str, size: tuple[int, int], frames: int, color: str, p: dict[str, Color]) -> Image:
@@ -321,6 +368,8 @@ def main(argv: list[str]) -> int:
         jobs.append((ROOT / "art/tiles/surfaces_placeholder.png", build_surfaces(p)))
     if args.thing in ("risers", "all"):
         jobs.append((ROOT / "art/tiles/risers_placeholder.png", build_risers(p)))
+    if args.thing in ("edges", "all"):
+        jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
     if not jobs:
         if not args.size:
             ap.error(f"no built-in generator for {args.thing!r}; pass --size WxH and --frames N")
