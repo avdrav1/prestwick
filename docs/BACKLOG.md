@@ -22,7 +22,7 @@ Ships as 0.1.0. Retires the biggest risk: the isometric projection and the heigh
 
 Done when: you can paint hills, fire a debug shot over them, and the ball lands where the math said it would.
 
-- [ ] E1-S1 Stand up the project skeleton. Get a repo, a main scene with Build and Play states, and green checks.
+- [x] E1-S1 Stand up the project skeleton. Get a repo, a main scene with Build and Play states, and green checks.
   - Accept: `git init` done with a first commit, since `/next-story` commits and this folder is not yet a repo. Pick the engine version and record it with `/decision`: the repo says 4.3 and `scripts/install_godot.sh` pins it, but `godot` on this machine is 4.7.2. GUT is pinned to a release that runs on that version and installed in `addons/gut`. `scenes/main.tscn` exists (`project.godot` already points at it) and a key toggles Build and Play with no scene load. `.gitignore` is reviewed: it currently ignores `*.import`, which loses per-asset import settings on a fresh clone.
   - Test: `scripts/run_tests.sh` exits 0 with one real test in `tests/test_main_states.gd`. It exits 3 without GUT, so GUT is part of this story.
   - Touches: `scenes/`, `scripts/`, `tests/`

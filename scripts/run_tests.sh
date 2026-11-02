@@ -10,6 +10,10 @@ if ! command -v "$GODOT" >/dev/null 2>&1; then
   exit 2
 fi
 
+echo "== import"
+# A fresh clone has no .godot/ class cache; class_name lookups fail until the project is imported once.
+"$GODOT" --headless --path . --import >/dev/null 2>&1 || { echo "import failed"; exit 1; }
+
 echo "== parse"
 find . -name '*.gd' -not -path './addons/*' -not -path './.bin/*' | while read -r f; do
   "$GODOT" --headless --check-only -s "$f" >/dev/null || { echo "parse error: $f"; exit 1; }
@@ -17,7 +21,13 @@ done
 
 echo "== scene"
 if [ -f scenes/main.tscn ]; then
-  "$GODOT" --headless --quit --path . scenes/main.tscn
+  # Godot exits 0 even when _ready throws, so fail on any error it prints.
+  scene_out="$("$GODOT" --headless --quit --path . scenes/main.tscn 2>&1)" || { echo "$scene_out"; exit 1; }
+  if grep -qE '^(SCRIPT )?ERROR' <<<"$scene_out"; then
+    echo "$scene_out" | grep -E -A2 '^(SCRIPT )?ERROR'
+    echo "scene error: scenes/main.tscn"
+    exit 1
+  fi
 fi
 
 echo "== tests"
