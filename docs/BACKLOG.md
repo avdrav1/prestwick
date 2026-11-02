@@ -136,6 +136,61 @@ Done when: you can design a single hole, stand on its tee in one click, play it 
   - Test: findings in `docs/playtests/`. `/godot-check` green with the survivor.
   - Touches: `golf/`, `docs/`
   - Settles: design doc open question "Swing bar feel".
+- [ ] E2-S10 Settle a ball in a green pit from 1 to 2 yd out quickly. A ball that rolls into a green pit should not take 7 to 13 s.
+  - Note: (found in E1 review). Green pit settle time from 1 to 2 yd out is 7 to 13 s because of the slow green trickle. Consider covering it in the E1-S12 settle-time target, or move it to the icebox at `/next-epic`.
+  - Accept: a ball that starts 1 to 2 yd from the centre of a one-tile green pit rests near the centre within the green settle target in `docs/design.md`.
+  - Test: a case in `tests/test_ball.gd`.
+  - Touches: `golf/`, `tests/`
+- [ ] E2-S11 Let a ball on rough run down a one-tile gully. A still ball on a gully floor should reach the bottom, not creep 6 to 10 yd and hit the 60 s cap.
+  - Note: (found in E1 review); old behaviour on main. While a ball moves along a one-tile gully's floor line, the bilinear gradient there still includes the wall's cross slope (plus or minus 0.8 or 1.2 step/yd). The 1/(1+|feel|²) projection then cuts the pull along the floor to about 2.4 yd/s², below rough's 2.5 friction. A possible fix is to use the averaged cross gradient (or drop the stopped axis from feel) in the moving branch too, or to smooth the gradient across tile centres in the height field. Worth a `/balance` or physics story.
+  - Accept: a still ball on a rough gully floor rolls to the bottom with steps < `max_steps`. Other ball tests pass as they are.
+  - Test: a case in `tests/test_ball.gd`.
+  - Touches: `golf/`, `tests/`
+- [ ] E2-S12 Centre the height-field gradient at tile centres. Remove the one-sided slope artifacts.
+  - Note: (found in E1 review). `HeightField.gradient_at` at an exact tile centre returns the slope on the + side only. This causes small artifacts, such as the spurious y pull at y = 12.5 in the pit test. Consider centring it, for example by averaging both sides when the blend is 0.
+  - Accept: at an exact tile centre the gradient is the average of both sides; the pit test shows no spurious y pull at y = 12.5.
+  - Test: a case in `tests/test_ball.gd` or the height-field tests.
+  - Touches: `golf/`, `tests/`
+- [ ] E2-S13 Settle a ball in a green gully. Green gully balls should not hit the 60 s cap.
+  - Note: (found in E1 review). Green gully balls still hit the 60 s cap at about y 8.2. That is the slow green trickle from E1-S12, unchanged from main. Likely shares a fix with E2-S11 or E2-S14.
+  - Accept: a still ball in a green gully rests or reaches the bottom with steps < `max_steps`.
+  - Test: a case in `tests/test_ball.gd`.
+  - Touches: `golf/`, `tests/`
+- [ ] E2-S14 Make the E1-S12 commit history match D7. The commit message body still describes the original rest rule.
+  - Note: (found in E1 review). The commit message body still describes the original rule ("rests where it is"), because the task said to keep the message. `docs/design.md` now has the per-axis wording. History is not rewritten; this story only records the mismatch where a reader will find it.
+  - Accept: `docs/DECISIONS.md` (D7) notes that the E1-S12 commit body predates the per-axis wording, and points to `docs/design.md`.
+  - Test: none. Review the diff.
+  - Touches: `docs/`
+- [ ] E2-S15 Change the green friction model so steep greens settle. Linear drag sets the trickle speed, so no retune fixes it.
+  - Note: (found in E1 review); for E2 or the icebox. Green slopes steeper than one step per tile still settle slowly. A still ball on a two-steps-per-tile green (felt 6%) trickles at about 0.2 yd/s and takes about 42 s to reach the foot of a 15 yd slope; a short putt that rolls back on it takes about 14 s. This got about twice as slow as under E1-S11, because the higher hold leaves less net pull. The fix is a change to the friction model, such as less drag at low speed or mostly constant rolling resistance. The 8 s target and D7 cover one-step green slopes only, and the tests assert only steps < `max_steps` there.
+  - Accept: a still ball and a roll-back putt on a two-steps-per-tile green settle under the green settle target, and the E1-S11 and E1-S12 putt targets still hold.
+  - Test: cases in `tests/test_ball.gd`.
+  - Touches: `golf/`, `course/`, `tests/`
+- [ ] E2-S16 Check that short uphill putts that stay on a step read well. Hand-check a D7 side effect.
+  - Note: (found in E1 review). Short uphill putts on a one-step green contour now stay on the step instead of rolling back. The E2-S9 hand playtest should check that this reads well.
+  - Accept: the E2-S9 playtest notes in `docs/playtests/` say whether a putt resting on a contour step reads as intended.
+  - Test: by hand, during E2-S9.
+  - Touches: `docs/`
+- [ ] E2-S17 Mirror D7 in the Claude Docs design doc. A green holds a ball on gentle slopes, and the break is read at rest.
+  - Note: (found in E1 review). The design doc in Claude Docs may want D7 mirrored.
+  - Accept: the Claude Docs design doc states the D7 rule, or the user declines and the decision says so.
+  - Test: none. Review the design doc.
+  - Touches: `docs/`
+- [ ] E2-S18 Fix settle time on greens steeper than the D7 hold. Do this before E2-S7.
+  - Note: (found in E1 review). Today a still ball from the upper part of a two-steps-per-tile band reaches the 60 s cap mid-slope, roll-backs take 8 to 28 s, and three steps per tile takes up to about 15 s. Options: a builder or validator limit on green height steps, or a faster trickle once the pull clearly beats the hold. Ask the user whether a long creep on a painted steep green is acceptable.
+  - Accept: a settle target measured on `_steep_green(2, 2)` in `docs/design.md`, met by every still ball and roll-back there, or a builder/validator limit that prevents such greens, with the user's answer recorded by `/decision`.
+  - Test: cases in `tests/test_ball.gd` on `_steep_green(2, 2)`.
+  - Touches: `golf/`, `course/`, `tests/`
+- [ ] E2-S19 Draw a resting ball on the tile it rests on. Do this before or with E2-S7.
+  - Note: (found in E1 review). Balls resting on one-step slopes are drawn up to about 7.5 px above or below the flat tile top, and sometimes on the riser. Options: snap the drawn z and shadow to the top of the tile the ball rests on, use sloped green tile art, or keep a slow ball out of the riser band. Confirm the choice with the user, because D7 holds the ball on a slope that is drawn as a cliff.
+  - Accept: a ball at rest on a one-step slope is drawn on a tile top, not on a riser, using the option the user chose.
+  - Test: a case in the course view or ball view tests, plus a screenshot.
+  - Touches: `golf/`, `scenes/`, `tests/`
+- [ ] E2-S20 Settle a putt that runs off a green onto a rough slope. A diagonal putt off the contour can roll about 9.6 s.
+  - Note: (found in E1 review). A diagonal putt that runs off the contour's y = 50 edge rolls about 5 yd down the rough's tier slope at about 1.2 yd/s, for up to about 9.6 s. This is rough physics and was not tuned by E1-S12. It fits a `/balance surfaces` pass on rough, or the rough-gully known limit (E2-S11).
+  - Accept: a `/balance surfaces` pass on rough brings that putt under the settle target, or records it as an accepted limit.
+  - Test: a case in `tests/test_ball.gd`.
+  - Touches: `golf/`, `course/`, `tests/`
 
 ## E3: Nine holes and guests — planned
 
