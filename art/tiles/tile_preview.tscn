@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://art/tiles/tile_preview.gd" id="1_preview"]
+
+[node name="TilePreview" type="Node2D"]
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 1280.0
+offset_bottom = 720.0
+color = Color(0.231, 0.235, 0.275, 1)
+
+[node name="Strip" type="Node2D" parent="."]
+position = Vector2(24, 16)
+script = ExtResource("1_preview")
+
+[node name="MapColor" type="Node2D" parent="."]
+position = Vector2(328, 304)
+script = ExtResource("1_preview")
+show_what = 1
+
+[node name="MapGray" type="Node2D" parent="."]
+position = Vector2(952, 304)
+script = ExtResource("1_preview")
+show_what = 1
+grayscale = true

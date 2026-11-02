@@ -30,7 +30,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: a 2D tile array (height 0 to 7, surface enum), a holes list, and `to_dict` / `from_dict` in course format version 1 from `/course-file`, including the base64 `tiles` packing and `oob` as surface 8. A 20x20 course round-trips through JSON with no loss. Out-of-range heights are rejected on load.
   - Test: `tests/test_course_data.gd`
   - Touches: `course/`, `tests/`
-- [ ] E1-S3 Build the placeholder art and screenshot tools. `/art-spec` and `/next-story` both call tools that do not exist yet.
+- [x] E1-S3 Build the placeholder art and screenshot tools. `/art-spec` and `/next-story` both call tools that do not exist yet.
   - Accept: `art/palette.gpl` (about 32 colors), `scripts/placeholder.py`, `scripts/screenshot.sh <scene>`, and specs plus placeholders for surfaces and risers. Each surface has its colorblind pattern from day one. `screenshot.sh` writes a real PNG: Godot's `--headless` mode has a dummy renderer and draws no pixels, so it needs a display (`xvfb-run` is not installed on this machine).
   - Test: by hand. Run the screenshot script on a test scene and open the PNG.
   - Touches: `art/`, `scripts/`

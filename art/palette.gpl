@@ -1,0 +1,40 @@
+GIMP Palette
+Name: Prestwick
+Columns: 8
+#
+# The only colors Prestwick art may use (art-spec skill). 32 entries.
+# Names are what scripts/placeholder.py looks up; rename only together with it.
+# Ramps run dark to light. SimGolf warmth, Mean 18 clarity.
+#
+ 26  28  34	ink
+ 58  60  70	slate_dark
+106 108 118	slate
+168 168 176	slate_light
+240 236 224	chalk
+ 31  74  42	tree_dark
+ 46 107  52	tree
+ 53 106  44	rough_dark
+ 74 138  58	rough
+ 95 160  64	tee_dark
+120 184  88	tee_light
+ 86 150  60	fairway_dark
+111 174  74	fairway
+124 192  78	green_dark
+154 216 106	green
+188 234 140	green_light
+201 174 110	sand_dark
+232 211 154	sand
+246 234 196	sand_light
+ 36  80 138	water_dark
+ 58 123 200	water
+122 180 232	water_light
+138 130 116	path_dark
+184 176 160	path
+ 94  60  38	earth_dark
+138  90  58	earth
+168 120  78	earth_light
+ 74  90  68	oob_dark
+112 124 100	oob
+216  58  58	flag_red
+240 200  58	sun_yellow
+232 176 144	skin

@@ -6,6 +6,7 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 
 - Tile = 5 yards. Isometric 2:1, 64x32 footprint. Height 0 to 7 steps, 16 px riser per step.
 - Brush sizes 1, 3, 5.
+- Every surface has a pattern as well as a color (colorblind rule); patterns are named in `art/specs/surfaces.md`. Art uses only `art/palette.gpl` (32 colors). Terrain sheets load by name through `art/tiles/surfaces.tres`.
 
 | Surface | Roll | Distance | Cost/tile | Notes |
 | --- | --- | --- | --- | --- |
