@@ -10,5 +10,6 @@ yards_per_step = 2.0
 roll_decel = 1.5
 roll_drag = 0.6
 rest_speed = 0.1
+low_point_speed = 0.25
 min_bounce_speed = 1.0
 max_steps = 3600

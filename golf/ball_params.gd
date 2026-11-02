@@ -19,6 +19,9 @@ const DEFAULT_PATH := "res://golf/ball_params.tres"
 @export var roll_drag: float = 0.6
 ## Below this speed (yd/s) a rolling ball stops, unless the slope pulls harder than roll_decel.
 @export var rest_speed: float = 0.1
+## Below this speed (yd/s) a rolling ball stops along an axis where it is about to cross a
+## low point (a pit's centre or a gully's floor line), so it settles instead of rocking (E1-S13).
+@export var low_point_speed: float = 0.25
 ## A touchdown that would bounce up slower than this (yd/s) rolls instead.
 @export var min_bounce_speed: float = 1.0
 ## Safety cap: a ball still moving after this many ticks is put at rest (60 s at 60 Hz).

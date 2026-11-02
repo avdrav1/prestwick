@@ -196,7 +196,20 @@ func _step_roll() -> void:
 		if pull.length() <= hold:
 			_rest()
 			return
+		var still := v
 		v += pull.normalized() * (pull.length() - hold) * DT
+		# At a low point (E1-S13), per axis: see _low_point_axes. With both axes stopped (a
+		# pit) it rests. With one stopped (a gully that slopes along its length) it goes on
+		# down the other, pulled by that axis's slope alone, as on the gully's floor line,
+		# and rests only if that pull is no more than the hold.
+		var keep := _low_point_axes(grad, v)
+		if keep != Vector2.ONE:
+			var floor_feel := feel * keep
+			var floor_pull := -floor_feel * params.gravity / (1.0 + floor_feel.length_squared())
+			if floor_pull.length() <= hold:
+				_rest()
+				return
+			v = still * keep + floor_pull.normalized() * (floor_pull.length() - hold) * DT
 	else:
 		# Friction = constant part + grass drag that grows with speed. Where the surface holds
 		# a still ball more lightly, the constant part rises back to full by decel_ramp_speed.
@@ -207,10 +220,25 @@ func _step_roll() -> void:
 		v += pull * DT
 		var speed := v.length() - friction * DT
 		v = v.normalized() * speed if speed > 0.0 else Vector2.ZERO
+		# A slow ball also stops along an axis where it is about to cross a low point
+		# (E1-S13), so it does not swing to and fro across a pit's centre or a gully's floor.
+		if v.length() < params.low_point_speed:
+			v *= _low_point_axes(grad, v)
 	var x := position.x + v.x * DT
 	var y := position.y + v.y * DT
 	position = Vector3(x, y, field.height_at(x, y))
 	velocity = Vector3(v.x, v.y, grad.dot(v))
+
+
+## 0 on each axis (x, y) where this tick's move `v` would carry the ball from ground falling
+## along `v` on that axis onto ground rising against it: the bottom of that axis, where the
+## bilinear gradient jumps at a tile centre. 1 on the others. Friction only trims the pull,
+## so without this nothing damps a slow ball swinging across that jump.
+func _low_point_axes(grad: Vector2, v: Vector2) -> Vector2:
+	var next := field.gradient_at(position.x + v.x * DT, position.y + v.y * DT)
+	return Vector2(
+			0.0 if grad.x * v.x < 0.0 and next.x * v.x > 0.0 else 1.0,
+			0.0 if grad.y * v.y < 0.0 and next.y * v.y > 0.0 else 1.0)
 
 
 func _rest() -> void:

@@ -240,6 +240,68 @@ func test_uphill_putt_that_stops_short_rolls_back() -> void:
 	assert_lt(ball.position.x, start.x, "and came back down past where it started")
 
 
+## A 5x5 plot at height 1 with a one-tile pit at height 0 in the middle, tile (2, 2), whose
+## centre is (12.5, 12.5) yd. The slope pull jumps across the pit's centre.
+func _pit(surface: Surface.Type) -> CourseData:
+	var course := _flat(surface, 5, 1)
+	course.set_tile(2, 2, 0, surface)
+	return course
+
+
+func test_still_ball_in_a_one_tile_pit_rests_near_the_centre() -> void:
+	# E1-S13: it used to rock across the centre until the 60 s cap. "Just off" is within
+	# 0.04 yd: the green pulls a still ball at only about 0.24 yd/s², so from further out the
+	# trickle to the centre alone takes over 1 s (E1-S12 owns that pace).
+	var centre := Vector2(12.5, 12.5)
+	for s: Surface.Type in [Surface.Type.GREEN, Surface.Type.FAIRWAY]:
+		for off: Vector2 in [Vector2(0.04, 0.0), Vector2(-0.03, 0.02), Vector2(0.0, -0.04)]:
+			var ball := Ball.new(_pit(s), 1)
+			ball.start_roll(centre + off, Vector2.ZERO)
+			ball.run_to_rest()
+			var label := "%s, set %s off the centre" % [Surface.NAMES[s], off]
+			assert_lte(ball.steps, Ball.TICK_HZ, "%s: rests within 1 s (%d ticks)" % [label, ball.steps])
+			assert_lt(Vector2(ball.position.x, ball.position.y).distance_to(centre), 0.1,
+					"%s: rests near the centre" % label)
+
+
+## A 7x8 plot with a one-tile gully down column 3 (floor line x = 17.5 yd): the floor rises
+## one step per tile from height 0 at row 0 to 4 at row 4, then is flat; the walls either
+## side stand `wall` steps above it. The floor is lowest, and flat along y, for y <= 2.5 yd.
+func _gully(surface: Surface.Type, wall: int) -> CourseData:
+	var course := CourseData.create(7, 8, surface, 0)
+	for j in 8:
+		var floor_h: int = mini(j, 4)
+		for i in 7:
+			course.set_tile(i, j, floor_h if i == 3 else floor_h + wall, surface)
+	return course
+
+
+func test_still_ball_in_a_sloping_gully_does_not_rest_mid_slope() -> void:
+	# E1-S13 review: the gradient flips across the gully's floor line, but the floor itself
+	# still slopes, pulling 3.7 yd/s² along it (more than rough's 2.5 hold). Only the cross
+	# axis is at a low point, so the ball must go on down, not rest where it crosses the line.
+	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY]:
+		for wall in [2, 3]:
+			for start: Vector2 in [Vector2(17.2, 18.0), Vector2(16.5, 18.0), Vector2(17.45, 18.0),
+					Vector2(17.5, 18.0)]:
+				var ball := Ball.new(_gully(s, wall), 1)
+				ball.start_roll(start, Vector2.ZERO)
+				ball.run_to_rest()
+				var label := "%s, walls %d up, set at %s" % [Surface.NAMES[s], wall, start]
+				assert_lt(ball.position.y, start.y - 5.0,
+						"%s: more than a tile down the gully (y %.2f)" % [label, ball.position.y])
+				if ball.steps < ball.params.max_steps:
+					assert_lte(ball.position.y, 3.0,
+							"%s: rested on its own only at the flat bottom (y %.2f)" % [label, ball.position.y])
+				assert_almost_eq(ball.position.x, 17.5, 0.1, "%s: on the floor line" % label)
+	# Fairway rolls all the way down.
+	var down := Ball.new(_gully(Surface.Type.FAIRWAY, 2), 1)
+	down.start_roll(Vector2(17.2, 18.0), Vector2.ZERO)
+	down.run_to_rest()
+	assert_lt(down.steps, down.params.max_steps, "fairway: came to rest on its own")
+	assert_lte(down.position.y, 3.0, "fairway: at the flat bottom")
+
+
 func test_flying_ball_meets_hillside_and_lands_there() -> void:
 	# Flat at height 0 for tiles x < 10, a 7-step hill from x = 10. The hillside runs
 	# between the tile centres at 47.5 and 52.5 yards.

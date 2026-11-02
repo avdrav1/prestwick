@@ -76,7 +76,7 @@ Done when: you can paint hills, fire a debug shot over them, and the ball lands 
   - Accept: a `/balance surfaces` target in `docs/design.md` for the longest green settle time (for example 8 s), measured on `GridHeightEvidence.green_contour()` and on a green rising one step per tile from height 0 to 7. Every still ball and every putt from 1 to 15 yd/s on both settles under it, with steps below `max_steps`. The E1-S11 putt targets, or a widened band agreed through `/balance`, still hold.
   - Test: cases in `tests/test_ball.gd`, including a still ball on a several-tile one-step-per-tile green ramp that reaches flat ground with steps < `max_steps`, and `test_ball_at_rest_on_a_green_slope_rolls_down` back at its original x 20 start.
   - Touches: `golf/`, `course/`, `tests/`, `docs/`
-- [ ] E1-S13 Rest a ball that settles in a dip. A ball in a one-tile pit should stop, not rock for 60 s.
+- [x] E1-S13 Rest a ball that settles in a dip. A ball in a one-tile pit should stop, not rock for 60 s.
   - Note: found in E1-S11 review, and on main before it, on every rolling surface. A still ball in a one-tile pit hits the 3600-tick cap on green and on fairway: the static branch of `Ball._step_roll` adds the pull less the friction and nothing damps the swing across the gradient jump at the tile centre.
   - Accept: in the static branch, a ball whose pull reverses against its velocity (it is at a low point) rests, or the hold is applied against the velocity before the pull is added. Other ball tests pass as they are.
   - Test: a case in `tests/test_ball.gd`: a still ball set just off the centre of a one-tile pit, on green and on fairway, rests within 1 s (60 ticks) near the centre.
