@@ -12,6 +12,8 @@ const GREEN_W: int = 16
 const GREEN_H: int = 12
 const HILL_W: int = 28
 const HILL_H: int = 12
+const RAMP_W: int = 24
+const RAMP_H: int = 12
 
 
 func _initialize() -> void:
@@ -40,6 +42,15 @@ func _initialize() -> void:
 	_slow_balls(green_contour(), params, built)
 	_still_on_steps(green_contour(), params, built)
 	_rest_on_slope(green_contour(), params, built)
+	print("== E1-S12 (D7): a green holds a slow ball on a gentle felt slope; target: every green ball settles in under 8 s")
+	_ramp_balls(params, built)
+	for mirrored: bool in [false, true]:
+		_settle("green contour" + (" mirrored" if mirrored else ""), green_contour(mirrored),
+				params, built,
+				[22.5, 25.0, 28.0, 30.0, 32.0, 35.0, 38.0, 40.0, 42.0, 45.0, 48.0, 50.0, 52.0, 55.0],
+				[12.5, 27.5, 47.5])
+	_settle("green ramp", green_ramp(), params, built,
+			[20.0, 22.5, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 57.5, 60.0], [10.0, 30.0, 50.0])
 	quit(0)
 
 
@@ -61,6 +72,18 @@ static func green_contour(mirrored: bool = false) -> CourseData:
 				s = Surface.Type.GREEN
 			c.set_tile(x, y, h, s)
 	c.set_info("E1-S9 green contour", "tests", "")
+	return c
+
+
+## E1-S12: an all-green plot rising one step per tile along +x from 0 to 7: flat at 0 for
+## tiles x 0 to 4, then heights 1 to 7 at tiles 5 to 11, flat at 7 after. The slope runs
+## from x 22.5 to 57.5 yd, felt on green as an even 3%.
+static func green_ramp() -> CourseData:
+	var c := CourseData.create(RAMP_W, RAMP_H, Surface.Type.GREEN, 0)
+	for y: int in RAMP_H:
+		for x: int in RAMP_W:
+			c.set_tile(x, y, clampi(x - 4, 0, 7), Surface.Type.GREEN)
+	c.set_info("E1-S12 green ramp", "tests", "")
 	return c
 
 
@@ -162,11 +185,11 @@ func _hill_shots(params: BallParams) -> void:
 			Vector2(p.landing.x - start.x, p.landing.y - start.y).length()])
 
 
-## Sidehill putts along +y through the middle of the tier 0 to 1 slope band. The break is the
-## sideways offset when the forward speed drops under rest speed (the putt's full length);
-## the ball then trickles down to the lower shelf.
+## Sidehill putts along +y through the middle of the tier 0 to 1 slope band. Prints the
+## sideways offset when the forward speed drops under rest speed (the putt's full length) and
+## where the ball rests. Since E1-S12 (D7) the break is read at rest.
 func _sidehill_break(course: CourseData, params: BallParams, table: SurfaceTable) -> void:
-	print("== sidehill break at the putt's full length (from tile (5.5, 2.5), mid-band, along +y)")
+	print("== sidehill break (from tile (5.5, 2.5), mid-band, along +y); D7 reads the break at rest")
 	for speed: float in [2.0, 3.0, 4.0, 5.0]:
 		var from := _yd(Vector2(5.5, 2.5))
 		var ball := Ball.new(course, 1, params, table)
@@ -179,7 +202,7 @@ func _sidehill_break(course: CourseData, params: BallParams, table: SurfaceTable
 				t = ball.steps
 				at = Vector2(ball.position.x, ball.position.y) - from
 		var end := Vector2(ball.position.x, ball.position.y) - from
-		print("   %3.1f yd/s: forward %.2f yd, break %.2f yd downhill at %.1f s; rests %.2f yd down, %.2f yd on, at %.1f s" % [
+		print("   %3.1f yd/s: out of pace %.2f yd on, %.2f yd down at %.1f s; rests %.2f yd down (the break), %.2f yd on, at %.1f s" % [
 			speed, at.y, -at.x, t / 60.0, -end.x, end.y, ball.steps / 60.0])
 
 
@@ -220,5 +243,66 @@ func _still_on_steps(course: CourseData, params: BallParams, table: SurfaceTable
 			ball.run_to_rest()
 			var flat := field.gradient_at(ball.position.x, ball.position.y).length() < 0.001
 			line += " from x %.1f -> x %.2f (%s, %.1f s);" % [lower + into, ball.position.x,
-					"flat shelf" if flat else "ON SLOPE", ball.steps / 60.0]
+					"flat shelf" if flat else "on slope", ball.steps / 60.0]
 		print(line)
+
+
+## E1-S12: the longest settle over still balls and putts of 1 to 15 yd/s along the four axes
+## and the four diagonals, from starts across the green (yards). The same grids as
+## tests/test_ball.gd. The 8 s target is for balls that rest on green; a ball that runs off
+## the green is reported apart (rough physics, docs/design.md Ball known limit).
+func _settle(label: String, course: CourseData, params: BallParams, table: SurfaceTable,
+		xs: Array, ys: Array) -> void:
+	var worst := {true: 0, false: 0}
+	var what := {true: "none", false: "none"}
+	var count := {true: 0, false: 0}
+	var capped := 0
+	var runs := 0
+	var still_worst := 0
+	for x: float in xs:
+		for y: float in ys:
+			for speed: int in range(0, 16):
+				for i: int in 8:
+					if speed == 0 and i > 0:
+						continue
+					var v := Vector2.RIGHT.rotated(i * PI / 4.0) * speed
+					var ball := Ball.new(course, 1, params, table)
+					ball.start_roll(Vector2(x, y), v)
+					ball.run_to_rest()
+					runs += 1
+					if ball.steps >= params.max_steps:
+						capped += 1
+					if speed == 0:
+						still_worst = maxi(still_worst, ball.steps)
+					var s := ball.field.surface_at(ball.position.x, ball.position.y)
+					var on_green := s == Surface.Type.GREEN
+					count[on_green] += 1
+					if ball.steps > worst[on_green]:
+						worst[on_green] = ball.steps
+						what[on_green] = "from (%.1f, %.1f) at (%.1f, %.1f), rests (%.2f, %.2f) on %s" % [
+								x, y, v.x, v.y, ball.position.x, ball.position.y, Surface.name_of(s)]
+	print("== settle time, %s: %d runs, longest still ball %.1f s, at the cap %d" % [
+		label, runs, still_worst / 60.0, capped])
+	print("   resting on green (%d): longest %.1f s (%s)" % [count[true], worst[true] / 60.0, what[true]])
+	print("   ran off green (%d): longest %.1f s (%s)" % [count[false], worst[false] / 60.0, what[false]])
+
+
+## E1-S12: still balls and slow balls on the one-step-per-tile green ramp.
+func _ramp_balls(params: BallParams, table: SurfaceTable) -> void:
+	print("== green ramp, one step per tile 0 to 7 (slope x 22.5 to 57.5 yd, y 30)")
+	var course := green_ramp()
+	var line := "   still:"
+	for x: float in [25.0, 35.0, 45.0, 55.0]:
+		var ball := Ball.new(course, 1, params, table)
+		ball.start_roll(Vector2(x, 30.0), Vector2.ZERO)
+		ball.run_to_rest()
+		line += " x %.1f -> x %.2f (%.1f s);" % [x, ball.position.x, ball.steps / 60.0]
+	print(line)
+	for speed: float in [3.0, 6.0, 9.0, 12.0, 15.0]:
+		for dir: float in [1.0, -1.0]:
+			var from := Vector2(40.0, 30.0)
+			var ball := Ball.new(course, 1, params, table)
+			ball.start_roll(from, Vector2(speed * dir, 0.0))
+			ball.run_to_rest()
+			print("   %s %4.1f yd/s from x 40: rests x %.2f in %.1f s" % [
+				"uphill  " if dir > 0.0 else "downhill", speed, ball.position.x, ball.steps / 60.0])

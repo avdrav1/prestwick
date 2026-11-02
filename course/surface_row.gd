@@ -14,8 +14,10 @@ extends Resource
 @export var slope_scale: float = 1.0
 ## Share of the constant friction (BallParams.roll_decel / roll) that holds a still ball
 ## here. It rises linearly back to the full constant friction at decel_ramp_speed, so fast
-## balls roll as before. Keep the one-step pull, scaled by slope_scale, above it, or a still
-## ball never starts down a slope (a GUT test guards it). 1.0 leaves the friction as it is.
+## balls roll as before. Off the green, keep the one-step pull, scaled by slope_scale, above
+## it, or a still ball never starts down a slope. On green it is the gentle-slope hold (D7):
+## above the one-step pull, so a ball rests on a one-step contour, and below the two-steps-
+## per-tile pull, so steeper greens still roll (GUT tests guard both). 1.0 leaves it as is.
 @export var rest_decel_scale: float = 1.0
 ## Speed (yd/s) at which the constant friction is back to full, when rest_decel_scale < 1.
 @export var decel_ramp_speed: float = 1.0

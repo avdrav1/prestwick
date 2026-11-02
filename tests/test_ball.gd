@@ -184,40 +184,78 @@ func _green_ramp() -> CourseData:
 	return course
 
 
+## Felt pull on a slope rising `steps` height steps per tile, on the surface of `row`.
+func _step_pull(params: BallParams, row: SurfaceRow, steps: float) -> float:
+	var grad := row.slope_scale * steps * params.yards_per_step / params.yards_per_tile
+	return params.gravity * grad / (1.0 + grad * grad)
+
+
+## Constant friction that holds a still ball on the surface of `row`.
+func _hold(params: BallParams, row: SurfaceRow) -> float:
+	return params.roll_decel * row.rest_decel_scale / row.roll
+
+
 func test_slope_pull_beats_rest_friction() -> void:
-	# A design guard: the steepest pull, scaled by the surface's slope_scale, must beat the
-	# constant friction that holds a still ball on every rolling surface, or balls never
-	# start down a slope.
+	# A design guard: off the green, the one-step pull must beat the constant friction that
+	# holds a still ball on every rolling surface, or balls never start down a slope. The
+	# green holds a ball on a gentle slope by design (D7, next test).
 	var params := BallParams.load_default()
 	var table := SurfaceTable.load_default()
-	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.GREEN,
-			Surface.Type.TEE, Surface.Type.TREES, Surface.Type.CART_PATH]:
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.TEE,
+			Surface.Type.TREES, Surface.Type.CART_PATH]:
 		var row := table.row(s)
-		var grad := row.slope_scale * params.yards_per_step / params.yards_per_tile
-		var pull := params.gravity * grad / (1.0 + grad * grad)
-		var hold := params.roll_decel * row.rest_decel_scale / row.roll
-		assert_gt(pull, hold, "a one-step slope moves a still ball on %s" % Surface.NAMES[s])
+		assert_gt(_step_pull(params, row, 1.0), _hold(params, row),
+				"a one-step slope moves a still ball on %s" % Surface.NAMES[s])
+
+
+func test_green_holds_a_ball_on_a_gentle_slope_only() -> void:
+	# E1-S12 (D7): a green holds a slow ball on a gentle felt slope, as a real green holds a
+	# ball on about 3%. One step per tile is felt as 3% and holds; two steps per tile (6%)
+	# must still move a still ball, so steeper greens roll down and short putts roll back.
+	var params := BallParams.load_default()
+	var green := SurfaceTable.load_default().row(Surface.Type.GREEN)
+	assert_gt(_hold(params, green), _step_pull(params, green, 1.0),
+			"a one-step green slope holds a still ball")
+	assert_lt(_hold(params, green), _step_pull(params, green, 2.0),
+			"a two-steps-per-tile green slope does not")
+
+
+## A green rising `per_tile` steps per tile along +x from height 0 at tile `from`, up to 7.
+func _steep_green(per_tile: int, from: int) -> CourseData:
+	var course := _flat(Surface.Type.GREEN, 40)
+	for y in 40:
+		for x in 40:
+			course.set_tile(x, y, clampi((x - from) * per_tile, 0, 7), Surface.Type.GREEN)
+	return course
+
+
+func test_ball_at_rest_on_a_gentle_green_slope_stays() -> void:
+	# E1-S12 (D7): the E1-S6 test's original x 20 start on the one-step-per-tile green ramp
+	# (felt as 3%). The green holds the ball where it is set, at once.
+	var ball := Ball.new(_green_ramp(), 3)
+	ball.start_roll(Vector2(20, 100), Vector2.ZERO)
+	ball.run_to_rest()
+	assert_almost_eq(ball.position.x, 20.0, EPS, "a green holds a ball on a 3% felt slope")
+	assert_lte(ball.steps, 1, "and rests on the first tick")
 
 
 func test_ball_at_rest_on_a_green_slope_rolls_down() -> void:
-	# The green feels a one-step ramp as 3% (E1-S11), so a still ball trickles down it at
-	# about 0.17 yd/s: set it down 3 yd above the mark rather than 10.
-	var course := _green_ramp()
-	var ball := Ball.new(course, 3)
-	ball.start_roll(Vector2(13, 100), Vector2.ZERO)
+	# The same x 20 start on a green rising two steps per tile (felt as 6%; heights 0, 2, 4,
+	# 6, 7 from tile 2, so the 6% band runs x 12.5 to 27.5): the ball runs down to the foot.
+	var ball := Ball.new(_steep_green(2, 2), 3)
+	ball.start_roll(Vector2(20, 100), Vector2.ZERO)
 	ball.run_to_rest()
-	assert_lt(ball.position.x, 10.0, "a ball set down on the slope runs down it")
+	assert_lt(ball.position.x, 13.0, "a ball set down on a steeper green slope runs down it")
+	# Known limit (docs/design.md Ball): it trickles, about 42 s; the 8 s target covers
+	# one-step green slopes only.
+	assert_lt(ball.steps, ball.params.max_steps, "and came to rest on its own")
 
 
 func test_ball_rolling_downhill_on_green_speeds_up() -> void:
 	# Green feels slope_scale of the slope (E1-S11), so a one-step ramp is a 3% break whose
 	# pull only keeps a slow ball trickling. A three-steps-per-tile green (120%, felt as 9%)
 	# pulls hard enough to speed a 0.5 yd/s ball up. Heights 0, 3, 6, 7 from x = 10.
-	var course := _flat(Surface.Type.GREEN, 40)
-	for y in 40:
-		for x in 40:
-			course.set_tile(x, y, clampi((x - 10) * 3, 0, 7), Surface.Type.GREEN)
-	var ball := Ball.new(course, 3)
+	var ball := Ball.new(_steep_green(3, 10), 3)
 	ball.start_roll(Vector2(62, 100), Vector2(-0.5, 0))
 	for i in 30:
 		ball.step()
@@ -226,18 +264,22 @@ func test_ball_rolling_downhill_on_green_speeds_up() -> void:
 
 
 func test_uphill_putt_that_stops_short_rolls_back() -> void:
-	var course := _green_ramp()
+	# E1-S12 (D7): a one-step-per-tile green now holds a ball that stops on it (see the
+	# contour test below), so this putt runs up a two-steps-per-tile green (felt as 6%,
+	# foot at x 12.5), which does not hold it.
+	var course := _steep_green(2, 2)
 	var start := Vector2(10, 100)
 	var ball := Ball.new(course, 3)
 	ball.record_path = true
-	ball.start_roll(start, Vector2(6, 0))
+	ball.start_roll(start, Vector2(5, 0))
 	ball.run_to_rest()
 	var furthest := start.x
 	for p in ball.path:
 		furthest = maxf(furthest, p.x)
-	assert_gt(furthest, start.x + 1.0, "went up the hill")
-	assert_lt(furthest, 37.5, "but not over the top")
-	assert_lt(ball.position.x, start.x, "and came back down past where it started")
+	assert_gt(furthest, 13.5, "went up the slope")
+	assert_lt(furthest, 27.5, "but not over the top")
+	assert_lt(ball.position.x, 13.0, "and came back down to the foot")
+	assert_lt(ball.steps, ball.params.max_steps, "on its own (about 14 s; see the test above)")
 
 
 ## A 5x5 plot at height 1 with a one-tile pit at height 0 in the middle, tile (2, 2), whose
@@ -250,8 +292,8 @@ func _pit(surface: Surface.Type) -> CourseData:
 
 func test_still_ball_in_a_one_tile_pit_rests_near_the_centre() -> void:
 	# E1-S13: it used to rock across the centre until the 60 s cap. "Just off" is within
-	# 0.04 yd: the green pulls a still ball at only about 0.24 yd/s², so from further out the
-	# trickle to the centre alone takes over 1 s (E1-S12 owns that pace).
+	# 0.04 yd. Since E1-S12 (D7) the green holds a still ball on the pit's walls, which it
+	# feels as 3%, so on green the ball rests where it is set.
 	var centre := Vector2(12.5, 12.5)
 	for s: Surface.Type in [Surface.Type.GREEN, Surface.Type.FAIRWAY]:
 		for off: Vector2 in [Vector2(0.04, 0.0), Vector2(-0.03, 0.02), Vector2(0.0, -0.04)]:
@@ -374,23 +416,20 @@ func test_contour_uphill_9_yds_ends_near_its_flat_distance() -> void:
 
 func test_contour_sidehill_3_yds_breaks_a_little() -> void:
 	# Along +y through the middle of the slope band between tier 0 and tier 1 (x 27.5 to
-	# 32.5 yd), which falls towards -x. The break is the sideways offset when the putt runs
-	# out of pace (forward speed under rest speed): what a cup at the putt's length sees.
-	# After that the ball trickles on down to the lower shelf, as any still ball does there.
+	# 32.5 yd), which falls towards -x. E1-S12 (D7): the break is the sideways offset where
+	# the ball comes to rest. The green holds it there: no slide after the putt dies.
 	var from := _yd(Vector2(5.5, 2.5))
-	var ball := Ball.new(GridHeightEvidence.green_contour(), 1)
-	ball.start_roll(from, Vector2(0, 3))
-	var brk := -1.0
-	while not ball.is_at_rest():
-		ball.step()
-		if brk < 0.0 and ball.velocity.y < ball.params.rest_speed:
-			brk = from.x - ball.position.x
-			assert_gt(ball.position.y - from.y, 2.0, "it rolled forward first")
-	assert_between(brk, 0.1, 1.0, "a 3 yd/s sidehill putt breaks %.2f yd downhill" % brk)
-	assert_lt(ball.position.x, 27.5 + EPS, "then settles on the lower shelf")
+	var ball := _putt(GridHeightEvidence.green_contour(), Vector2(5.5, 2.5), Vector2(0, 3))
+	var brk := from.x - ball.position.x
+	assert_gt(ball.position.y - from.y, 2.0, "it rolled forward")
+	assert_between(brk, 0.1, 1.0, "a 3 yd/s sidehill putt rests %.2f yd below its line" % brk)
+	assert_gt(ball.position.x, 27.5, "held on the step, not slid down to the lower shelf")
+	assert_lt(ball.steps, Ball.TICK_HZ * 8, "within the 8 s settle target")
 
 
-func test_contour_still_ball_on_a_step_rolls_to_the_lower_shelf() -> void:
+func test_contour_still_ball_on_a_step_is_held() -> void:
+	# E1-S12 (D7) replaces the E1-S11 clause "a still ball set down on a step rolls to the
+	# shelf below": a one-step green contour is felt as 3%, and a green holds a ball on that.
 	var course := GridHeightEvidence.green_contour()
 	# Points across each of the three green step bands (x 27.5-32.5, 37.5-42.5, 47.5-52.5).
 	for band: int in 3:
@@ -399,22 +438,86 @@ func test_contour_still_ball_on_a_step_rolls_to_the_lower_shelf() -> void:
 			var ball := Ball.new(course, 1)
 			ball.start_roll(Vector2(lower + into, 27.5), Vector2.ZERO)
 			ball.run_to_rest()
-			assert_lt(ball.steps, ball.params.max_steps, "came to rest on its own")
-			assert_between(ball.position.x, lower - 5.0, lower + EPS,
-					"set down %.1f yd up step %d, rests on the shelf below" % [into, band + 1])
-			assert_almost_eq(ball.field.gradient_at(ball.position.x, ball.position.y).length(), 0.0, EPS,
-					"on flat ground")
+			assert_lte(ball.steps, 1, "set down %.1f yd up step %d, rests at once" % [into, band + 1])
+			assert_almost_eq(ball.position.x, lower + into, EPS, "where it was set")
 
 
-func test_contour_uphill_putt_that_stops_short_on_a_step_rolls_back() -> void:
+func test_contour_uphill_putt_that_stops_short_on_a_step_stays_there() -> void:
+	# E1-S12 (D7): it used to roll back to the front tier in 12 to 35 s. Now the green holds
+	# it on the step's 3% felt slope at the point where it runs out of pace.
 	var from := Vector2(4.5, 5.5)
 	var ball := _putt(GridHeightEvidence.green_contour(), from, Vector2(6, 0))
 	var furthest := 0.0
 	for p in ball.path:
 		furthest = maxf(furthest, p.x)
-	assert_between(furthest, 27.5, 32.5, "it stops on the step's slope")
-	assert_lt(ball.position.x, 27.5 + EPS, "and rolls back to the front tier")
-	assert_gt(ball.position.x, _yd(from).x, "ahead of where it started")
+	assert_between(ball.position.x, 27.5, 32.5, "it stops on the step's slope")
+	assert_almost_eq(ball.position.x, furthest, EPS, "and stays there")
+	assert_lt(ball.steps, Ball.TICK_HZ * 8, "within the 8 s settle target")
+
+
+# --- settle time (E1-S12, D7): docs/design.md Ball, the longest green settle is under 8 s ---
+
+## Longest settle over still balls and putts of 1 to 15 yd/s along the four axes and the four
+## diagonals from every start (yards) in `xs` x `ys`. The 8 s target is for balls that come
+## to rest on green ("steps"); a putt that runs off the green and on down the rough's slope
+## is rough physics, reported apart ("off_steps", docs/design.md Ball known limit).
+func _settle_worst(course: CourseData, xs: Array, ys: Array) -> Dictionary:
+	var worst := {"steps": 0, "what": "", "off_steps": 0, "off_what": "", "capped": 0}
+	var cases: Array[Vector2] = [Vector2.ZERO]
+	for speed in range(1, 16):
+		for i in 8:
+			cases.append(Vector2.RIGHT.rotated(i * PI / 4.0) * speed)
+	for x: float in xs:
+		for y: float in ys:
+			var p := Vector2(x, y)
+			for v: Vector2 in cases:
+				var ball := Ball.new(course, 1)
+				ball.start_roll(p, v)
+				ball.run_to_rest()
+				if ball.steps >= ball.params.max_steps:
+					worst["capped"] += 1
+				var on_green := ball.field.surface_at(ball.position.x, ball.position.y) \
+						== Surface.Type.GREEN
+				var key := "steps" if on_green else "off_steps"
+				if ball.steps > worst[key]:
+					worst[key] = ball.steps
+					worst["what" if on_green else "off_what"] = "from %s at %s" % [p, v]
+	return worst
+
+
+func test_green_settle_time_on_the_contour() -> void:
+	# From the front tier, every step band and every tier of the green, on three lines, on the
+	# contour and its mirror. A diagonal putt that runs off the green's y = 50 edge rolls on
+	# down the rough's tier slope for up to about 9.6 s (rough physics, a known limit), so
+	# only balls that rest on green are held to 8 s; the rest must still settle on their own.
+	for mirrored: bool in [false, true]:
+		var w := _settle_worst(GridHeightEvidence.green_contour(mirrored),
+				[22.5, 25.0, 28.0, 30.0, 32.0, 35.0, 38.0, 40.0, 42.0, 45.0, 48.0, 50.0, 52.0, 55.0],
+				[12.5, 27.5, 47.5])
+		assert_eq(w["capped"], 0, "no ball reaches max_steps")
+		assert_lt(w["steps"], Ball.TICK_HZ * 8, "mirrored %s: longest settle on green %.1f s, %s (off green %.1f s, %s)" % [
+				mirrored, w["steps"] / 60.0, w["what"], w["off_steps"] / 60.0, w["off_what"]])
+
+
+func test_green_settle_time_on_a_one_step_per_tile_ramp() -> void:
+	# GridHeightEvidence.green_ramp(): all green, rising one step per tile from 0 to 7.
+	var w := _settle_worst(GridHeightEvidence.green_ramp(),
+			[20.0, 22.5, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 57.5, 60.0], [10.0, 30.0, 50.0])
+	assert_eq(w["capped"], 0, "no ball reaches max_steps")
+	assert_lt(w["steps"], Ball.TICK_HZ * 8, "longest settle %.1f s, %s" % [w["steps"] / 60.0, w["what"]])
+
+
+func test_still_ball_on_a_several_tile_green_ramp_settles_at_once() -> void:
+	# E1-S12's still ball on a several-tile one-step-per-tile green ramp, under D7: it used
+	# to creep about 10 yd down before the 60 s cap; now the green holds it where it is set.
+	var course := GridHeightEvidence.green_ramp()
+	for x: float in [25.0, 35.0, 45.0, 55.0]:
+		var ball := Ball.new(course, 1)
+		ball.start_roll(Vector2(x, 30.0), Vector2.ZERO)
+		ball.run_to_rest()
+		assert_lt(ball.steps, ball.params.max_steps, "came to rest on its own")
+		assert_lte(ball.steps, 1, "at once, on the slope at x %.1f" % x)
+		assert_almost_eq(ball.position.x, x, EPS, "where it was set")
 
 
 func test_green_touchdown_normal_tilt_is_scaled() -> void:
