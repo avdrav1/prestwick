@@ -470,52 +470,80 @@ func test_contour_uphill_putt_that_stops_short_on_a_step_stays_there() -> void:
 
 # --- settle time (E1-S12, D7): docs/design.md Ball, the longest green settle is under 8 s ---
 
+## Every start (yards) of `xs` x `ys`.
+func _grid(xs: Array, ys: Array) -> Array[Vector2]:
+	var starts: Array[Vector2] = []
+	for x: float in xs:
+		for y: float in ys:
+			starts.append(Vector2(x, y))
+	return starts
+
+
 ## Longest settle over still balls and putts of 1 to 15 yd/s along the four axes and the four
-## diagonals from every start (yards) in `xs` x `ys`. The 8 s target is for balls that come
+## diagonals from every start (yards) in `starts`. The 8 s target is for balls that come
 ## to rest on green ("steps"); a putt that runs off the green and on down the rough's slope
-## is rough physics, reported apart ("off_steps", docs/design.md Ball known limit).
-func _settle_worst(course: CourseData, xs: Array, ys: Array) -> Dictionary:
+## is held to the off-green target, reported apart ("off_steps", D16).
+func _settle_worst(course: CourseData, starts: Array[Vector2]) -> Dictionary:
 	var worst := {"steps": 0, "what": "", "off_steps": 0, "off_what": "", "capped": 0}
 	var cases: Array[Vector2] = [Vector2.ZERO]
 	for speed in range(1, 16):
 		for i in 8:
 			cases.append(Vector2.RIGHT.rotated(i * PI / 4.0) * speed)
-	for x: float in xs:
-		for y: float in ys:
-			var p := Vector2(x, y)
-			for v: Vector2 in cases:
-				var ball := Ball.new(course, 1)
-				ball.start_roll(p, v)
-				ball.run_to_rest()
-				if ball.steps >= ball.params.max_steps:
-					worst["capped"] += 1
-				var on_green := ball.field.surface_at(ball.position.x, ball.position.y) \
-						== Surface.Type.GREEN
-				var key := "steps" if on_green else "off_steps"
-				if ball.steps > worst[key]:
-					worst[key] = ball.steps
-					worst["what" if on_green else "off_what"] = "from %s at %s" % [p, v]
+	for p: Vector2 in starts:
+		for v: Vector2 in cases:
+			var ball := Ball.new(course, 1)
+			ball.start_roll(p, v)
+			ball.run_to_rest()
+			if ball.steps >= ball.params.max_steps:
+				worst["capped"] += 1
+			var on_green := ball.field.surface_at(ball.position.x, ball.position.y) \
+					== Surface.Type.GREEN
+			var key := "steps" if on_green else "off_steps"
+			if ball.steps > worst[key]:
+				worst[key] = ball.steps
+				worst["what" if on_green else "off_what"] = "from %s at %s" % [p, v]
 	return worst
 
 
 func test_green_settle_time_on_the_contour() -> void:
 	# From the front tier, every step band and every tier of the green, on three lines, on the
 	# contour and its mirror. A diagonal putt that runs off the green's y = 50 edge rolls on
-	# down the rough's tier slope for up to about 9.6 s (rough physics, a known limit), so
-	# only balls that rest on green are held to 8 s; the rest must still settle on their own.
+	# down the rough's tier slope, so only balls that rest on green are held to 8 s; the rest
+	# are held to the off-green 10 s (D16).
+	# E2-S16: by default only the starts that set the worst settles on the full grid (on
+	# green 329 ticks from x 52, 321 from 55 and 50; off green 362 from (52, 27.5) and 359 to
+	# 360 near the y = 10 and y = 50 edges), mirrored at x 80 - x on the mirror, and two
+	# starts back across the tiers. The contour is the same along y away from its edges.
+	# Sweep.full() (scripts/run_tests.sh --full) runs every start.
+	var dense := _grid([22.5, 25.0, 28.0, 30.0, 32.0, 35.0, 38.0, 40.0, 42.0, 45.0, 48.0, 50.0, 52.0, 55.0],
+			[12.5, 27.5, 47.5])
+	var quick: Array[Vector2] = [Vector2(52.0, 27.5), Vector2(55.0, 12.5), Vector2(50.0, 47.5),
+			Vector2(35.0, 27.5), Vector2(22.5, 27.5)]
 	for mirrored: bool in [false, true]:
-		var w := _settle_worst(GridHeightEvidence.green_contour(mirrored),
-				[22.5, 25.0, 28.0, 30.0, 32.0, 35.0, 38.0, 40.0, 42.0, 45.0, 48.0, 50.0, 52.0, 55.0],
-				[12.5, 27.5, 47.5])
+		var starts: Array[Vector2] = dense
+		if not Sweep.full():
+			starts = []
+			for p: Vector2 in quick:
+				starts.append(Vector2(80.0 - p.x, p.y) if mirrored else p)
+		var w := _settle_worst(GridHeightEvidence.green_contour(mirrored), starts)
 		assert_eq(w["capped"], 0, "no ball reaches max_steps")
-		assert_lt(w["steps"], Ball.TICK_HZ * 8, "mirrored %s: longest settle on green %.1f s, %s (off green %.1f s, %s)" % [
+		assert_lt(w["steps"], GREEN_SETTLE, "mirrored %s: longest settle on green %.1f s, %s (off green %.1f s, %s)" % [
 				mirrored, w["steps"] / 60.0, w["what"], w["off_steps"] / 60.0, w["off_what"]])
+		assert_lt(w["off_steps"], OFF_GREEN_SETTLE, "mirrored %s: longest settle off green %.1f s, %s" % [
+				mirrored, w["off_steps"] / 60.0, w["off_what"]])
 
 
 func test_green_settle_time_on_a_one_step_per_tile_ramp() -> void:
 	# GridHeightEvidence.green_ramp(): all green, rising one step per tile from 0 to 7.
-	var w := _settle_worst(GridHeightEvidence.green_ramp(),
-			[20.0, 22.5, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 57.5, 60.0], [10.0, 30.0, 50.0])
+	# E2-S16: by default the starts of the worst settles on the full grid (337 ticks from x 50
+	# to 57.5, 336 from 60, 329 from 45) and a spread down the ramp, which is the same along
+	# y. Sweep.full() runs every start.
+	var starts: Array[Vector2] = _grid([20.0, 22.5, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 57.5, 60.0],
+			[10.0, 30.0, 50.0])
+	if not Sweep.full():
+		starts = [Vector2(57.5, 30.0), Vector2(60.0, 10.0), Vector2(45.0, 50.0), Vector2(30.0, 30.0),
+				Vector2(20.0, 10.0)]
+	var w := _settle_worst(GridHeightEvidence.green_ramp(), starts)
 	assert_eq(w["capped"], 0, "no ball reaches max_steps")
 	assert_lt(w["steps"], Ball.TICK_HZ * 8, "longest settle %.1f s, %s" % [w["steps"] / 60.0, w["what"]])
 
@@ -696,13 +724,23 @@ func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
 	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim. Cart
 	# path 5 deep is 9.95 s (E2-S11 keeps it there); deeper valleys are docs/design.md Ball,
 	# Known limit.
+	# E2-S16: by default the left half only (the valley is symmetric, and so are its settles),
+	# every 0.25 yd within 1.5 yd of the rim, where the worst settle starts (on the rim or
+	# 0.25 yd in, on the full grid), then every yard down to the floor. Sweep.full() runs
+	# every 0.25 yd from rim to rim.
 	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.CART_PATH]:
 		var depths: Array = [2, 3, 4, 5] if s == Surface.Type.CART_PATH else [2, 3, 4]
 		for depth: int in depths:
 			var course := _valley(s, depth)
 			var worst := 0
-			var x := 52.5 - depth * 5.0
-			while x <= 52.5 + depth * 5.0 + EPS:
+			var rim := 52.5 - depth * 5.0
+			var xs: Array[float] = []
+			for i: int in range(0, depth * 40 + 1):
+				var at := rim + i * 0.25
+				var quick := at <= 52.5 + EPS and (i <= 6 or i % 4 == 0)
+				if quick or Sweep.full():
+					xs.append(at)
+			for x: float in xs:
 				var ball := _set_down(course, Vector2(x, 30.0))
 				worst = maxi(worst, ball.steps)
 				var label := "%s, %d deep, set at x %.2f" % [Surface.NAMES[s], depth, x]
@@ -712,7 +750,6 @@ func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
 					assert_eq(s, Surface.Type.ROUGH, "%s: only rough holds a ball on the rim" % label)
 				else:
 					assert_almost_eq(ball.position.x, 52.5, 0.25, "%s: rests on the floor" % label)
-				x += 0.25
 			assert_lt(worst, OFF_GREEN_SETTLE, "%s valley %d steps deep: longest %d ticks" % [
 					Surface.NAMES[s], depth, worst])
 
@@ -788,13 +825,16 @@ func test_deep_pits_settle_under_the_targets() -> void:
 	# E2-S4 review: one-tile pits 2 to 7 steps deep reached the 60 s cap (fairway and tee from
 	# 5 deep, cart path from 3, green from 4, rough from 6). Starts 0.5 to 2.4 yd out, 16
 	# ways round. The green's rim, further out, is the next test.
+	# E2-S16: by default depths 2, 4 and 7 (7 is the worst on every surface, rough 204 ticks)
+	# and radii 0.5, 1.925 and 2.4 (every worst start is 1.925 or 2.4 out). Sweep.full() runs
+	# every depth from 2 to 7 and every radius.
 	var centre := Vector2(12.5, 12.5)
 	for s: Surface.Type in ROLLING:
 		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
-		for depth: int in range(2, 8):
+		for depth: int in Sweep.pick([2, 4, 7], [2, 3, 4, 5, 6, 7]):
 			var course := _deep_pit(s, depth)
 			var worst := 0
-			for r: float in [0.5, 0.975, 1.45, 1.925, 2.4]:
+			for r: float in Sweep.pick([0.5, 1.925, 2.4], [0.5, 0.975, 1.45, 1.925, 2.4]):
 				for a: int in 16:
 					var ball := _set_down(course, centre + Vector2.RIGHT.rotated(a * PI / 8.0) * r)
 					worst = maxi(worst, ball.steps)
@@ -816,6 +856,12 @@ func test_green_pit_balls_settle_from_anywhere_on_the_plot() -> void:
 		var what := Vector2.ZERO
 		for i in range(1, 51):
 			for j in range(1, 51):
+				# E2-S16: by default every 0.5 yd, and every 0.25 yd from 7.25 to 10.5 yd on both
+				# axes, the rim's corner, where the worst settles start (273 ticks from (10.25,
+				# 7.75) on 2 deep, 286 from (9.25, 7.75) on 3). Sweep.full() runs every 0.25 yd.
+				var corner := i >= 29 and i <= 42 and j >= 29 and j <= 42
+				if not (Sweep.full() or corner or (i % 2 == 0 and j % 2 == 0)):
+					continue
 				var at := Vector2(i, j) * 0.25
 				var ball := _set_down(course, at)
 				if ball.steps > worst:
@@ -842,9 +888,11 @@ func test_a_green_slope_past_a_contour_is_felt_well_over_the_hold() -> void:
 func test_trench_balls_settle_under_the_targets() -> void:
 	# E2-S4 review: a one-tile trench 7 deep (column 4 of a 9x12 plot) held still balls at
 	# 0.3 yd/s across its floor until the cap on fairway, tee, cart path and green.
+	# E2-S16: by default depths 2, 4 and 7 (7 is the worst on every surface, rough 220
+	# ticks). Sweep.full() runs every depth from 2 to 7.
 	for s: Surface.Type in ROLLING:
 		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
-		for depth: int in range(2, 8):
+		for depth: int in Sweep.pick([2, 4, 7], [2, 3, 4, 5, 6, 7]):
 			var course := CourseData.create(9, 12, s, depth)
 			for y: int in 12:
 				course.set_tile(4, y, 0, s)

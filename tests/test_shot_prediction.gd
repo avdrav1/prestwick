@@ -393,21 +393,36 @@ func _putt_main(course: CourseData, tee: Vector2i, cup: Vector2i, at: Vector2,
 
 
 ## The rest nearest the cup over the bar from 0 to 100% in 1% steps, yards from its centre.
+## E2-S16: every 5%, then every 1% within 4% of the nearest of those (29 putts, not 101).
+## Sweep.full() tries every 1% step.
 func _brute_nearest(sc: SwingControl) -> float:
 	var cup := sc.field.tile_center(sc.cup_tile())
-	var best := INF
-	for i in 101:
+	var miss := func(i: int) -> float:
 		var s := PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, i / 100.0)
 		var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), s, null, null, sc.cup_tile())
-		var d := 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup)
-		best = minf(best, d)
+		return 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup)
+	var step := 1 if Sweep.full() else 5
+	var best := INF
+	var at := 0
+	for i in range(0, 101, step):
+		var d: float = miss.call(i)
+		if d < best:
+			best = d
+			at = i
+	if step > 1:
+		for i in range(maxi(at - step + 1, 0), mini(at + step, 101)):
+			if i != at:
+				best = minf(best, miss.call(i))
 	return best
 
 
 ## The marker shows the putt at the solved power, nearest the cup; a putt struck through the
 ## bar at that power rests within 1 yd of it; a putt at 100% still runs past (the bar decides).
-func _assert_putt_marker(main: Main, label: String) -> void:
+## `nearest` is `_brute_nearest(sc)` when the caller has it already (E2-S16: 101 putts each).
+func _assert_putt_marker(main: Main, label: String, nearest: float = NAN) -> void:
 	var sc := main.swing_control
+	if is_nan(nearest):
+		nearest = _brute_nearest(sc)
 	assert_true(sc.club.is_putter(), "%s: the putter" % label)
 	var cup := sc.field.tile_center(sc.cup_tile())
 	var marker := main.aim_view.marker_point
@@ -416,8 +431,8 @@ func _assert_putt_marker(main: Main, label: String) -> void:
 	assert_lt(sc.aim_power, 1.0, "%s: not the 100%% putt" % label)
 	var miss := Vector2(marker.x, marker.y).distance_to(cup)
 	assert_almost_eq(miss, 0.0 if sc.aim_prediction.holed else sc.aim_putt.miss_yd, 1e-4, label)
-	assert_lte(miss, _brute_nearest(sc) + 0.15, "%s: as near the cup as any power on the bar" % label)
-	var last := sc.aim_prediction.path[sc.aim_prediction.path.size() - 1]
+	assert_lte(miss, nearest + 0.15, "%s: as near the cup as any power on the bar" % label)
+	var last :=sc.aim_prediction.path[sc.aim_prediction.path.size() - 1]
 	assert_eq(Vector2(last.x, last.y), Vector2(marker.x, marker.y), "%s: the dots' roll ends on the marker" % label)
 	var full := ShotPrediction.run_launch(sc.course, sc.next_seed(),
 			PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, 1.0), null, null, sc.cup_tile())
@@ -465,7 +480,8 @@ func test_putter_marker_with_the_aim_turned_off_the_cup() -> void:
 		var label := "flat, 12.5 yd, %.0f deg off" % off
 		var marker := main.aim_view.marker_point
 		var miss := Vector2(marker.x, marker.y).distance_to(sc.field.tile_center(cup))
-		assert_lte(miss, _brute_nearest(sc) + 0.15, "%s: as near the cup as any power on the bar" % label)
+		var nearest := _brute_nearest(sc)
+		assert_lte(miss, nearest + 0.15, "%s: as near the cup as any power on the bar" % label)
 		assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs)
 		if absf(off) >= 90.0:
 			assert_eq(sc.aim_power, 0.0, "%s: the cup is not ahead, the 0%% putt" % label)
@@ -473,7 +489,7 @@ func test_putter_marker_with_the_aim_turned_off_the_cup() -> void:
 			assert_almost_eq(miss, 12.5 * sin(deg_to_rad(absf(off))), 0.3,
 					"%s: rests level with the cup along the aim" % label)
 		if absf(off) <= 60.0:
-			_assert_putt_marker(main, label)
+			_assert_putt_marker(main, label, nearest)
 
 
 func test_putter_marker_shows_the_pace_that_reaches_the_cup_on_a_contour() -> void:
