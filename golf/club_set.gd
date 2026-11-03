@@ -49,6 +49,17 @@ static func is_legal(c: Club, lie: Surface.Type, driver_stroke: bool) -> bool:
 			return true
 
 
+## D20: true when `shot` (a full club), predicted as `p` from the same Ball step, meets the
+## ground or trees while still climbing (ShotPrediction.stopped_climbing): a riser face or
+## trees ahead stop it before its apex, so it does not fly to its marker. Every flight that
+## gets away comes down descending. The physics is unchanged, so a blocked club can still
+## be struck. A putt is never blocked. Guests (E3) read the same rule.
+func is_blocked(shot: ShotLaunch, p: ShotPrediction) -> bool:
+	if shot == null or p == null or shot.is_putt():
+		return false
+	return p.stopped_climbing
+
+
 ## The clubs a stroke from `lie` may use, in bag order.
 func legal(lie: Surface.Type, driver_stroke: bool) -> Array[Club]:
 	var out: Array[Club] = []

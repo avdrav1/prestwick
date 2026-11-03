@@ -70,6 +70,12 @@ var hazard_position: Vector3 = Vector3.ZERO
 var scattered: bool = false
 ## Where the flight was blocked, yards.
 var scatter_from: Vector3 = Vector3.ZERO
+## Where the flight first met something, yards: its first touchdown, or the point trees
+## blocked it before any touchdown (scatter_from); the start until then, and for a putt.
+## Bookkeeping only, for D20's blocked rule; the physics never reads it.
+var stop_point: Vector3 = Vector3.ZERO
+## The flight's velocity there, yd/s. z > 0: it was stopped while still climbing.
+var stop_velocity: Vector3 = Vector3.ZERO
 
 var _rng := RandomNumberGenerator.new()
 ## The stroke's start, yards (the drop of last resort, D15).
@@ -188,6 +194,8 @@ func _reset(start: Vector3) -> void:
 	hazard_position = Vector3.ZERO
 	scattered = false
 	scatter_from = Vector3.ZERO
+	stop_point = position
+	stop_velocity = Vector3.ZERO
 	_start = position
 	_track = PackedVector2Array([Vector2(position.x, position.y)])
 	path = PackedVector3Array()
@@ -268,6 +276,9 @@ func _blocks(p: Vector3) -> bool:
 func _scatter(from: Vector3, v: Vector3) -> void:
 	scattered = true
 	scatter_from = from
+	if not has_landed:
+		stop_point = from
+		stop_velocity = v
 	var here := Vector2(from.x, from.y)
 	var back := -Vector2(v.x, v.y)
 	if back.length_squared() < 1e-8:
@@ -340,6 +351,8 @@ func _touch_down(at: Vector3, v: Vector3) -> void:
 	if first:
 		has_landed = true
 		landing_position = at
+		stop_point = at
+		stop_velocity = v
 	var row := surfaces.row(field.surface_at(at.x, at.y))
 	if row.roll <= 0.0:
 		_rest()

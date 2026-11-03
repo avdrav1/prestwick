@@ -309,6 +309,59 @@ func test_perfect_swing_lands_within_a_tile_of_the_aim_marker() -> void:
 				0.5, "%s: in fact within half a yard" % club_id)
 
 
+## D20: at the foot of a riser, a club the face stops at once is shown as blocked in the
+## marker and the club picker; a club that flies keeps its plain marker, and its perfect
+## swing lands on it. The physics is kept, so a blocked club can still be struck.
+func test_the_marker_and_picker_show_a_club_blocked_at_the_foot_of_a_riser() -> void:
+	for steps: int in [1, 2]:
+		var main := MAIN_SCENE.instantiate() as Main
+		main.course_path = "res://tests/fixtures/flat_20x20.json"
+		add_child_autofree(main)
+		main.shot_view.set_process(false)
+		main.swing_control.set_process(false)
+		main.show_course(BalanceStrips.uphill(steps))
+		main.set_mode(Main.Mode.PLAY)
+		var sc := main.swing_control
+		var at := (Vector2(BalanceStrips.tee_tile()) + Vector2(0.5, 0.5)) * 5.0
+		sc.place_ball(at, true)
+		sc.aim_deg = 0.0
+		for c in sc.legal:
+			sc.select_club(c)
+			sc._refresh_aim()
+			var want := sc.model.clubs.is_blocked(sc.perfect_launch(), sc.aim_prediction)
+			assert_eq(sc.aim_blocked, want, "%d steps, %s: the control reads the rule" % [steps, c.id])
+			assert_eq(main.aim_view.blocked, want, "%d steps, %s: the marker says so" % [steps, c.id])
+			assert_eq(main.swing_panel.club_label.text.contains("blocked"), want,
+					"%d steps, %s: the picker says so" % [steps, c.id])
+			assert_eq(main.aim_view.marker_point, sc.aim_prediction.landing,
+					"%d steps, %s: the marker is still the first touchdown" % [steps, c.id])
+			assert_eq(main.aim_view.dots.is_empty(), want,
+					"%d steps, %s: a blocked club draws no dots" % [steps, c.id])
+		sc.select_club(sc.model.clubs.club("driver"))
+		sc._refresh_aim()
+		assert_true(sc.aim_blocked, "%d steps: the driver is blocked" % steps)
+		if steps == 1:
+			sc.select_club(sc.model.clubs.club("7i"))
+			sc._refresh_aim()
+			assert_false(sc.aim_blocked, "the 7i clears one step")
+		# Strike a perfect swing; a blocked club is still struck (the physics is kept).
+		var marker := main.aim_view.marker_point
+		sc.press()
+		sc.advance(1.0 / sc.swing.rate())
+		sc.press()
+		sc.advance(1.0 / sc.swing.rate())
+		sc.press()
+		assert_eq(sc.strokes, 1, "%d steps: the swing is struck" % steps)
+		var view := main.shot_view
+		var i := 0
+		while view.playing and i < 100000:
+			view.advance(FRAMES[i % FRAMES.size()])
+			i += 1
+		var got := view.ball.landing_position
+		assert_lt(Vector2(marker.x - got.x, marker.y - got.y).length(), 0.5,
+				"%d steps: the ball lands on the marker" % steps)
+
+
 func test_debug_shot_tunables_come_from_a_resource() -> void:
 	var shot := DebugShot.load_default()
 	assert_not_null(shot, "golf/debug_shot.tres loads")

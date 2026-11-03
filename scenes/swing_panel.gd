@@ -11,6 +11,8 @@ var bar: SwingBar
 var speed_slider: HSlider
 var speed_label: Label
 var hint_label: Label
+## flag_red (art/palette.gpl): the club label's colour when the club is blocked (D20).
+var blocked_color: Color = Color8(216, 58, 58)
 
 var _control: SwingControl
 
@@ -24,7 +26,8 @@ func _ready() -> void:
 	prev_button = _button("<", "Longer club (Up)", func() -> void: _control.cycle_club(-1))
 	row.add_child(prev_button)
 	club_label = Label.new()
-	club_label.custom_minimum_size = Vector2(150, 0)
+	club_label.custom_minimum_size = Vector2(190, 0)
+	club_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	club_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(club_label)
 	next_button = _button(">", "Shorter club (Down)", func() -> void: _control.cycle_club(1))
@@ -70,6 +73,13 @@ func refresh() -> void:
 		return
 	var c := _control.club
 	club_label.text = "Club: %s" % (_club_name(c) if c != null else "none")
+	if _control.aim_blocked:
+		club_label.text += " (blocked)"
+		club_label.add_theme_color_override("font_color", blocked_color)
+		club_label.tooltip_text = "The slope or trees ahead stop this club before it peaks. Try a club with more loft, or aim elsewhere."
+	else:
+		club_label.remove_theme_color_override("font_color")
+		club_label.tooltip_text = ""
 	var i := _control.legal.find(c)
 	var busy := _control.swing.in_progress()
 	prev_button.disabled = busy or i <= 0

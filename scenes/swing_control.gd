@@ -60,6 +60,9 @@ var score: HoleScore
 var driver_stroke: bool = false
 ## The perfect swing's prediction the aim shows, or null.
 var aim_prediction: ShotPrediction
+## D20: the selected club is blocked from here along this aim (ClubSet.is_blocked): the
+## marker and the club picker show it. The club can still be struck.
+var aim_blocked: bool = false
 var active: bool = false:
 	set(value):
 		active = value
@@ -293,6 +296,7 @@ func _ground_under(local: Vector2) -> Vector2:
 
 func _strike() -> void:
 	var shot := swing.launch(model, field, club, ball_at, aim_deg)
+	aim_blocked = false
 	var rng_seed := next_seed()
 	strokes += 1
 	_own_shot = true
@@ -343,8 +347,12 @@ func _refresh_aim() -> void:
 		return
 	var shot := perfect_launch()
 	aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
+	var was_blocked := aim_blocked
+	aim_blocked = model.clubs.is_blocked(shot, aim_prediction)
 	if _aim_view != null:
-		_aim_view.show_prediction(field, aim_prediction, shot.is_putt(), shot.start)
+		_aim_view.show_prediction(field, aim_prediction, shot.is_putt(), shot.start, aim_blocked)
+	if aim_blocked != was_blocked:
+		changed.emit()
 
 
 static func _first_hole(c: CourseData) -> HoleData:

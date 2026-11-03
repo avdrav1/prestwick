@@ -10,6 +10,16 @@ extends RefCounted
 var path: PackedVector3Array = PackedVector3Array()
 ## First touchdown (the carry), yards.
 var landing: Vector3 = Vector3.ZERO
+## Ground distance from the launch point to the first touchdown, yards (0 for a putt, which
+## counts as landed where it starts). Unsigned: a flight scattered back off trees counts
+## its distance behind the start too.
+var carry_yd: float = 0.0
+## Where the flight first met the ground or trees, yards (Ball.stop_point): the first
+## touchdown, or the point trees blocked it. For a putt, the start.
+var stop_point: Vector3 = Vector3.ZERO
+## D20: the flight met the ground or trees while still climbing, before its apex: the face
+## or trees ahead stop it. ClubSet.is_blocked reads it.
+var stopped_climbing: bool = false
 ## Where the ball comes to rest, yards: the drop point after water or OB, the cup's centre
 ## when holed.
 var rest: Vector3 = Vector3.ZERO
@@ -37,7 +47,7 @@ static func run(course: CourseData, rng_seed: int, start: Vector3, velocity: Vec
 	ball.roll_factor = roll_factor
 	ball.set_cup(cup_tile)
 	ball.launch(start, velocity)
-	return _from(ball)
+	return _from(ball, start)
 
 
 ## Predicts a stroke built by ShotModel (a flight or a putt) with seed `rng_seed`.
@@ -48,14 +58,17 @@ static func run_launch(course: CourseData, rng_seed: int, shot: ShotLaunch,
 	ball.record_path = true
 	ball.set_cup(cup_tile)
 	shot.apply(ball)
-	return _from(ball)
+	return _from(ball, shot.start)
 
 
-static func _from(ball: Ball) -> ShotPrediction:
+static func _from(ball: Ball, start: Vector3) -> ShotPrediction:
 	ball.run_to_rest()
 	var p := ShotPrediction.new()
 	p.path = ball.path
 	p.landing = ball.landing_position
+	p.carry_yd = Vector2(start.x, start.y).distance_to(Vector2(p.landing.x, p.landing.y))
+	p.stop_point = ball.stop_point
+	p.stopped_climbing = ball.stop_velocity.z > 0.0
 	p.rest = ball.position
 	p.landing_tile = ball.field.tile_at(p.landing.x, p.landing.y)
 	p.rest_tile = ball.field.tile_at(p.rest.x, p.rest.y)

@@ -216,9 +216,11 @@ func test_the_putter_ignores_the_lie() -> void:
 	assert_almost_eq(shot.roll_factor, 1.0, EPS)
 
 
-# --- known limit: a ball at the foot of a riser (docs/design.md Shot model) ---
+# --- a ball at the foot of a riser (D20, docs/design.md Shot model) ---
 
-func _carry_from_riser_foot(steps: int, back_yd: float) -> Dictionary:
+## Each full club's perfect swing from the riser foot, `back_yd` short of the tile centre
+## where a `steps`-step riser begins: {id: [carry, blocked]}.
+func _riser_foot(steps: int, back_yd: float) -> Dictionary:
 	var model := ShotModel.new()
 	var course := BalanceStrips.uphill(steps)
 	var field := HeightField.new(course, model.params)
@@ -228,25 +230,129 @@ func _carry_from_riser_foot(steps: int, back_yd: float) -> Dictionary:
 	for c in clubs.clubs:
 		if c.is_putter():
 			continue
-		var r := ShotPrediction.run_launch(course, 1, model.full(field, c, 1.0, at, 0.0), model.params)
-		out[c.id] = r.landing.x - at.x
+		var shot := model.full(field, c, 1.0, at, 0.0)
+		var r := ShotPrediction.run_launch(course, 1, shot, model.params)
+		assert_almost_eq(r.carry_yd, r.landing.x - at.x, EPS, "%s: carry is start to first touchdown" % c.id)
+		assert_eq(r.stop_point, r.landing, "%s: on a riser the flight stops at its first touchdown" % c.id)
+		out[c.id] = [r.carry_yd, clubs.is_blocked(shot, r)]
 	return out
 
 
-## Pins today's behaviour, not a target: a launch flatter than the face ahead meets it on
-## the first tick. When the /decision on this limit changes it, change this test with it.
-func test_a_club_flatter_than_the_riser_ahead_meets_it_at_once() -> void:
-	var one := _carry_from_riser_foot(1, 0.0)
+func _blocked_ids(d: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	for id: String in IDS:
+		if d.has(id) and d[id][1]:
+			out.append(id)
+	return out
+
+
+## D20: the physics is kept (a launch flatter than the face ahead meets it on the first
+## tick), and a club whose perfect swing meets the face while still climbing is blocked.
+## Every other club flies, so its marker (the first touchdown) is where it lands.
+func test_a_club_flatter_than_the_riser_ahead_meets_it_at_once_and_is_blocked() -> void:
+	var one := _riser_foot(1, 0.0)
 	for id: String in ["driver", "3w", "3i", "4i", "5i"]:
-		assert_lt(float(one[id]), 2.0, "%s meets a 1-step riser (0.4, 21.8 deg) at once" % id)
+		assert_lt(float(one[id][0]), 2.0, "%s meets a 1-step riser (0.4, 21.8 deg) at once" % id)
+		assert_true(one[id][1], "%s is blocked at the foot of a 1-step riser" % id)
 	for id: String in ["6i", "7i", "8i", "9i", "pw", "sw"]:
-		assert_gt(float(one[id]), 90.0, "%s clears a 1-step riser" % id)
-	var back := _carry_from_riser_foot(1, 1.0)
+		assert_gt(float(one[id][0]), 90.0, "%s clears a 1-step riser" % id)
+		assert_false(one[id][1], "%s is not blocked" % id)
+	var back := _riser_foot(1, 1.0)
 	for id: String in ["driver", "3w", "3i"]:
-		assert_lt(float(back[id]), 5.0, "%s still meets it from 1 yd short" % id)
+		assert_lt(float(back[id][0]), 5.0, "%s still meets it from 1 yd short" % id)
+		assert_true(back[id][1], "%s is still blocked from 1 yd short" % id)
 	for id: String in ["4i", "5i"]:
-		assert_gt(float(back[id]), 150.0, "%s clears it from 1 yd short" % id)
-	var two := _carry_from_riser_foot(2, 0.0)
+		assert_gt(float(back[id][0]), 150.0, "%s clears it from 1 yd short" % id)
+		assert_false(back[id][1], "%s is not blocked from 1 yd short" % id)
+	var two := _riser_foot(2, 0.0)
 	for c in clubs.clubs:
 		if not c.is_putter():
-			assert_lt(float(two[c.id]), 5.0, "%s gets no carry off a 2-step riser (0.8, 38.7 deg)" % c.id)
+			assert_lt(float(two[c.id][0]), 5.0, "%s gets no carry off a 2-step riser (0.8, 38.7 deg)" % c.id)
+			assert_true(two[c.id][1], "%s is blocked at the foot of a 2-step riser" % c.id)
+
+
+## D20 review: the rule is whether the flight meets the face, not a distance, so it holds
+## one to three tiles back too (a 5 yd carry cutoff let the driver carry 5 to 14 yd into the
+## face unflagged and then run 120 yd). Every club either is blocked or flies over 90 yd.
+func test_the_blocked_rule_holds_further_back_from_a_riser() -> void:
+	var want := {
+		"1:2": ["driver", "3w"],
+		"1:3": ["driver"],
+		"1:4": [],
+		"1:7": [],
+		"1:10": [],
+		"2:2": ["driver", "3w", "3i", "4i", "5i", "6i", "7i", "8i"],
+		"2:3": ["driver", "3w", "3i", "4i", "5i", "6i", "7i"],
+		"2:4": ["driver", "3w", "3i", "4i", "5i", "6i"],
+		"2:7": ["driver", "3w", "3i"],
+		"2:10": ["driver"],
+		"2:15": [],
+	}
+	for key: String in want:
+		var parts := key.split(":")
+		var steps := int(parts[0])
+		var back_yd := float(parts[1])
+		var d := _riser_foot(steps, back_yd)
+		assert_eq(_blocked_ids(d), PackedStringArray(want[key]),
+				"%d-step riser, %d yd back: the clubs that meet the face" % [steps, back_yd])
+		for id: String in d:
+			if d[id][1]:
+				assert_lt(float(d[id][0]), 15.0, "%s, %s: blocked means it meets the face" % [key, id])
+			else:
+				assert_gt(float(d[id][0]), 90.0, "%s, %s: not blocked means it flies" % [key, id])
+
+
+## A strip with a band of trees three tiles deep starting `gap` tiles past the tee.
+func _trees_ahead(gap: int) -> CourseData:
+	var c := BalanceStrips.strip(Surface.Type.FAIRWAY)
+	var t := BalanceStrips.tee_tile()
+	for y in BalanceStrips.STRIP_H:
+		for x in range(t.x + 1 + gap, t.x + 4 + gap):
+			c.set_tile(x, y, 0, Surface.Type.TREES)
+	return c
+
+
+func _blocked_by_trees(gap: int, rng_seed: int) -> PackedStringArray:
+	var model := ShotModel.new()
+	var course := _trees_ahead(gap)
+	var field := HeightField.new(course, model.params)
+	var at := (Vector2(BalanceStrips.tee_tile()) + Vector2(0.5, 0.5)) * model.params.yards_per_tile
+	var out := PackedStringArray()
+	for c in clubs.clubs:
+		if c.is_putter():
+			continue
+		var shot := model.full(field, c, 1.0, at, 0.0)
+		var r := ShotPrediction.run_launch(course, rng_seed, shot, model.params)
+		if clubs.is_blocked(shot, r):
+			assert_true(r.scattered, "gap %d, %s, seed %d: the trees stop it" % [gap, c.id, rng_seed])
+			assert_gt(r.stop_point.x, at.x, "gap %d, %s, seed %d: stopped ahead of the ball" % [gap, c.id, rng_seed])
+			out.append(c.id)
+	return out
+
+
+## D20 review: trees right in front stop every club while it climbs. The rule reads the
+## flight before the scatter, so it does not change with the stroke's seed (the scatter
+## does), and the blocked marker's point is where the trees stop it, ahead of the ball.
+func test_trees_right_in_front_block_every_club_on_every_seed() -> void:
+	var every := PackedStringArray(["driver", "3w", "3i", "4i", "5i", "6i", "7i", "8i", "9i", "pw", "sw"])
+	for gap: int in [0, 1, 2]:
+		for s in range(1, 11):
+			assert_eq(_blocked_by_trees(gap, s), every, "trees %d tiles out, seed %d" % [gap, s])
+	# Six tiles out the long clubs are still climbing into the trees; the 5i and up clear them.
+	for s in range(1, 6):
+		assert_eq(_blocked_by_trees(6, s), PackedStringArray(["driver", "3w", "3i", "4i"]),
+				"trees 30 yd out, seed %d" % s)
+	# Ten tiles out every club is coming down before it reaches them: none is blocked.
+	assert_eq(_blocked_by_trees(10, 1), PackedStringArray(), "trees 50 yd out")
+
+
+func test_no_club_is_blocked_on_flat_ground_and_a_putt_never_is() -> void:
+	var model := ShotModel.new()
+	var course := BalanceStrips.strip(Surface.Type.FAIRWAY)
+	var field := HeightField.new(course, model.params)
+	var at := (Vector2(BalanceStrips.tee_tile()) + Vector2(0.5, 0.5)) * model.params.yards_per_tile
+	for c in clubs.clubs:
+		var shot := model.putt(field, c, c.putt_min_speed, at, 0.0) if c.is_putter() \
+				else model.full(field, c, 1.0, at, 0.0)
+		var r := ShotPrediction.run_launch(course, 1, shot, model.params)
+		assert_false(clubs.is_blocked(shot, r), "%s is not blocked on flat fairway" % c.id)
