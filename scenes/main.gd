@@ -95,9 +95,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## Keeps the camera on a moving ball (E2-S8), unless the player panned away to scout.
+## While aiming at rest it frames the ball and the aim marker together (pillar 2), so the
+## player sees where the shot goes before striking.
 func _process(_delta: float) -> void:
-	if mode == Mode.PLAY and shot_view.playing:
+	if mode != Mode.PLAY:
+		return
+	if shot_view.playing:
+		camera.clear_lead()
 		camera.set_focus(_ball_world())
+	elif aim_view.visible and aim_view.prediction != null:
+		camera.set_focus(_ball_world())
+		camera.set_lead(_aim_marker_world())
+	else:
+		camera.clear_lead()
 
 
 func toggle_mode() -> void:
@@ -122,7 +132,7 @@ func set_mode(new_mode: Mode) -> void:
 ## on it (E2-S8).
 func _begin_play() -> void:
 	swing_control.begin(course, debug_shot.start_tile, debug_shot.heading_deg)
-	camera.centre_on(_ball_world())
+	camera.centre_on(_ball_world(), true)
 
 
 ## The ball's drawn point in the camera's space.
@@ -132,8 +142,15 @@ func _ball_world() -> Vector2:
 			if shot_view.ball != null else camera.position
 
 
-## A shot starts: centre on the ball (E2-S8), even after a pan.
+## The aim marker's drawn point in the camera's space.
+func _aim_marker_world() -> Vector2:
+	return camera.get_parent().to_local(aim_view.to_global(aim_view.marker_screen))
+
+
+## A shot starts: centre on the ball alone (E2-S8), even after a pan. The zoom stays as
+## the aim framed it, so the flight is followed at the same scale.
 func _on_struck(_shot: ShotLaunch) -> void:
+	camera.clear_lead()
 	camera.centre_on(_ball_world())
 
 
@@ -145,7 +162,7 @@ func _on_hole_finished(_score: HoleScore) -> void:
 ## The ball rests (or was dropped): centre on it for the next shot (E2-S8).
 func _on_came_to_rest(_at: Vector3) -> void:
 	if mode == Mode.PLAY:
-		camera.centre_on(_ball_world())
+		camera.centre_on(_ball_world(), true)
 
 
 ## The build tool, its palette, the hole panel, New sandbox and the issue highlights exist

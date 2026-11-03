@@ -15,6 +15,9 @@ const PATH: String = "res://scenes/camera_tuning.tres"
 ## Play (E2-S8): how quickly the camera eases onto the ball it centres on, a time constant in
 ## seconds (about 63% of the way in this time, 95% in three). 0 jumps at once.
 @export var centre_time: float = 0.15
+## Play, aiming at rest (E2-S8 review): the camera frames the ball and the aim marker
+## together, each at least this many screen pixels inside the screen edge.
+@export var aim_frame_margin: float = 64.0
 
 
 static func load_default() -> CameraTuning:

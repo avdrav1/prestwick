@@ -9,3 +9,4 @@ zoom_levels = PackedFloat32Array(0.5, 1, 2)
 start_zoom_index = 1
 edge_margin = 128.0
 centre_time = 0.15
+aim_frame_margin = 64.0

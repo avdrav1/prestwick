@@ -45,7 +45,7 @@ func _ready() -> void:
 	bar = SwingBar.new()
 	box.add_child(bar)
 	hint_label = Label.new()
-	hint_label.text = "Space or click: start, power, accuracy.  Mouse or Left/Right: aim."
+	hint_label.text = "Space or click: start, power, accuracy.  Mouse or Left/Right: aim.  WASD: pan, C: back to ball."
 	hint_label.add_theme_font_size_override("font_size", 12)
 	box.add_child(hint_label)
 

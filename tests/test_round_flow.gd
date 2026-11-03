@@ -195,6 +195,43 @@ func test_the_camera_centres_on_the_ball_at_the_strike_and_at_rest() -> void:
 	assert_almost_eq(cam.position, cam.focus, Vector2(0.01, 0.01), "one key snaps back")
 
 
+## True when world point `p` is inside the camera's view.
+func _in_view(cam: CourseCamera, p: Vector2) -> bool:
+	var half := cam.view_size() * 0.5 / cam.zoom.x
+	return Rect2(cam.position - half, half * 2.0).has_point(p)
+
+
+func test_from_the_tee_the_ball_and_the_aim_marker_are_both_in_view() -> void:
+	# E2-S8 review, pillar 2: on example_par3 the driver's marker is (1568, 784) px from the
+	# tee and the 6-iron's (1005, 502); a ball-only camera showed neither.
+	var m := _main(PAR3_PATH)
+	var cam := m.camera
+	cam.view_size_override = Vector2(1280, 720)
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	assert_eq(sc.club.id, "driver", "the default club from the tee")
+	m._process(0.0)
+	cam._process(10.0)
+	assert_true(cam.has_lead, "aiming at rest frames the marker too")
+	var marker := m.aim_view.marker_screen
+	assert_true(_in_view(cam, m.shot_view.ball_screen()), "the ball is in view")
+	assert_true(_in_view(cam, marker), "the driver's marker is in view")
+	assert_eq(cam.zoom, Vector2(0.5, 0.5), "the driver needs 0.5x")
+	for c: Club in sc.legal:
+		if c.id == "6i":
+			sc.select_club(c)
+	m._process(0.0)
+	cam._process(10.0)
+	assert_true(_in_view(cam, m.aim_view.marker_screen), "the 6-iron's marker is in view")
+	assert_true(_in_view(cam, m.shot_view.ball_screen()))
+	var plan := ScriptedRound.plan(sc)
+	ScriptedRound.swing(sc, plan)
+	m._process(0.0)
+	assert_false(cam.has_lead, "a flight follows the ball alone")
+	_finish_shot(m)
+	assert_eq(cam.zoom, Vector2.ONE, "the next aim starts from the player's 1x")
+
+
 func test_no_hole_plays_without_a_score() -> void:
 	var m := _main(FLAT_PATH)
 	m.set_mode(Main.Mode.PLAY)

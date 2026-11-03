@@ -157,3 +157,90 @@ func test_frame_forgets_the_ball() -> void:
 	assert_false(_cam.tracking)
 	_cam._process(1.0)
 	assert_eq(_cam.position, Rect2(-640, -128, 1280, 768).get_center())
+
+
+# --- aiming at rest: the ball and the aim marker framed together (E2-S8 review, pillar 2) ---
+
+func _aiming_cam() -> void:
+	_cam.view_size_override = Vector2(1280, 720)
+	_cam.frame(Rect2(-5000, -5000, 10000, 10000))
+	_cam.centre_on(Vector2.ZERO, true)
+
+
+## True when world point `p` is on screen at least the frame margin inside the edge.
+func _on_screen(p: Vector2) -> bool:
+	var half := _cam.view_size() * 0.5 / _cam.zoom.x
+	var inset := Vector2.ONE * (_cam.tuning.aim_frame_margin - 0.5) / _cam.zoom.x
+	var r := Rect2(_cam.position - half + inset, (half - inset) * 2.0)
+	return r.has_point(p)
+
+
+func test_aim_frame_margin_comes_from_the_resource() -> void:
+	assert_gt(_cam.tuning.aim_frame_margin, 0.0)
+
+
+func test_a_lead_that_fits_is_framed_with_the_ball_at_the_midpoint() -> void:
+	_aiming_cam()
+	_cam.set_lead(Vector2(800, 400))
+	_cam._process(10.0)
+	assert_eq(_cam.zoom, Vector2.ONE, "it fits at 1x, so the zoom stays")
+	assert_almost_eq(_cam.position, Vector2(400, 200), Vector2(0.01, 0.01), "centred between them")
+	assert_true(_on_screen(Vector2.ZERO), "the ball is on screen")
+	assert_true(_on_screen(Vector2(800, 400)), "and so is the marker")
+
+
+func test_a_lead_too_far_for_1x_steps_the_zoom_out_until_both_fit() -> void:
+	_aiming_cam()
+	# The driver's marker from example_par3's tee (E2-S8 review): (1568, 784) px at 1x.
+	_cam.set_lead(Vector2(1568, 784))
+	_cam._process(10.0)
+	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "one step out")
+	assert_true(_on_screen(Vector2.ZERO), "the ball is on screen")
+	assert_true(_on_screen(Vector2(1568, 784)), "and so is the marker")
+
+
+func test_a_lead_too_far_for_any_zoom_keeps_the_ball_on_screen() -> void:
+	_aiming_cam()
+	_cam.set_lead(Vector2(6000, 0))
+	_cam._process(10.0)
+	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "the farthest level")
+	assert_true(_on_screen(Vector2.ZERO), "the ball never leaves the screen")
+	assert_gt(_cam.position.x, 0.0, "the view leans toward the marker")
+
+
+func test_the_next_aim_comes_back_to_the_players_zoom() -> void:
+	_aiming_cam()
+	_cam.set_lead(Vector2(1568, 784))
+	assert_eq(_cam.zoom, Vector2(0.5, 0.5))
+	_cam.clear_lead()
+	_cam.centre_on(Vector2(1568, 784))
+	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "a strike keeps the framed zoom for the flight")
+	_cam.centre_on(Vector2(1568, 784), true)
+	assert_eq(_cam.zoom, Vector2.ONE, "the next aim starts from the player's 1x")
+	assert_false(_cam.has_lead)
+
+
+func test_a_zoom_key_wins_over_the_fit() -> void:
+	_aiming_cam()
+	_cam.step_zoom(1)
+	_cam.set_lead(Vector2(1568, 784))
+	assert_eq(_cam.zoom, Vector2(2, 2), "the player zoomed in, so the fit does not undo it")
+	_cam._process(10.0)
+	assert_true(_on_screen(Vector2.ZERO), "the ball stays on screen")
+	_cam.centre_on(Vector2.ZERO, true)
+	assert_eq(_cam.zoom, Vector2(2, 2), "and 2x is now the player's level")
+
+
+func test_without_a_lead_the_camera_follows_the_ball_alone() -> void:
+	_aiming_cam()
+	_cam.set_lead(Vector2(800, 400))
+	_cam.clear_lead()
+	_cam._process(10.0)
+	assert_almost_eq(_cam.position, Vector2.ZERO, Vector2(0.01, 0.01))
+
+
+func test_a_panned_camera_does_not_zoom_for_the_lead() -> void:
+	_aiming_cam()
+	_cam.pan(Vector2(10, 0))
+	_cam.set_lead(Vector2(1568, 784))
+	assert_eq(_cam.zoom, Vector2.ONE, "scouting: the player has the camera")
