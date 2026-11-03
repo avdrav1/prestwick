@@ -1058,8 +1058,8 @@ func test_green_pit_balls_settle_from_anywhere_on_the_plot() -> void:
 	# E2-S11: on the rim of a two-step green pit, where the walls blend at its corners, the
 	# felt pull was just over the D7 hold and a still ball crept at the rest speed: 20.7 s
 	# from (10.2, 10.2), 19.4 s from (9.5, 10.75), and 15.2 s on a three-step pit. Since green
-	# steep_from 0.4 and steep_scale 3.0, past a one-step contour a slope is felt well over the
-	# hold. Every 0.25 yd over one quarter of the 5x5 plot (the pit is symmetric).
+	# steep_from 0.4 and steep_scale 3.0 (20 since E6-S11), past a one-step contour a slope is
+	# felt well over the hold. Every 0.25 yd over one quarter of the 5x5 plot (the pit is symmetric).
 	var centre := Vector2(12.5, 12.5)
 	for depth: int in [2, 3]:
 		var course := _deep_pit(Surface.Type.GREEN, depth)
@@ -1068,8 +1068,8 @@ func test_green_pit_balls_settle_from_anywhere_on_the_plot() -> void:
 		for i in range(1, 51):
 			for j in range(1, 51):
 				# E2-S16: by default every 0.5 yd, and every 0.25 yd from 7.25 to 10.5 yd on both
-				# axes, the rim's corner, where the worst settles start (273 ticks from (10.25,
-				# 7.75) on 2 deep, 286 from (9.25, 7.75) on 3). Sweep.full() runs every 0.25 yd.
+				# axes, the rim's corner, where the worst settles start (E6-S11: 201 ticks from
+				# (7.75, 10.25) on 2 deep, 162 from (7.75, 9.25) on 3; 273 and 286 before). Sweep.full() runs every 0.25 yd.
 				var corner := i >= 29 and i <= 42 and j >= 29 and j <= 42
 				if not (Sweep.full() or corner or (i % 2 == 0 and j % 2 == 0)):
 					continue
@@ -1094,6 +1094,123 @@ func test_a_green_slope_past_a_contour_is_felt_well_over_the_hold() -> void:
 	var felt := Ball.felt_gradient(Vector2(0.5, 0.0), green).x
 	var pull := params.gravity * felt / (1.0 + felt * felt)
 	assert_gt(pull, 3.0 * hold, "a quarter step past a contour pulls %.2f against the %.2f hold" % [pull, hold])
+
+
+## E6-S11: 40 greens of 6x6 tiles, every tile a random height from 0 to `hmax`, drawn in
+## order from one generator seeded 5 (the E2-S11 review's set).
+func _random_greens(hmax: int) -> Array[CourseData]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var greens: Array[CourseData] = []
+	for g in 40:
+		var course := CourseData.create(6, 6, Surface.Type.GREEN, 0)
+		for y in 6:
+			for x in 6:
+				course.set_tile(x, y, rng.randi_range(0, hmax), Surface.Type.GREEN)
+		greens.append(course)
+	return greens
+
+
+## Longest settle of still balls on `greens`: `quick`, a list of [green index, start], and
+## with --full also every `stride` yards on both axes (at x.5, y.5).
+func _random_green_worst(greens: Array[CourseData], quick: Array, stride: int = 1) -> Dictionary:
+	var worst := {"steps": 0, "what": "", "capped": 0}
+	var cases: Array = quick.duplicate()
+	if Sweep.full():
+		for g in greens.size():
+			for i in range(0, 30, stride):
+				for j in range(0, 30, stride):
+					cases.append([g, Vector2(i + 0.5, j + 0.5)])
+	for c: Array in cases:
+		var ball := _set_down(greens[c[0]], c[1])
+		if ball.steps >= ball.params.max_steps:
+			worst["capped"] += 1
+		if ball.steps > worst["steps"]:
+			worst["steps"] = ball.steps
+			worst["what"] = "green %d from %s" % [c[0], c[1]]
+	return worst
+
+
+func test_random_greens_up_to_two_steps_settle_under_the_green_target() -> void:
+	# E6-S11: with E2-S11's steep_scale 3.0, 7 of the 36000 still balls on random greens of
+	# heights 0 to 2 took 480 ticks or more (8.6 s); just past a contour a ball crept at a low
+	# terminal speed for seconds. Since steep_scale 20 none does (446 ticks, green 15 from
+	# (14.5, 18.5)). By default the twelve worst starts of the full set; --full runs them all.
+	var quick := [[15, Vector2(14.5, 18.5)], [12, Vector2(15.5, 10.5)], [12, Vector2(19.5, 10.5)],
+			[15, Vector2(20.5, 18.5)], [22, Vector2(11.5, 9.5)], [15, Vector2(21.5, 18.5)],
+			[22, Vector2(11.5, 8.5)], [6, Vector2(4.5, 26.5)], [14, Vector2(19.5, 21.5)],
+			[12, Vector2(26.5, 24.5)], [16, Vector2(3.5, 10.5)], [22, Vector2(10.5, 10.5)]]
+	var w := _random_green_worst(_random_greens(2), quick)
+	assert_eq(w["capped"], 0, "no ball reaches max_steps")
+	assert_lt(w["steps"], GREEN_SETTLE, "heights 0 to 2: longest %d ticks, %s" % [w["steps"], w["what"]])
+
+
+func test_random_steep_greens_stay_within_their_known_limit() -> void:
+	# E6-S11, not met: random greens of heights 0 to 4 and 0 to 7 still settle over 8 s from
+	# a few starts (docs/design.md Ball, Known limit). The ball runs down a bank, slows almost
+	# to rest on gentle ground, then meets another bank. This guards the measured worst (501
+	# and 589 ticks, from 666 and 662 with steep_scale 3.0) against a regression. By default
+	# the worst starts of the full set; --full adds every other yard on both axes (a quarter
+	# of the 36000 per height, to keep --full near its old runtime; the worst starts above
+	# come from the every-yard sweep).
+	var cases := {
+		4: {"bound": 520, "quick": [[0, Vector2(14.5, 10.5)], [2, Vector2(21.5, 9.5)],
+				[4, Vector2(15.5, 21.5)], [35, Vector2(9.5, 27.5)]]},
+		7: {"bound": 610, "quick": [[17, Vector2(8.5, 4.5)], [32, Vector2(26.5, 10.5)],
+				[17, Vector2(9.5, 19.5)], [29, Vector2(16.5, 4.5)], [22, Vector2(21.5, 8.5)]]},
+	}
+	for hmax: int in cases:
+		var w := _random_green_worst(_random_greens(hmax), cases[hmax]["quick"], 2)
+		assert_eq(w["capped"], 0, "heights 0 to %d: no ball reaches max_steps" % hmax)
+		assert_lt(w["steps"], cases[hmax]["bound"], "heights 0 to %d: longest %d ticks, %s" % [
+				hmax, w["steps"], w["what"]])
+
+
+func test_a_diagonal_two_and_one_step_green_ramp_settles_under_the_green_target() -> void:
+	# E2-S11 review: a 6x6 green with heights 2i + j (capped at 7) took up to 9.7 s (583
+	# ticks) for still balls; since steep_scale 20, 264 ticks from (17.25, 12.25). Every yard
+	# and every 0.25 yd round the worst start; --full every 0.25 yd.
+	var course := CourseData.create(6, 6, Surface.Type.GREEN, 0)
+	for y in 6:
+		for x in 6:
+			course.set_tile(x, y, clampi(2 * x + y, 0, 7), Surface.Type.GREEN)
+	var worst := 0
+	var what := Vector2.ZERO
+	for i in range(1, 120):
+		for j in range(1, 120):
+			var near := i >= 64 and i <= 72 and j >= 44 and j <= 52
+			if not (Sweep.full() or near or (i % 4 == 0 and j % 4 == 0)):
+				continue
+			var ball := _set_down(course, Vector2(i, j) * 0.25)
+			if ball.steps > worst:
+				worst = ball.steps
+				what = Vector2(i, j) * 0.25
+	assert_lt(worst, GREEN_SETTLE, "longest %d ticks, from %s" % [worst, what])
+
+
+func test_mixed_green_banks_stay_within_their_known_limit() -> void:
+	# E6-S11, not met: a green bank whose tiles alternate two- and one-step rises, ten flat
+	# tiles below it. A ball that runs down a two-step rise and only just crosses the one-step
+	# band below it, then runs down the next rise and out across the flat, takes over 8 s
+	# (docs/design.md Ball, Known limit): 534 and 548 ticks, from x 66.0 and 71.0. This guards
+	# them against a regression. Still balls every 0.25 yd along y 22.5 over the bank (x 50 to
+	# 85); --full from x 0.25.
+	for heights: Array in [[0, 2, 3, 5, 6, 7, 7], [0, 1, 3, 4, 6, 7, 7]]:
+		var course := CourseData.create(10 + heights.size(), 10, Surface.Type.GREEN, 0)
+		for y in 10:
+			for i in heights.size():
+				course.set_tile(10 + i, y, heights[i], Surface.Type.GREEN)
+		var worst := 0
+		var what := 0.0
+		var x := 0.25 if Sweep.full() else 50.0
+		while x < course.width * 5.0:
+			var ball := _set_down(course, Vector2(x, 22.5))
+			assert_lt(ball.steps, ball.params.max_steps, "%s from x %.2f: comes to rest" % [heights, x])
+			if ball.steps > worst:
+				worst = ball.steps
+				what = x
+			x += 0.25
+		assert_lt(worst, 560, "%s: longest %d ticks, from x %.2f" % [heights, worst, what])
 
 
 func test_trench_balls_settle_under_the_targets() -> void:
