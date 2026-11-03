@@ -1,5 +1,5 @@
 {
-  "_doc": "Expectations for scripts/playtest.gd (the /playtest smoke). The E1 values are the debug shot on the heights fixture, from docs/design.md: struck from the 7-step tee pillar at (15, 4), lands at (7, 4), rests at (12, 4). Change them only with that doc.",
+  "_doc": "Expectations for scripts/playtest.gd (the /playtest smoke). The E1 values are the debug shot on the heights fixture, from docs/design.md: struck from the 7-step tee pillar at (15, 4), lands at (7, 4), rests at (12, 4). The E2 values are the scripted round (scripts/scripted_round.gd) on courses/example_par3.json, a 160 yd par 3: a 6-iron at 89% onto the green, then a holed putt, 2 strokes. Change them only with that doc.",
   "e1": {
     "course_path": "res://courses/heights_20x20.json",
     "course_size": [20, 20],
@@ -7,5 +7,10 @@
     "start_height": 7,
     "landing_tile": [7, 4],
     "rest_tile": [12, 4]
+  },
+  "e2": {
+    "course_path": "res://courses/example_par3.json",
+    "par": 3,
+    "strokes": 2
   }
 }

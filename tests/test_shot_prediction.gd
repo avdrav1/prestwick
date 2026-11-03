@@ -5,6 +5,8 @@ extends GutTest
 ## the ground beneath it.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+## The debug shot's course (E1-S7). The main scene starts on the blank plot since E2-S8.
+const HEIGHTS_PATH := "res://courses/heights_20x20.json"
 const EPS := 0.001
 ## Uneven frame times (seconds), so the live ball crosses tick boundaries at odd places.
 const FRAMES: Array[float] = [0.016, 0.021, 0.009, 0.033, 0.017, 0.05, 0.004]
@@ -202,10 +204,11 @@ func test_ball_and_marker_sort_over_their_own_tile_top_along_the_debug_shot() ->
 	# The debug shot leaves a 7-step pillar and rolls past tiles with lower neighbours, where
 	# the bilinear ground sits under the drawn top. The pieces must still draw over that top.
 	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = HEIGHTS_PATH
 	add_child_autofree(main)
 	main.shot_view.set_process(false)
 	main.set_mode(Main.Mode.PLAY)
-	main.fire_button.pressed.emit()
+	main.fire_debug_shot()
 	var view := main.shot_view
 	var course := main.course
 	var landing := view.ball.field.iso_point(view.prediction.landing)
@@ -236,18 +239,26 @@ func test_live_ball_steps_at_60_hz_whatever_the_frame_rate() -> void:
 	assert_eq(view.ball.steps, 36, "a tenth of a second more in small frames is 6 ticks")
 
 
-# --- the button ---
+# --- the debug key (E2-S8; the button until then) ---
 
-func test_play_mode_button_fires_the_debug_shot() -> void:
+func test_play_mode_debug_key_fires_the_debug_shot() -> void:
 	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = HEIGHTS_PATH
 	add_child_autofree(main)
 	main.shot_view.set_process(false)
-	assert_false(main.fire_button.visible, "no debug shot while building")
+	var key := InputEventAction.new()
+	key.action = Main.DEBUG_SHOT_ACTION
+	key.pressed = true
+	main._unhandled_input(key)
+	assert_false(main.shot_view.playing, "no debug shot while building")
+	var f3 := InputEventKey.new()
+	f3.physical_keycode = KEY_F3
+	f3.pressed = true
+	assert_true(f3.is_action(Main.DEBUG_SHOT_ACTION), "F3 is the debug key")
 	main.set_mode(Main.Mode.PLAY)
-	assert_true(main.fire_button.visible, "the button shows in Play")
 	assert_false(main.shot_view.playing)
-	main.fire_button.pressed.emit()
-	assert_true(main.shot_view.playing, "pressing it launches the ball")
+	main._unhandled_input(key)
+	assert_true(main.shot_view.playing, "the key launches the ball")
 	assert_not_null(main.shot_view.prediction, "and predicts where it lands")
 	var shot := main.debug_shot
 	var field := main.shot_view.ball.field
@@ -258,7 +269,7 @@ func test_play_mode_button_fires_the_debug_shot() -> void:
 	assert_false(main.shot_view.playing)
 	assert_eq(main.shot_view.ball.landing_position, expected.landing, "lands where predicted")
 	main.set_mode(Main.Mode.BUILD)
-	assert_false(main.fire_button.visible)
+	assert_false(main.can_fire_debug_shot(), "not in Build")
 	assert_false(main.shot_view.visible, "the shot is cleared from the Build view")
 
 

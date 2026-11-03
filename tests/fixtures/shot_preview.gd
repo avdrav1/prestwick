@@ -11,6 +11,7 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
 func _ready() -> void:
 	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = "res://courses/heights_20x20.json"
 	add_child(main)
 	main.set_mode(Main.Mode.PLAY)
 	main.fire_debug_shot()

@@ -214,7 +214,7 @@ func test_another_holes_tee_moved_into_its_zone_closes_it() -> void:
 
 func _main() -> Main:
 	var m := MAIN_SCENE.instantiate() as Main
-	m.course_path = ""
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(m)
 	return m
 
@@ -315,4 +315,5 @@ func test_play_stays_available_while_the_hole_fails() -> void:
 	assert_false(m.build_tool.builder.issues_for(1).is_empty(), "the hole fails rule 2")
 	m.toggle_mode()
 	assert_eq(m.mode, Main.Mode.PLAY, "pillar 1: the validator never blocks Play")
-	assert_true(m.fire_button.visible)
+	assert_true(m.score_card.visible, "the scorecard shows")
+	assert_true(m.swing_control.active, "and the swing takes input")

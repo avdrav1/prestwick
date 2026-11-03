@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scenes/swing_control.gd" id="9_swing_control"]
 [ext_resource type="Script" path="res://scenes/aim_view.gd" id="10_aim_view"]
 [ext_resource type="Script" path="res://scenes/swing_panel.gd" id="11_swing_panel"]
+[ext_resource type="Script" path="res://scenes/score_card.gd" id="12_score_card"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -57,21 +58,21 @@ grow_horizontal = 2
 grow_vertical = 0
 script = ExtResource("5_palette")
 
-[node name="FireButton" type="Button" parent="HUD"]
-visible = false
+[node name="ModeButton" type="Button" parent="HUD"]
 focus_mode = 0
 offset_left = 16.0
 offset_top = 48.0
-offset_right = 176.0
+offset_right = 196.0
 offset_bottom = 80.0
-text = "Fire debug shot"
+tooltip_text = "Switch between building the hole and playing it"
+text = "Play hole (Tab)"
 
 [node name="NewSandboxButton" type="Button" parent="HUD"]
 focus_mode = 0
 offset_left = 16.0
-offset_top = 48.0
-offset_right = 176.0
-offset_bottom = 80.0
+offset_top = 88.0
+offset_right = 196.0
+offset_bottom = 120.0
 tooltip_text = "Start a new course on a blank 128 x 128 plot"
 text = "New sandbox"
 
@@ -98,3 +99,15 @@ offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 0
 script = ExtResource("11_swing_panel")
+
+[node name="ScoreCard" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 16.0
+grow_horizontal = 0
+script = ExtResource("12_score_card")

@@ -118,6 +118,7 @@ func _hill(mirrored: bool, zoom_index: int) -> void:
 	if zoom_index != _main.camera.zoom_index:
 		_main.camera.set_zoom_index(zoom_index)
 		_main.camera.position = Iso.point_to_screen(field.iso_point(shot.landing))
+		_main.camera.tracking = false  # hold the framing; Play would ease back to the ball
 
 
 ## E1-S10: rises of 1, 2, 3 and 1 steps facing away from the camera, on green, fairway,

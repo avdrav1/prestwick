@@ -1,0 +1,203 @@
+extends GutTest
+## E2-S8: play the hole end to end on the main scene. One click from Build to the tee, the
+## swing, the ball, the score, the camera, and one click back to Build with the course as it
+## was.
+
+const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+const PAR3_PATH := "res://courses/example_par3.json"
+const FLAT_PATH := "res://tests/fixtures/flat_20x20.json"
+## Strokes the scripted player may take before a test gives up.
+const MAX_STROKES: int = 12
+
+
+func _main(path: String) -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = path
+	add_child_autofree(m)
+	m.shot_view.set_process(false)
+	m.swing_control.set_process(false)
+	m.camera.set_process(false)
+	return m
+
+
+## Shows `c` on a main scene in Build.
+func _main_on(c: CourseData) -> Main:
+	var m := _main(FLAT_PATH)
+	m.show_course(c)
+	return m
+
+
+## Plays the struck ball out to rest.
+func _finish_shot(m: Main) -> void:
+	var i := 0
+	while m.shot_view.playing and i < 10000:
+		m.shot_view.advance(0.25)
+		i += 1
+
+
+## Plays the hole with the scripted player until it is finished. Returns the strokes taken.
+func _play_out(m: Main) -> int:
+	var sc := m.swing_control
+	var n := 0
+	while not sc.is_finished() and n < MAX_STROKES:
+		var plan := ScriptedRound.plan(sc)
+		assert_not_null(plan, "a stroke can be planned")
+		if plan == null:
+			break
+		ScriptedRound.swing(sc, plan)
+		assert_true(m.shot_view.playing, "stroke %d is struck" % (n + 1))
+		_finish_shot(m)
+		n += 1
+	return n
+
+
+## A strip `w` x 10 at height 0: a 3 x 3 tee at x 1 to 3, fairway, and a green at the far end
+## with the cup on it.
+func _strip(w: int, par: int) -> CourseData:
+	var c := CourseData.create(w, 10, Surface.Type.FAIRWAY, 0)
+	for y: int in 10:
+		for x: int in w:
+			if x >= w - 6:
+				c.set_tile(x, y, 0, Surface.Type.GREEN)
+			elif x <= 3 and y >= 4 and y <= 6:
+				c.set_tile(x, y, 0, Surface.Type.TEE)
+	c.set_holes([HoleData.new(1, par, Vector2i(2, 5), Vector2i(w - 3, 5), false)])
+	return c
+
+
+func test_one_click_from_build_puts_the_ball_on_the_tee() -> void:
+	var m := _main(PAR3_PATH)
+	var hole: HoleData = m.course.holes[0]
+	assert_eq(m.mode, Main.Mode.BUILD)
+	assert_true(m.mode_button.visible, "the Play button is on the Build HUD")
+	m.mode_button.pressed.emit()
+	assert_eq(m.mode, Main.Mode.PLAY, "one click to Play, no scene load (D2)")
+	assert_eq(m.swing_control.ball_at, m.swing_control.field.tile_center(hole.tee), "on the tee")
+	assert_true(m.score_card.visible, "the scorecard shows in Play")
+	assert_eq(m.score_card.par_label.text, "Par 3")
+	assert_eq(m.score_card.strokes_label.text, "Strokes 0")
+	assert_eq(m.score_card.to_par_label.text, "Total: in play", "no total before the hole is finished")
+	assert_eq(m.score_card.status_label.text, "Pick up at 6")
+	assert_true(m.camera.tracking, "the camera centres on the ball")
+	assert_almost_eq(m.camera.focus, m.shot_view.ball_screen(), Vector2(0.01, 0.01))
+
+
+func test_a_scripted_hole_plays_to_a_score_and_leaves_the_course_unchanged() -> void:
+	var m := _main(PAR3_PATH)
+	var before := m.course.content_hash()
+	m.mode_button.pressed.emit()
+	var strokes := _play_out(m)
+	var sc := m.swing_control
+	var score := sc.score
+	assert_true(score.holed, "the ball is holed")
+	assert_false(score.picked_up)
+	assert_eq(score.strokes, strokes, "every swing is counted")
+	assert_eq(sc.strokes, strokes)
+	assert_eq(score.total(), score.strokes + score.penalty_strokes)
+	assert_lte(score.total(), 4, "a scripted player makes par or close on a flat 160 yd par 3")
+	var cup := sc.field.tile_center(sc.cup_tile())
+	assert_eq(sc.ball_at, cup, "the ball sits in the cup")
+	assert_eq(m.score_card.strokes_label.text, "Strokes %d" % score.total())
+	assert_eq(m.score_card.to_par_label.text, "Total %s" % HoleScore.to_par_text(score.total() - 3))
+	assert_string_contains(m.score_card.status_label.text, "Holed in %d" % score.total())
+	# A finished hole takes no more swings.
+	sc.press()
+	assert_false(sc.swing.in_progress(), "no swing after the ball is holed")
+	assert_false(m.aim_view.visible, "and no aim line")
+	assert_false(m.swing_panel.visible, "and no swing panel")
+	m.mode_button.pressed.emit()
+	assert_eq(m.mode, Main.Mode.BUILD, "one click back to Build")
+	assert_eq(m.course.content_hash(), before, "the course is unchanged by playing it")
+	assert_false(m.score_card.visible)
+
+
+func test_play_again_starts_a_fresh_score_on_the_tee() -> void:
+	var m := _main(PAR3_PATH)
+	m.set_mode(Main.Mode.PLAY)
+	_play_out(m)
+	m.set_mode(Main.Mode.BUILD)
+	m.set_mode(Main.Mode.PLAY)
+	assert_true(m.swing_panel.visible, "the swing panel is back")
+	assert_eq(m.swing_control.score.strokes, 0)
+	assert_false(m.swing_control.is_finished())
+
+
+func test_a_water_ball_costs_a_stroke_and_the_next_starts_at_the_drop() -> void:
+	var c := _strip(60, 5)
+	for y: int in 10:
+		for x: int in range(30, 54):
+			c.set_tile(x, y, 0, Surface.Type.WATER)
+	var m := _main_on(c)
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	assert_eq(sc.club.id, "driver")
+	var plan := ScriptedRound.Plan.new()
+	plan.club = sc.club
+	plan.aim_deg = sc.aim_deg
+	plan.ticks = ScriptedRound.ticks_for(sc, 1.0)
+	ScriptedRound.swing(sc, plan)
+	_finish_shot(m)
+	var ball := m.shot_view.ball
+	assert_eq(ball.hazard, Ball.Hazard.WATER, "the drive finds the water")
+	assert_eq(sc.score.strokes, 1)
+	assert_eq(sc.score.penalty_strokes, 1, "one penalty stroke")
+	assert_eq(sc.score.total(), 2)
+	assert_eq(sc.ball_at, Vector2(ball.drop_point.x, ball.drop_point.y), "the next shot starts at the drop")
+	assert_eq(sc.field.tile_at(sc.ball_at.x, sc.ball_at.y), Vector2i(29, 5), "on the tile before the water")
+	assert_eq(m.score_card.strokes_label.text, "Strokes 2 (1 penalty)")
+	assert_false(sc.driver_stroke, "a drop is not the tee shot")
+
+
+func test_the_ball_is_picked_up_at_double_par() -> void:
+	var c := _strip(60, 3)
+	var m := _main_on(c)
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	sc.select_club(sc.model.clubs.club("sw"))
+	for i in 6:
+		assert_false(sc.is_finished(), "stroke %d plays" % (i + 1))
+		var plan := ScriptedRound.Plan.new()
+		plan.club = sc.model.clubs.club("sw")
+		plan.aim_deg = sc.aim_deg
+		plan.ticks = 4  # a tap of a few yards
+		ScriptedRound.swing(sc, plan)
+		_finish_shot(m)
+	assert_true(sc.score.picked_up, "picked up after 6 on a par 3")
+	assert_true(sc.is_finished())
+	assert_eq(sc.score.total(), 6)
+	assert_eq(m.score_card.strokes_label.text, "Strokes 6")
+	assert_eq(m.score_card.to_par_label.text, "Total +3")
+	assert_string_contains(m.score_card.status_label.text, "Picked up at 6 (double par)")
+	assert_false(m.shot_view.visible, "the ball is picked up")
+	sc.press()
+	assert_false(sc.swing.in_progress(), "no swing after the pick-up")
+
+
+func test_the_camera_centres_on_the_ball_at_the_strike_and_at_rest() -> void:
+	var m := _main(PAR3_PATH)
+	m.set_mode(Main.Mode.PLAY)
+	var cam := m.camera
+	cam.pan(Vector2(500, 300))
+	assert_false(cam.tracking, "the player pans away to scout")
+	var sc := m.swing_control
+	var plan := ScriptedRound.plan(sc)
+	ScriptedRound.swing(sc, plan)
+	assert_true(cam.tracking, "a shot starting centres the camera on the ball")
+	m.shot_view.advance(1.0)
+	m._process(0.0)
+	assert_almost_eq(cam.focus, m.shot_view.ball_screen(), Vector2(0.01, 0.01), "and follows it")
+	_finish_shot(m)
+	assert_true(cam.tracking)
+	assert_almost_eq(cam.focus, m.shot_view.ball_screen(), Vector2(0.01, 0.01), "centred where it rests")
+	cam.pan(Vector2(-400, 0))
+	cam.snap_back()
+	cam._process(10.0)
+	assert_almost_eq(cam.position, cam.focus, Vector2(0.01, 0.01), "one key snaps back")
+
+
+func test_no_hole_plays_without_a_score() -> void:
+	var m := _main(FLAT_PATH)
+	m.set_mode(Main.Mode.PLAY)
+	assert_null(m.swing_control.score)
+	assert_eq(m.score_card.title_label.text, "No hole")
+	assert_false(m.swing_control.is_finished())

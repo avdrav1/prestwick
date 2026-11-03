@@ -13,11 +13,21 @@ extends Node2D
 ## it moves SwingTuning.mouse_reaim_px from where it was; `club_prev` and
 ## `club_next` (up and down) step through the clubs the lie and stroke allow (D13). Sits at
 ## the CourseView's origin, so local points are course screen space.
+##
+## The hole (E2-S8): the ball and the aim know hole 1's cup, so a ball can be holed, and a
+## HoleScore (golf/hole_score.gd) counts each stroke the control struck, its penalty
+## strokes (a water or OB drop, D15) and whether it holed. The next stroke starts where the
+## ball rests or was dropped. Play goes on until the ball is holed or picked up at the
+## stroke limit (D12); after that no swing starts until the hole begins again.
 
 ## Emitted when the club, the legal clubs, the aim or the swing's phase changes.
 signal changed
 ## Emitted when a swing strikes the ball.
 signal struck(shot: ShotLaunch)
+## Emitted when a struck ball comes to rest and its stroke is counted.
+signal stroke_counted(score: HoleScore)
+## Emitted once when the hole is finished: holed, or picked up at the limit.
+signal hole_finished(score: HoleScore)
 
 const SWING_ACTION: StringName = &"swing"
 const AIM_LEFT: StringName = &"aim_left"
@@ -42,6 +52,10 @@ var club: Club
 var legal: Array[Club] = []
 ## Swings struck since the ball was set on the tee (begin).
 var strokes: int = 0
+## The hole being played (hole 1), or null when the course has no tee yet.
+var hole: HoleData
+## The hole's score, or null with no hole.
+var score: HoleScore
 ## True when the next stroke is the hole's first from its tee marker (the driver, D13).
 var driver_stroke: bool = false
 ## The perfect swing's prediction the aim shows, or null.
@@ -87,7 +101,8 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float) -> v
 	strokes = 0
 	_own_shot = false
 	swing.reset()
-	var hole := _first_hole(c)
+	hole = _first_hole(c)
+	score = HoleScore.new(hole.par) if hole != null else null
 	if hole != null:
 		place_ball(field.tile_center(hole.tee), true)
 		if c.in_bounds(hole.cup.x, hole.cup.y):
@@ -158,6 +173,18 @@ func aim_at(p: Vector2) -> void:
 	changed.emit()
 
 
+## The cup the ball can drop into: hole 1's, or Ball.NO_CUP when it has none on the map.
+func cup_tile() -> Vector2i:
+	if hole != null and course != null and course.in_bounds(hole.cup.x, hole.cup.y):
+		return hole.cup
+	return Ball.NO_CUP
+
+
+## True once the hole is holed or the ball picked up (D12): no more swings.
+func is_finished() -> bool:
+	return score != null and score.is_finished()
+
+
 ## True while a struck ball is still moving.
 func is_ball_moving() -> bool:
 	return _shot_view != null and _shot_view.playing
@@ -165,7 +192,7 @@ func is_ball_moving() -> bool:
 
 ## One swing click. Ignored while a ball is moving or with no club.
 func press() -> void:
-	if not active or club == null or is_ball_moving():
+	if not active or club == null or is_ball_moving() or is_finished():
 		return
 	swing.click()
 	if swing.is_done():
@@ -273,7 +300,7 @@ func _strike() -> void:
 	if _aim_view != null:
 		_aim_view.clear()
 	if _shot_view != null:
-		_shot_view.fire_launch(course, shot, rng_seed)
+		_shot_view.fire_launch(course, shot, rng_seed, cup_tile())
 	struck.emit(shot)
 
 
@@ -287,6 +314,15 @@ func _on_came_to_rest(at: Vector3) -> void:
 		return
 	_own_shot = false
 	place_ball(Vector2(at.x, at.y), false, false)
+	if score != null:
+		var ball := _shot_view.ball
+		score.record_stroke(ball.penalty_strokes, ball.holed)
+		stroke_counted.emit(score)
+		if score.picked_up:
+			# D12: the ball is picked up.
+			_shot_view.clear()
+		if score.is_finished():
+			hole_finished.emit(score)
 	if active:
 		_refresh_aim()
 	changed.emit()
@@ -301,12 +337,12 @@ func _refresh_legal() -> void:
 
 func _refresh_aim() -> void:
 	_aim_dirty = false
-	if not active or course == null or club == null or is_ball_moving():
-		if _aim_view != null and not active:
+	if not active or course == null or club == null or is_ball_moving() or is_finished():
+		if _aim_view != null and (not active or is_finished()):
 			_aim_view.clear()
 		return
 	var shot := perfect_launch()
-	aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot)
+	aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
 	if _aim_view != null:
 		_aim_view.show_prediction(field, aim_prediction, shot.is_putt(), shot.start)
 

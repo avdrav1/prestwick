@@ -11,6 +11,7 @@ var _main: Main
 
 func _ready() -> void:
 	_main = MAIN_SCENE.instantiate() as Main
+	_main.course_path = "res://courses/heights_20x20.json"
 	add_child(_main)
 	var tool: BuildTool = _main.build_tool
 	tool.brush_size = 3

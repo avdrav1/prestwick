@@ -10,22 +10,24 @@ extends SceneTree
 ##   E1 Ball on a tile   switch to Play, fire the debug shot, it lands on the course where
 ##                       the prediction said, and comes to rest on the course.   (here)
 ##   E2 One hole         load courses/example_par3.json, play the hole with a scripted
-##                       swing, the ball holes out.
+##                       swing, the ball holes out.                               (here)
 ##   E3 Guests           spawn one guest, it plays and leaves a reaction.
 ##   E4 Economy          run one in-game day, it ends with money changed.
 ##
 ## Exit code 0 when every check passes, 1 when one fails. Prints one line per check.
 
 ## The last milestone whose smoke stage exists in this script.
-const BUILT_MILESTONE: int = 1
+const BUILT_MILESTONE: int = 2
 const MAIN_SCENE := "res://scenes/main.tscn"
 ## What each stage expects, from docs/design.md. Kept as data so the numbers are not
 ## literals here, and so a silent fallback course or a physics change fails the smoke.
 const EXPECT_PATH := "res://data/playtest_smoke.json"
 ## Frames to wait for the shot to finish: the ball's own 3600-tick cap plus a margin.
 const MAX_FRAMES: int = 4000
+## E2: the most strokes the scripted player may take (double par on a par 5).
+const MAX_STROKES: int = 10
 
-enum Phase { START, FLYING, DONE }
+enum Phase { START, FLYING, E2_START, E2_SWING, E2_FLYING, DONE }
 
 var _main: Main
 var _phase: Phase = Phase.START
@@ -34,23 +36,35 @@ var _failures: int = 0
 var _landed_at: Variant = null
 var _rest_at: Variant = null
 var _expect: Dictionary = {}
+var _expect_e2: Dictionary = {}
+var _e2_hash: String = ""
+var _e2_strokes: int = 0
 
 
 func _initialize() -> void:
 	print("playtest smoke: milestone E%d stages" % BUILT_MILESTONE)
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(EXPECT_PATH))
-	if not parsed is Dictionary or not (parsed as Dictionary).get("e1") is Dictionary:
+	if not parsed is Dictionary or not (parsed as Dictionary).get("e1") is Dictionary \
+			or not (parsed as Dictionary).get("e2") is Dictionary:
 		_fail("expectations load (%s)" % EXPECT_PATH)
 		_finish()
 		return
 	_expect = (parsed as Dictionary)["e1"]
+	_expect_e2 = (parsed as Dictionary)["e2"]
+	if not _add_main(_expect["course_path"]):
+		_finish()
+
+
+## A fresh main scene on `course_path`, set before add_child (no load UI is implied).
+func _add_main(course_path: String) -> bool:
 	var packed := load(MAIN_SCENE) as PackedScene
 	if packed == null:
 		_fail("main scene loads (%s)" % MAIN_SCENE)
-		_finish()
-		return
+		return false
 	_main = packed.instantiate() as Main
+	_main.course_path = course_path
 	root.add_child(_main)
+	return true
 
 
 func _process(_delta: float) -> bool:
@@ -61,7 +75,19 @@ func _process(_delta: float) -> bool:
 			_frames += 1
 			if not _main.shot_view.playing or _frames >= MAX_FRAMES:
 				_check_shot()
-				_finish()
+				_main.queue_free()
+				_main = null
+				_phase = Phase.E2_START
+		Phase.E2_START:
+			_start_hole()
+		Phase.E2_SWING:
+			_swing()
+		Phase.E2_FLYING:
+			_frames += 1
+			if not _main.shot_view.playing or _frames >= MAX_FRAMES:
+				_check(not _main.shot_view.playing,
+						"stroke %d comes to rest within %d frames" % [_e2_strokes, MAX_FRAMES])
+				_phase = Phase.E2_SWING
 	return false
 
 
@@ -81,11 +107,11 @@ func _start_shot() -> void:
 			size.y, int(_expect["start_height"]), start])
 	_main.set_mode(Main.Mode.PLAY)
 	_check(_main.mode == Main.Mode.PLAY, "switches to Play")
-	_check(_main.fire_button.visible, "the fire button shows in Play")
+	_check(_main.can_fire_debug_shot(), "the debug key is live in Play")
 	_main.shot_view.landed.connect(func(at: Vector3) -> void: _landed_at = at)
 	_main.shot_view.came_to_rest.connect(func(at: Vector3) -> void: _rest_at = at)
-	_main.fire_button.pressed.emit()
-	_check(_main.shot_view.playing, "the fire button launches a ball")
+	_main.fire_debug_shot()
+	_check(_main.shot_view.playing, "the debug shot launches a ball")
 	if not _main.shot_view.playing:
 		_finish()
 		return
@@ -120,6 +146,67 @@ func _check_shot() -> void:
 	_check(land_tile == want_land, "it lands where design.md says, tile %s" % want_land)
 	_check(rest_tile == want_rest, "it rests where design.md says, tile %s" % want_rest)
 	print("  shot: %d ticks in %d frames" % [view.ball.steps, _frames])
+
+
+# --- E2: play the hole with a scripted swing and hole out ---
+
+func _start_hole() -> void:
+	if not _add_main(_expect_e2["course_path"]):
+		_finish()
+		return
+	var course := _main.course
+	_check(course != null and course.holes.size() == 1
+			and course.holes[0].par == int(_expect_e2["par"]),
+			"the course is %s, one par %d" % [_expect_e2["course_path"], int(_expect_e2["par"])])
+	if course == null or course.holes.is_empty():
+		_finish()
+		return
+	_e2_hash = course.content_hash()
+	_main.mode_button.pressed.emit()
+	var sc := _main.swing_control
+	_check(_main.mode == Main.Mode.PLAY, "one click from Build to Play")
+	_check(sc.ball_at == sc.field.tile_center(course.holes[0].tee), "the ball is on the tee")
+	_phase = Phase.E2_SWING
+
+
+func _swing() -> void:
+	var sc := _main.swing_control
+	if sc.is_finished() or _e2_strokes >= MAX_STROKES:
+		_check_hole()
+		_finish()
+		return
+	var plan := ScriptedRound.plan(sc)
+	if plan == null:
+		_fail("stroke %d can be planned" % (_e2_strokes + 1))
+		_finish()
+		return
+	var from := sc.field.tile_at(sc.ball_at.x, sc.ball_at.y)
+	ScriptedRound.swing(sc, plan)
+	_e2_strokes += 1
+	print("  stroke %d: %s, %d bar ticks, from tile %s" % [_e2_strokes, plan.club.id,
+			plan.ticks, from])
+	if not _main.shot_view.playing:
+		_fail("stroke %d is struck" % _e2_strokes)
+		_finish()
+		return
+	_frames = 0
+	_phase = Phase.E2_FLYING
+
+
+func _check_hole() -> void:
+	var sc := _main.swing_control
+	var score := sc.score
+	_check(score.holed, "the ball holes out")
+	_check(score.total() == int(_expect_e2["strokes"]),
+			"in %d strokes, as data/playtest_smoke.json says (%d)" % [score.total(),
+			int(_expect_e2["strokes"])])
+	_check(_main.score_card.strokes_label.text == "Strokes %d" % score.total(),
+			"the scorecard shows %d strokes" % score.total())
+	_check(_main.score_card.to_par_label.text == "Total %s" % HoleScore.to_par_text(score.to_par()),
+			"and the total to par, %s" % HoleScore.to_par_text(score.to_par()))
+	_main.mode_button.pressed.emit()
+	_check(_main.mode == Main.Mode.BUILD, "one click back to Build")
+	_check(_main.course.content_hash() == _e2_hash, "the course is unchanged")
 
 
 # --- reporting ---

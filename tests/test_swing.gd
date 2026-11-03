@@ -246,7 +246,7 @@ func test_perfect_putt_rests_within_a_yard_of_the_marker_on_a_contour() -> void:
 
 func _main_on(course: CourseData) -> Main:
 	var main := MAIN_SCENE.instantiate() as Main
-	main.course_path = ""
+	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(main)
 	main.shot_view.set_process(false)
 	main.swing_control.set_process(false)
@@ -326,29 +326,32 @@ func test_the_aim_follows_the_club_and_aim() -> void:
 	assert_gt(main.aim_view.dots.size(), 10, "with a dotted line to it")
 
 
-func test_debug_button_hides_while_a_swing_is_in_progress_or_the_ball_moves() -> void:
+func test_the_debug_key_waits_while_a_swing_is_in_progress_or_the_ball_moves() -> void:
 	var main := _main_on(_par3())
 	var sc := main.swing_control
-	assert_true(main.fire_button.visible, "the debug fire button stays in Play")
+	assert_true(main.can_fire_debug_shot(), "the debug key works in Play (E2-S8)")
 	var ev := InputEventAction.new()
 	ev.action = SwingControl.SWING_ACTION
 	ev.pressed = true
 	sc._unhandled_input(ev)
 	assert_true(sc.swing.in_progress(), "the swing has its own input")
-	assert_false(main.fire_button.visible, "hidden while the swing is in progress")
+	assert_false(main.can_fire_debug_shot(), "not while the swing is in progress")
 	sc.advance(1.0 / sc.swing.rate())
 	sc._unhandled_input(ev)
 	sc.advance(1.0 / sc.swing.rate())
 	sc._unhandled_input(ev)
 	assert_false(sc.swing.in_progress())
 	assert_true(main.shot_view.playing, "the third click strikes the ball")
-	assert_false(main.fire_button.visible, "still hidden while the struck ball moves")
+	assert_false(main.can_fire_debug_shot(), "nor while the struck ball moves")
 	var at_strike := main.shot_view.ball
-	main.fire_debug_shot()
+	var key := InputEventAction.new()
+	key.action = Main.DEBUG_SHOT_ACTION
+	key.pressed = true
+	main._unhandled_input(key)
 	assert_eq(main.shot_view.ball, at_strike, "the debug shot cannot replace the ball in flight")
 	main.shot_view.advance(60.0)
 	assert_false(main.shot_view.playing)
-	assert_true(main.fire_button.visible, "the button is back once the ball rests")
+	assert_true(main.can_fire_debug_shot(), "the key works again once the ball rests")
 	assert_eq(sc.strokes, 1)
 
 

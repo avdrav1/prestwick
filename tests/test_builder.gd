@@ -286,7 +286,7 @@ func test_pick_matches_what_is_drawn_frontmost() -> void:
 
 func _main() -> Main:
 	var m := MAIN_SCENE.instantiate() as Main
-	m.course_path = ""
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(m)
 	return m
 

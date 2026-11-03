@@ -91,3 +91,69 @@ func test_frame_centers_and_clamps_to_the_course() -> void:
 	assert_eq(_cam.position, rect.get_center())
 	_cam.pan(Vector2(100000, 100000))
 	assert_eq(_cam.position, rect.end + Vector2.ONE * _cam.tuning.edge_margin, "stops past the edge margin")
+
+
+# --- the play camera (E2-S8) ---
+
+func test_centre_time_comes_from_the_resource() -> void:
+	assert_gt(_cam.tuning.centre_time, 0.0)
+	assert_lt(_cam.tuning.centre_time, 1.0, "eases onto the ball in well under a second")
+
+
+func test_centre_on_eases_onto_the_ball() -> void:
+	_cam.frame(Rect2(-2000, -2000, 4000, 4000))
+	_cam.centre_on(Vector2(300, 120))
+	assert_true(_cam.tracking)
+	_cam._process(_cam.tuning.centre_time)
+	var d: float = _cam.position.distance_to(Vector2(300, 120))
+	assert_between(d, 1.0, 323.0 * 0.5, "most of the way after one time constant")
+	_cam._process(10.0)
+	assert_almost_eq(_cam.position, Vector2(300, 120), Vector2(0.01, 0.01), "and there in the end")
+
+
+func test_tracking_follows_a_moving_focus() -> void:
+	_cam.frame(Rect2(-2000, -2000, 4000, 4000))
+	_cam.centre_on(Vector2.ZERO)
+	_cam._process(10.0)
+	_cam.set_focus(Vector2(50, 0))
+	_cam._process(10.0)
+	assert_almost_eq(_cam.position.x, 50.0, 0.01, "the camera keeps the ball centred")
+
+
+func test_a_pan_stops_tracking_and_the_key_snaps_back() -> void:
+	_cam.frame(Rect2(-2000, -2000, 4000, 4000))
+	_cam.centre_on(Vector2(100, 100))
+	_cam._process(10.0)
+	_cam.pan(Vector2(400, 0))
+	assert_false(_cam.tracking, "panning to scout leaves the ball")
+	var scouted: Vector2 = _cam.position
+	_cam.set_focus(Vector2(120, 100))
+	_cam._process(10.0)
+	assert_eq(_cam.position, scouted, "and stays where the player panned")
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_C
+	key.pressed = true
+	assert_true(key.is_action(CourseCamera.SNAP_BACK), "C is the snap-back key")
+	var ev := InputEventAction.new()
+	ev.action = CourseCamera.SNAP_BACK
+	ev.pressed = true
+	_cam._unhandled_input(ev)
+	assert_true(_cam.tracking)
+	_cam._process(10.0)
+	assert_almost_eq(_cam.position, Vector2(120, 100), Vector2(0.01, 0.01), "one key snaps it back to the ball")
+
+
+func test_snap_back_with_no_ball_does_nothing() -> void:
+	_cam.frame(Rect2(-640, -128, 1280, 768))
+	var at: Vector2 = _cam.position
+	_cam.snap_back()
+	_cam._process(1.0)
+	assert_eq(_cam.position, at)
+
+
+func test_frame_forgets_the_ball() -> void:
+	_cam.centre_on(Vector2(100, 100))
+	_cam.frame(Rect2(-640, -128, 1280, 768))
+	assert_false(_cam.tracking)
+	_cam._process(1.0)
+	assert_eq(_cam.position, Rect2(-640, -128, 1280, 768).get_center())

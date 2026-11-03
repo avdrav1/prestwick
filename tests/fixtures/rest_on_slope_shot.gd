@@ -14,7 +14,7 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
 func _ready() -> void:
 	var main := MAIN_SCENE.instantiate() as Main
-	main.course_path = ""
+	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(main)
 	var course := GridHeightEvidence.green_contour()
 	main.show_course(course)
@@ -34,3 +34,4 @@ func _ready() -> void:
 	sc._refresh_aim()
 	main.camera.set_zoom_index(zoom_index)
 	main.camera.position = main.shot_view.ball_screen()
+	main.camera.tracking = false

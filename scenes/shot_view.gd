@@ -69,9 +69,12 @@ func fire(course: CourseData, start: Vector3, velocity: Vector3, rng_seed: int) 
 
 
 ## Fires a stroke built by ShotModel (a flight or a putt, E2-S7), predicted the same way.
-func fire_launch(course: CourseData, shot: ShotLaunch, rng_seed: int) -> void:
-	prediction = ShotPrediction.run_launch(course, rng_seed, shot)
+## `cup_tile` is the hole's cup (E2-S8), or Ball.NO_CUP.
+func fire_launch(course: CourseData, shot: ShotLaunch, rng_seed: int,
+		cup_tile: Vector2i = Ball.NO_CUP) -> void:
+	prediction = ShotPrediction.run_launch(course, rng_seed, shot, null, null, cup_tile)
 	ball = Ball.new(course, rng_seed)
+	ball.set_cup(cup_tile)
 	shot.apply(ball)
 	_start_live()
 	# A putt starts on the ground: its "landing" is where it was struck.

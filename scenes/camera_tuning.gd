@@ -12,6 +12,9 @@ const PATH: String = "res://scenes/camera_tuning.tres"
 @export var start_zoom_index: int = 1
 ## How far past the course edge, in screen pixels at 1x, the camera center may go.
 @export var edge_margin: float = 128.0
+## Play (E2-S8): how quickly the camera eases onto the ball it centres on, a time constant in
+## seconds (about 63% of the way in this time, 95% in three). 0 jumps at once.
+@export var centre_time: float = 0.15
 
 
 static func load_default() -> CameraTuning:
