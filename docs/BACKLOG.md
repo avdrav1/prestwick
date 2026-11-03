@@ -255,7 +255,7 @@ Planning notes:
   - Accept: a leader foot whose tile has a higher tile in front draws dashed or faded. Issue text shows for the hovered or selected hole only, or boxes may also move sideways, so no box sits more than a set distance above its tile (the distance in the builder tuning). The swing bar redraws on resize while idle.
   - Test: `tests/test_issue_marker.gd` (new) for the hidden foot and the box distance; a screenshot through `scripts/screenshot.sh` in `docs/decisions/`.
   - Touches: `course/`, `scenes/`
-- [ ] E2-S18 Finish `/course-file inspect` and `generate hilly`. Both are named in the skill and not built.
+- [x] E2-S18 Finish `/course-file inspect` and `generate hilly`. Both are named in the skill and not built.
   - Note: (found in E2 review) left optional in E2-S2. `courses/example_par3.json` is `generate 3 flat dry`; nothing generates a hilly fixture.
   - Note: (D19) `generate hilly` reuses E6-S2's land generator rather than a ridge of its own; if E2-S18 runs before E6-S2, keep the ridge minimal.
   - Accept: `/course-file inspect <path>` prints the size, the holes with par, yardage and open flag, and each hole's validator result. `/course-file generate <par> hilly` adds a gentle ridge and still passes `validate`.
