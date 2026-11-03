@@ -142,9 +142,15 @@ func _check_shot() -> void:
 	_check(rest_tile == view.prediction.rest_tile,
 			"it rests on the predicted tile %s" % view.prediction.rest_tile)
 	var want_land := _vec2i(_expect["landing_tile"])
-	var want_rest := _vec2i(_expect["rest_tile"])
 	_check(land_tile == want_land, "it lands where design.md says, tile %s" % want_land)
-	_check(rest_tile == want_rest, "it rests where design.md says, tile %s" % want_rest)
+	# The rest point is checked within a tolerance, not by tile: it lies 0.03 yd from a tile
+	# border (E6-S10 review), so a small surface retune must not flip the smoke.
+	var rest_list: Array = _expect["rest_yd"]
+	var want_rest := Vector2(float(rest_list[0]), float(rest_list[1]))
+	var tolerance := float(_expect["rest_tolerance_yd"])
+	var off := Vector2(rest.x, rest.y).distance_to(want_rest)
+	_check(off <= tolerance, "it rests where design.md says, within %.1f yd of %s (%.2f yd off)" % [
+			tolerance, want_rest, off])
 	print("  shot: %d ticks in %d frames" % [view.ball.steps, _frames])
 
 

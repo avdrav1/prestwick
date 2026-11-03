@@ -455,6 +455,14 @@ func _step_roll() -> void:
 		var drag := params.roll_drag * row.drag_scale * v.length() / row.roll
 		if row.drag_full_speed > 0.0 and v.length() < row.drag_full_speed:
 			drag *= v.length() / row.drag_full_speed
+		# Downhill (E6-S10): where the slope pulls the ball on along its line, the friction
+		# falls toward downhill_friction_scale of itself, so a long slope off the green is run
+		# at pace, not at the crawl where a one-step pull meets the drag.
+		var downhill := downhill_share(pull, v, full)
+		if downhill > 0.0:
+			var keep := lerpf(1.0, row.downhill_friction_scale, downhill)
+			constant *= keep
+			drag *= keep
 		var friction := constant + drag
 		v += pull * DT
 		var speed := v.length() - friction * DT
@@ -490,8 +498,20 @@ func _step_roll() -> void:
 	# a valley floor, the foot of a bank), the ball keeps only its velocity along the new
 	# ground (E2-S4).
 	var next := field.gradient_at(x, y)
-	var met := meet_ground(v, crease_slope(grad, next, v, row), crease_slope(next, grad, v, row, true))
+	var met := meet_ground(v, crease_slope(grad, next, v, row), crease_slope(next, grad, v, row, true),
+			row.floor_keep, row.floor_keep_speed)
 	velocity = Vector3(met.x, met.y, grad.dot(met))
+
+
+## How much the slope pulls a ball moving at `v` on along its line, as a share of the
+## constant friction `full` (E6-S10): 1 wherever that pull is at least the constant friction
+## (every slope of a step per tile or more, off the green), less on a gentler downhill, and 0
+## on flat ground, straight across a slope and uphill.
+static func downhill_share(pull: Vector2, v: Vector2, full: float) -> float:
+	var speed := v.length()
+	if speed <= 0.0 or full <= 0.0:
+		return 0.0
+	return clampf(pull.dot(v / speed) / full, 0.0, 1.0)
 
 
 ## 0 on each axis (x, y) where this tick's move `v` would carry the ball from ground falling
@@ -561,15 +581,35 @@ static func crease_slope(here: Vector2, there: Vector2, v: Vector2, row: Surface
 ## where the slope is the same, that axis is unchanged, so a ball over a drop runs on as far
 ## as on flat ground. A crease never adds ground speed (from a steep downhill onto a gentler
 ## one the projection would) and never turns the ball back: past a 90 degree crease that axis
-## stops instead.
-static func meet_ground(v: Vector2, from: Vector2, to: Vector2) -> Vector2:
-	return Vector2(_meet_axis(v.x, from.x, to.x), _meet_axis(v.y, from.y, to.y))
+## stops instead. Across a low point on that axis (falling, then rising: a valley or pit
+## floor) the ball keeps only `floor_keep` (the row's, E6-S10) of what rigid ground leaves it,
+## as a ball thuds into the far wall, so a swing across a valley floor dies in a few passes;
+## the thud fades out by `floor_keep_speed` (floor_thud), so a fast roll through a dip runs on.
+static func meet_ground(v: Vector2, from: Vector2, to: Vector2, floor_keep: float = 1.0,
+		floor_keep_speed: float = 0.0) -> Vector2:
+	return Vector2(_meet_axis(v.x, from.x, to.x, floor_keep, floor_keep_speed),
+			_meet_axis(v.y, from.y, to.y, floor_keep, floor_keep_speed))
 
 
-static func _meet_axis(v: float, from: float, to: float) -> float:
+static func _meet_axis(v: float, from: float, to: float, floor_keep: float = 1.0,
+		floor_keep_speed: float = 0.0) -> float:
 	if (to - from) * v <= 0.0:
 		return v
-	return v * clampf((1.0 + from * to) / (1.0 + to * to), 0.0, 1.0)
+	var keep := clampf((1.0 + from * to) / (1.0 + to * to), 0.0, 1.0)
+	if from * v < 0.0 and to * v > 0.0:
+		keep *= floor_thud(absf(v), floor_keep, floor_keep_speed)
+	return v * keep
+
+
+## The share of its speed along an axis that a ball crossing a low point at `speed` (yd/s,
+## on that axis) keeps on top of the rigid-ground share (E6-S10 review): `floor_keep` for a
+## still ball, rising in proportion to speed back to all of it at `floor_keep_speed`, so a
+## slow swing across a valley floor dies out while a fast roll through a dip runs on as
+## before. A `floor_keep_speed` of 0 takes `floor_keep` at every speed.
+static func floor_thud(speed: float, floor_keep: float, floor_keep_speed: float) -> float:
+	if floor_keep_speed <= 0.0:
+		return floor_keep
+	return lerpf(floor_keep, 1.0, clampf(speed / floor_keep_speed, 0.0, 1.0))
 
 
 ## Every way to rest comes here, so a ball never rests on water, OB or inside trees (D15).

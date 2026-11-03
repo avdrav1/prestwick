@@ -35,6 +35,23 @@ extends Resource
 ## Speed (yd/s) below which the grass drag fades in proportion to speed (E2-S4), so a slow
 ## ball running down a slope is not held to a crawl. 0 keeps the full drag at every speed.
 @export var drag_full_speed: float = 0.0
+## Share of the rolling friction (constant part and drag alike) kept by a ball the slope
+## pulls on along its line (E6-S10, Ball.downhill_share): in full where that pull is at least
+## the constant friction, so on every slope of a step per tile or more off the green; none of
+## it on flat ground, straight across a slope or uphill. Below 1.0 a ball runs a long downhill
+## at pace instead of at the low speed where a one-step pull meets the drag (3.6 yd/s on
+## fairway), while every roll on flat ground and every climb is as before. 1.0 keeps it.
+@export var downhill_friction_scale: float = 1.0
+## Share of its speed, along an axis, that a ball keeps when it crosses a low point on that
+## axis (a valley or pit floor, falling then rising), on top of what the crease rule leaves
+## it (E6-S10, Ball.meet_ground): the thud into the far wall. Below 1.0 a swing across a
+## valley floor dies in a few passes. 1.0 keeps the rigid-ground share alone.
+@export var floor_keep: float = 1.0
+## Speed (yd/s, along that axis) at which a ball crossing a low point keeps all of what the
+## crease leaves it (E6-S10 review, Ball.floor_thud): floor_keep applies to a still ball and
+## fades in proportion to speed up to this, so a fast roll through a one-tile dip runs on as
+## before floor_keep. 0 takes floor_keep at every speed.
+@export var floor_keep_speed: float = 0.0
 ## Share of the speed into the ground that comes back out as the bounce (restitution).
 @export_range(0.0, 1.0) var bounce: float = 0.25
 ## Share of the speed along the ground lost at each touchdown.

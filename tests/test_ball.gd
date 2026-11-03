@@ -135,7 +135,7 @@ func test_friction_is_read_from_the_resource() -> void:
 	# Deceleration (a + k v) / roll stops a ball from v0 in (v0 - (a / k) ln(1 + k v0 / a)) / k
 	# at roll 1; doubling roll doubles the distance.
 	var a := normal.params.roll_decel
-	var k := normal.params.roll_drag
+	var k := normal.params.roll_drag * normal.surfaces.row(Surface.Type.FAIRWAY).drag_scale
 	var expected := (10.0 - (a / k) * log(1.0 + k * 10.0 / a)) / k
 	assert_almost_eq(d_normal, expected, 0.3, "distance from the table's friction")
 	assert_almost_eq(d_fast / d_normal, 2.0, 0.1, "double roll factor rolls twice as far")
@@ -723,23 +723,24 @@ func _valley(surface: Surface.Type, depth: int) -> CourseData:
 
 
 func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
-	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim. Cart
-	# path 5 deep is 9.95 s (E2-S11 keeps it there); deeper valleys are docs/design.md Ball,
-	# Known limit.
+	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim.
+	# E6-S10: 5 to 7 deep too (up to 13.5 s before: downhill_friction_scale and floor_keep).
 	# E2-S16: by default the left half only (the valley is symmetric, and so are its settles),
 	# every 0.25 yd within 1.5 yd of the rim, where the worst settle starts (on the rim or
 	# 0.25 yd in, on the full grid), then every yard down to the floor. Sweep.full() runs
-	# every 0.25 yd from rim to rim.
-	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.CART_PATH]:
-		var depths: Array = [2, 3, 4, 5] if s == Surface.Type.CART_PATH else [2, 3, 4]
-		for depth: int in depths:
+	# every 0.25 yd from rim to rim. E6-S10: 5 to 7 deep by default every 2 yd past the rim
+	# (their worst starts within 0.75 yd of it), and tee (fairway's twin) only in full.
+	var surfaces: Array = Sweep.pick([Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.CART_PATH],
+			[Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.CART_PATH])
+	for s: Surface.Type in surfaces:
+		for depth: int in [2, 3, 4, 5, 6, 7]:
 			var course := _valley(s, depth)
 			var worst := 0
 			var rim := 52.5 - depth * 5.0
 			var xs: Array[float] = []
 			for i: int in range(0, depth * 40 + 1):
 				var at := rim + i * 0.25
-				var quick := at <= 52.5 + EPS and (i <= 6 or i % 4 == 0)
+				var quick := at <= 52.5 + EPS and (i <= 6 or i % (4 if depth <= 4 else 8) == 0)
 				if quick or Sweep.full():
 					xs.append(at)
 			for x: float in xs:
@@ -787,13 +788,221 @@ func test_drive_down_a_stepped_cart_path_settles_under_the_target() -> void:
 			assert_lt(ticks, OFF_GREEN_SETTLE, "%s: %d ticks on the ground" % [label, ticks])
 
 
+## A plateau at height 7 that steps down to 0 along +x from tile 52 (x 262.5 yd, the top), one
+## step every `every` tiles, then flat: the long slope off the green (E2-S4 review, E6-S10).
+func _stepped(surface: Surface.Type, every: int) -> CourseData:
+	var course := CourseData.create(160, 8, surface, 7)
+	for y: int in 8:
+		for x: int in 160:
+			course.set_tile(x, y, clampi(7 - (x - 52) / every, 0, 7) if x >= 52 else 7, surface)
+	return course
+
+
+const STEPPED_TOP := 262.5
+
+
+func test_balls_down_a_long_one_step_slope_settle_under_the_target() -> void:
+	# E6-S10: from up to 15.4 s (fairway, 923 ticks), rough 14.8 s, at the low terminal speed
+	# where a one-step pull met the drag (3.6 yd/s). Balls set still or at up to 12 yd/s from
+	# 22.5 yd above the top to the foot, down a slope stepping one step per tile (and every
+	# 2 tiles). The worst arrive at the top nearly still (fairway and rough from x 254 at
+	# 10 yd/s, 9.6 s). By default the run-in above the top every 2 yd at 8 to 12 yd/s and still
+	# balls every 5 yd down the slope; Sweep.full() every 0.5 yd at 0 to 12 yd/s, and tee.
+	# Cart path is docs/design.md Ball, Known limit (its own flat roll-out is too long).
+	var surfaces: Array = Sweep.pick([Surface.Type.FAIRWAY, Surface.Type.ROUGH],
+			[Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH])
+	for s: Surface.Type in surfaces:
+		for every: int in [1, 2]:
+			var course := _stepped(s, every)
+			var foot := STEPPED_TOP + 35.0 * every
+			var starts: Array[Vector2] = []
+			if Sweep.full():
+				var x := STEPPED_TOP - 22.5
+				while x <= foot + EPS:
+					for sp: int in 13:
+						starts.append(Vector2(x, sp))
+					x += 0.5
+			else:
+				for i: int in 13:
+					for sp: float in [8.0, 10.0, 12.0]:
+						starts.append(Vector2(STEPPED_TOP - 24.0 + 2.0 * i, sp))
+				var x := STEPPED_TOP
+				while x <= foot:
+					starts.append(Vector2(x, 0.0))
+					x += 5.0
+			var worst := 0
+			var at := Vector2.ZERO
+			for st: Vector2 in starts:
+				var ball := Ball.new(course, 1)
+				ball.start_roll(Vector2(st.x, 20.0), Vector2(st.y, 0.0))
+				ball.run_to_rest()
+				if ball.steps > worst:
+					worst = ball.steps
+					at = st
+			assert_lt(worst, OFF_GREEN_SETTLE, "%s stepping every %d: longest %d ticks (x %.1f at %.0f yd/s)" % [
+					Surface.NAMES[s], every, worst, at.x, at.y])
+
+
+func test_clubs_down_a_long_slope_settle_under_the_target() -> void:
+	# E6-S10: every full club through the shot model, at 100% and max_power, struck so it
+	# comes down above or on the slope of _stepped(): rough stepping every 1, 2 and 4 tiles
+	# (up to 572 ticks, the 110% driver), fairway every 2 and 4 (584, the 110% 3-wood). Fairway
+	# every tile and cart path are docs/design.md Ball, Known limit. By default the worst
+	# strikes; Sweep.full() every yard from 60 yd short of the club's carry to 10 yd past.
+	var model := ShotModel.new()
+	var top := SwingTuning.load_default().max_power
+	var cases: Array = [[Surface.Type.ROUGH, 1], [Surface.Type.ROUGH, 2], [Surface.Type.ROUGH, 4],
+			[Surface.Type.FAIRWAY, 2], [Surface.Type.FAIRWAY, 4]]
+	# The worst strike found by the full sweep for each case: club, power, start x.
+	var worst_strikes := {
+		"rough 1": ["driver", top, -33.0], "rough 2": ["driver", top, -12.0],
+		"rough 4": ["driver", top, -18.0], "fairway 2": ["3w", top, 0.0],
+		"fairway 4": ["driver", top, 3.0]}
+	for cfg: Array in cases:
+		var s: Surface.Type = cfg[0]
+		var every: int = cfg[1]
+		var course := _stepped(s, every)
+		var key := "%s %d" % [Surface.NAMES[s], every]
+		var strikes: Array = []
+		if Sweep.full():
+			for c in model.clubs.clubs:
+				if c.is_putter():
+					continue
+				for power: float in [1.0, top]:
+					var x := STEPPED_TOP - c.carry_yd * power - 60.0
+					while x <= STEPPED_TOP - c.carry_yd * power + 10.0:
+						strikes.append([c.id, power, x])
+						x += 1.0
+		else:
+			strikes.append(worst_strikes[key])
+		var worst := 0
+		var label := ""
+		for st: Array in strikes:
+			var ball := Ball.new(course, 1)
+			model.full(ball.field, model.clubs.club(st[0]), st[1], Vector2(st[2], 20.0), 0.0).apply(ball)
+			while not ball.has_landed:
+				ball.step()
+			var landed := ball.steps
+			ball.run_to_rest()
+			if ball.steps - landed > worst:
+				worst = ball.steps - landed
+				label = "%s at %.0f%% from x %.0f" % [st[0], st[1] * 100.0, st[2]]
+		assert_lt(worst, OFF_GREEN_SETTLE, "%s: longest %d ticks on the ground (%s)" % [key, worst, label])
+
+
+func test_downhill_share_is_the_pull_along_the_ball_over_the_constant_friction() -> void:
+	var full := 1.5
+	var down := Vector2(3.7, 0.0)
+	assert_eq(Ball.downhill_share(Vector2.ZERO, Vector2(5, 0), full), 0.0, "flat ground: none")
+	assert_eq(Ball.downhill_share(down, Vector2(-5, 0), full), 0.0, "uphill: none")
+	assert_almost_eq(Ball.downhill_share(down, Vector2(0, 5), full), 0.0, EPS, "straight across: none")
+	assert_eq(Ball.downhill_share(down, Vector2(5, 0), full), 1.0, "a one-step downhill: in full")
+	assert_almost_eq(Ball.downhill_share(Vector2(0.75, 0), Vector2(5, 0), full), 0.5, EPS,
+			"a pull of half the constant friction: half")
+	assert_eq(Ball.downhill_share(down, Vector2.ZERO, full), 0.0, "a still ball: none")
+
+
+func test_downhill_friction_leaves_flat_rolls_and_climbs_alone() -> void:
+	# E6-S10: downhill_friction_scale only works where the slope pulls the ball on.
+	var plain: SurfaceTable = SurfaceTable.load_default().duplicate(true)
+	for i in plain.rows.size():
+		plain.rows[i] = plain.rows[i].duplicate()
+		plain.rows[i].downhill_friction_scale = 1.0
+	assert_lt(SurfaceTable.load_default().row(Surface.Type.FAIRWAY).downhill_friction_scale, 1.0,
+			"fairway eases its friction downhill")
+	var flat := Ball.new(_flat(), 1)
+	flat.start_roll(Vector2(10, 100), Vector2(12, 0))
+	flat.run_to_rest()
+	var flat_plain := Ball.new(_flat(), 1, null, plain)
+	flat_plain.start_roll(Vector2(10, 100), Vector2(12, 0))
+	flat_plain.run_to_rest()
+	assert_eq(flat.position, flat_plain.position, "flat ground: the same roll")
+	assert_eq(flat.steps, flat_plain.steps, "and the same ticks")
+	# Uphill on _ramp() until it stops: the same climb.
+	var climbs: Array[float] = []
+	for table: SurfaceTable in [SurfaceTable.load_default(), plain]:
+		var up := Ball.new(_ramp(), 1, null, table)
+		up.start_roll(Vector2(10, 100), Vector2(10, 0))
+		while up.velocity.x > 0.0:
+			up.step()
+		climbs.append(up.position.x)
+	assert_eq(climbs[0], climbs[1], "the climb: the same")
+	# Downhill from the top of _ramp(), still: it reaches the foot sooner.
+	var ticks: Array[int] = []
+	for table: SurfaceTable in [SurfaceTable.load_default(), plain]:
+		var down := Ball.new(_ramp(), 1, null, table)
+		down.start_roll(Vector2(37.0, 100), Vector2.ZERO)
+		while down.position.x > 5.0 and not down.is_at_rest():
+			down.step()
+		ticks.append(down.steps)
+	assert_lt(ticks[0], ticks[1] * 0.8, "downhill: well before (%d against %d ticks)" % [ticks[0], ticks[1]])
+
+
+func test_a_valley_floor_takes_floor_keep_of_the_speed() -> void:
+	# E6-S10: across a low point only; a flat foot and a lip are as before.
+	var v := Vector2(5.0, 0.0)
+	var rigid := Ball.meet_ground(v, Vector2(-0.4, 0), Vector2(0.4, 0))
+	var thud := Ball.meet_ground(v, Vector2(-0.4, 0), Vector2(0.4, 0), 0.4)
+	assert_almost_eq(thud.x, rigid.x * 0.4, EPS, "a V floor: floor_keep of the rigid share")
+	assert_eq(Ball.meet_ground(v, Vector2.ZERO, Vector2(0.4, 0), 0.4),
+			Ball.meet_ground(v, Vector2.ZERO, Vector2(0.4, 0)), "the foot of a bank: unchanged")
+	assert_eq(Ball.meet_ground(v, Vector2(-0.4, 0), Vector2.ZERO, 0.4), v, "onto a flat foot: unchanged")
+	assert_eq(Ball.meet_ground(v, Vector2.ZERO, Vector2(-0.4, 0), 0.4), v, "over a lip: unchanged")
+	var table := SurfaceTable.load_default()
+	assert_eq(table.row(Surface.Type.GREEN).floor_keep, 1.0, "the green keeps the rigid share")
+	assert_eq(table.row(Surface.Type.GREEN).downhill_friction_scale, 1.0, "and its friction downhill")
+	# E6-S10 review: the thud fades with speed, so floor_keep is for slow crossings.
+	assert_eq(Ball.floor_thud(0.0, 0.4, 20.0), 0.4, "a still ball: floor_keep")
+	assert_almost_eq(Ball.floor_thud(10.0, 0.4, 20.0), 0.7, EPS, "half floor_keep_speed: halfway")
+	assert_eq(Ball.floor_thud(25.0, 0.4, 20.0), 1.0, "past floor_keep_speed: all of it")
+	assert_eq(Ball.floor_thud(25.0, 0.4, 0.0), 0.4, "floor_keep_speed 0: floor_keep at every speed")
+	var fast := Ball.meet_ground(Vector2(25.0, 0.0), Vector2(-0.4, 0), Vector2(0.4, 0), 0.4, 20.0)
+	assert_almost_eq(fast, Ball.meet_ground(Vector2(25.0, 0.0), Vector2(-0.4, 0), Vector2(0.4, 0)),
+			Vector2.ONE * 1e-5, "a fast crossing: the rigid share alone")
+
+
+func test_a_fast_roll_crosses_a_one_step_dip_as_before_floor_keep() -> void:
+	# E6-S10 review: with floor_keep at every speed, one tile dug a step into fairway or rough
+	# caught a 25 to 40 yd/s roll at its floor (15.0 yd, against 23.8 to 41.0 without it).
+	# With floor_keep_speed the fast rolls run on as they did with floor_keep 1.0.
+	var plain: SurfaceTable = SurfaceTable.load_default().duplicate(true)
+	for i in plain.rows.size():
+		plain.rows[i] = plain.rows[i].duplicate()
+		plain.rows[i].floor_keep = 1.0
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.CART_PATH]:
+		var course := CourseData.create(60, 8, s, 2)
+		for y: int in 8:
+			course.set_tile(5, y, 1, s)
+		for speed: float in [30.0, 35.0, 40.0, 50.0, 60.0]:
+			var runs: Array[float] = []
+			for table: SurfaceTable in [SurfaceTable.load_default(), plain]:
+				var ball := Ball.new(course, 1, null, table)
+				ball.start_roll(Vector2(12.5, 20.0), Vector2(speed, 0.0))
+				ball.run_to_rest()
+				runs.append(ball.position.x - 12.5)
+			var label := "%s at %.0f yd/s" % [Surface.NAMES[s], speed]
+			assert_gt(runs[0], 20.0, "%s: past the dip (%.1f yd)" % [label, runs[0]])
+			assert_almost_eq(runs[0], runs[1], 1.0, "%s: about as far as without floor_keep" % label)
+
+
+func test_fairway_does_not_outroll_green_on_flat_ground() -> void:
+	# E6-S10: fairway drag_scale 1.2 shortens fairway rolls; it must not pass the green's.
+	for speed: float in [4.0, 10.0, 20.0, 30.0]:
+		var fair := Ball.new(_flat(Surface.Type.FAIRWAY, 60), 1)
+		fair.start_roll(Vector2(10, 100), Vector2(speed, 0))
+		fair.run_to_rest()
+		var green := Ball.new(_flat(Surface.Type.GREEN, 60), 1)
+		green.start_roll(Vector2(10, 100), Vector2(speed, 0))
+		green.run_to_rest()
+		assert_lt(fair.position.x, green.position.x, "%.0f yd/s: fairway %.2f yd, green %.2f yd" % [
+				speed, fair.position.x - 10.0, green.position.x - 10.0])
+
+
 func test_every_club_settles_under_the_target_on_flat_ground() -> void:
 	# E2-S11: the E2-S4 drives above are a raw 75 yd/s ball with no club. Every full club
 	# through the shot model (E2-S5: its launch and roll_factor), at 100% and at the bar's
 	# max_power, onto flat fairway, tee, rough and cart path (the 110% driver onto cart path,
-	# 8.9 s, is the slowest). Down a stepped cart path only the driver is held to the target
-	# (the test above): an iron that reaches the top of the steps nearly still takes up to
-	# 14.9 s (docs/design.md Ball, Known limit, long slopes off the green).
+	# 8.9 s, is the slowest). Down a long slope see test_clubs_down_a_long_slope_settle_under_the_target.
 	var model := ShotModel.new()
 	var top := SwingTuning.load_default().max_power
 	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH, Surface.Type.CART_PATH]:
