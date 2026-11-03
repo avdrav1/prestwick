@@ -69,3 +69,122 @@ Choice: b, the user's answer. A ball under rest speed on green rests where the f
 Why: pillar 2 (shots are readable): a putt that finishes in about 3 s, where the break you read is where the ball sits, reads better than one that keeps creeping for half a minute. Real greens hold a ball on a gentle slope, so this also matches what players expect.
 Inconclusive: greens steeper than one step per tile still trickle slowly, since the net pull there is only 0.16 yd/s² (two steps per tile). On a two-steps-per-tile green a still ball set down at the middle of the 15 yd band takes about 42 s to reach the foot, one set down in the upper part reaches the 60 s cap mid-slope, and short uphill putts that roll back take 8 to 28 s (4 to 7 yd/s); three steps per tile takes up to about 15 s. Players can paint such greens, so this needs its own fix before E2-S7 (a builder or validator limit on green steps, or a faster trickle once the pull clearly beats the hold). The 8 s settle target covers balls that rest on one-step green slopes only, which is what the contour and ramp evidence measure; a putt that runs off the green and down the rough's slope can take about 9.6 s. Balls now rest partway up one-step slopes, at the bilinear height between tile centres, while the course view draws flat tops and 16 px risers, so a resting ball is drawn up to about 7.5 px above or below the top it appears to sit on, sometimes on the riser. The drawing fix (snap the drawn rest height to the tile top, sloped green art, or keep a slow ball out of the riser band) is open and needs the user's choice. Nobody has putted by hand yet (E2-S7).
 Affects: course/surfaces.tres, course/surface_row.gd, docs/design.md Ball, tests/test_ball.gd, tests/fixtures/grid_height_evidence.gd, docs/decisions/e1-s9-probe.txt, scenes/shot_view.gd (drawn rest height, open)
+
+## D8: Is wind in the MVP? (2026-11-03)
+Question: E2 planning fork. The design doc's Aim paragraph says "Wind shifts the marker" and its Play toolbar lists wind, but the MVP's Out list already cuts weather.
+Options:
+- Keep wind: one vector per hole that shifts the aim marker, shown on the Play toolbar. Cost: a new Ball term (a drift in flight) with its own tuning, a toolbar widget, and a guest skill factor in E3. Benefit: one more input for the player to read.
+- Cut wind. Cost: shots lose a variable that real golf has. Benefit: no new Ball term, and the aim marker shows the whole shot from club, lie and slope alone.
+Choice: cut wind from the MVP (user, 2026-11-03).
+Why: pillar 4 (small, finishable scope), and pillar 2 is better served by a marker that already tells the whole truth. It removes from the design doc the sentence "Wind shifts the marker." (Golf play, Aim) and "wind" from the Play toolbar (Presentation, UI). The ambient sound bed's "wind" (Presentation, Audio) is a sound, not weather, and stays. The Icebox "Weather" entry already holds the smallest version if it is ever promoted.
+Affects: docs/design.md MVP (Out), the Claude Docs design doc (Golf play: Aim; Presentation: UI), docs/BACKLOG.md Icebox (already says so)
+
+## D9: What is out of bounds? (2026-11-03)
+Question: E2 planning fork. The design doc lists "out-of-bounds stakes" as a feature, while the course format already has an `oob` surface (8) that the palette hides.
+Options:
+- Off the map only. Cost: a player cannot mark OB inside the plot. Benefit: nothing to build.
+- Off the map plus `oob` tiles painted from the Build palette. Cost: one palette entry (E2-S3) and the drop rule (E2-S6). Benefit: the format, the art (`oob` frames) and the ball's surface lookup already have it.
+- Placed OB stakes as boundary objects. Cost: a new CourseData field, course format version 2 and a `save.gd` migration. Benefit: thin lines instead of whole tiles.
+Choice: off the map plus `oob` tiles, painted from the Build palette (E2-S3) and read from files (user, 2026-11-03). Placed OB stakes stay in the Icebox.
+Why: pillar 4: it costs one palette entry, since everything under it exists. Rule 3's path cannot cross `oob` (D11), and a ball that stops OB takes one penalty stroke and a drop (D15).
+Pays for it: the stakes are delayed to the Icebox, with their format version 2.
+Affects: docs/design.md Grid and terrain (Out of bounds, Builder, surface table), course/builder.gd and scenes/ palette (E2-S3), golf/ (E2-S6), art/specs/surfaces.md (its "still open (E2-S1)" line), the Claude Docs design doc (Course builder: Features)
+
+## D10: What is a blank sandbox plot? (2026-11-03)
+Question: the plot's size and the surface and height of a new sandbox. It must fit a par 5 over 94 tiles long with water on its line (E2-S9) and 9 holes (E3-S2).
+Options:
+- 64 x 64. Cost: no par 5 fits, even corner to corner (64 x 1.41 x 5 = 452 yd). Benefit: small files and quick redraws.
+- 128 x 128, all rough at height 2. Cost: 16,384 tiles to draw and a 16 KB tile array (about 22 KB in base64). Benefit: 640 yd along an edge, so a 520 yd par 5 fits straight with 24 tiles to spare, and about 85 acres hold 9 holes (a real 9-hole course takes roughly 50 to 80).
+- 256 x 256. Cost: 4 times the tiles, and most of the plot stays empty for a 9-hole MVP. Benefit: room for 18 holes.
+Choice: 128 x 128 tiles, every tile rough, height 2 (user, 2026-11-03).
+Why: pillar 4: the smallest square that fits the E2-S9 par 5 and E3's 9 holes. Rough is the unbuilt ground a player paints over. Height 2 lets them dig two steps for water and bunkers without hitting the clamp at 0.
+Inconclusive: drawing 16,384 tiles has not been timed; E2-S3 should check the frame time. The plot's cost is E4-S1's.
+Affects: docs/design.md Grid and terrain (Plot), course/builder.gd (E2-S3), the Claude Docs design doc (Progression and content: Sandbox)
+
+## D11: How are hole rules 3, 4 and 5 measured, and what is a hole's footprint? (2026-11-03)
+Question: the five validation rules name a path, a yardage and a landing zone without saying how to measure them, and "terrain edits under an open hole close it" names no tiles.
+Options:
+- Rule 3: 4 neighbours, or 8. Cost of 8: a diagonal gap between two water corners lets a path through that no ball rolls along. Benefit of 4: it matches how tiles share edges. Which surfaces: every in-map surface except water and `oob`, trees included, heights ignored (a ball can be chipped out of trees and up a hill), or also no trees (cost: a forest hole could never validate even when playable).
+- Rule 4: straight line tee centre to cup centre, or the path length from rule 3. Cost of the path: a dogleg's yardage changes when the player paints rough at the corner. Benefit of the line: one formula the card, the validator and `/course-file inspect` share.
+- Rule 5: a disc at a driving distance on the tee-to-cup line, or a corridor along the whole line. Cost of the corridor: two parallel holes 50 yd apart would fail. Benefit of the disc: it is where tee shots come down. Where the disc sits on short holes: at `min(240 yd, yardage)`, or kept clear of the green. Cost of `min(240 yd, yardage)`: a par 3's zone sits on its cup, and a par 4 under about 270 yd has its zone within 30 yd of the cup, so a next tee beside the green (a 150 yd par 3 from tile (10, 10) to (40, 10), next tee at (44, 13), 25 yd from the cup) fails both holes, and ordinary routing cannot open.
+- Footprint: the tiles of the hole's own green and tee only, or a capsule around the tee-to-cup segment. Cost of the capsule: edits beside the fairway close the hole too. Benefit: edits to the landing area, which guests feel most, cannot slip past. Neither holds everything the rules read: rule 3's path can run outside the capsule (round the end of a lake across it), and rule 5 reads other holes' tees, so a footprint alone leaves an open hole open while it fails a rule.
+Choice: 4 neighbours across every in-map surface except water and `oob`, heights ignored. Yardage is `5 × sqrt(dx² + dy²)` rounded to the nearest yard, with par checked on the rounded number: par 3 up to 249, par 4 250 to 470 inclusive, par 5 from 471. The landing zone is a 30 yd disc centred `min(240 yd, yardage - 60 yd)` along the line, for par 4s and par 5s only, checked both ways for each pair of holes; a par 3 has none, and a tee less than 30 yd from a hole's cup is never in that hole's zone. The footprint is every tile whose centre is within 30 yd of the tee-to-cup segment, and an edit there, or moving the hole's own tee or cup, closes the hole until the player presses Open again. After every build edit the validator also reruns for every open hole, and any that now fails a rule closes, so a broken rule-3 path outside the footprint, or another hole's tee moved into its zone, closes it too.
+Why: pillar 1: each rule is one formula the builder can predict and see highlighted. The card shows the rounded yardage, so par follows the number on the card, and the raw value is never exactly x.5, so rounding has no tie. 240 yd sits in the driver target, and 30 yd there is about 7 degrees either way, a swing 35% off centre. The 60 yd cup clearance keeps tees beside a green legal, which 9-hole routing (E3-S2) needs, and a par 3's tee shot is aimed at the green, where no tee belongs anyway. An open hole never stays open while it fails a rule; the rerun costs one search per open hole over at most 16,384 tiles.
+Inconclusive: one zone per hole; a par 5's second-shot zone is not checked. Doglegs are measured on the straight line.
+Affects: docs/design.md Hole validation rules, course/ validator and its tuning `.tres` (E2-S2), course/builder.gd and scenes/ (E2-S3), the Claude Docs design doc (Course builder: Hole rules, Undo)
+
+## D12: How many strokes before the ball is picked up? (2026-11-03)
+Question: the most strokes a hole allows, and what the score records. E3-S3 guests use the same limit.
+Options:
+- No limit. Cost: a player stuck in a bunker, or a weak guest, can play forever and stall the course. Benefit: nothing to explain.
+- A fixed limit, such as 10 on every hole. Cost: it is 7 over on a par 3 and 5 over on a par 5. Benefit: one number.
+- Double par. Cost: the card shows a score that was not played out. Benefit: the same share of par on every hole, a familiar casual rule.
+Choice: double par (6 on a par 3, 8 on a par 4, 10 on a par 5), counting penalty strokes. The ball is picked up when that count is reached without the ball holed, and the card shows double par (user, 2026-11-03). The score keeps a picked-up flag; a ball holed on the double-par stroke is holed.
+Why: pillar 3: guest pace stays bounded, so a bad hole shows up as complaints, not as a jam. Pillar 1 holds as well, since every placed hole can be finished.
+Affects: docs/design.md Swing (Scoring), golf/ hole score (E2-S8), guests/ (E3-S3), the Claude Docs design doc (Golf play: Scoring)
+
+## D13: Which clubs may a stroke use? (2026-11-03)
+Question: the design doc says "Driver is allowed only on tee boxes", "Putter is the only club on the green" and "Bunker: sand wedge only". Where exactly is the driver allowed, is the putter green only, and is the sand wedge a bunker-only club?
+Options:
+- Driver on tee tiles only. Cost: a tee marker placed on fairway or rough forbids the driver on its own tee shot. Benefit: one surface check.
+- Driver on the hole's first stroke from its tee marker, and on any tee tile. Cost: two checks. Benefit: the tee shot always allows it, whatever the builder painted under the marker.
+- Sand wedge only in bunkers. Cost: the shortest full club disappears from every pitch. Benefit: none the design doc asks for; "sand wedge only" there restricts the bunker, not the club.
+Choice: checked in order: on green the putter only; in a bunker the sand wedge only; anywhere else every club but the putter, with the driver only on the hole's first stroke from its tee marker or from any tee tile. The sand wedge is legal on every lie but green.
+Why: pillar 2: the club list the player sees follows from the lie alone, and the restated putter target ("selectable only on green", D18) needs the putter green only. The order also settles a tee marker on green: the putter wins.
+Affects: docs/design.md Swing (Club legality), docs/design.md surface table, golf/ clubs (E2-S5), scenes/ club picker (E2-S7), the Claude Docs design doc (Golf play: Clubs)
+
+## D14: What is the shot model? (2026-11-03)
+Question: how the bar, the club, the lie and the slope become a launch, shared by E2-S5 and E2-S7.
+Options:
+- Bar to launch speed. Cost: carry goes as speed squared, so 50% on the bar carries 25%, against the design doc's "power is the fraction of full club distance". Benefit: one multiply.
+- Bar to carry. Cost: a square root (exact with no drag; with drag later, a solve for the speed). Benefit: 50% carries half, as the design doc says.
+- Lie multipliers on launch speed, or on carry. Carry matches the Distance column.
+- Hook, slice and sidehill as a heading offset at launch, or as a lateral acceleration in flight. Cost of the acceleration: a new `golf/ball_params.tres` term, its own tuning, and a curve the aim line must draw. Benefit of the offset: no new Ball term, and the ball flies straight where the marker says.
+- Lie slope from the gradient at the rest point, or from a window of heights around it. The gradient is almost always near 0 under a resting ball off the green, since a ball rests only where the pull is under the still-ball friction (a gradient under 0.14 on fairway against 0.4 for a one-step band). The window sees the rise beside the ball. A rise window centred on the ball (`h(p + 5) - h(p - 5)` along the aim) counts ground falling away behind as uphill: a ball on flat ground at the top of a 2-step riser, aimed away from it, reads almost rise 2. A window ahead only (`h(p + 5) - h(p)`) reads 0 on flat ground ahead wherever the ball rests.
+- Rough 0.8 to 0.9 fixed, or rolled from the ball's seed. Rolled, the marker moves between identical lies and the generator stream changes; fixed, the same lie always reads the same.
+- Club roll factor on the surface's Roll, or on the ground speed kept after the first touchdown. On Roll it also scales the still-ball friction: on rough a factor under 0.68 would beat the one-step pull (2.5 / factor against 3.69 yd/s²) and break the slope guard, and on green it would move D7's hold.
+Choice: the bar sets a share of carry; target carry is `carry × power × surface lie × uphill`; launch speed is the one whose flat carry at the club's launch angle hits that target. Rough is one fixed value (start 0.85). Lie slope is read at the rest point in steps: rise from the ground 5 yd ahead along the aim, with ground behind never counting; tilt across a centred 10 yd window, both sides counting; rise shortens carry by `k` per step, tilt turns the heading toward the lower side by `c` degrees per step, full clubs only. Hook, slice and sidehill are heading offsets at launch (2 degrees per 10% off centre for accuracy, user 2026-11-03), and the ball flies straight. The club's roll factor multiplies the ground speed kept after the first touchdown. The putter's bar sets ground speed. The aim marker shows the first touchdown of a perfect swing with the selected club and lie, or the putt's rest point at 100%. The recommended options are taken except the lie slope measure, which departs from the story's recommendation for the reasons above.
+Why: pillar 2 (shots are readable): every part of the shot is decided at launch from numbers the player can see, so the marker tells the whole truth and a perfect swing lands within 1 tile of it. The hand calculation in docs/design.md (Balance targets) shows the bunker target is reachable with a SW carrying 80 yd or more.
+Affects: docs/design.md Swing (Shot model), docs/design.md Balance targets, golf/ (E2-S5, E2-S7), scenes/ (E2-S7), the Claude Docs design doc (Golf play: Aim, Power, Clubs, Lies)
+
+## D15: How do the cup, water, OB and trees treat the ball? (2026-11-03)
+Question: the rules E2-S6 and E2-S8 share: where and when the cup captures, the exact water and OB drop, a ball that rolls into trees, and how the tree scatter finds open ground.
+Options:
+- Cup checked on ground ticks only, or also at touchdown. Touchdown speeds are far above any capture speed, so the extra check only adds slam-dunks the speed rule would refuse.
+- Drop at the entry point itself, or on the last restable tile the track crossed before it. The entry point sits on the hazard's edge, half the time on a slope or beside trees.
+- A ball rolling into trees: stops outside, bounces back, or scatters as a flight does. Bounce and scatter need speeds and angles to tune; stopping is one rule and reads as hitting the trunks.
+- Scatter target: any direction, or back toward the shot's start. Forward scatter usually lands deeper in the trees it just hit.
+Choice: the cup sits at its tile centre and captures on any surface at the end of a rolling tick, including a ball rolling to rest inside the radius. The entry point is the last place the ground track crossed into the hazard the ball stopped in (water, or OB: `oob` or off the map). The drop is the centre of the tile the track was over just before it, walking further back past water, OB and trees, else the stroke's start, and the ball is placed there at rest. A ball rolling into a tree tile rests where it was the tick before. A blocked flight scatters 1 to 2 tiles back toward the start (within 90 degrees of the reversed heading), redrawn up to 8 times off trees, water and OB, then the nearest open tile centre, and goes on as a still ball. All draws come from the ball's own generator.
+Why: pillar 2: each hazard has one visible outcome a player can predict, and the scatter stays deterministic by seed so the prediction matches the flight. A dropped ball placed at rest cannot roll back into the water it came out of.
+Affects: docs/design.md Ball (Cup and hazards), docs/design.md surface table, golf/ (E2-S6), golf/ hole score (E2-S8), the Claude Docs design doc (Golf play: Flight and roll, Scoring)
+
+## D16: How long may a ball take to settle, and how do steep greens get there? (2026-11-03)
+Question: the settle targets off the green on every rolling surface, on greens steeper than one step per tile, and for a putt that runs off the green; and how steep greens are fixed, left open by D7.
+Options for steep greens:
+- A builder or validator limit on green steps. Cost: a player who paints a steep green cannot open it, and pillar 1 suffers. Benefit: no physics change.
+- Change the green friction model in the physics, such as less drag at low speed once the pull clearly beats the hold. Cost: E2-S4 work in `golf/`, and possibly new columns in `course/surfaces.tres`. Benefit: any green a player paints plays.
+Options for the off-green target: 8 s, as the green; 10 s; or a bound set by the slowest shape a player can paint. A 100% driver onto a flat cart path, measured with the real Ball, takes 9.2 s from first touchdown (fairway 4.3, rough 2.2, green 6.0), and a 110% one 9.4 s, so 8 s would force a cart path change that `/balance` has not asked for. Shapes are slower today: still balls in V valleys 2 to 4 steps deep take up to 10.4 to 18.7 s on rough, 7.7 to 10.7 s on fairway and 10.0 to 12.9 s on cart path, and a drive down a cart path stepping from 7 to 0 takes 10.2 s, so a bound set by them would be about 20 s.
+Choice: fix steep greens in the physics (user, 2026-11-03), in E2-S4. Targets: a ball that rests on green, on any slope a player can paint, settles under 8 s (480 ticks), the E1-S12 target extended to `_steep_green(2, 2)` and `_steep_green(3, ...)` for still balls and roll-backs at 4 to 7 yd/s. A ball that rests on fairway, tee, rough or cart path settles under 10 s (600 ticks), from its first touchdown, its set-down or its putt start, measured on flat drives (100% on each surface, 110% on cart path), the one-tile pit and rough gully, V valleys 2 to 4 steps deep on rough, fairway and cart path, and a drive down a stepped cart path. E2-S4 brings the valleys and the slope under it. A putt that runs off the green is held to the off-green 10 s, and the 9.6 s diagonal putt from (58.1, 34.4) at (-10.6, 10.6) meets it, so it is pinned by a test, not recorded as an accepted limit.
+Why: pillar 2: with live play the player waits out every settle, so no ball may creep for half a minute, and pillar 1 rules out forbidding steep greens. 10 s off the green is the smallest round bound above the slowest flat case; flat ground is the floor, not the worst case. Valleys are held to it rather than setting it, since a dug valley is a common shape on the all-rough D10 plot and a 20 s wait there is the creep pillar 2 rules out.
+Inconclusive: the 9.6 s putt has 0.4 s to spare. If E2-S4 moves it over 10 s, that is a new finding, not a reason to raise the target. Whether E2-S4 can bring a 4-step rough valley from 18.7 s to under 10 s without breaking the green putt targets is not known; if it cannot, the case moves to its own story with this target, as E2-S4 says for steep greens.
+Affects: docs/design.md Ball (Settle targets, Known limit lines), golf/ and course/surfaces.tres (E2-S4), tests/test_ball.gd (E2-S4), the Claude Docs design doc (Golf play: Flight and roll)
+The E1-S12 commit body describes the rest rule from before D7's per-axis wording; `docs/design.md` Ball is current.
+
+## D17: Where is a resting ball drawn? (2026-11-03)
+Question: D7's open point. Balls now rest partway up one-step slopes at the bilinear height, up to about 7.5 px off the flat tile top they appear to sit on, sometimes on the riser.
+Options:
+- Snap the drawn ball and shadow to the top of the tile under them while on the ground. Cost: a rolling ball steps 16 px at each riser it crosses. Benefit: scenes/ only, a ball always sits on a top.
+- Sloped green art. Cost: new frames per slope class, against D5. Benefit: the picture matches the physics on greens.
+- Keep a slow ball out of the riser band. Cost: a physics change for a drawing problem. Benefit: no drawing change.
+Choice: snap the drawn ball and its shadow to the top of the tile under them while on the ground (user, 2026-11-03), built in E2-S7. In flight the ball is drawn at its true height. The shadow follows the tile-top rule in flight too; that part is E2-S1's default, since the shadow is always on the ground.
+Why: pillar 2: a resting ball is always on the top you read its lie from, and the physics stays as it is.
+Affects: docs/design.md Ball (Drawn rest height), scenes/shot_view.gd (E2-S7), tests/test_shot_view.gd (E2-S7)
+
+## D18: Which `/balance` targets change for E2? (2026-11-03)
+Question: three of the five target lines in `.claude/skills/balance/SKILL.md` cannot be measured as written in E2: "putter never leaves the green", "at 100% for a skill-10 golfer" (no guest skill until E3) and "about one club".
+Options:
+- Keep the lines and measure by judgment. Cost: `/balance` cannot pass or fail them. Benefit: no edit.
+- Restate the three as measurable lines and copy all five into docs/design.md, which the skill credits.
+Choice: restate and copy. "Putter never leaves the green" becomes "the putter is selectable only on green, and a full putt rolls at most N yd on a flat green", with N set by E2-S5 alongside the putter's speed range. "At 100% for a skill-10 golfer" becomes "a perfect swing, until guests have skill in E3". "About one club" becomes "within one club step (10 to 12 yd)" for a 2-step uphill lie with the 7-iron, and the sidehill line names the 7-iron and a 1-step tilt. Each lie line names the spot it is struck from (the tile centre where a 2-step riser ahead begins, reading rise 2; the tile centre where a 1-step band beside the aim begins, reading tilt 1), because D14's windows read less a little further away. The surfaces, reactions and economy lines are copied unchanged.
+Why: pillar 2: a target that `/balance` can measure is one a player can feel. The putter line follows D13, and the lie lines use D14's rise and tilt.
+Affects: docs/design.md Balance targets, .claude/skills/balance/SKILL.md (its Targets list should point at docs/design.md; not edited here)
