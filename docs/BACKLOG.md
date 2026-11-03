@@ -256,6 +256,7 @@ Planning notes:
   - Touches: `course/`, `scenes/`
 - [ ] E2-S18 Finish `/course-file inspect` and `generate hilly`. Both are named in the skill and not built.
   - Note: (found in E2 review) left optional in E2-S2. `courses/example_par3.json` is `generate 3 flat dry`; nothing generates a hilly fixture.
+  - Note: (D19) `generate hilly` reuses E6-S2's land generator rather than a ridge of its own; if E2-S18 runs before E6-S2, keep the ridge minimal.
   - Accept: `/course-file inspect <path>` prints the size, the holes with par, yardage and open flag, and each hole's validator result. `/course-file generate <par> hilly` adds a gentle ridge and still passes `validate`.
   - Test: `tests/test_course_file.gd` (new): a generated hilly par 4 passes the validator; inspect's output names every hole of `courses/example_par3.json`.
   - Touches: `course/`, `courses/`
@@ -271,9 +272,57 @@ Planning notes:
   - Test: cases in `tests/test_shot_prediction.gd` (flat green and `green_contour()`), and `tests/test_swing.gd` still passes.
   - Touches: `golf/`, `scenes/`
 
+## E6: Land — planned
+
+Ships as 0.3.0. Runs before E3 (D19). Serves pillars 3 and 1: the course starts as land the player buys and shapes, and a hole can only go on land they own, so it is still playable the moment it is placed.
+
+Done when: a new course opens on generated natural land, the player owns a starting block, buys neighbouring parcels from a land budget, and builds and plays a hole on them. New sandbox still gives free, fully owned land.
+
+- [ ] E6-S1 Settle the land rules on paper. D19 chose the model and left the numbers open.
+  - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice.
+  - Test: none. Review the design.md diff.
+  - Touches: `docs/`
+  - Settles:
+    - Parcel size. Proposed: 16 x 16 tiles (80 yd), so the 128 x 128 map is 8 x 8 parcels and D10's draw and frame times are unchanged.
+    - The starting block. Proposed: 2 x 2 parcels near the middle of the map, 160 yd on a side, room for a par 3 but not a par 4, so the first purchase comes with the second hole.
+    - Which parcels may be bought. Proposed: any parcel sharing an edge with one already owned.
+    - Parcel price: a base price, plus or minus what is on it (trees, water, hills). Prices live in `data/`.
+    - The land budget until E4. Proposed: $5,000, spent on parcels only. E4-S1 folds it into the one balance.
+    - What a ball does on land the player does not own. Proposed: it plays as OB (D9), drawn as a boundary, so buying land is how a hole gets room.
+    - Whether land can be sold back. Proposed: no.
+    - What the generator lays down: hill heights within 0 to 7, tree stands, ponds, rough, and how often; and that it is seeded, so one seed gives one map.
+- [ ] E6-S2 Generate natural land. The map stops being blank.
+  - Accept: a seeded generator in `course/` fills the map with hills, tree stands, ponds and rough, using only the existing surfaces and heights 0 to 7, at the rates E6-S1 set. The same seed gives the same map. Every parcel has some buildable ground. Tunables live in a resource.
+  - Test: `tests/test_land_generator.gd`: same seed same map, heights in range, rates within tolerance, no parcel all water.
+  - Touches: `course/`, `tests/`
+- [ ] E6-S3 Record who owns each parcel. Ownership joins the single source of truth.
+  - Accept: CourseData holds parcel ownership. Course format version 2 saves it, and `course/save.gd` loads version 1 files as fully owned. Only the builder buys a parcel: it must border owned land and fit the land budget, and a refusal says which rule failed. Buying is an undo step.
+  - Test: `tests/test_land_ownership.gd`: buy, refuse (not adjacent, too expensive), undo, a v1 file loads fully owned, a v2 round-trip keeps ownership and `content_hash()`.
+  - Touches: `course/`, `tests/`
+- [ ] E6-S4 Build only on owned land. The builder enforces the line.
+  - Accept: painting, raising, lowering and placing a tee or cup on a tile the player does not own does nothing and says why; a brush that straddles the line edits only the owned tiles. A hole whose 30 yd footprint (D11) reaches unowned land fails a new validator rule, with its tile highlighted.
+  - Test: `tests/test_builder_land.gd`, plus the new rule's pass and fail cases in the validator tests.
+  - Touches: `course/`, `tests/`
+- [ ] E6-S5 Show land and buy parcels in Build. Make ownership readable.
+  - Accept: unowned land draws dimmed with parcel edges (a pattern as well as a shade, for the colorblind rule). Hovering a parcel shows its price and whether it can be bought; a click buys it after a confirm. The land budget is always on the Build HUD.
+  - Test: by hand with a screenshot of owned, buyable and out-of-reach parcels.
+  - Touches: `scenes/`, `course/`
+- [ ] E6-S6 Start a course by buying land. The game opens on land, not a blank plot.
+  - Accept: a New course action generates land from a seed, gives the starting block and the land budget, and the main scene starts on it. New sandbox stays: flat rough as D10, every parcel owned, unlimited budget, and buying is hidden.
+  - Test: `tests/test_new_course.gd`: New course owns only the starting block with the full budget; New sandbox owns everything.
+  - Touches: `scenes/`, `course/`
+- [ ] E6-S7 Play across the land line. The ball respects what E6-S1 decided for unowned land.
+  - Accept: a ball that comes to rest on unowned land is treated as E6-S1 settled (proposed: OB, one stroke and a drop, D15), and the aim view shows the line so the player can read it before the shot. Sandbox play is unchanged.
+  - Test: `tests/test_ball_land.gd`
+  - Touches: `golf/`, `tests/`
+- [ ] E6-S8 Tune land prices and playtest a start. Close the milestone on the first purchases.
+  - Accept: `/balance land` shows that the budget buys enough land for a par 3 and a par 4 on a typical seed, but not nine holes, so E4's money has work to do. A `/playtest` session starts a new course, buys two parcels, builds a hole across them and plays it. Findings go in `docs/playtests/`.
+  - Test: sim output in the balance commit.
+  - Touches: `data/`, `docs/`
+
 ## E3: Nine holes and guests — planned
 
-Ships as 0.3.0. Serves pillar 3: the course tells a story through its guests. No money yet, so arrivals are a flat number until E4 connects rating.
+Ships as 0.4.0 (D19). Serves pillar 3: the course tells a story through its guests. No money yet, so arrivals are a flat number until E4 connects rating.
 
 Done when: nine holes are open, guests play them in order, and their complaints name a hole you can click and fix.
 
@@ -322,7 +371,7 @@ Done when: nine holes are open, guests play them in order, and their complaints 
 
 ## E4: Economy — planned
 
-Ships as 0.4.0. Gives building a budget and reactions a consequence. Serves pillar 3, and stays deliberately thin: one input, one output.
+Ships as 0.5.0 (D19). Gives building a budget and reactions a consequence. Serves pillar 3, and stays deliberately thin: one input, one output.
 
 Done when: a player starts with $5,000, funds the course from green fees, and can save, quit and pick up where they left off.
 
@@ -334,6 +383,7 @@ Done when: a player starts with $5,000, funds the course from green fees, and ca
     - Hole costs. The design doc says a basic par 3 is about $1,500 and a par 5 with hazards about $6,000. At the table's rates, a 5x5 green and 2x2 tee alone are $3,320. A 400-yard fairway 6 tiles wide is $19,200. Either tile costs, tile scale or hole budgets must move.
     - Whether raising and lowering terrain costs money, and what features cost.
     - Refunds when a tile is repainted or an edit undone.
+    - How E6's land budget folds into the one balance, and whether parcel prices change once fees exist (D19).
     - Arrivals per day by rating.
     - Arrivals curve for fees between free and the ceiling, since only "at the ceiling" is defined.
     - Rating points per reaction type, and the starting rating before 50 reactions exist.
@@ -368,7 +418,7 @@ Done when: a player starts with $5,000, funds the course from green fees, and ca
 
 ## E5: Polish and share — planned
 
-Ships as 0.5.0, the MVP. Pillar 4: finish it. Art is the largest single cost, so it gets its decision first.
+Ships as 0.6.0, the MVP (D19). Pillar 4: finish it. Art is the largest single cost, so it gets its decision first.
 
 Done when: 10 people outside the project have played a build with final art and sound, and swapped a course file.
 

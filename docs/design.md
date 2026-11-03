@@ -13,6 +13,7 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 - Play camera (E2-S8, `scenes/course_camera.gd`): in Play the camera centres on the ball when Play starts (on the tee), when a shot starts, while the ball moves, and after it rests or is dropped. It eases onto the ball with a time constant of `centre_time` 0.15 s in `scenes/camera_tuning.tres` (95% of the way in 0.45 s; 0 jumps), so a moving ball stays centred without a jolt at each stroke. A pan (WASD or middle drag) stops the centring so the player can scout; `snap_camera` (C) snaps back to the ball and centres on it again. Zoom does not stop it. A shot starting centres on the ball even after a pan. While the player aims at rest (E2-S8 review, pillar 2), the camera frames the ball and the aim marker together: it centres on their midpoint, held so the ball stays at least `aim_frame_margin` 64 screen px inside the edge, and when both do not fit it steps the zoom out (never past 0.5x) until they do. On `courses/example_par3.json` the driver's marker from the tee is (1568, 784) px away at 1x, so the tee opens at 0.5x; the 6-iron's (1005, 502) fits at 1x. A flight follows the ball alone at the zoom the aim chose, and the next aim (Play or the ball at rest) starts again from the player's own zoom, the level of their last zoom key. A zoom key wins over the fit until the next aim, and a panned camera never zooms. The swing panel hint names WASD (pan) and C (back to ball).
 - Brush sizes 1, 3, 5: an n x n square centered on the cursor tile, clipped to the map. Sizes and the undo depth (200 steps) are tuned in `course/builder_tuning.tres`.
 - Plot (D10): a new sandbox (E2-S3) is 128 x 128 tiles (640 yd along an edge, 905 yd corner to corner, about 85 acres), every tile rough at height 2. A par 5 needs more than 94 tiles of straight line (470 / 5), so a 520 yd par 5 (104 tiles) fits along an edge with 24 tiles to spare, with room for water on its line. Height 2 lets the builder dig two steps for water and bunkers and raise five. The plot's cost is E4-S1's. The main scene starts on this plot (E2-S8; `Main.course_path` empty, a failed load warns and falls back to it). New sandbox (a Build HUD button, `CourseBuilder.new_sandbox`) makes it from `plot_size`, `plot_surface` and `plot_ground` in `course/builder_tuning.tres` and hands it to a fresh builder (empty undo stack). Measured at 128 x 128 (E2-S3, RTX 3080, Godot 4.7.2 debug): drawing the whole plot takes about 190 ms once; `refresh_cell` 0.06 ms; frames 1.0 ms at 0.5x and 0.7 ms at 1x idle; an edit outside a drag, with its validator rerun, about 8.5 ms (p95 frame 11.8 ms raising a 5x5 brush every frame); a 50-tile drag about 19 ms in all, since a drag reruns the validator once, when it ends.
+- Land (D19): a new course is generated natural land (hills, tree stands, ponds, rough), split into parcels. The player starts owning a small block and buys parcels that border owned land from a land budget; building and holes go only on owned land. New sandbox stays as a separate mode on the D10 plot with every parcel owned and an unlimited budget. Parcel size, the starting block, prices, the budget and what a ball does on unowned land are E6-S1's.
 - Out of bounds (D9): OB is off the map plus every `oob` tile. From E2-S3 `oob` is on the Build palette as OB ground, and course files already carry it (surface 8). Placed OB stakes stay in the Icebox. A ball that comes to rest OB costs one stroke and is dropped (Ball, Cup and hazards).
 - Builder (`course/builder.gd`, the only terrain writer with `course/save.gd`): paint any of the 9 surfaces below (`oob` from E2-S3, D9), raise or lower one step per click, heights clamp at 0 and 7. One click, or one drag, is one undo step; a drag raises or lowers each tile once. Edits that change nothing are not recorded. Ctrl+Z (`ui_undo`) undoes. Active in Build mode only.
 - Holes in Build (E2-S3): the Tee and Cup tools place hole 1's tee or cup on the tile clicked (a drag does not move them), through the builder. The first of them creates the hole, closed, with the par picked in the hole panel (3, 4 or 5; `default_par` 3 in `course/builder_tuning.tres` until the player picks). The par buttons set the hole's par. Tee, cup, par and Open are undo steps on the same stack as terrain, and an undo puts the holes back as that step found them, open flags included, then reruns the validator. The hole panel shows the yardage, the status (open or closed), Open (enabled only when the hole is closed and all five rules pass) and every failing rule with its tile and reason; each failing rule's tile is highlighted on the map with its reason (`course/issue_marker.gd`): the diamond on the tile sorts with the terrain, so a hill in front hides it, while the badge, leader line and text box draw on top, laid out at the current zoom so neighbouring boxes never cover each other. Highlights and the panel show in Build only. A course brought into the builder with an open hole that fails a rule has that hole closed at once (not an undo step). A hole with only its tee or only its cup holds `HoleData.UNPLACED` (-1, -1) for the other, which `CourseData.from_dict` rejects: whatever first saves a Build course must drop or refuse such a hole, or give the format an explicit unplaced value, with a round-trip test for a tee-only hole. Play is never gated by the validator (pillar 1): it is available whatever the hole's rules say; Open only decides whether guests may play it.
@@ -196,12 +197,12 @@ Hand calculation: the bunker target is reachable (E2-S1, before E2-S5 tunes). No
 
 ## Economy and time
 
-- Start $5,000. Upkeep $5 per open hole per day. Negative balance pauses building.
+- Start $5,000. Until E4, a land budget pays for parcels only (D19); E4-S1 folds it into the one balance. Upkeep $5 per open hole per day. Negative balance pauses building.
 - Day = 3 real minutes at 1x. Speeds: pause, 1x, 3x, skip to morning.
 
 ## MVP
 
-In: 8 surfaces above, flat and hilly terrain, 9 holes, sandbox, one golfer sprite set, course JSON export/import.
+In: 8 surfaces above, flat and hilly terrain, land bought in parcels on one map (D19), 9 holes, sandbox, one golfer sprite set, course JSON export/import.
 
 Out: campaign, unlocks, tournaments, second plot, weather (wind included: cut at E2 planning, D8), placed OB stakes (D9), staff, clubhouse, camera rotation, online sharing, multiplayer, mobile.
 
@@ -209,6 +210,7 @@ Out: campaign, unlocks, tournaments, second plot, weather (wind included: cut at
 
 1. Ball on a tile
 2. One hole
-3. Nine holes and guests
-4. Economy
-5. Polish and share
+3. Land (D19)
+4. Nine holes and guests
+5. Economy
+6. Polish and share

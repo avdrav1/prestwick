@@ -188,3 +188,17 @@ Options:
 Choice: restate and copy. "Putter never leaves the green" becomes "the putter is selectable only on green, and a full putt rolls at most N yd on a flat green", with N set by E2-S5 alongside the putter's speed range. "At 100% for a skill-10 golfer" becomes "a perfect swing, until guests have skill in E3". "About one club" becomes "within one club step (10 to 12 yd)" for a 2-step uphill lie with the 7-iron, and the sidehill line names the 7-iron and a 1-step tilt. Each lie line names the spot it is struck from (the tile centre where a 2-step riser ahead begins, reading rise 2; the tile centre where a 1-step band beside the aim begins, reading tilt 1), because D14's windows read less a little further away. The surfaces, reactions and economy lines are copied unchanged.
 Why: pillar 2: a target that `/balance` can measure is one a player can feel. The putter line follows D13, and the lie lines use D14's rise and tilt.
 Affects: docs/design.md Balance targets, .claude/skills/balance/SKILL.md (its Targets list should point at docs/design.md; not edited here)
+
+## D19: Does a course start on blank land, or on land the player buys? (2026-11-03)
+Question: every course starts on the blank D10 plot, 128 x 128 tiles of rough at height 2, all of it free to build on. The user does not want to build on blank land: land should be bought, then turned into a course.
+Options:
+- Parcels on one map. The map is split into parcels; the player starts owning a small block and buys neighbouring parcels. Cost: an ownership layer in CourseData and course format version 2. Benefit: one map, so "second plot" stays out of the MVP, and the course grows as money allows.
+- Pick one plot to buy from a few offers, then never buy again. Cost: a plot chooser and several generated plots. Benefit: no ownership layer. The course cannot grow.
+- Both. Cost: everything above. Benefit: the most choice, against pillar 4.
+For the land itself: natural generated terrain (hills, tree stands, ponds, rough), or flat rough as today.
+For timing: a new epic before E3, inside E4 with money, or terrain before E3 and buying in E4.
+Choice: parcels on one map, with natural generated terrain, built in a new Land epic (E6) that runs before E3 (user, 2026-11-03). New sandbox stays as a separate mode: every parcel owned, unlimited budget. Until E4 makes money real, a land budget is spent on parcels only; E4-S1 folds it into the one balance.
+Why: pillar 3: the land you buy and shape is the start of the course's story, and buying a parcel to fit the next hole is a decision the player makes. Pillar 1 holds, because the builder only lets a hole go where the player owns land, so a placed hole is still playable at once. Pillar 4: one map, no plot chooser.
+Pays for it: E3, E4 and E5 each move back one epic, and their releases move up one version (E6 ships 0.3.0, E3 0.4.0, E4 0.5.0, E5 0.6.0, the MVP). The land generator delivers the MVP's "hilly terrain", so `/course-file generate hilly` (E2-S18) reuses it instead of a generator of its own.
+Open, for E6-S1: parcel size, the starting block, parcel prices, the land budget, what a ball does on land the player does not own, and whether land can be sold.
+Affects: docs/design.md (Grid and terrain: Plot; Economy and time; MVP; Milestones), docs/BACKLOG.md (E6, E2-S18, E3 to E5 versions), course/ (CourseData, builder, save format v2), scenes/ (Build HUD), the Claude Docs design doc (Course building, Economy)
