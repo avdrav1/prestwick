@@ -153,6 +153,72 @@ func test_round_trips_through_save_file() -> void:
 		_assert_same_course(a, b)
 
 
+## E2-S12: a Build course can hold a hole with only its tee or only its cup (HoleData.UNPLACED
+## for the other). CourseSave drops such a hole from the file, says which holes it dropped, and
+## the file loads back equal to the course with only its whole holes.
+func _half_placed_course() -> CourseData:
+	var c := _make_course()
+	var tee_only := HoleData.new(3, 4, Vector2i(5, 5), HoleData.UNPLACED, false)
+	var cup_only := HoleData.new(4, 5, HoleData.UNPLACED, Vector2i(9, 9), false)
+	var whole: Array = c.holes.duplicate()
+	c.set_holes([whole[0], tee_only, whole[1], cup_only])
+	return c
+
+
+func _whole_holes_only(c: CourseData) -> CourseData:
+	var expected := c.copy()
+	expected.set_holes(c.holes.filter(func(h: HoleData) -> bool:
+		return c.in_bounds(h.tee.x, h.tee.y) and c.in_bounds(h.cup.x, h.cup.y)))
+	return expected
+
+
+func test_half_placed_holes_are_dropped_on_save_and_the_file_loads() -> void:
+	var a := _half_placed_course()
+	var before := a.content_hash()
+	var path := TMP_PATH % OS.get_process_id()
+	var dropped: Array[int] = []
+	assert_eq(CourseSave.save_file(a, path, dropped), OK)
+	assert_eq(dropped, [3, 4] as Array[int], "says which holes were dropped")
+	assert_eq(a.content_hash(), before, "saving does not change the course in memory")
+	var errors: Array[String] = []
+	var b := CourseSave.load_file(path, errors)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_not_null(b, "a saved Build course loads: %s" % [errors])
+	if b:
+		assert_eq(b.holes.size(), 2, "only the whole holes are in the file")
+		_assert_same_course(_whole_holes_only(a), b)
+
+
+func test_half_placed_holes_are_dropped_from_json_text() -> void:
+	var a := _half_placed_course()
+	var dropped: Array[int] = []
+	var errors: Array[String] = []
+	var b := CourseSave.from_json(CourseSave.to_json(a, dropped), errors)
+	assert_not_null(b, "loads: %s" % [errors])
+	assert_eq(dropped, [3, 4] as Array[int])
+	if b:
+		assert_eq(b.content_hash(), _whole_holes_only(a).content_hash())
+
+
+func test_any_off_map_tee_or_cup_counts_as_half_placed() -> void:
+	var c := CourseData.create(10, 10)
+	c.set_holes([HoleData.new(1, 3, Vector2i(2, 2), Vector2i(12, 2)),
+			HoleData.new(2, 3, HoleData.UNPLACED, HoleData.UNPLACED)])
+	var dropped: Array[int] = []
+	var b := CourseSave.from_json(CourseSave.to_json(c, dropped))
+	assert_eq(dropped, [1, 2] as Array[int])
+	assert_not_null(b, "loads")
+	if b:
+		assert_eq(b.holes.size(), 0)
+
+
+func test_a_course_of_whole_holes_drops_nothing() -> void:
+	var a := _make_course()
+	var dropped: Array[int] = []
+	assert_eq(CourseSave.to_json(a, dropped), JSON.stringify(a.to_dict(), "  ", false), "file unchanged")
+	assert_eq(dropped.size(), 0)
+
+
 func test_load_missing_file_reports_error() -> void:
 	var errors: Array[String] = []
 	assert_null(CourseSave.load_file("user://no_such_course.json", errors))

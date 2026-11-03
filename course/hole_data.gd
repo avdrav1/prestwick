@@ -5,10 +5,9 @@ extends Resource
 ## holes through CourseData.set_holes.
 
 ## A tee or cup not placed yet (E2-S3 places them one at a time). Any off-map tile counts as
-## not placed (course/validator.gd rule 1). to_dict writes it as is, but CourseData.from_dict
-## rejects an off-map tee or cup, so a course holding a half-placed hole saves to a file that
-## does not load: whatever first saves a Build course must drop or refuse such a hole, or the
-## format must gain an unplaced value (docs/design.md Holes in Build).
+## not placed (course/validator.gd rule 1). CourseData.from_dict rejects an off-map tee or cup,
+## so CourseSave.save_file drops a half-placed hole from the file and reports its number
+## (E2-S12, docs/design.md Holes in Build).
 const UNPLACED: Vector2i = Vector2i(-1, -1)
 
 var number: int = 1
