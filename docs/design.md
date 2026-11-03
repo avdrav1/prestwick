@@ -56,7 +56,7 @@ How each rule is measured (D11). Distances are between tile centres at 5 yd per 
 
 ## Swing
 
-- Three-click bar: start, power, accuracy. Bar fills in 1.2 s, runs to 110%.
+- Three-click bar: start, power, accuracy. Bar fills in 1.2 s, runs to 110%. Kept at its E2-S7 numbers after the E2-S9 hand playtest (D24).
 - Accuracy: each 10% off center = 2 degrees hook or slice. Outside zone = shank.
 - The bar (E2-S7, `golf/swing.gd`, no scene; numbers in `golf/swing_tuning.tres`, tuned by hand in E2-S9). Click 1 starts the bar from 0; it reaches 100% in `fill_time` 1.2 s at bar speed 1.0 and runs on to `max_power` 110%, where it locks by itself. Click 2 locks the power at the bar, and the bar runs back at the same speed past the accuracy centre (0) to `bar_min` -30%. Click 3 locks the accuracy: the bar's position then, positive when early (above the centre), negative when late. Reaching `bar_min` with no third click is a late miss.
 - Accuracy zone: `zone_half` 20% either side of the centre at 100% power or less (edges count as inside), so up to 4 degrees of curve. Early turns the heading right on screen (+heading, a slice for a right-hander), late turns it left (a hook), `deg_per_10pct` 2 degrees per 10% (D14: a heading offset at launch, the ball then flies straight). Overswing penalty: above 100% the zone narrows linearly to `overswing_zone_scale` 0.5 of its width at 110% (10% either side); the carry still grows to 1.1 times. Shank (outside the zone): the heading turns `shank_deg` 30 degrees toward the side of the miss, and the power is multiplied by `shank_power` 0.5. Every number is deterministic, so a swing's result is known at the third click.

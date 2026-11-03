@@ -191,7 +191,7 @@ Planning notes:
     - A new E2 stage sets `course_path` to `courses/example_par3.json` before `add_child` (no load UI is implied), plays the hole with a scripted swing, and holes out. `BUILT_MILESTONE` is raised to 2, and the stage's expectations go in `data/playtest_smoke.json`.
   - Test: `tests/test_round_flow.gd` plays a scripted hole through to a score and checks the content hash afterwards. `tests/test_hole_score.gd` covers strokes, penalties, score to par and the pick-up at the limit. A snap-back case goes in `tests/test_course_camera.gd`. `bash scripts/playtest.sh` exits 0.
   - Touches: `scenes/`, `golf/` (`tests/`; `scripts/playtest.gd` and `data/playtest_smoke.json` as smoke upkeep)
-- [ ] E2-S9 Playtest the hole and settle the swing. Close the swing-bar question and the "fun to build, boring to play" risk.
+- [x] E2-S9 Playtest the hole and settle the swing. Close the swing-bar question and the "fun to build, boring to play" risk.
   - Note: this folds in old E2-S16 (short uphill putts that stay on a contour step, a D7 side effect) and D4's open point that nobody has putted on 5 yd contours by hand. Both become questions in the session. The three-click bar is tested alone. The one-click swing waits in the Icebox, with a promotion trigger.
   - Accept: a `/playtest full` session covers checklist items 1 (without its cost clause), 2 and 5, and the build part of item 4: a par 5 with water on the direct line, on the E2-S1 plot. Notes go in `docs/playtests/`. They say:
     - whether the swing bar feels right, at its speed setting;
@@ -530,6 +530,10 @@ Done when: 10 people outside the project have played a build with final art and 
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
 
+- Default club on short holes (found in playtest 2026-11-03). The tee defaults to the longest legal club, so on a 160 yd par 3 the driver's marker flies past the cup and out of bounds. Proposed: default to the longest club whose marker stays short of the cup. Pillar 2.
+- Camera and HUD in Play (found in playtest 2026-11-03). The user was bothered by the camera or the HUD; candidates from E2-S14: the ease (`centre_time` 0.15 s), the stepped zoom-out of the aim framing, and the swing panel or scorecard hiding the ball or marker near the edges (a per-edge HUD inset). Ask which before fixing. Pillar 2.
+- Pace mark on the swing bar for putts (found in playtest 2026-11-03). D21 shows the line at the cup's pace but not the power, so the player still judges the pace; D21's option (b), a mark on the bar at the solved power, is wanted. Pillar 2.
+- Blocked-club and hazard cues (found in playtest 2026-11-03). The blocked ring (D20), the red landing cross at the tree scatter point, or the 0.8 s `hazard_show_time` pause read as unclear; a splash cue was the open idea. Ask which before fixing. Pillar 2.
 - Campaign plots and goals
 - Unlocks by rating
 - Tournament mode

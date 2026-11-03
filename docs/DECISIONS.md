@@ -234,3 +234,13 @@ Options:
 Choice: the felt-slope change (E2-S4), with its two companions from the same story: a drag fade, `drag_full_speed` (12 yd/s on rough, 0 elsewhere), so a slow ball running down a rough slope is not held to a crawl, and the crease rule, which takes a rolling ball's speed along the new ground's normal where the ground turns up against it on an axis, so a ball swinging across a valley or pit floor is damped instead of rocking until the cap. Green friction is unchanged.
 Why: pillar 1: any green a player paints still plays and settles, and pillar 2: a one-step contour reads exactly as D7 set it, while a steep bank looks steep and plays steep. Friction alone was ruled out by the arithmetic above, not by taste.
 Affects: docs/design.md Ball (Slope pull, Creases, Rolling friction) and the surface table's green and drag-fade lines, course/surface_row.gd and course/surfaces.tres (`steep_from`, `steep_scale`, `drag_full_speed`), golf/ball.gd (E2-S4), tests/test_ball.gd (E2-S4), D16, the Claude Docs design doc (Golf play: Flight and roll)
+
+## D24: Does the three-click swing bar feel right? (2026-11-03)
+Question: the design doc's open question "Swing bar feel", closed by the E2-S9 hand playtest.
+Options:
+- Keep the three-click bar at its E2-S7 numbers. Cost: none. Benefit: tested by hand and liked.
+- Retune its speed. Cost: a `/balance` pass. Benefit: only if it felt too fast or slow; it did not.
+- Promote the one-click swing from the Icebox. Cost: a new swing and its tests. Benefit: only if the three-click bar failed checklist item 2; it did not.
+Choice: keep the three-click bar with zone 20%, shank 30 degrees and half power, bar speed 0.5 to 1.5 (user, E2-S9 hand playtest, 2026-11-03). The one-click swing stays in the Icebox; its promotion trigger was not met.
+Why: pillar 2: the user found shots landed where the marker said and the bar felt right at its speed setting.
+Affects: docs/design.md Swing, docs/playtests/2026-11-03-e2-hand.md, the Claude Docs design doc (Open questions: "Swing bar feel")
