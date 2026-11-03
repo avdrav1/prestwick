@@ -1,0 +1,318 @@
+extends GutTest
+## E2-S3: opening a hole (D11). Open is enabled only when all five rules pass. An edit inside
+## an open hole's footprint closes it; after every build edit the validator reruns for every
+## open hole and closes any that now fails. Failing rules reach the view, tile and reason.
+## Play never waits for the validator (pillar 1).
+
+const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+
+## Hole 1 on an 80 x 40 rough plot at height 2: a 150 yd par 3 along y = 20. Its footprint
+## is the capsule 6 tiles (30 yd) either side of the tee-to-cup segment.
+const TEE := Vector2i(5, 20)
+const CUP := Vector2i(35, 20)
+
+
+func _course() -> CourseData:
+	return CourseData.create(80, 40, Surface.Type.ROUGH, 2)
+
+
+## A builder with hole 1 placed, its cup on a green, and opened.
+func _open_par3(c: CourseData) -> CourseBuilder:
+	var b := CourseBuilder.new(c)
+	b.paint(CUP, Surface.Type.GREEN, 3)
+	b.place_tee(1, TEE, 3)
+	b.place_cup(1, CUP)
+	assert_true(b.open_hole(1), "the par 3 opens")
+	return b
+
+
+func _rules(issues: Array) -> Array[int]:
+	var out: Array[int] = []
+	for i: CourseValidator.Issue in issues:
+		out.append(i.rule)
+	return out
+
+
+func _paint_column(b: CourseBuilder, x: int, from_y: int, to_y: int, s: Surface.Type) -> void:
+	b.begin_stroke()
+	for y: int in range(from_y, to_y + 1):
+		b.paint(Vector2i(x, y), s, 1)
+	b.end_stroke()
+
+
+# --- the footprint ---
+
+func test_footprint_is_a_30_yd_capsule_round_the_segment() -> void:
+	var v := CourseValidator.new()
+	var c := _course()
+	var h := HoleData.new(1, 3, TEE, CUP, false)
+	assert_true(v.in_footprint(c, h, Vector2i(20, 20)), "on the line")
+	assert_true(v.in_footprint(c, h, Vector2i(20, 26)), "30 yd beside it")
+	assert_false(v.in_footprint(c, h, Vector2i(20, 27)), "35 yd beside it")
+	assert_true(v.in_footprint(c, h, TEE + Vector2i(-5, 0)), "25 yd behind the tee")
+	assert_true(v.in_footprint(c, h, TEE + Vector2i(-4, -4)), "28 yd off the tee corner")
+	assert_false(v.in_footprint(c, h, Vector2i(TEE.x - 5, 15)), "35 yd off the tee corner")
+	assert_true(v.in_footprint(c, h, CUP + Vector2i(6, 0)), "30 yd past the cup")
+	var tiles: Array[Vector2i] = v.footprint(c, h)
+	for t: Vector2i in tiles:
+		assert_true(v.in_footprint(c, h, t), str(t))
+	assert_true(Vector2i(20, 26) in tiles and not Vector2i(20, 27) in tiles)
+	assert_eq(v.footprint(c, HoleData.new(1, 3, TEE, HoleData.UNPLACED)), [] as Array[Vector2i], "no cup, no footprint")
+
+
+# --- open gating ---
+
+func test_open_only_when_every_rule_passes() -> void:
+	var c := _course()
+	var b := CourseBuilder.new(c)
+	assert_false(b.can_open(1), "no hole yet")
+	b.place_tee(1, TEE, 3)
+	assert_false(b.can_open(1), "no cup yet")
+	assert_eq(_rules(b.issues_for(1)), [1] as Array[int])
+	b.place_cup(1, CUP)
+	assert_eq(_rules(b.issues_for(1)), [2] as Array[int], "the cup is on rough")
+	assert_false(b.can_open(1))
+	assert_false(b.open_hole(1), "Open refuses a failing hole")
+	assert_false(b.hole(1).open)
+	b.paint(CUP, Surface.Type.GREEN, 1)
+	assert_eq(b.issues_for(1), [], "all five pass")
+	assert_true(b.can_open(1))
+	assert_true(b.open_hole(1))
+	assert_true(b.hole(1).open)
+	assert_false(b.can_open(1), "already open")
+	assert_false(b.open_hole(1))
+	b.undo()
+	assert_false(b.hole(1).open, "Open is on the undo stack too")
+
+
+func test_wrong_par_cannot_open() -> void:
+	var c := _course()
+	var b := CourseBuilder.new(c)
+	b.paint(CUP, Surface.Type.GREEN, 1)
+	b.place_tee(1, TEE, 4)
+	b.place_cup(1, CUP)
+	assert_eq(_rules(b.issues_for(1)), [4] as Array[int], "150 yd is a par 3")
+	assert_false(b.open_hole(1))
+	b.set_par(1, 3)
+	assert_true(b.open_hole(1))
+
+
+func test_a_course_brought_in_with_a_failing_open_hole_has_it_closed() -> void:
+	var c := _course()
+	var hs: Array[HoleData] = [HoleData.new(1, 3, TEE, CUP, true)]
+	c.set_holes(hs)
+	var b := CourseBuilder.new(c)
+	assert_eq(_rules(b.issues_for(1)), [2] as Array[int], "the cup is on rough")
+	assert_false(b.hole(1).open, "an open hole that fails a rule closes when the builder is made")
+	assert_false(b.can_undo(), "closing it is not an undo step")
+
+
+func test_a_course_brought_in_with_a_passing_open_hole_keeps_it_open() -> void:
+	var c := _course()
+	c.set_tile(CUP.x, CUP.y, 2, Surface.Type.GREEN)
+	var hs: Array[HoleData] = [HoleData.new(1, 3, TEE, CUP, true)]
+	c.set_holes(hs)
+	var b := CourseBuilder.new(c)
+	assert_true(b.hole(1).open)
+
+
+# --- an edit inside the footprint closes the hole ---
+
+func test_an_edit_inside_the_footprint_closes_a_passing_hole() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	b.paint(Vector2i(20, 24), Surface.Type.FAIRWAY, 1)
+	assert_false(b.hole(1).open, "a paint inside the footprint closes it")
+	assert_eq(b.issues_for(1), [], "although it still passes")
+	assert_true(b.open_hole(1), "until Open is pressed again")
+	b.raise(Vector2i(10, 21), 1)
+	assert_false(b.hole(1).open, "a height edit closes it too")
+
+
+func test_an_edit_outside_the_footprint_leaves_it_open() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	b.paint(Vector2i(20, 27), Surface.Type.BUNKER, 1)
+	b.raise(Vector2i(70, 5), 3)
+	b.lower(Vector2i(60, 35), 5)
+	assert_true(b.hole(1).open)
+
+
+func test_a_brush_reaching_into_the_footprint_closes_it() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	b.paint(Vector2i(20, 28), Surface.Type.BUNKER, 5)
+	assert_false(b.hole(1).open, "the 5x5 brush's top row is at y 26")
+
+
+func test_moving_its_own_tee_or_cup_closes_it() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	b.place_tee(1, TEE + Vector2i(0, 1))
+	assert_false(b.hole(1).open, "moving the tee")
+	assert_true(b.open_hole(1))
+	b.place_cup(1, CUP + Vector2i(1, 0))
+	assert_false(b.hole(1).open, "moving the cup")
+
+
+func test_undoing_the_edit_that_closed_it_restores_it() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	var open_hash: String = c.content_hash()
+	b.paint(Vector2i(20, 20), Surface.Type.FAIRWAY, 3)
+	assert_false(b.hole(1).open)
+	b.undo()
+	assert_true(b.hole(1).open, "undo puts the course back as it was, open hole included")
+	assert_eq(c.content_hash(), open_hash)
+
+
+# --- the rerun closes an open hole that now fails, wherever the edit was ---
+
+func test_water_on_a_rule3_path_outside_the_footprint_closes_it() -> void:
+	var c := _course()
+	var b := _open_par3(c)
+	# A lake across the whole capsule (y 14 to 26) and past it: inside the footprint, so it
+	# closes the hole, but the path still goes round its ends.
+	_paint_column(b, 20, 10, 30, Surface.Type.WATER)
+	assert_false(b.hole(1).open)
+	assert_eq(b.issues_for(1), [], "the path goes round the end of the lake")
+	assert_true(b.open_hole(1))
+	# Water on the path round the top end, outside the footprint: still a path round the bottom.
+	_paint_column(b, 20, 0, 9, Surface.Type.WATER)
+	assert_true(b.hole(1).open, "outside the footprint and the hole still passes")
+	# And round the bottom end: no path is left, so the rerun closes it.
+	_paint_column(b, 20, 31, 39, Surface.Type.WATER)
+	assert_false(b.hole(1).open, "the rerun closes a hole that now fails rule 3")
+	assert_eq(_rules(b.issues_for(1)), [3] as Array[int])
+	assert_false(b.can_open(1))
+
+
+func test_another_holes_tee_moved_into_its_zone_closes_it() -> void:
+	var c := _course()
+	var b := CourseBuilder.new(c)
+	# Hole 1: a 300 yd par 4 along y = 20, zone centre 240 yd out at (53, 20).
+	var cup1 := Vector2i(65, 20)
+	b.paint(cup1, Surface.Type.GREEN, 3)
+	b.place_tee(1, TEE, 4)
+	b.place_cup(1, cup1)
+	# Hole 2: a 150 yd par 3 along y = 35.
+	b.paint(Vector2i(35, 35), Surface.Type.GREEN, 3)
+	b.place_tee(2, Vector2i(5, 35), 3)
+	b.place_cup(2, Vector2i(35, 35))
+	assert_true(b.open_hole(1))
+	assert_true(b.open_hole(2))
+	b.place_tee(2, Vector2i(60, 26))
+	assert_true(b.hole(1).open, "inside hole 1's footprint, outside its zone: another hole's tee is not hole 1's edit")
+	b.place_tee(2, Vector2i(53, 24))
+	assert_false(b.hole(1).open, "hole 2's tee in hole 1's zone closes hole 1")
+	assert_true(5 in _rules(b.issues_for(1)))
+	assert_true(5 in _rules(b.issues_for(2)), "both fail rule 5")
+	assert_false(b.hole(2).open)
+
+
+# --- the view and the HUD ---
+
+func _main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = ""
+	add_child_autofree(m)
+	return m
+
+
+func _click(m: Main, t: BuildTool.Tool, cell: Vector2i) -> void:
+	m.build_tool.select_tool(t)
+	m.build_tool.press_at(Iso.tile_to_screen(Vector2(cell), m.course.get_height(cell.x, cell.y)) + Vector2(0.5, 0.5))
+	m.build_tool.release()
+
+
+func test_a_failing_rule_reaches_the_view_with_its_tile_and_reason() -> void:
+	var m := _main()
+	_click(m, BuildTool.Tool.TEE, Vector2i(2, 10))
+	_click(m, BuildTool.Tool.CUP, Vector2i(15, 10))
+	var markers: Array[IssueMarker] = m.course_view.issue_markers()
+	assert_eq(markers.size(), 1, "one failing rule, one highlight")
+	var marker: IssueMarker = markers[0]
+	assert_eq(marker.cell, Vector2i(15, 10), "rule 2's tile is the cup")
+	assert_eq(marker.rules, PackedInt32Array([2]))
+	assert_eq(marker.reasons, PackedStringArray(["cup is on rough, not green"]))
+	assert_eq(marker.draw_point(), Iso.tile_to_screen(Vector2(15, 10), 0), "on the tile's top")
+	var panel: HolePanel = m.hole_panel
+	assert_true(panel.open_button.disabled, "Open is disabled while a rule fails")
+	assert_string_contains(panel.issues_label.text, "cup is on rough, not green")
+	assert_string_contains(panel.issues_label.text, "rule 2")
+
+
+func test_a_highlight_sorts_with_the_terrain_and_only_its_text_draws_on_top() -> void:
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 2)
+	var v: CourseView = autofree(CourseView.new())
+	v.show_course(c)
+	v.show_issues({1: [CourseValidator.Issue.new(2, Vector2i(6, 6), "cup is on rough, not green")]})
+	var m: IssueMarker = v.issue_markers()[0]
+	assert_eq(m.sort_key(), Iso.object_sort_key(Vector2(6, 6), 2), "the diamond Y-sorts like a pin on its tile")
+	assert_eq(m.z_index, 0, "so a hill in front hides it")
+	assert_true(m.get_parent().y_sort_enabled)
+	assert_eq(m.label.z_index, 2, "the badge and text draw over everything")
+	assert_eq(m.position + m.label.position, Iso.tile_to_screen(Vector2(6, 6), 2), "the text hangs off the tile centre")
+
+
+func test_neighbouring_highlights_lay_their_text_out_clear_of_each_other() -> void:
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 2)
+	var v: CourseView = autofree(CourseView.new())
+	v.show_course(c)
+	# A water-guarded cup: rule 3's first blocked tile next to the cup's rule 2 and rule 4.
+	v.show_issues({1: [
+		CourseValidator.Issue.new(2, Vector2i(10, 10), "cup is on rough, not green"),
+		CourseValidator.Issue.new(4, Vector2i(10, 10), "150 yd is a par 3, not a par 4"),
+		CourseValidator.Issue.new(3, Vector2i(9, 10), "no path from tee to cup round water and oob"),
+		CourseValidator.Issue.new(3, Vector2i(10, 9), "no path from tee to cup round water and oob"),
+	]})
+	assert_eq(v.issue_markers().size(), 3)
+	for scale: float in [1.0, 0.5, 2.0]:
+		v.layout_issue_labels(scale)
+		var rects: Array[Rect2] = v.issue_label_rects()
+		for i: int in rects.size():
+			for j: int in range(i + 1, rects.size()):
+				assert_false(rects[i].intersects(rects[j]), "boxes %d and %d overlap at %sx" % [i, j, scale])
+	v.show_issues({1: [CourseValidator.Issue.new(2, Vector2i(10, 10), "cup is on rough, not green")]})
+	assert_eq(v.issue_markers()[0].stack, 0.0, "a lone box sits just above its tile")
+
+
+func test_open_button_opens_a_passing_hole_and_highlights_clear() -> void:
+	var m := _main()
+	_click(m, BuildTool.Tool.TEE, Vector2i(2, 10))
+	_click(m, BuildTool.Tool.CUP, Vector2i(15, 10))
+	m.build_tool.select_surface(Surface.Type.GREEN)
+	_click(m, BuildTool.Tool.PAINT, Vector2i(15, 10))
+	assert_eq(m.course_view.issue_markers().size(), 0, "nothing fails, nothing is highlighted")
+	var panel: HolePanel = m.hole_panel
+	assert_false(panel.open_button.disabled)
+	panel.open_button.pressed.emit()
+	assert_true(m.build_tool.builder.hole(1).open)
+	assert_true(panel.open_button.disabled, "an open hole cannot be opened again")
+	assert_string_contains(panel.status_label.text, "open")
+	m.build_tool.select_surface(Surface.Type.FAIRWAY)
+	_click(m, BuildTool.Tool.PAINT, Vector2i(8, 10))
+	assert_false(m.build_tool.builder.hole(1).open, "a paint in the footprint closes it")
+	assert_false(panel.open_button.disabled, "and Open is offered again")
+
+
+func test_highlights_show_in_build_only() -> void:
+	var m := _main()
+	_click(m, BuildTool.Tool.TEE, Vector2i(2, 10))
+	_click(m, BuildTool.Tool.CUP, Vector2i(15, 10))
+	assert_true(m.course_view.issues_visible)
+	m.set_mode(Main.Mode.PLAY)
+	assert_false(m.course_view.issues_visible)
+	assert_false(m.hole_panel.visible)
+	m.set_mode(Main.Mode.BUILD)
+	assert_true(m.course_view.issues_visible)
+
+
+func test_play_stays_available_while_the_hole_fails() -> void:
+	var m := _main()
+	_click(m, BuildTool.Tool.TEE, Vector2i(2, 10))
+	_click(m, BuildTool.Tool.CUP, Vector2i(15, 10))
+	assert_false(m.build_tool.builder.issues_for(1).is_empty(), "the hole fails rule 2")
+	m.toggle_mode()
+	assert_eq(m.mode, Main.Mode.PLAY, "pillar 1: the validator never blocks Play")
+	assert_true(m.fire_button.visible)

@@ -16,7 +16,7 @@ const PATH: String = "res://course/validator_tuning.tres"
 @export var cup_clearance_yd: float = 60.0
 ## Rule 5: a tee whose tile centre is this close to the zone centre, or closer, is inside.
 @export var zone_radius_yd: float = 30.0
-## Footprint (read by E2-S3): tiles whose centre is within this distance of the tee-to-cup segment.
+## Footprint (CourseValidator.in_footprint, read by course/builder.gd): tiles whose centre is within this distance of the tee-to-cup segment.
 @export var footprint_half_width_yd: float = 30.0
 
 

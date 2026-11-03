@@ -1,6 +1,6 @@
 extends GutTest
 ## E1-S5: paint terrain through course/builder.gd, the only writer. Surface palette for the
-## 8 surfaces, raise and lower, brush 1/3/5, undo stack, heights clamp at 0 and 7, and the
+## 9 surfaces (`oob` joined in E2-S3, D9), raise and lower, brush 1/3/5, undo stack, heights clamp at 0 and 7, and the
 ## tile under the cursor is picked correctly on raised ground (TilePicker).
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -46,8 +46,7 @@ func test_paint_keeps_heights_and_clips_at_the_map_edge() -> void:
 
 
 func test_every_palette_surface_paints() -> void:
-	assert_eq(CourseBuilder.PALETTE.size(), 8, "the 8 surfaces of docs/design.md")
-	assert_false(Surface.Type.OOB in CourseBuilder.PALETTE, "oob is not a painted surface")
+	assert_eq(CourseBuilder.PALETTE.size(), Surface.COUNT, "every surface of docs/design.md, oob included (D9)")
 	var c := _flat()
 	var b := CourseBuilder.new(c)
 	for n: int in CourseBuilder.PALETTE.size():
@@ -118,9 +117,10 @@ func test_50_edits_then_50_undos_restore_the_hash() -> void:
 		var changed: bool
 		match n % 3:
 			0:
-				var s: Surface.Type = CourseBuilder.PALETTE[rng.randi_range(0, 7)]
+				var n_pal: int = CourseBuilder.PALETTE.size()
+				var s: Surface.Type = CourseBuilder.PALETTE[rng.randi_range(0, n_pal - 1)]
 				if s == c.get_surface(at.x, at.y):
-					s = CourseBuilder.PALETTE[(CourseBuilder.PALETTE.find(s) + 1) % 8]
+					s = CourseBuilder.PALETTE[(CourseBuilder.PALETTE.find(s) + 1) % n_pal]
 				changed = b.paint(at, s, size)
 			1:
 				changed = b.raise(at, size) if c.get_height(at.x, at.y) < CourseData.MAX_HEIGHT else b.lower(at, size)
@@ -406,7 +406,7 @@ func test_tool_is_inactive_in_play_mode() -> void:
 func test_palette_drives_the_tool() -> void:
 	var m := _main()
 	var pal: BuildPalette = m.build_palette
-	assert_eq(pal.surface_buttons.size(), 8)
+	assert_eq(pal.surface_buttons.size(), CourseBuilder.PALETTE.size())
 	pal.surface_buttons[CourseBuilder.PALETTE.find(Surface.Type.BUNKER)].pressed.emit()
 	assert_eq(m.build_tool.tool, BuildTool.Tool.PAINT)
 	assert_eq(m.build_tool.surface, Surface.Type.BUNKER)
@@ -419,7 +419,7 @@ func test_palette_drives_the_tool() -> void:
 	m.build_tool.select_surface(Surface.Type.TEE)
 	m.build_tool.brush_size = 3
 	var lit: Array[String] = []
-	for b: Button in pal.surface_buttons + [pal.raise_button, pal.lower_button] + pal.brush_buttons:
+	for b: Button in pal.surface_buttons + [pal.raise_button, pal.lower_button, pal.tee_button, pal.cup_button] + pal.brush_buttons:
 		if b.button_pressed:
 			lit.append(b.text)
 	assert_eq(lit, ["tee", "3"] as Array[String])

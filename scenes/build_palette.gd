@@ -1,7 +1,8 @@
 class_name BuildPalette
 extends PanelContainer
-## The Build-mode HUD bar: the 8 surfaces (each with its tile art, so the colorblind pattern
-## shows on the button), raise and lower, brush 1/3/5 and undo. A view onto a BuildTool:
+## The Build-mode HUD bar: the 9 surfaces, `oob` included (D9; each with its tile art, so the
+## colorblind pattern shows on the button), raise and lower, the tee and cup tools (E2-S3),
+## brush 1/3/5 and undo. A view onto a BuildTool:
 ## buttons set the tool, and the tool's settings_changed keeps the buttons in step.
 ## Buttons are made in code from CourseBuilder.PALETTE and BuilderTuning.brush_sizes.
 
@@ -9,6 +10,8 @@ extends PanelContainer
 var surface_buttons: Array[Button] = []
 var raise_button: Button
 var lower_button: Button
+var tee_button: Button
+var cup_button: Button
 ## Brush buttons in BuilderTuning.brush_sizes order.
 var brush_buttons: Array[Button] = []
 var undo_button: Button
@@ -41,7 +44,7 @@ func _ready() -> void:
 		b.icon = art.surface_texture(StringName(Surface.name_of(s)))
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.custom_minimum_size = Vector2(72, 0)
+		b.custom_minimum_size = Vector2(64, 0)
 		b.tooltip_text = "Paint %s" % Surface.name_of(s)
 		b.pressed.connect(func() -> void: _tool.select_surface(s))
 		surface_buttons.append(b)
@@ -50,6 +53,13 @@ func _ready() -> void:
 	raise_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.RAISE))
 	lower_button = _toggle(row, "Lower", _tools_group)
 	lower_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.LOWER))
+	row.add_child(VSeparator.new())
+	tee_button = _toggle(row, "Tee", _tools_group)
+	tee_button.tooltip_text = "Place the hole's tee"
+	tee_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.TEE))
+	cup_button = _toggle(row, "Cup", _tools_group)
+	cup_button.tooltip_text = "Place the hole's cup"
+	cup_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CUP))
 	row.add_child(VSeparator.new())
 	var brush_label := Label.new()
 	brush_label.text = "Brush"
@@ -91,6 +101,10 @@ func _sync() -> void:
 			on = raise_button
 		BuildTool.Tool.LOWER:
 			on = lower_button
+		BuildTool.Tool.TEE:
+			on = tee_button
+		BuildTool.Tool.CUP:
+			on = cup_button
 	for b: BaseButton in _tools_group.get_buttons():
 		b.set_pressed_no_signal(b == on)
 	var n: int = _brush_sizes.find(_tool.brush_size)

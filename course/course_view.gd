@@ -23,6 +23,15 @@ extends Node2D
 ## Hole markers (E2-S2): a HoleMarker tee marker and pin for every placed tee and cup in
 ## CourseData, under one Y-sorted child at the origin, so each sorts with the terrain at
 ## Iso.object_sort_key on its tile's top (course/hole_marker.gd).
+##
+## Issue highlights (E2-S3): an IssueMarker on every tile where a hole rule fails, with its
+## one-line reasons (course/issue_marker.gd), from show_issues, under a Y-sorted child at the
+## origin. The diamond on the tile sorts with the terrain like a HoleMarker, so a hill in front
+## hides it; the badge, leader line and text box draw over everything (z_index), so a fault
+## behind a hill still shows without reading as being on the hill. The text boxes keep their
+## screen size, so they are laid out in screen space at the current zoom (layout_issue_labels):
+## nearest the camera first, each pushed up clear of the boxes already placed. Main shows them
+## in Build only.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
@@ -30,6 +39,8 @@ const RISER_SOURCE: int = 1
 const EDGE_SOURCE: int = 2
 ## Rises of this many steps or more share one cue (two lines). Matches the art's frame names.
 const EDGE_MAX_STEPS: int = 2
+## Screen px left between two issue text boxes when one is pushed up past the other.
+const ISSUE_BOX_GAP: float = 4.0
 
 var course: CourseData:
 	get:
@@ -45,6 +56,16 @@ var _riser_atlas: Dictionary = {}
 var _edge_atlas: Dictionary = {}
 var _holes_root: Node2D
 var _markers: Array[HoleMarker] = []
+var _issues_root: Node2D
+var _issue_markers: Array[IssueMarker] = []
+## The zoom (screen px per local unit) the issue boxes were last laid out at; 0 forces a layout.
+var _issue_layout_scale: float = 0.0
+
+## Whether the issue highlights show (Build mode).
+var issues_visible: bool = true:
+	set(value):
+		issues_visible = value
+		_issues_root.visible = value
 
 
 func _init() -> void:
@@ -63,6 +84,10 @@ func _init() -> void:
 	_holes_root.name = "Holes"
 	_holes_root.y_sort_enabled = true
 	add_child(_holes_root)
+	_issues_root = Node2D.new()
+	_issues_root.name = "Issues"
+	_issues_root.y_sort_enabled = true
+	add_child(_issues_root)
 	for frame: String in _art.risers.frames:
 		_riser_atlas[StringName(frame)] = Vector2i(_art.risers.frame_index(StringName(frame)), 0)
 	for frame: String in _art.edges.frames:
@@ -79,6 +104,7 @@ func show_course(c: CourseData) -> void:
 			for x: int in c.width:
 				_draw_cell(Vector2i(x, y))
 	refresh_holes()
+	show_issues({})
 
 
 ## Rebuilds the tee marker and pin of every hole from CourseData. Call after holes change
@@ -114,6 +140,94 @@ func hole_marker(number: int, kind: HoleMarker.Kind) -> HoleMarker:
 	return null
 
 
+## Highlights every failing rule in `issues` (CourseBuilder.issues: hole number -> Array of
+## CourseValidator.Issue) on its tile, one IssueMarker per tile with a line per rule. An issue
+## with no tile on the map (a hole with no tee and no cup) has no highlight.
+func show_issues(issues: Dictionary) -> void:
+	for m: IssueMarker in _issue_markers:
+		_issues_root.remove_child(m)
+		m.free()
+	_issue_markers.clear()
+	if _course == null:
+		return
+	var by_cell := {}
+	for number: int in issues:
+		for issue: CourseValidator.Issue in issues[number]:
+			if not _course.in_bounds(issue.tile.x, issue.tile.y):
+				continue
+			var m: IssueMarker = by_cell.get(issue.tile)
+			if m == null:
+				m = IssueMarker.new(issue.tile)
+				m.place(_course)
+				by_cell[issue.tile] = m
+				_issues_root.add_child(m)
+				_issue_markers.append(m)
+			m.add(issue.rule, issue.reason)
+	layout_issue_labels(_view_scale())
+
+
+## Lays the issue text boxes out in screen space at a zoom of `scale` screen px per local unit:
+## the box nearest the camera (lowest on screen) stays just above its tile, and each one
+## further back is pushed up until it overlaps no box already placed. Sets every marker's
+## text_scale and stack. CourseView reruns it when the zoom changes or a marker moves.
+func layout_issue_labels(scale: float) -> void:
+	_issue_layout_scale = scale
+	var order: Array[IssueMarker] = _issue_markers.duplicate()
+	order.sort_custom(func(a: IssueMarker, b: IssueMarker) -> bool:
+		return a.draw_point().y > b.draw_point().y)
+	var placed: Array[Rect2] = []
+	for m: IssueMarker in order:
+		var anchor: Vector2 = m.draw_point() * scale
+		var push: float = 0.0
+		var rect: Rect2 = m.box_rect(scale, push)
+		rect.position += anchor
+		var moved: bool = true
+		while moved:
+			moved = false
+			for r: Rect2 in placed:
+				if rect.intersects(r):
+					push += rect.end.y - r.position.y + ISSUE_BOX_GAP
+					rect = m.box_rect(scale, push)
+					rect.position += anchor
+					moved = true
+		placed.append(rect)
+		m.text_scale = 1.0 / scale
+		m.stack = push
+
+
+## Every issue text box as laid out, in screen px at the last layout's zoom (one per marker,
+## in issue_markers() order).
+func issue_label_rects() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for m: IssueMarker in _issue_markers:
+		var r: Rect2 = m.box_rect(_issue_layout_scale, m.stack)
+		r.position += m.draw_point() * _issue_layout_scale
+		out.append(r)
+	return out
+
+
+func _process(_delta: float) -> void:
+	# The text boxes keep their screen size, so a zoom change needs a fresh layout.
+	if _issue_markers.is_empty():
+		return
+	var s: float = _view_scale()
+	if not is_equal_approx(s, _issue_layout_scale):
+		layout_issue_labels(s)
+
+
+## Screen px per local unit (the camera zoom), 1 outside the tree.
+func _view_scale() -> float:
+	if not is_inside_tree():
+		return 1.0
+	var s: float = get_global_transform_with_canvas().get_scale().x
+	return s if s > 0.0 else 1.0
+
+
+## Every issue highlight drawn, one per tile at fault.
+func issue_markers() -> Array[IssueMarker]:
+	return _issue_markers.duplicate()
+
+
 ## Redraws one tile after an edit, plus the two back neighbors whose walls it may now hide
 ## or reveal, and the two front neighbors whose edge cues depend on its height. Call from
 ## the builder after it writes a tile (E1-S5). A hole marker on the tile moves to its new top.
@@ -127,6 +241,10 @@ func refresh_cell(cell: Vector2i) -> void:
 	for m: HoleMarker in _markers:
 		if m.cell == cell:
 			m.place(_course)
+	for m: IssueMarker in _issue_markers:
+		if m.cell == cell:
+			m.place(_course)
+			_issue_layout_scale = 0.0
 
 
 ## The layer holding surface tops at height `h`.

@@ -1,26 +1,57 @@
 class_name CourseBuilder
 extends RefCounted
-## The terrain builder: paint surfaces, raise and lower ground, undo. With course/save.gd it is
-## one of the two writers of CourseData (CLAUDE.md Architecture); the build tool, HUD and
-## anything else go through it.
+## The course builder: paint surfaces, raise and lower ground, place a hole's tee and cup, set
+## its par, open it, undo. With course/save.gd it is one of the two writers of CourseData
+## (CLAUDE.md Architecture); the build tool, HUD and anything else go through it.
 ##
 ## A brush of size n (1, 3 or 5, from BuilderTuning) is the n x n square of tiles centered on
 ## the cursor tile, clipped to the map. Heights clamp at 0 and CourseData.MAX_HEIGHT.
 ##
-## Every edit that changes at least one tile pushes one undo step holding the old height and
-## surface of each tile it wrote. An edit that changes nothing pushes nothing. Between
+## Every edit that changes the course pushes one undo step holding the old height and surface
+## of each tile it wrote, and the holes as they were when it changed them. Terrain and hole
+## edits share the one stack. An edit that changes nothing pushes nothing. Between
 ## begin_stroke() and end_stroke() (one mouse drag) all edits share one undo step, and raise
 ## or lower moves each tile at most once, so a drag lifts ground one step, not one per frame.
+##
+## Holes (E2-S3, D11, docs/design.md Hole validation rules): place_tee and place_cup create
+## the hole with that number, closed, or move its tee or cup. A hole opens only through
+## open_hole, and only while all five rules of course/validator.gd pass. An open hole closes
+## when a surface or height edit touches a tile of its footprint, or when its own tee or cup
+## moves. After every edit (a stroke counts as one, checked when it ends) and every undo the
+## validator reruns for every hole: `issues` holds the result, and any open hole that now
+## fails a rule closes. Undo puts the holes back as the step found them, open flags included.
+## The same check runs when the builder is made, so a course that comes in with a failing open
+## hole has it closed at once (no undo step, no signal: nothing is connected yet).
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
+## Emitted after the holes list changed: a tee or cup placed or moved, a par set, a hole
+## opened or closed, or an undo of any of those.
+signal holes_changed
+## Emitted after the validator reran (every edit and undo), with `issues`.
+signal checked(issues: Dictionary)
 
-## The 8 surfaces a player paints, in palette order (docs/design.md surface table). Oob is a
-## surface in the course format but not on the palette.
+## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
+## OB ground from E2-S3 (D9).
 const PALETTE: Array[Surface.Type] = [
 	Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.GREEN, Surface.Type.TEE,
 	Surface.Type.BUNKER, Surface.Type.WATER, Surface.Type.TREES, Surface.Type.CART_PATH,
+	Surface.Type.OOB,
 ]
+## The pars a hole may have.
+const PARS: PackedInt32Array = [3, 4, 5]
+
+
+## One undo step: each tile's packed (height << 4 | surface) before the step, and the holes
+## before the step when it changed them (null when it did not).
+class Step:
+	extends RefCounted
+	var tiles: Dictionary = {}
+	var holes: Variant = null
+
+	func is_empty() -> bool:
+		return tiles.is_empty() and holes == null
+
 
 var course: CourseData:
 	get:
@@ -28,21 +59,47 @@ var course: CourseData:
 var tuning: BuilderTuning:
 	get:
 		return _tuning
+var validator: CourseValidator:
+	get:
+		return _validator
+## The latest validator run: every hole's failing rules, keyed by hole number
+## (CourseValidator.check_course). Read-only.
+var issues: Dictionary:
+	get:
+		return _issues
 
 var _course: CourseData
 var _tuning: BuilderTuning
-## Undo steps, oldest first. Each maps a tile to its packed (height << 4 | surface) before the step.
-var _undo: Array[Dictionary] = []
+var _validator: CourseValidator
+var _issues: Dictionary = {}
+## Undo steps, oldest first.
+var _undo: Array[Step] = []
 ## The open stroke's step, or null when no stroke is open.
-var _stroke: Variant = null
+var _stroke: Step = null
 ## Tiles the open stroke has already raised or lowered.
 var _stroke_lifted: Dictionary = {}
+## The holes changed since holes_changed was last emitted.
+var _holes_dirty: bool = false
 
 
-func _init(p_course: CourseData, p_tuning: BuilderTuning = null) -> void:
+func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null) -> void:
 	_course = p_course
 	_tuning = p_tuning if p_tuning != null else BuilderTuning.load_default()
+	_validator = p_validator if p_validator != null else CourseValidator.new()
+	# A loaded course may bring in an open hole that fails a rule (a hand-edited or older
+	# file): close it now, before anyone reads the open flag. Not an undo step.
+	_rerun(Step.new())
+	_holes_dirty = false
 
+
+## A new course on the blank plot (D10): BuilderTuning's size, every tile its surface and
+## height, no holes. A fresh course, not a write to one; hand it to a new builder.
+static func new_sandbox(p_tuning: BuilderTuning = null) -> CourseData:
+	var t: BuilderTuning = p_tuning if p_tuning != null else BuilderTuning.load_default()
+	return CourseData.create(t.plot_size.x, t.plot_size.y, t.plot_surface, t.plot_ground)
+
+
+# --- terrain ---
 
 ## In-bounds tiles under a brush of `size` centered on `center`.
 func brush_cells(center: Vector2i, size: int) -> Array[Vector2i]:
@@ -60,11 +117,11 @@ func brush_cells(center: Vector2i, size: int) -> Array[Vector2i]:
 ## Paints `surface` under the brush. Returns true when any tile changed.
 func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 	assert(Surface.is_valid(surface), "surface out of range")
-	var step := {}
+	var tiles := {}
 	for c: Vector2i in brush_cells(center, size):
 		if _course.get_surface(c.x, c.y) != surface:
-			_write(step, c, _course.get_height(c.x, c.y), surface)
-	return _commit(step)
+			_write(tiles, c, _course.get_height(c.x, c.y), surface)
+	return _commit(tiles)
 
 
 ## Raises the ground under the brush one step, clamped at MAX_HEIGHT. True when any tile changed.
@@ -80,19 +137,19 @@ func lower(center: Vector2i, size: int) -> bool:
 ## Starts grouping edits into one undo step (a mouse drag). Ends any open stroke first.
 func begin_stroke() -> void:
 	end_stroke()
-	_stroke = {}
+	_stroke = Step.new()
 	_stroke_lifted = {}
 
 
-## Closes the open stroke and pushes its undo step if it changed anything.
+## Closes the open stroke, reruns the validator and pushes its undo step if it changed anything.
 func end_stroke() -> void:
 	if _stroke == null:
 		return
-	var step: Dictionary = _stroke
+	var step: Step = _stroke
 	_stroke = null
 	_stroke_lifted = {}
 	if not step.is_empty():
-		_push(step)
+		_finish(step)
 
 
 ## Heights the open stroke has changed, as they were when it began (tile -> height). Empty when
@@ -102,76 +159,256 @@ func stroke_start_heights() -> Dictionary:
 	var out := {}
 	if _stroke == null:
 		return out
-	var open: Dictionary = _stroke
-	for c: Vector2i in open:
-		var packed: int = open[c]
+	for c: Vector2i in _stroke.tiles:
+		var packed: int = _stroke.tiles[c]
 		out[c] = packed >> 4
 	return out
 
 
+# --- holes ---
+
+## Hole `number` as stored in CourseData (read it, do not change it), or null.
+func hole(number: int) -> HoleData:
+	for h: HoleData in _course.holes:
+		if h.number == number:
+			return h
+	return null
+
+
+## Hole `number`'s failing rules from the latest validator run; empty when it passes or
+## does not exist.
+func issues_for(number: int) -> Array[CourseValidator.Issue]:
+	var out: Array[CourseValidator.Issue] = []
+	if _issues.has(number):
+		out.assign(_issues[number])
+	return out
+
+
+## True when hole `number` exists, is closed and passes all five rules.
+func can_open(number: int) -> bool:
+	var h: HoleData = hole(number)
+	return h != null and not h.open and _issues.has(number) and (_issues[number] as Array).is_empty()
+
+
+## Puts hole `number`'s tee on `cell`, creating the hole (closed, with `par`, or the tuning's
+## default par when `par` is not 3, 4 or 5) when there is none. Moving the tee closes it.
+## False when `cell` is off the map or the tee is already there.
+func place_tee(number: int, cell: Vector2i, par: int = 0) -> bool:
+	return _place(number, cell, true, par)
+
+
+## Puts hole `number`'s cup on `cell`, as place_tee does for the tee.
+func place_cup(number: int, cell: Vector2i, par: int = 0) -> bool:
+	return _place(number, cell, false, par)
+
+
+## Sets hole `number`'s par to 3, 4 or 5. False when there is no such hole, the par is not
+## one of those, or it is already that par. The rerun closes the hole if rule 4 now fails.
+func set_par(number: int, par: int) -> bool:
+	if not par in PARS:
+		return false
+	var hs: Array[HoleData] = _holes_copy()
+	var i: int = _find(hs, number)
+	if i < 0 or hs[i].par == par:
+		return false
+	end_stroke()
+	hs[i].par = par
+	var step := Step.new()
+	_write_holes(step, hs)
+	_finish(step)
+	return true
+
+
+## Opens hole `number` (Open in the HUD). False unless can_open: guests play only holes that
+## pass every rule. Pressing Open is an undo step like any other edit.
+func open_hole(number: int) -> bool:
+	if not can_open(number):
+		return false
+	end_stroke()
+	var hs: Array[HoleData] = _holes_copy()
+	hs[_find(hs, number)].open = true
+	var step := Step.new()
+	_write_holes(step, hs)
+	_finish(step)
+	return true
+
+
+# --- undo ---
+
 func can_undo() -> bool:
-	return not _undo.is_empty() or (_stroke != null and not (_stroke as Dictionary).is_empty())
+	return not _undo.is_empty() or (_stroke != null and not _stroke.is_empty())
 
 
 ## Undo steps available (an open stroke counts once it changes something).
 func undo_depth() -> int:
-	return _undo.size() + (1 if _stroke != null and not (_stroke as Dictionary).is_empty() else 0)
+	return _undo.size() + (1 if _stroke != null and not _stroke.is_empty() else 0)
 
 
-## Reverts the latest step (closing an open stroke first). Returns false when there is none.
+## Reverts the latest step (closing an open stroke first), then reruns the validator.
+## Returns false when there is none.
 func undo() -> bool:
 	end_stroke()
 	if _undo.is_empty():
 		return false
-	var step: Dictionary = _undo.pop_back()
+	var step: Step = _undo.pop_back()
 	var cells: Array[Vector2i] = []
-	for c: Vector2i in step:
-		var packed: int = step[c]
+	for c: Vector2i in step.tiles:
+		var packed: int = step.tiles[c]
 		_course.set_tile(c.x, c.y, packed >> 4, (packed & 0x0F) as Surface.Type)
 		cells.append(c)
-	tiles_changed.emit(cells)
+	if not cells.is_empty():
+		tiles_changed.emit(cells)
+	if step.holes != null:
+		_course.set_holes(step.holes)
+		_holes_dirty = true
+	# The course is back as it was before the edit, when every open hole passed (_init closed
+	# any that came in failing), so this rerun refreshes `issues` and closes nothing.
+	_rerun(Step.new())
+	_announce()
 	return true
 
 
+# --- internals ---
+
 func _lift(center: Vector2i, size: int, delta: int) -> bool:
-	var step := {}
+	var tiles := {}
 	for c: Vector2i in brush_cells(center, size):
 		if _stroke != null and _stroke_lifted.has(c):
 			continue
 		var h: int = _course.get_height(c.x, c.y)
 		var to: int = clampi(h + delta, 0, CourseData.MAX_HEIGHT)
 		if to != h:
-			_write(step, c, to, _course.get_surface(c.x, c.y))
+			_write(tiles, c, to, _course.get_surface(c.x, c.y))
 			if _stroke != null:
 				_stroke_lifted[c] = true
-	return _commit(step)
+	return _commit(tiles)
 
 
-## Records the tile's old value in `step` (first write wins) and writes the new one.
-func _write(step: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
-	if not step.has(c):
-		step[c] = (_course.get_height(c.x, c.y) << 4) | _course.get_surface(c.x, c.y)
+## Records the tile's old value in `tiles` (first write wins) and writes the new one.
+func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
+	if not tiles.has(c):
+		tiles[c] = (_course.get_height(c.x, c.y) << 4) | _course.get_surface(c.x, c.y)
 	_course.set_tile(c.x, c.y, h, s)
 
 
-## Files `step` (the tiles one edit wrote) and announces them. False when it is empty.
-func _commit(step: Dictionary) -> bool:
-	if step.is_empty():
+## Files the tiles one terrain edit wrote into its step (the open stroke's, or a new one),
+## closes every open hole whose footprint they touch, and announces them. Outside a stroke
+## the step is finished at once; a stroke's is finished when it ends. False when empty.
+func _commit(tiles: Dictionary) -> bool:
+	if tiles.is_empty():
 		return false
-	if _stroke != null:
-		var open: Dictionary = _stroke
-		for c: Vector2i in step:
-			if not open.has(c):
-				open[c] = step[c]
-	else:
-		_push(step)
+	var step: Step = _stroke if _stroke != null else Step.new()
+	for c: Vector2i in tiles:
+		if not step.tiles.has(c):
+			step.tiles[c] = tiles[c]
 	var cells: Array[Vector2i] = []
-	cells.assign(step.keys())
+	cells.assign(tiles.keys())
+	_close_footprints(step, cells)
 	tiles_changed.emit(cells)
+	if _stroke == null:
+		_finish(step)
 	return true
 
 
-func _push(step: Dictionary) -> void:
+## Closes every open hole with a footprint tile among `cells` (D11), even if it still passes.
+func _close_footprints(step: Step, cells: Array[Vector2i]) -> void:
+	var hs: Array[HoleData] = _holes_copy()
+	var closed: bool = false
+	for h: HoleData in hs:
+		if not h.open:
+			continue
+		for c: Vector2i in cells:
+			if _validator.in_footprint(_course, h, c):
+				h.open = false
+				closed = true
+				break
+	if closed:
+		_write_holes(step, hs)
+
+
+func _place(number: int, cell: Vector2i, is_tee: bool, par: int) -> bool:
+	if not _course.in_bounds(cell.x, cell.y):
+		return false
+	var hs: Array[HoleData] = _holes_copy()
+	var i: int = _find(hs, number)
+	if i < 0:
+		var p: int = par if par in PARS else _tuning.default_par
+		var tee: Vector2i = cell if is_tee else HoleData.UNPLACED
+		var cup: Vector2i = HoleData.UNPLACED if is_tee else cell
+		hs.append(HoleData.new(number, p, tee, cup, false))
+	else:
+		var h: HoleData = hs[i]
+		if (h.tee if is_tee else h.cup) == cell:
+			return false
+		if is_tee:
+			h.tee = cell
+		else:
+			h.cup = cell
+		h.open = false
+	end_stroke()
+	var step := Step.new()
+	_write_holes(step, hs)
+	_finish(step)
+	return true
+
+
+## Reruns the validator, closes failing open holes, files the step and announces the change.
+func _finish(step: Step) -> void:
+	_rerun(step)
+	_push(step)
+	_announce()
+
+
+## Reruns the validator for every hole and closes each open one that now fails a rule,
+## recording the holes in `step` first.
+func _rerun(step: Step) -> void:
+	_issues = _check()
+	var hs: Array[HoleData] = _holes_copy()
+	var closed: bool = false
+	for h: HoleData in hs:
+		if h.open and not (_issues.get(h.number, []) as Array).is_empty():
+			h.open = false
+			closed = true
+	if closed:
+		_write_holes(step, hs)
+
+
+func _check() -> Dictionary:
+	if _course.holes.is_empty():
+		return {}
+	return _validator.check_course(_course)
+
+
+func _announce() -> void:
+	if _holes_dirty:
+		_holes_dirty = false
+		holes_changed.emit()
+	checked.emit(_issues)
+
+
+## Writes `hs` as the course's holes, saving the holes as they were into `step` the first time.
+func _write_holes(step: Step, hs: Array[HoleData]) -> void:
+	if step.holes == null:
+		step.holes = _holes_copy()
+	_course.set_holes(hs)
+	_holes_dirty = true
+
+
+func _holes_copy() -> Array[HoleData]:
+	var out: Array[HoleData] = []
+	for h: HoleData in _course.holes:
+		out.append(h.copy())
+	return out
+
+
+static func _find(hs: Array[HoleData], number: int) -> int:
+	for i: int in hs.size():
+		if hs[i].number == number:
+			return i
+	return -1
+
+
+func _push(step: Step) -> void:
 	_undo.append(step)
 	while _undo.size() > maxi(_tuning.undo_limit, 1):
 		_undo.pop_front()

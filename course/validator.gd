@@ -171,6 +171,33 @@ func par_for_yardage(yards: int) -> int:
 	return 3
 
 
+## True when `cell` is under `hole` (D11 footprint): its centre is within
+## footprint_half_width_yd of the tee-to-cup segment. A hole whose tee or cup is not placed
+## has no footprint.
+func in_footprint(course: CourseData, hole: HoleData, cell: Vector2i) -> bool:
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return false
+	var p := Vector2(cell)
+	var closest: Vector2 = Geometry2D.get_closest_point_to_segment(p, Vector2(hole.tee), Vector2(hole.cup))
+	return _yards_between(p, closest) <= tuning.footprint_half_width_yd
+
+
+## Every in-map tile under `hole` (in_footprint), row-major. Empty when it is not placed.
+func footprint(course: CourseData, hole: HoleData) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return out
+	var pad: int = ceili(tuning.footprint_half_width_yd / YARDS_PER_TILE)
+	var lo := Vector2i(maxi(mini(hole.tee.x, hole.cup.x) - pad, 0), maxi(mini(hole.tee.y, hole.cup.y) - pad, 0))
+	var hi := Vector2i(mini(maxi(hole.tee.x, hole.cup.x) + pad, course.width - 1),
+			mini(maxi(hole.tee.y, hole.cup.y) + pad, course.height - 1))
+	for y: int in range(lo.y, hi.y + 1):
+		for x: int in range(lo.x, hi.x + 1):
+			if in_footprint(course, hole, Vector2i(x, y)):
+				out.append(Vector2i(x, y))
+	return out
+
+
 ## Rule 5's landing zone centre, in tile coordinates, or null for a par 3 (which has none).
 func landing_zone(hole: HoleData) -> Variant:
 	if hole.par < 4:

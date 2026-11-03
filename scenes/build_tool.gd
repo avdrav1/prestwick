@@ -9,10 +9,13 @@ extends Node2D
 ## tile on the grid line between successive cursor tiles (fast mouse motion skips tiles), and
 ## picks against the ground as it was when the stroke began (so a Lower drag does not creep
 ## onto the tile behind the one it just dug).
+## The tee and cup tools (E2-S3) place hole `hole_number`'s tee or cup on the tile clicked,
+## through the builder, creating the hole with `par` when it has none; a drag does not move
+## them. select_par sets `par` and the existing hole's par.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
 
-enum Tool { PAINT, RAISE, LOWER }
+enum Tool { PAINT, RAISE, LOWER, TEE, CUP }
 
 ## Emitted when the tool, surface or brush changes, so the palette can follow.
 signal settings_changed
@@ -26,6 +29,10 @@ const UNDO_ACTION: StringName = &"ui_undo"
 var builder: CourseBuilder
 var tool: Tool = Tool.PAINT
 var surface: Surface.Type = Surface.Type.FAIRWAY
+## The hole the tee and cup tools build. One hole in E2; E3 adds the others.
+var hole_number: int = 1
+## The par a new hole gets, and the one the par buttons last picked.
+var par: int = 3
 var brush_size: int = 1:
 	set(value):
 		brush_size = maxi(value, 1)
@@ -50,6 +57,7 @@ var _last_cell: Vector2i = TilePicker.NONE
 
 func _ready() -> void:
 	z_index = 1  # over the course layers
+	par = BuilderTuning.load_default().default_par
 
 
 func select_surface(s: Surface.Type) -> void:
@@ -61,6 +69,29 @@ func select_surface(s: Surface.Type) -> void:
 func select_tool(t: Tool) -> void:
 	tool = t
 	settings_changed.emit()
+
+
+## Picks par 3, 4 or 5: for the next new hole, and for hole `hole_number` when it exists.
+func select_par(p: int) -> void:
+	if not p in CourseBuilder.PARS:
+		return
+	par = p
+	if builder != null and active:
+		builder.set_par(hole_number, p)
+	settings_changed.emit()
+
+
+## Opens hole `hole_number` (the HUD's Open). False unless it passes every rule.
+func open_hole() -> bool:
+	if builder == null or not active:
+		return false
+	return builder.open_hole(hole_number)
+
+
+## The par to show: the hole's own when it exists, else the one picked for a new hole.
+func shown_par() -> int:
+	var h: HoleData = builder.hole(hole_number) if builder != null else null
+	return h.par if h != null else par
 
 
 func undo() -> bool:
@@ -92,7 +123,7 @@ func press_at(local: Vector2) -> void:
 ## Mouse moved to `local` with the left button held: apply along the drag.
 func drag_to(local: Vector2) -> void:
 	hover_at(local)
-	if not _dragging or not active:
+	if not _dragging or not active or _places_hole():
 		return
 	if _hover == TilePicker.NONE:
 		_last_cell = TilePicker.NONE  # left the map: do not join across the gap
@@ -166,7 +197,7 @@ func _draw() -> void:
 	if not active or builder == null or _hover == TilePicker.NONE:
 		return
 	var c: CourseData = builder.course
-	for cell: Vector2i in builder.brush_cells(_hover, brush_size):
+	for cell: Vector2i in builder.brush_cells(_hover, 1 if _places_hole() else brush_size):
 		var center: Vector2 = Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))
 		var pts := PackedVector2Array([
 			center + Vector2(0, -Iso.HALF_H), center + Vector2(Iso.HALF_W, 0),
@@ -188,7 +219,15 @@ func _apply(cell: Vector2i) -> void:
 			builder.raise(cell, brush_size)
 		Tool.LOWER:
 			builder.lower(cell, brush_size)
+		Tool.TEE:
+			builder.place_tee(hole_number, cell, par)
+		Tool.CUP:
+			builder.place_cup(hole_number, cell, par)
 	queue_redraw()
+
+
+func _places_hole() -> bool:
+	return tool == Tool.TEE or tool == Tool.CUP
 
 
 func _pick(local: Vector2) -> Vector2i:

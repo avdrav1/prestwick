@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scenes/build_palette.gd" id="5_palette"]
 [ext_resource type="Script" path="res://scenes/shot_view.gd" id="6_shot"]
 [ext_resource type="Resource" path="res://golf/debug_shot.tres" id="7_debug_shot"]
+[ext_resource type="Script" path="res://scenes/hole_panel.gd" id="8_hole_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -55,3 +56,23 @@ offset_top = 48.0
 offset_right = 176.0
 offset_bottom = 80.0
 text = "Fire debug shot"
+
+[node name="NewSandboxButton" type="Button" parent="HUD"]
+focus_mode = 0
+offset_left = 16.0
+offset_top = 48.0
+offset_right = 176.0
+offset_bottom = 80.0
+tooltip_text = "Start a new course on a blank 128 x 128 plot"
+text = "New sandbox"
+
+[node name="HolePanel" type="PanelContainer" parent="HUD"]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 16.0
+grow_horizontal = 0
+script = ExtResource("8_hole_panel")

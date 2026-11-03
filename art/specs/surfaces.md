@@ -35,8 +35,8 @@ surface is a flat, unmistakable field; no texture noise that competes with the b
 | 8 | `oob` | `oob` / `oob_dark` | bold diagonal stripes | OB |
 
 Tee, trees and oob patterns are not named by the art-spec skill; they are chosen here.
-`oob` is surface 8 in the course format; whether OB is a surface or stakes is still open
-(E2-S1). If E2-S1 drops it, delete frame 8 and its name in `surfaces.tres`.
+`oob` is surface 8 in the course format. D9 keeps it as a surface: from E2-S3 it is on the
+Build palette as OB ground, and its frame is the palette button's icon.
 
 Grayscale check (`art/tiles/tile_preview.tscn`, right half): rough, water and oob sit
 close in luminance (about 108, 116, 100 of 255) and are told apart by pattern alone. Final
