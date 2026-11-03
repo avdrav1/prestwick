@@ -274,8 +274,11 @@ func _blocks(p: Vector3) -> bool:
 
 ## Tree scatter (D15): from the blocked point `from`, a target 1 to 2 tiles back toward the
 ## start (within tree_scatter_cone_deg of the reversed heading), drawn from the ball's own
-## generator and redrawn off trees, water and OB up to tree_scatter_draws times; failing
-## that, the nearest open tile centre. The ball comes down there with no speed, a still ball.
+## generator and redrawn off trees, water and OB, and off the cup's disc (a still ball there
+## would be holed on its next tick, E6-S13), up to tree_scatter_draws times; failing that,
+## the nearest tile centre the game may place a ball on (_nearest_open: never the cup's tile,
+## and with none on the map, _last_resort's point clear of the cup). The ball comes down
+## there with no speed, a still ball.
 func _scatter(from: Vector3, v: Vector3) -> void:
 	scattered = true
 	scatter_from = from
@@ -296,7 +299,7 @@ func _scatter(from: Vector3, v: Vector3) -> void:
 		var turn := deg_to_rad(_rng.randf_range(-params.tree_scatter_cone_deg,
 				params.tree_scatter_cone_deg))
 		var q := here + Vector2.from_angle(base + turn) * d
-		if may_rest_on(field.tile_at(q.x, q.y)):
+		if may_rest_on(field.tile_at(q.x, q.y)) and _clear_of_cup(q):
 			target = q
 			found = true
 			break

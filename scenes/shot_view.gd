@@ -12,8 +12,9 @@ extends Node2D
 ## Water and OB (E2-S13): Ball moves a dropped ball to its drop point the tick it stops in
 ## the hazard. The view keeps drawing it where it went in (Ball.hazard_position) for
 ## ShotViewTuning.hazard_show_time, and only then draws it at the drop, ends the shot and
-## emits came_to_rest with the drop point. For that hold the landing cross is hidden (a ball
-## in water stops where it lands, so the cross would sit on it) and a hazard cue is drawn
+## emits came_to_rest with the drop point. From the drop on the landing cross is hidden, for
+## the hold (a ball in water stops where it lands, so the cross would sit on it) and after it
+## until the next shot (E6-S13: it would mark the hazard, not the ball), and a hazard cue is drawn
 ## under the ball, its shape set by the hazard so it reads by shape, not only colour: a
 ## splash ring for water, a struck-through circle for OB.
 ##
@@ -222,7 +223,9 @@ func _refresh() -> void:
 	if ball == null:
 		return
 	var hold := showing_hazard()
-	marker.visible = _marker_wanted and not hold
+	# A dropped ball's landing cross stays hidden after the hold too (E6-S13): it would sit in
+	# the water or OB where the ball went in, away from the ball now at its drop.
+	marker.visible = _marker_wanted and ball.penalty_strokes == 0
 	hazard_cue.visible = hold
 	_sort_at(sprite, _ground_below(drawn_position()))
 	if hold:

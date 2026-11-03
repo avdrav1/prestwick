@@ -121,6 +121,12 @@ func test_a_water_ball_is_shown_where_it_went_in_before_the_drop() -> void:
 	assert_eq(rests, [ball.drop_point], "came_to_rest reports the drop, once")
 	assert_eq(view.drawn_position(), ball.drop_point, "now drawn at the drop")
 	assert_false(view.hazard_cue.visible, "the cue goes with the hold")
+	assert_false(view.marker.visible,
+			"E6-S13: the landing cross stays hidden after the drop, not back in the water")
+	view.advance(5.0)
+	assert_false(view.marker.visible, "until the next shot")
+	view.fire(course, ball.drop_point, Ball.launch_velocity(10.0, 30.0, 180.0), 3)
+	assert_true(view.marker.visible, "the next shot shows its own landing cross")
 	assert_almost_eq(view.ball_screen(), ball.field.tile_top_screen(ball.drop_point),
 			Vector2(EPS, EPS), "on the drop tile's top")
 

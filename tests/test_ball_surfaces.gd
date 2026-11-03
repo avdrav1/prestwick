@@ -401,6 +401,113 @@ func test_scatter_falls_back_to_the_nearest_open_tile_centre() -> void:
 	assert_eq(ball.penalty_strokes, 0)
 
 
+## E6-S13: water everywhere but the cup's tile (10, 5), a green, and trees from tile 14 on, so
+## the cup's tile is the only tile on the map a ball may rest on.
+func _cup_island_before_trees() -> CourseData:
+	var c := _course(Surface.Type.WATER)
+	c.set_tile(10, 5, 0, Surface.Type.GREEN)
+	_band(c, 14, 39, Surface.Type.TREES)
+	return c
+
+
+## A ball placed at rest at `at` by a last-resort fallback: on ground that may hold it, clear of
+## the cup, and no tap toward the cup from there is holed.
+func _assert_placed_clear_of_cup(c: CourseData, ball: Ball, cup: Vector2i, label: String) -> void:
+	var at := Vector2(ball.position.x, ball.position.y)
+	assert_false(ball.holed, label + ": not holed")
+	assert_eq(ball.penalty_strokes, 0, label + ": no penalty")
+	assert_eq(ball.state, Ball.State.AT_REST, label + ": at rest")
+	assert_gt(at.distance_to(ball.cup_center()), params.cup_radius, label + ": clear of the cup")
+	assert_true(ball.may_rest_on(_tile(ball)), label + ": on ground that may hold a ball")
+	for speed: float in [0.0, 0.1, 0.3]:
+		var to_cup := (ball.cup_center() - at).normalized()
+		var tap := _roll(c, at, to_cup * speed, cup)
+		assert_false(tap.holed, label + ": a %.1f yd/s tap toward the cup is not holed" % speed)
+
+
+func test_a_scatter_with_no_other_open_tile_stays_clear_of_the_cup() -> void:
+	# Struck from beside the cup's centre (inside cup_radius) low into the trees. Every draw
+	# comes down on water (5 to 10 yd back from x 70 is tiles 12 and 13), and no tile but the
+	# cup's may take a placed ball, so the scatter falls to the last resort: the start would
+	# leave a free tap-in, so cup_clear_drop_yd from the cup toward the start, on its tile.
+	var c := _cup_island_before_trees()
+	var cup := Vector2i(10, 5)
+	var start := Vector3(52.5 + params.cup_radius * 0.5, ROW_Y, 0)
+	for s: int in 10:
+		var ball := _fly(c, start, Ball.launch_velocity(40.0, 8.0, 0.0), s, cup)
+		var label := "seed %d" % s
+		assert_true(ball.scattered, label + ": the low flight meets the trees")
+		assert_eq(ball.field.tile_at(ball.scatter_from.x, ball.scatter_from.y), Vector2i(14, 5))
+		assert_almost_eq(Vector2(ball.position.x, ball.position.y),
+				Vector2(52.5 + params.cup_clear_drop_yd, ROW_Y), Vector2(EPS, EPS),
+				label + ": cup_clear_drop_yd from the cup, toward the start")
+		assert_eq(_tile(ball), cup, label + ": on the only tile a ball may rest on")
+		_assert_placed_clear_of_cup(c, ball, cup, label)
+
+
+func test_a_scatter_with_no_other_open_tile_from_a_start_clear_of_the_cup_is_the_start() -> void:
+	var c := _cup_island_before_trees()
+	var cup := Vector2i(10, 5)
+	var start := Vector3(51.0, ROW_Y, 0)
+	var ball := _fly(c, start, Ball.launch_velocity(40.0, 8.0, 0.0), 3, cup)
+	assert_true(ball.scattered)
+	assert_eq(ball.position, start, "a start clear of the cup is the place of last resort (D15)")
+	_assert_placed_clear_of_cup(c, ball, cup, "start")
+
+
+func test_a_scatter_draw_never_comes_down_on_the_cup() -> void:
+	# The cup sits where the draws come down (tile 12, 5 to 10 yd back from the trees at x 70)
+	# and its radius is widened to 2 yd so many draws fall inside it: a still ball there would
+	# be holed on its next tick, so those draws are drawn again.
+	var c := _course()
+	_band(c, 14, 39, Surface.Type.TREES)
+	var cup := Vector2i(12, 5)
+	var wide := params.duplicate() as BallParams
+	wide.cup_radius = 2.0
+	var on_cup_tile := 0
+	for s: int in 200:
+		var ball := Ball.new(c, s, wide)
+		ball.set_cup(cup)
+		ball.launch(Vector3(52.5, ROW_Y, 0), Ball.launch_velocity(40.0, 8.0, 0.0))
+		ball.run_to_rest()
+		assert_true(ball.scattered, "seed %d: the low flight meets the trees" % s)
+		var at := Vector2(ball.position.x, ball.position.y)
+		if _tile(ball) == cup:
+			on_cup_tile += 1
+		if ball.holed or at.distance_to(ball.cup_center()) <= wide.cup_radius:
+			fail_test("seed %d: the scatter came down %.2f yd from the cup" % [s,
+					at.distance_to(ball.cup_center())])
+			return
+	assert_gt(on_cup_tile, 10, "the draws do reach the cup's tile")
+
+
+func test_a_ball_stopped_on_trees_with_no_other_open_tile_stays_clear_of_the_cup() -> void:
+	# The trees rest: with block_height 0 a flight comes down on the trees (roll 0) and is moved
+	# to the nearest tile centre the game may place a ball on. The cup's tile is the only tile a
+	# ball may rest on and takes no placed ball, so it is the last resort, as for a drop.
+	var c := _course(Surface.Type.TREES)
+	var cup := Vector2i(10, 5)
+	c.set_tile(cup.x, cup.y, 0, Surface.Type.GREEN)
+	var open := table.duplicate(true) as SurfaceTable
+	open.row(Surface.Type.TREES).block_height = 0.0
+	for start: Vector3 in [Vector3(52.5 - params.cup_radius * 0.5, ROW_Y, 0), Vector3(51.0, ROW_Y, 0)]:
+		var ball := Ball.new(c, 7, null, open)
+		ball.set_cup(cup)
+		ball.launch(start, _carry(40.0, 30.0))
+		ball.run_to_rest()
+		var label := "from x %.3f" % start.x
+		assert_false(ball.scattered, label + ": nothing blocks it")
+		assert_eq(ball.field.tile_at(ball.landing_position.x, ball.landing_position.y),
+				Vector2i(18, 5), label + ": it comes down on the trees")
+		var at := Vector2(ball.position.x, ball.position.y)
+		if Vector2(start.x, start.y).distance_to(ball.cup_center()) <= params.cup_radius:
+			assert_almost_eq(at, Vector2(52.5 - params.cup_clear_drop_yd, ROW_Y), Vector2(EPS, EPS),
+					label + ": cup_clear_drop_yd from the cup, toward the start")
+		else:
+			assert_eq(at, Vector2(start.x, start.y), label + ": the start, clear of the cup")
+		_assert_placed_clear_of_cup(c, ball, cup, label)
+
+
 func test_scatter_is_deterministic_by_seed() -> void:
 	var c := _course()
 	_band(c, 20, 24, Surface.Type.TREES)

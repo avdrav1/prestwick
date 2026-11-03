@@ -1,0 +1,5 @@
+{
+  "_doc": "The scripted player's short-game noise (scripts/scripted_round.gd, E6-S13; docs/design.md Playing the hole). A full-club stroke from at most short_game_max_yd from the cup clicks the accuracy a whole number of bar ticks off the centre, drawn evenly from -accuracy_noise_ticks to +accuracy_noise_ticks (one tick is 1/72 of the bar, about 0.28 degrees), seeded by the stroke and the ball's place, so a chip is not holed every time. Longer full shots and putts stay perfect, so the /playtest smoke's tee shot is unchanged.",
+  "short_game_max_yd": 120.0,
+  "accuracy_noise_ticks": 3
+}

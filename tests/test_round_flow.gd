@@ -8,6 +8,7 @@ const PAR3_PATH := "res://courses/example_par3.json"
 const FLAT_PATH := "res://tests/fixtures/flat_20x20.json"
 ## Strokes the scripted player may take before a test gives up.
 const MAX_STROKES: int = 12
+const EPS_YD: float = 0.001
 
 
 func _main(path: String) -> Main:
@@ -195,6 +196,94 @@ func test_a_water_carry_short_of_an_island_green_scores_the_penalty_not_par() ->
 	assert_eq(score.strokes, rest + 1)
 	assert_gt(score.total(), score.par, "a water carry does not make par: %d" % score.total())
 	assert_eq(m.score_card.to_par_label.text, "Total %s" % HoleScore.to_par_text(score.to_par()))
+
+
+func test_the_scripted_player_does_not_hole_every_chip_from_80_yd_or_more() -> void:
+	# E6-S13: with a perfect click every time the planner holed the 80 to 110 yd chip from a
+	# drop. Its short-game noise (data/scripted_player.json) clicks a chip's accuracy a few bar
+	# ticks off the centre, so the same chips are holed far less often, and every noisy plan's
+	# prediction is the swing it plays.
+	var noise := ScriptedRound.ShortGameNoise.load_default()
+	assert_gt(noise.accuracy_noise_ticks, 0, "the noise is on")
+	assert_gte(noise.short_game_max_yd, 110.0, "for chips up to 110 yd at least")
+	var m := _main_on(_strip(60, 4))
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	var cup := sc.field.tile_center(sc.cup_tile())
+	var perfect_holed := 0
+	var noisy_holed := 0
+	var off_centre := 0
+	var chips := 0
+	for d: float in range(80, 111, 2):
+		sc.place_ball(cup - Vector2(d, 0.0))
+		var perfect := ScriptedRound.plan(sc, false, ScriptedRound.ShortGameNoise.none())
+		var noisy := ScriptedRound.plan(sc)
+		assert_false(perfect.club.is_putter(), "%d yd: a full club" % d)
+		assert_eq(perfect.accuracy_offset, 0, "no noise, no offset")
+		assert_eq(noisy.club, perfect.club, "%d yd: the same club is meant" % d)
+		assert_eq(noisy.ticks, perfect.ticks, "%d yd: at the same power" % d)
+		assert_lte(absi(noisy.accuracy_offset), noise.accuracy_noise_ticks)
+		var live := ScriptedRound.predict(sc, noisy.club, noisy.aim_deg, noisy.ticks,
+				noisy.accuracy_offset)
+		assert_eq(noisy.prediction.rest, live.rest, "%d yd: the plan predicts its own swing" % d)
+		chips += 1
+		if perfect.prediction.holed:
+			perfect_holed += 1
+		if noisy.prediction.holed:
+			noisy_holed += 1
+		if noisy.accuracy_offset != 0:
+			off_centre += 1
+	print("chips %d: perfect holed %d, noisy holed %d, off centre %d" % [chips, perfect_holed,
+			noisy_holed, off_centre])
+	assert_gt(perfect_holed, chips / 2, "a perfect click holes most of these chips")
+	assert_lt(noisy_holed, chips / 4, "the noisy player holes few of them")
+	# Played out on the main scene, the live ball follows a noisy plan.
+	sc.place_ball(cup - Vector2(96.0, 0.0))
+	var plan := ScriptedRound.plan(sc)
+	ScriptedRound.swing(sc, plan)
+	_finish_shot(m)
+	var rest := m.shot_view.ball.position
+	assert_almost_eq(Vector2(rest.x, rest.y), Vector2(plan.prediction.rest.x, plan.prediction.rest.y),
+			Vector2(EPS_YD, EPS_YD), "the live ball rests where the plan said")
+
+
+func test_putts_hole_only_holds_for_noisy_chips_too() -> void:
+	# E6-S13 review: the noise is drawn after the centred plan passed over full-club strokes
+	# that hole, so a noisy chip could still hole. With putts_hole_only it never does.
+	var m := _main_on(_strip(60, 4))
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	var cup := sc.field.tile_center(sc.cup_tile())
+	var plans := 0
+	for strokes: int in [0, 1, 2, 4, 5]:
+		sc.strokes = strokes
+		for d: float in range(60, 121, 1):
+			sc.place_ball(cup - Vector2(d, 0.0))
+			var p := ScriptedRound.plan(sc, true)
+			if p == null or p.club.is_putter():
+				continue
+			plans += 1
+			assert_false(p.prediction.holed, "stroke %d, %d yd: no chip-in" % [strokes, d])
+			var live := ScriptedRound.predict(sc, p.club, p.aim_deg, p.ticks, p.accuracy_offset)
+			assert_eq(p.prediction.rest, live.rest, "stroke %d, %d yd: the plan is its swing" % [strokes, d])
+	assert_gt(plans, 100, "full-club plans were checked")
+
+
+func test_long_full_shots_and_putts_are_not_noisy() -> void:
+	var m := _main(PAR3_PATH)
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	var noise := ScriptedRound.ShortGameNoise.load_default()
+	var cup := sc.field.tile_center(sc.cup_tile())
+	assert_gt(sc.ball_at.distance_to(cup), noise.short_game_max_yd, "the tee shot is a long one")
+	assert_eq(ScriptedRound.plan(sc).accuracy_offset, 0, "the tee shot is struck perfectly")
+	var green := _main_on(_strip(60, 4))
+	green.set_mode(Main.Mode.PLAY)
+	var gs := green.swing_control
+	gs.place_ball(gs.field.tile_center(gs.cup_tile()) - Vector2(12.0, 0.0))
+	var putt := ScriptedRound.plan(gs)
+	assert_true(putt.club.is_putter(), "on the green")
+	assert_eq(putt.accuracy_offset, 0, "a putt is struck perfectly")
 
 
 func test_the_ball_is_picked_up_at_double_par() -> void:
