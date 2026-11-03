@@ -1,7 +1,8 @@
 class_name SurfaceRow
 extends Resource
 ## One row of the surface table (course/surfaces.tres): how a surface treats the ball.
-## Tuned with /balance surfaces. Lie distance and tile cost join this row in E2-S5 and E4.
+## Tuned with /balance surfaces. Lie distance is not here: it lives in golf/lies.tres with the
+## other lie numbers (E2-S5). Tile cost joins this row in E4.
 
 ## Lowercase surface name, as Surface.NAMES. The table checks rows are in enum order.
 @export var name: String = ""
@@ -41,3 +42,6 @@ extends Resource
 ## Bounce direction is turned by a random angle up to this many degrees either way,
 ## drawn from the ball's own seeded generator.
 @export var scatter_deg: float = 0.0
+## Height above the ground (yards) below which a flight over this surface is blocked and
+## scattered (E2-S6, D15). Read on the trees row only; 0 blocks nothing.
+@export var block_height: float = 0.0

@@ -206,11 +206,11 @@ func _hold(params: BallParams, row: SurfaceRow) -> float:
 func test_slope_pull_beats_rest_friction() -> void:
 	# A design guard: off the green, the one-step pull must beat the constant friction that
 	# holds a still ball on every rolling surface, or balls never start down a slope. The
-	# green holds a ball on a gentle slope by design (D7, next test).
+	# green holds a ball on a gentle slope by design (D7, next test). Trees have roll 0 since
+	# E2-S6: no ball rolls on them, it stops at their edge (D15).
 	var params := BallParams.load_default()
 	var table := SurfaceTable.load_default()
-	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.TEE,
-			Surface.Type.TREES, Surface.Type.CART_PATH]:
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.TEE, Surface.Type.CART_PATH]:
 		var row := table.row(s)
 		assert_gt(_step_pull(params, row, 1.0), _hold(params, row),
 				"a one-step slope moves a still ball on %s" % Surface.NAMES[s])

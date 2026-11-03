@@ -61,11 +61,11 @@ scatter_deg = 0.0
 [sub_resource type="Resource" id="Resource_3v5xk"]
 script = ExtResource("1_n812f")
 name = "trees"
-roll = 0.6
-drag_full_speed = 12.0
-bounce = 0.15
-bounce_friction = 0.6
-scatter_deg = 8.0
+roll = 0.0
+bounce = 0.0
+bounce_friction = 1.0
+scatter_deg = 0.0
+block_height = 10.0
 
 [sub_resource type="Resource" id="Resource_q3epg"]
 script = ExtResource("1_n812f")

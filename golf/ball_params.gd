@@ -27,6 +27,21 @@ const DEFAULT_PATH := "res://golf/ball_params.tres"
 ## Safety cap: a ball still moving after this many ticks is put at rest (60 s at 60 Hz).
 @export var max_steps: int = 3600
 
+@export_group("Cup and hazards")
+## The cup captures a ball whose centre is this close to the cup's centre (yards), at the
+## end of a rolling tick (D15, E2-S6). Larger than a real cup (0.06 yd) so a putt can be
+## aimed at a 5 yd tile with the swing's aim step.
+@export var cup_radius: float = 0.25
+## The fastest ground speed (yd/s) the cup still captures. Faster balls roll over it.
+@export var cup_capture_speed: float = 2.0
+## Tree scatter distance from the blocked point, yards (D15: 1 to 2 tiles).
+@export var tree_scatter_min_yd: float = 5.0
+@export var tree_scatter_max_yd: float = 10.0
+## Tree scatter direction: within this many degrees either way of the reversed heading.
+@export var tree_scatter_cone_deg: float = 90.0
+## Tree scatter draws before falling back to the nearest open tile centre (D15: 8).
+@export var tree_scatter_draws: int = 8
+
 
 static func load_default() -> BallParams:
 	return load(DEFAULT_PATH) as BallParams

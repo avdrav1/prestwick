@@ -9,9 +9,17 @@ extends RefCounted
 ## at most one bounce, by surface -> ROLLING along the ground with slope and surface
 ## friction -> AT_REST. Randomness (bounce scatter) comes only from this ball's own
 ## generator, so the same seed and inputs give the same result bit for bit.
-## Hazards (water, trees, OB penalties) are E2-S6; for now they are rows in the table.
+##
+## Cup and hazards (D15, E2-S6; docs/design.md Ball, Cup and hazards): the cup (set_cup)
+## captures a slow ball at the end of a rolling tick. A ball that stops on water or OB
+## (an `oob` tile or off the map) is dropped, at rest, with one penalty stroke, and reports
+## it (penalty_strokes, hazard, entry_point, drop_point). A flight lower than the trees row's
+## block_height over trees is scattered back toward the start; a rolling ball stops at the
+## edge of trees. A ball never rests on water, OB or inside trees.
 
 enum State { READY, FLYING, ROLLING, AT_REST }
+## Which hazard dropped the ball (D15). OB is an `oob` tile or off the map.
+enum Hazard { NONE, WATER, OB }
 
 const TICK_HZ: int = 60
 const DT: float = 1.0 / TICK_HZ
@@ -19,6 +27,10 @@ const DT: float = 1.0 / TICK_HZ
 const MAX_BOUNCES: int = 1
 ## Bisection steps that find the touchdown point inside a tick (1/4096 of a tick).
 const CONTACT_ITERATIONS: int = 12
+## Bisection steps that find a hazard's entry point between two track points.
+const ENTRY_ITERATIONS: int = 16
+## No cup set (set_cup): nothing captures the ball.
+const NO_CUP: Vector2i = Vector2i(-1, -1)
 
 var params: BallParams
 var surfaces: SurfaceTable
@@ -39,8 +51,31 @@ var path: PackedVector3Array = PackedVector3Array()
 ## The club's roll factor (D14, golf/clubs.tres): multiplies the ground speed kept after the
 ## first touchdown, after the surface's bounce friction. 1.0 changes nothing. Set before launch.
 var roll_factor: float = 1.0
+## The cup's tile (D15: it sits at the tile's centre), or NO_CUP. Set before launch; a new
+## stroke keeps it.
+var cup_tile: Vector2i = NO_CUP
+
+## True once the cup captured the ball; it then rests at the cup's centre.
+var holed: bool = false
+## 1 when the ball stopped on water or OB and was dropped (D15), else 0.
+var penalty_strokes: int = 0
+var hazard: Hazard = Hazard.NONE
+## Where the ground track last crossed into the hazard it stopped in, yards (x, y).
+var entry_point: Vector2 = Vector2.ZERO
+## Where the ball was dropped, at rest, yards. Equal to `position` after a drop.
+var drop_point: Vector3 = Vector3.ZERO
+## Where the ball stopped in the hazard before the drop, yards. `path` ends here.
+var hazard_position: Vector3 = Vector3.ZERO
+## True once a flight was blocked by trees and scattered (D15).
+var scattered: bool = false
+## Where the flight was blocked, yards.
+var scatter_from: Vector3 = Vector3.ZERO
 
 var _rng := RandomNumberGenerator.new()
+## The stroke's start, yards (the drop of last resort, D15).
+var _start: Vector3 = Vector3.ZERO
+## The ground track (x and y of every tick, flight and roll alike), walked back for a drop.
+var _track: PackedVector2Array = PackedVector2Array()
 
 
 ## `params` and `surfaces` default to golf/ball_params.tres and course/surfaces.tres.
@@ -82,8 +117,30 @@ func is_at_rest() -> bool:
 	return state == State.AT_REST
 
 
+## Puts the cup on `tile` (at its centre), or takes it away with NO_CUP.
+func set_cup(tile: Vector2i) -> void:
+	cup_tile = tile
+
+
+func has_cup() -> bool:
+	return cup_tile != NO_CUP
+
+
+## Centre of the cup, yards.
+func cup_center() -> Vector2:
+	return field.tile_center(cup_tile)
+
+
+## True when a ball at ground point `at` moving at `ground_speed` yd/s is captured: within
+## cup_radius of the cup's centre and no faster than cup_capture_speed, both included (D15).
+func captures(at: Vector2, ground_speed: float) -> bool:
+	return has_cup() and at.distance_to(cup_center()) <= params.cup_radius \
+			and ground_speed <= params.cup_capture_speed
+
+
 ## One 1/60 s tick. Does nothing before launch or at rest.
 func step() -> void:
+	var rolling := state == State.ROLLING
 	match state:
 		State.FLYING:
 			_step_flight()
@@ -94,8 +151,16 @@ func step() -> void:
 	steps += 1
 	if state != State.AT_REST and steps >= params.max_steps:
 		_rest()
+	# The cup checks at the end of every rolling tick, never at touchdown (D15). A drop never
+	# captures (and never lands on the cup's tile, so the next stroke cannot be a free tap-in).
+	if rolling and penalty_strokes == 0 and not holed \
+			and captures(Vector2(position.x, position.y), Vector2(velocity.x, velocity.y).length()):
+		_hole()
+	# The track and the path end where the ball stopped in a hazard, not at the drop.
+	var shown := hazard_position if penalty_strokes > 0 else position
+	_track.append(Vector2(shown.x, shown.y))
 	if record_path:
-		path.append(position)
+		path.append(shown)
 
 
 ## Steps until the ball is at rest. Returns the number of ticks this call took.
@@ -115,6 +180,16 @@ func _reset(start: Vector3) -> void:
 	bounces = 0
 	has_landed = false
 	landing_position = Vector3.ZERO
+	holed = false
+	penalty_strokes = 0
+	hazard = Hazard.NONE
+	entry_point = Vector2.ZERO
+	drop_point = Vector3.ZERO
+	hazard_position = Vector3.ZERO
+	scattered = false
+	scatter_from = Vector3.ZERO
+	_start = position
+	_track = PackedVector2Array([Vector2(position.x, position.y)])
 	path = PackedVector3Array()
 	if record_path:
 		path.append(position)
@@ -141,6 +216,8 @@ func _step_flight() -> void:
 		lo = 0.5
 		hi = 1.0
 	if hi < 0.0:
+		if _blocked_in(1.0):
+			return
 		position = _flight_at(1.0)
 		velocity.z -= params.gravity * DT
 		return
@@ -150,9 +227,111 @@ func _step_flight() -> void:
 			hi = mid
 		else:
 			lo = mid
+	# Trees block a flight before it reaches their ground.
+	if _blocked_in(hi):
+		return
 	var hit := _flight_at(hi)
 	var hit_velocity := velocity + Vector3(0.0, 0.0, -params.gravity * hi * DT)
 	_touch_down(Vector3(hit.x, hit.y, field.height_at(hit.x, hit.y)), hit_velocity)
+
+
+## True when trees block the flight within the first `t` of this tick (checked at its
+## middle and at `t`), after scattering it. A tile is 5 yd and a tick moves the ball at most
+## about 1.3 yd, so a flight cannot cross a tree tile between checks.
+func _blocked_in(t: float) -> bool:
+	for at: float in [t * 0.5, t]:
+		var p := _flight_at(at)
+		if _blocks(p):
+			_scatter(p, velocity + Vector3(0.0, 0.0, -params.gravity * at * DT))
+			return true
+	return false
+
+
+## True when a flight at `p` is inside trees: over a tree tile, lower than the trees row's
+## block_height above that tile's top (its whole height, as drawn, not the bilinear ground,
+## which leans up toward a higher neighbour), or meeting its ground.
+func _blocks(p: Vector3) -> bool:
+	if field.surface_at(p.x, p.y) != Surface.Type.TREES:
+		return false
+	var row := surfaces.row(Surface.Type.TREES)
+	if row.block_height <= 0.0:
+		return false
+	var t := field.tile_at(p.x, p.y)
+	var top := field.course.get_height(t.x, t.y) * field.yards_per_step
+	return p.z < top + row.block_height or _below(p)
+
+
+## Tree scatter (D15): from the blocked point `from`, a target 1 to 2 tiles back toward the
+## start (within tree_scatter_cone_deg of the reversed heading), drawn from the ball's own
+## generator and redrawn off trees, water and OB up to tree_scatter_draws times; failing
+## that, the nearest open tile centre. The ball comes down there with no speed, a still ball.
+func _scatter(from: Vector3, v: Vector3) -> void:
+	scattered = true
+	scatter_from = from
+	var here := Vector2(from.x, from.y)
+	var back := -Vector2(v.x, v.y)
+	if back.length_squared() < 1e-8:
+		back = Vector2(_start.x, _start.y) - here
+	if back.length_squared() < 1e-8:
+		back = Vector2.LEFT
+	var base := back.angle()
+	var target := Vector2.ZERO
+	var found := false
+	for i in params.tree_scatter_draws:
+		var d := _rng.randf_range(params.tree_scatter_min_yd, params.tree_scatter_max_yd)
+		var turn := deg_to_rad(_rng.randf_range(-params.tree_scatter_cone_deg,
+				params.tree_scatter_cone_deg))
+		var q := here + Vector2.from_angle(base + turn) * d
+		if may_rest_on(field.tile_at(q.x, q.y)):
+			target = q
+			found = true
+			break
+	if not found:
+		target = _nearest_open(here)
+	position = Vector3(target.x, target.y, field.height_at(target.x, target.y))
+	velocity = Vector3.ZERO
+	if not has_landed:
+		has_landed = true
+		landing_position = position
+	state = State.ROLLING
+
+
+## True when a ball may come to rest on `tile`: on the map, and not water, `oob` or trees.
+func may_rest_on(tile: Vector2i) -> bool:
+	if not field.course.in_bounds(tile.x, tile.y):
+		return false
+	var s := field.course.get_surface(tile.x, tile.y)
+	return s != Surface.Type.WATER and s != Surface.Type.OOB and s != Surface.Type.TREES
+
+
+## True when the game may place a ball at rest on `tile`'s centre: it may rest there and
+## it is not the cup's tile. The cup sits at its tile's centre, so a ball placed there (a
+## drop, or a move off trees) would be holed by any tap on the next stroke (D15).
+func may_place_on(tile: Vector2i) -> bool:
+	return may_rest_on(tile) and tile != cup_tile
+
+
+## The nearest tile centre the game may place a ball on (may_place_on), searched ring by
+## ring outward from the tile under `at` (yards): in the first ring that has one, the
+## centre nearest `at`, ties in row-major order. The stroke's start if the map has none.
+func _nearest_open(at: Vector2) -> Vector2:
+	var c := field.tile_at(at.x, at.y)
+	var rings := maxi(field.course.width, field.course.height)
+	for r in rings + 1:
+		var best := Vector2.ZERO
+		var best_d := INF
+		for j in range(c.y - r, c.y + r + 1):
+			for i in range(c.x - r, c.x + r + 1):
+				if maxi(absi(i - c.x), absi(j - c.y)) != r or not may_place_on(Vector2i(i, j)):
+					continue
+				var centre := field.tile_center(Vector2i(i, j))
+				var d := centre.distance_squared_to(at)
+				if d < best_d:
+					best_d = d
+					best = centre
+		if best_d < INF:
+			return best
+	return Vector2(_start.x, _start.y)
 
 
 func _touch_down(at: Vector3, v: Vector3) -> void:
@@ -254,6 +433,11 @@ func _step_roll() -> void:
 			v *= keep
 	var x := position.x + v.x * DT
 	var y := position.y + v.y * DT
+	# A rolling ball stops where it is at the edge of trees, as if against the trunks (D15).
+	if field.surface_at(x, y) == Surface.Type.TREES \
+			and field.surface_at(position.x, position.y) != Surface.Type.TREES:
+		_rest()
+		return
 	# A stopped axis sits exactly on the low point's line (a tile centre), where the slope
 	# along it is the mean of both sides (E2-S4 review): so a ball running down a gully's floor
 	# feels the floor's own pull, not one wall's trim of it.
@@ -348,6 +532,74 @@ static func _meet_axis(v: float, from: float, to: float) -> float:
 	return v * clampf((1.0 + from * to) / (1.0 + to * to), 0.0, 1.0)
 
 
+## Every way to rest comes here, so a ball never rests on water, OB or inside trees (D15).
 func _rest() -> void:
+	velocity = Vector3.ZERO
+	state = State.AT_REST
+	var h := hazard_at(Vector2(position.x, position.y))
+	if h != Hazard.NONE:
+		_drop(h)
+	elif field.surface_at(position.x, position.y) == Surface.Type.TREES:
+		# Only when trees block nothing (block_height 0) can a ball reach their ground.
+		var open := _nearest_open(Vector2(position.x, position.y))
+		position = Vector3(open.x, open.y, field.height_at(open.x, open.y))
+
+
+## The hazard under ground point `at`: water, OB (an `oob` tile or off the map), or none.
+func hazard_at(at: Vector2) -> Hazard:
+	match field.surface_at(at.x, at.y):
+		Surface.Type.WATER:
+			return Hazard.WATER
+		Surface.Type.OOB:
+			return Hazard.OB
+	return Hazard.NONE
+
+
+## Water and OB (D15): walk the ground track back to where it last crossed into hazard `h`
+## (the entry point), then drop the ball at rest on the centre of the tile the track was
+## over just before it, or further back past water, OB, trees and the cup's tile, else at the
+## stroke's start.
+## One penalty stroke.
+func _drop(h: Hazard) -> void:
+	hazard = h
+	penalty_strokes = 1
+	hazard_position = position
+	var track := _track.duplicate()
+	track.append(Vector2(position.x, position.y))
+	var drop := Vector2(_start.x, _start.y)
+	var i := track.size() - 2
+	while i >= 0 and not (hazard_at(track[i]) != h and hazard_at(track[i + 1]) == h):
+		i -= 1
+	if i >= 0:
+		var lo := track[i]
+		var hi := track[i + 1]
+		for k in ENTRY_ITERATIONS:
+			var mid := (lo + hi) * 0.5
+			if hazard_at(mid) == h:
+				hi = mid
+			else:
+				lo = mid
+		entry_point = hi
+		# The tile just before the entry point, then each earlier track point's tile.
+		var tiles: Array[Vector2i] = [field.tile_at(lo.x, lo.y)]
+		for k in range(i, -1, -1):
+			tiles.append(field.tile_at(track[k].x, track[k].y))
+		for t in tiles:
+			if may_place_on(t):
+				drop = field.tile_center(t)
+				break
+	else:
+		entry_point = Vector2(position.x, position.y)
+	position = Vector3(drop.x, drop.y, field.height_at(drop.x, drop.y))
+	drop_point = position
+	velocity = Vector3.ZERO
+	state = State.AT_REST
+
+
+## The cup captured the ball: it rests at the cup's centre.
+func _hole() -> void:
+	holed = true
+	var c := cup_center()
+	position = Vector3(c.x, c.y, field.height_at(c.x, c.y))
 	velocity = Vector3.ZERO
 	state = State.AT_REST
