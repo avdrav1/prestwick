@@ -85,6 +85,14 @@ func _ready() -> void:
 	row.add_child(undo_button)
 
 
+## Shows or hides Buy land (E6-S6: hidden in New sandbox, where every parcel is owned). Hiding
+## it while it is the selected tool steps the tool back to painting its surface.
+func set_buying(on: bool) -> void:
+	buy_button.visible = on
+	if not on and _tool != null and _tool.tool == BuildTool.Tool.BUY:
+		_tool.select_surface(_tool.surface)
+
+
 ## Drives `tool` from now on and shows its current settings.
 func bind(tool: BuildTool) -> void:
 	_tool = tool

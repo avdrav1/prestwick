@@ -63,13 +63,16 @@ func test_new_sandbox_button_starts_the_plot_and_hides_in_play() -> void:
 	assert_false(m.new_sandbox_button.visible, "Build only")
 
 
-func test_main_starts_on_the_blank_plot() -> void:
-	# E2-S8: the main scene starts on the D10 plot, as New sandbox makes it.
+func test_main_starts_on_a_new_course_not_the_blank_plot() -> void:
+	# E2-S8 started on the D10 plot; from E6-S6 the main scene starts on a New course
+	# (tests/test_new_course.gd), and the plot is New sandbox's.
 	var m := MAIN_SCENE.instantiate() as Main
+	m.start_seed = 3
 	assert_eq(m.course_path, "", "no startup course file")
 	add_child_autofree(m)
 	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(128, 128))
-	assert_eq(m.course.content_hash(), CourseBuilder.new_sandbox().content_hash(), "the blank plot")
+	assert_eq(m.course.content_hash(), CourseBuilder.new_course(3).content_hash(), "generated land")
+	assert_ne(m.course.content_hash(), CourseBuilder.new_sandbox().content_hash(), "not the blank plot")
 
 
 # --- tee, cup and par ---

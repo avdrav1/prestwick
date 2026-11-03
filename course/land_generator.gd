@@ -57,7 +57,7 @@ static func generate(land_seed: int, tuning: LandTuning = null, errors: Array[St
 		"thumbnail": "",
 		# Every parcel owned, no budget: the format version 2 fields (E6-S3), which version 1
 		# from_dict ignores. Ownership of a new course (the starting block, the $5,000 budget)
-		# is the builder's to set (E6-S5), not the land's.
+		# is the builder's to set (CourseBuilder.new_course, E6-S6), not the land's.
 		"owned": _all_owned_rows(run.w, run.h),
 		"land_budget": null,
 	}

@@ -68,20 +68,29 @@ offset_bottom = 80.0
 tooltip_text = "Switch between building the hole and playing it"
 text = "Play hole (Tab)"
 
-[node name="NewSandboxButton" type="Button" parent="HUD"]
+[node name="NewCourseButton" type="Button" parent="HUD"]
 focus_mode = 0
 offset_left = 16.0
 offset_top = 88.0
 offset_right = 196.0
 offset_bottom = 120.0
-tooltip_text = "Start a new course on a blank 128 x 128 plot"
+tooltip_text = "Start a new course on generated land: own the starting block, buy the rest"
+text = "New course"
+
+[node name="NewSandboxButton" type="Button" parent="HUD"]
+focus_mode = 0
+offset_left = 16.0
+offset_top = 128.0
+offset_right = 196.0
+offset_bottom = 160.0
+tooltip_text = "Start a sandbox on a blank 128 x 128 plot: all land owned, no budget"
 text = "New sandbox"
 
 [node name="LandPanel" type="PanelContainer" parent="HUD"]
 offset_left = 16.0
-offset_top = 128.0
+offset_top = 168.0
 offset_right = 196.0
-offset_bottom = 128.0
+offset_bottom = 168.0
 script = ExtResource("13_land_panel")
 
 [node name="HolePanel" type="PanelContainer" parent="HUD"]

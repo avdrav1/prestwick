@@ -19,6 +19,7 @@ var _panel: LandPanel
 
 func before_each() -> void:
 	_main = MAIN_SCENE.instantiate() as Main
+	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(_main)
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	for q: int in c.parcels_high:

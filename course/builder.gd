@@ -129,6 +129,23 @@ static func new_sandbox(p_tuning: BuilderTuning = null) -> CourseData:
 	return CourseData.create(t.plot_size.x, t.plot_size.y, t.plot_surface, t.plot_ground)
 
 
+## A New course (E6-S6, D19, D26, D28): the generated land of `land_seed` (LandGenerator),
+## owning only the starting block (LandGenerator.start_block, free) with the land budget
+## from data/land.json (LandPrices.land_budget). No holes. A fresh course, as new_sandbox
+## makes one; hand it to a new builder. The same seed gives the same course.
+static func new_course(land_seed: int, p_prices: LandPrices = null,
+		p_land: LandTuning = null) -> CourseData:
+	var lp: LandPrices = p_prices if p_prices != null else LandPrices.load_default()
+	var c: CourseData = LandGenerator.generate(land_seed, p_land)
+	var block: Rect2i = LandGenerator.start_block(c.width, c.height)
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			var parcel := Vector2i(p, q)
+			c.set_parcel_owned(parcel, block.encloses(c.parcel_rect(parcel)))
+	c.set_land_budget(maxi(lp.land_budget, 0))
+	return c
+
+
 # --- terrain ---
 
 ## In-bounds tiles under a brush of `size` centered on `center`.

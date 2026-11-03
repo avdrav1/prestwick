@@ -10,15 +10,20 @@ const TOGGLE_ACTION: StringName = &"toggle_mode"
 ## Fires the debug shot in Play, in debug builds only (E2-S8; F3).
 const DEBUG_SHOT_ACTION: StringName = &"debug_shot"
 
-## Course loaded at start (E2-S8). Empty, the default, starts on the D10 blank plot
-## (CourseBuilder.new_sandbox), as New sandbox does; a failed load warns and does the same.
+## Course loaded at start (E2-S8). Empty, the default, starts on a New course (E6-S6,
+## CourseBuilder.new_course: generated land, the starting block, the land budget); a failed
+## load warns and does the same.
 @export_file("*.json") var course_path: String = ""
+## The land seed of the New course the game starts on. -1, the default, picks one at random.
+@export var start_seed: int = -1
 ## The fixed shot the debug key fires (E1-S7, E2-S8). Null loads golf/debug_shot.tres.
 @export var debug_shot: DebugShot
 
 var mode: Mode = Mode.BUILD
 ## The course being built and played. Only course/builder.gd and course/save.gd write it.
 var course: CourseData
+## The seed of the latest New course's land (new_course), so it can be made again.
+var land_seed: int = -1
 
 @onready var mode_label: Label = $HUD/ModeLabel
 @onready var course_view: CourseView = $CourseView
@@ -29,6 +34,7 @@ var course: CourseData
 @onready var mode_button: Button = $HUD/ModeButton
 @onready var score_card: ScoreCard = $HUD/ScoreCard
 @onready var new_sandbox_button: Button = $HUD/NewSandboxButton
+@onready var new_course_button: Button = $HUD/NewCourseButton
 @onready var hole_panel: HolePanel = $HUD/HolePanel
 @onready var land_panel: LandPanel = $HUD/LandPanel
 @onready var swing_control: SwingControl = $SwingControl
@@ -41,6 +47,7 @@ func _ready() -> void:
 		debug_shot = DebugShot.load_default()
 	mode_button.pressed.connect(toggle_mode)
 	new_sandbox_button.pressed.connect(new_sandbox)
+	new_course_button.pressed.connect(func() -> void: new_course())
 	_refresh_label()
 	build_palette.bind(build_tool)
 	hole_panel.bind(build_tool)
@@ -57,11 +64,12 @@ func _ready() -> void:
 	var loaded: CourseData = null
 	if not course_path.is_empty():
 		loaded = CourseSave.load_file(course_path, errors)
-	if loaded == null:
-		if not errors.is_empty():
-			push_warning("main: %s" % "; ".join(errors))
-		loaded = CourseBuilder.new_sandbox()
-	show_course(loaded)
+	if loaded != null:
+		show_course(loaded)
+		return
+	if not errors.is_empty():
+		push_warning("main: %s" % "; ".join(errors))
+	new_course(start_seed)
 
 
 ## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
@@ -79,6 +87,9 @@ func show_course(c: CourseData) -> void:
 	builder.land_changed.connect(course_view.refresh_parcel)
 	build_tool.builder = builder
 	land_panel.watch(builder)
+	# New sandbox (and every version 1 file) has an unlimited budget and owns every parcel:
+	# nothing to buy, so the Buy land tool is hidden (E6-S6).
+	build_palette.set_buying(not c.has_unlimited_budget())
 	_on_checked(builder.issues)
 	if mode == Mode.PLAY:
 		_begin_play()
@@ -87,6 +98,14 @@ func show_course(c: CourseData) -> void:
 ## Starts a new course on the blank plot (D10, BuilderTuning), with a fresh builder.
 func new_sandbox() -> void:
 	show_course(CourseBuilder.new_sandbox())
+
+
+## Starts a New course (E6-S6, D19): the generated land of `seed_value` (-1 picks one at
+## random), owning only the starting block, with the full land budget and a fresh builder.
+## The camera frames the map's centre, where the block is (D26).
+func new_course(seed_value: int = -1) -> void:
+	land_seed = seed_value if seed_value >= 0 else randi() % 1000000
+	show_course(CourseBuilder.new_course(land_seed))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -131,12 +150,30 @@ func set_mode(new_mode: Mode) -> void:
 	mode_changed.emit(mode)
 
 
-## Puts the ball on hole 1's tee aimed at its cup (or on the debug shot's tile when the
-## course has no tee yet) for the swing (E2-S7), with a fresh score, and centres the camera
-## on it (E2-S8).
+## Puts the ball on hole 1's tee aimed at its cup (or, when the course has no tee yet, on
+## no_hole_tile) for the swing (E2-S7), with a fresh score, and centres the camera on it
+## (E2-S8).
 func _begin_play() -> void:
-	swing_control.begin(course, debug_shot.start_tile, debug_shot.heading_deg)
+	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg)
 	camera.centre_on(_ball_world(), true)
+
+
+## Where Play rests the ball on a course with no hole: the debug shot's tile when the player
+## owns it (New sandbox, the fixture courses); else the centre of the starting block (D26),
+## else the first owned tile, so the ball never starts out of bounds on unowned land (D29).
+func no_hole_tile() -> Vector2i:
+	var t: Vector2i = debug_shot.start_tile
+	if course.is_owned(t.x, t.y):
+		return t
+	var block := LandGenerator.start_block(course.width, course.height)
+	var centre: Vector2i = block.get_center()
+	if course.is_owned(centre.x, centre.y):
+		return centre
+	for y: int in course.height:
+		for x: int in course.width:
+			if course.is_owned(x, y):
+				return Vector2i(x, y)
+	return t
 
 
 ## The ball's drawn point in the camera's space.
@@ -169,7 +206,7 @@ func _on_came_to_rest(_at: Vector3) -> void:
 		camera.centre_on(_ball_world(), true)
 
 
-## The build tool, its palette, the hole and land panels, New sandbox and the issue highlights exist
+## The build tool, its palette, the hole and land panels, New course, New sandbox and the issue highlights exist
 ## only in Build mode. Play never waits for the validator (pillar 1): a hole that fails a rule
 ## is still played; the rules only decide whether guests may play it (Open).
 func _apply_mode() -> void:
@@ -181,6 +218,7 @@ func _apply_mode() -> void:
 	hole_panel.visible = building
 	land_panel.visible = building
 	new_sandbox_button.visible = building
+	new_course_button.visible = building
 	score_card.visible = not building
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building

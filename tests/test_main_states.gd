@@ -8,6 +8,9 @@ var _main: Main
 
 func before_each() -> void:
 	_main = MAIN_SCENE.instantiate() as Main
+	# A small course: these tests are about the states, not the land (E6-S6 starts the game
+	# on a generated New course, which takes longer to make and draw).
+	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(_main)
 
 
