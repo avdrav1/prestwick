@@ -1,5 +1,5 @@
 {
-  "_doc": "Land prices and the land budget in dollars (D28, docs/design.md Land), read by course/land_prices.gd. Provisional until E6-S8's /balance land.",
+  "_doc": "Land prices and the land budget in dollars (D28, docs/design.md Land), read by course/land_prices.gd. E6-S8's /balance land kept every number (docs/design.md Land, Measured; Balance targets, land).",
   "land_budget": 5000,
   "base_price": 1000,
   "relief_step_price": 100,

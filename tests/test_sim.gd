@@ -77,3 +77,51 @@ func test_a_missed_target_is_reported() -> void:
 	assert_eq(missed.size(), 1, "with k at 0 the uphill target misses")
 	var lines := BalanceSim.format(off.measure_lies(RUNS, SEED))
 	assert_string_contains(lines[0], "MISS")
+
+
+# --- land (E6-S8) ---
+
+func test_land_rows_hit_their_targets() -> void:
+	var rows := sim.measure_land(RUNS, SEED)
+	_assert_all_hit(rows, "land")
+	var both := _named(rows, "land: seeds with room for a par 3 and a par 4")
+	assert_false(both.is_empty(), "a row for the par 3 and par 4")
+	assert_eq(float(both.measured), 1.0, "on every seed")
+	var nine := _named(rows, "land: seeds with room for nine holes")
+	assert_false(nine.is_empty(), "a row for nine holes")
+	assert_eq(float(nine.measured), 0.0, "on no seed")
+	assert_false(_named(rows, "land: parcels at the price clamp").is_empty())
+
+
+func test_land_budget_buys_land_cheapest_first() -> void:
+	var c := CourseBuilder.new_course(SEED)
+	var budget: int = c.land_budget
+	var buy := BalanceSim.spend_budget(CourseBuilder.new(c))
+	assert_gt(buy.bought.size(), 0, "the budget buys at least one parcel")
+	var spent := 0
+	for price: int in buy.prices:
+		spent += price
+	assert_eq(spent + int(buy.left), budget, "the budget is spent on parcels only")
+	assert_lt(int(buy.left), int(buy.cheapest_left), "stops when the cheapest buyable parcel costs more than is left")
+
+
+func test_land_hole_room_reads_the_design_footprint() -> void:
+	# docs/design.md Land, hand calculation: a (L + 60) x 60 sq yd capsule per hole.
+	assert_almost_eq(BalanceSim.footprint_parcels(160.0), 2.06, 0.01, "a 160 yd par 3")
+	assert_almost_eq(BalanceSim.footprint_parcels(380.0), 4.13, 0.01, "a 380 yd par 4")
+	var nine := 0.0
+	for yd: float in BalanceSim.NINE_HOLES_YD:
+		nine += BalanceSim.footprint_parcels(yd)
+	assert_almost_eq(nine, 33.56, 0.01, "nine holes need about 34 parcels")
+
+
+func test_land_span_of_the_starting_block_is_219_yd() -> void:
+	var c := CourseBuilder.new_course(SEED)
+	assert_almost_eq(BalanceSim.owned_span_yd(c), 219.2, 0.1, "corner to corner of the 2 x 2 block")
+
+
+func test_a_missed_land_target_is_reported() -> void:
+	sim.land.land_budget = 500
+	var missed := BalanceSim.misses(sim.measure_land(RUNS, SEED))
+	assert_eq(missed.size(), 1, "$500 buys no parcel, so no par 4 fits")
+	assert_string_contains(String(missed[0].name), "par 4")

@@ -65,7 +65,7 @@ exit_leak_baseline() {
     ./tests/test_lies.gd) echo "10 8" ;;
     ./tests/test_ball.gd) echo "9 7" ;;
     ./tests/test_shot_view.gd) echo "6 4" ;;
-    ./tests/test_sim.gd) echo "107 36" ;;
+    ./tests/test_sim.gd) echo "108 37" ;;
     gut) echo "253 72" ;;
     *) echo "0 0" ;;
   esac

@@ -22,6 +22,10 @@ The smoke asserts only what the milestones shipped so far have built, so it can 
 
 The full bar (holed out, guest reaction, money changed) is the E4 smoke. Before E4 a passing smoke means every stage built so far passed, not that the full bar did.
 
+## Scripted sessions
+
+A scripted session drives the real main scene through one milestone's player flow and prints what happened; Claude writes the findings to `docs/playtests/` by hand. `scripts/land_playtest.gd` (E6-S8) starts a New course, buys two parcels with Buy land, builds a par 4 across them, plays it with the scripted player and sweeps the tee for D29's OB reading: `godot --headless --path . --fixed-fps 60 -s res://scripts/land_playtest.gd -- --seed 1`. It exits 0 only when every check passes. It is not part of the smoke.
+
 ## Full
 
 A guided session with the user at the keyboard. Claude drives the checklist, the user plays.
