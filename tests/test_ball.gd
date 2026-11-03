@@ -587,9 +587,11 @@ func test_green_touchdown_normal_tilt_is_scaled() -> void:
 # Each case asserts its ticks against GREEN_SETTLE or OFF_GREEN_SETTLE, counted from the
 # first touchdown, the set-down or the putt start (docs/design.md Ball, Settle targets).
 
-func _set_down(course: CourseData, at: Vector2, v: Vector2 = Vector2.ZERO) -> Ball:
+## A ball set down at `at` with velocity `v`, run to rest. `record` keeps its path, for the
+## tests that read `ball.path` (E6-S14: the sweeps do not, so they skip the allocations).
+func _set_down(course: CourseData, at: Vector2, v: Vector2 = Vector2.ZERO, record: bool = false) -> Ball:
 	var ball := Ball.new(course, 1)
-	ball.record_path = true
+	ball.record_path = record
 	ball.start_roll(at, v)
 	ball.run_to_rest()
 	return ball
@@ -623,7 +625,7 @@ func test_still_ball_on_a_pit_floor_line_rolls_straight_to_the_centre() -> void:
 	# E2-S4 (old E2-S10): on y = 12.5 the one-sided gradient pulled a ball along y. Now it
 	# runs along x only and rests at the centre.
 	for dx: float in [1.0, 1.5, 2.0, -1.0, -2.0]:
-		var ball := _set_down(_pit(Surface.Type.FAIRWAY), Vector2(12.5 + dx, 12.5))
+		var ball := _set_down(_pit(Surface.Type.FAIRWAY), Vector2(12.5 + dx, 12.5), Vector2.ZERO, true)
 		var off := 0.0
 		for p in ball.path:
 			off = maxf(off, absf(p.y - 12.5))
@@ -692,7 +694,7 @@ func test_roll_backs_on_steep_greens_settle_under_the_green_target() -> void:
 		var course := _steep_green(cfg.x, cfg.y)
 		var foot := cfg.y * 5.0 + 2.5
 		for speed: float in [4.0, 5.0, 6.0, 7.0]:
-			var ball := _set_down(course, Vector2(foot - 2.5, 100.0), Vector2(speed, 0.0))
+			var ball := _set_down(course, Vector2(foot - 2.5, 100.0), Vector2(speed, 0.0), true)
 			var furthest := 0.0
 			for p in ball.path:
 				furthest = maxf(furthest, p.x)
