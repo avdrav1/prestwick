@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="LandTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://course/land_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+map_size = Vector2i(128, 128)
+base_height = 2
+hill_count_min = 4
+hill_count_max = 8
+hill_peak_min = 2
+hill_peak_max = 5
+hill_radius_per_step_min = 5.0
+hill_radius_per_step_max = 8.0
+hill_lobes_max = 2
+hill_lobe_offset_min = 0.45
+hill_lobe_offset_max = 0.85
+hill_lobe_scale_min = 0.45
+hill_lobe_scale_max = 0.8
+high_ground_share = 0.15
+high_ground_level = 4
+hill_scale_min = 0.6
+hill_scale_max = 1.6
+tree_share = 0.12
+tree_stands_min = 15
+tree_stands_max = 35
+tree_stand_min_tiles = 20
+tree_stand_max_tiles = 200
+water_share = 0.04
+ponds_min = 4
+ponds_max = 10
+pond_min_tiles = 15
+pond_max_tiles = 120
+parcel_min_rough = 0.6
+start_block_min_rough = 0.85
