@@ -7,18 +7,20 @@ description: Tune a numeric table in Prestwick (clubs, surfaces, lies, reactions
 
 Argument: the table to tune. One of `clubs`, `surfaces`, `lies`, `reactions`, `economy`.
 
-## Targets (from docs/design.md)
+## Targets
 
-- clubs: driver carries 230 to 260 yd at 100% for a skill-10 golfer; each iron steps 10 to 12 yd; putter never leaves the green.
-- surfaces: rough costs 10 to 20% distance; a bunker shot with SW at 50% lands 20 to 40 yd.
-- lies: a 2-step uphill lie loses about one club; a sidehill lie curves 5 to 10 yd over 150 yd.
-- reactions: a fair par 4 played by a field of 50 guests, skills 1 to 10, gets 60 to 75% praise and under 15% complaints.
-- economy: a player who builds one hole per 2 days reaches 9 holes and 3 stars in 25 to 35 in-game days without going negative.
+The targets live in `docs/design.md` Balance targets, the one source of truth (D18). Read that section before tuning; do not copy its lines here. Each table's numbers live in one resource:
+
+- clubs: `golf/clubs.tres`
+- lies: `golf/lies.tres`
+- surfaces: `course/surfaces.tres`
+- reactions: `guests/reactions.tres` (E3)
+- economy: `data/economy.json` (E4)
 
 ## Steps
 
-1. Read the table's resource (`golf/clubs.tres`, `course/surfaces.tres`, `guests/reactions.tres`, `data/economy.json`).
-2. Run `scripts/sim.gd --table <name> --runs 200`. It prints the measured values next to the targets.
+1. Read the table's targets in `docs/design.md` Balance targets and its resource from the list above.
+2. Run `godot --headless --path . -s res://scripts/sim.gd -- --table <name> --runs 200 --seed 1` (tables built so far: clubs, lies, surfaces). It prints the measured values next to the targets and exits 1 on a miss.
 3. Propose the smallest change that moves the measured value into range. One or two numbers, not a rewrite.
 4. Apply, rerun, show before and after in a short table.
 5. Update the matching line in `docs/design.md` if the target itself changed, and say why.
