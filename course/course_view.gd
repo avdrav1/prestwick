@@ -35,11 +35,28 @@ extends Node2D
 ## issue_box_max_side, and past both it collapses to its badge (E2-S17). A
 ## leader foot covered by a tile in front draws dashed and faded (IssueMarker.foot_hidden).
 ## Main shows them in Build only.
+##
+## Unowned land (E6-S5, D26, art/specs/land.md): every top, riser and edge cue of a tile on a
+## parcel the player does not own draws through the DIM_ALT alternative tile, modulated by
+## BuilderTuning.unowned_tint (the shade), and one Land layer per height lays the land sheet's
+## hatch and parcel lines over its top (the pattern; land_frame), at the top's sort key and
+## after the cue layers, so it draws over the top and cue and a hill in front hides it. Fully
+## owned land (New sandbox, every older file) draws exactly as before. Shown in Build and Play:
+## the line is the OB boundary (D29). refresh_parcel redraws a parcel after a purchase or its
+## undo.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
 const RISER_SOURCE: int = 1
 const EDGE_SOURCE: int = 2
+const LAND_SOURCE: int = 3
+## The alternative tile id of every surface, riser and edge frame drawn on unowned land.
+const DIM_ALT: int = 1
+## land_frame bits: the tile's edge toward x - 1, y - 1, x + 1, y + 1 lies on a parcel edge.
+const LAND_EDGE_W: int = 1
+const LAND_EDGE_N: int = 2
+const LAND_EDGE_E: int = 4
+const LAND_EDGE_S: int = 8
 ## Rises of this many steps or more share one cue (two lines). Matches the art's frame names.
 const EDGE_MAX_STEPS: int = 2
 ## Screen px left between two issue text boxes when one is pushed up past the other.
@@ -55,6 +72,7 @@ var _tile_set: TileSet
 var _tops: Array[TileMapLayer] = []
 var _risers: Array[TileMapLayer] = []
 var _edges: Array[TileMapLayer] = []
+var _lands: Array[TileMapLayer] = []
 var _riser_atlas: Dictionary = {}
 var _edge_atlas: Dictionary = {}
 var _holes_root: Node2D
@@ -82,7 +100,7 @@ func _init() -> void:
 	issue_max_stack = tuning.issue_box_max_stack
 	issue_max_side = tuning.issue_box_max_side
 	_art = TileArt.load_default()
-	_tile_set = _make_tile_set(_art)
+	_tile_set = _make_tile_set(_art, tuning.unowned_tint)
 	for k: int in CourseData.MAX_HEIGHT + 1:
 		if k < CourseData.MAX_HEIGHT:
 			_risers.append(_make_layer("Risers%d" % k, k, Iso.riser_sort_key(Vector2i.ZERO, k)))
@@ -91,6 +109,9 @@ func _init() -> void:
 	var edge_shift: int = _art.edges.anchor.y - _art.edges.frame_size.y / 2
 	for k: int in CourseData.MAX_HEIGHT + 1:
 		_edges.append(_make_layer("Edges%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k), edge_shift))
+	# After every cue, so the hatch and parcel lines draw over their own top and cue.
+	for k: int in CourseData.MAX_HEIGHT + 1:
+		_lands.append(_make_layer("Land%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k)))
 	_holes_root = Node2D.new()
 	_holes_root.name = "Holes"
 	_holes_root.y_sort_enabled = true
@@ -108,7 +129,7 @@ func _init() -> void:
 ## Draws `c` from scratch. Pass null to clear.
 func show_course(c: CourseData) -> void:
 	_course = c
-	for layer: TileMapLayer in _tops + _risers + _edges:
+	for layer: TileMapLayer in _tops + _risers + _edges + _lands:
 		layer.clear()
 	if c != null:
 		for y: int in c.height:
@@ -305,6 +326,18 @@ func refresh_cell(cell: Vector2i) -> void:
 			m.foot_hidden = IssueMarker.covered(_course, m.cell)
 
 
+## Redraws every tile of parcel `parcel` after it was bought or a purchase was undone (the
+## builder's land_changed). Its tiles change shade and overlay; no neighbour's does, since a
+## parcel line depends only on where the parcels meet.
+func refresh_parcel(parcel: Vector2i) -> void:
+	if _course == null:
+		return
+	var r: Rect2i = _course.parcel_rect(parcel)
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			_draw_cell(Vector2i(x, y))
+
+
 ## The layer holding surface tops at height `h`.
 func top_layer(h: int) -> TileMapLayer:
 	return _tops[h]
@@ -318,6 +351,11 @@ func riser_layer(k: int) -> TileMapLayer:
 ## The layer holding edge cues on tiles at height `h`.
 func edge_layer(h: int) -> TileMapLayer:
 	return _edges[h]
+
+
+## The layer holding the unowned-land hatch and parcel lines on tiles at height `h`.
+func land_layer(h: int) -> TileMapLayer:
+	return _lands[h]
 
 
 ## Screen rectangle (local to this node) covering every tile at every height.
@@ -366,6 +404,25 @@ static func edge_cue_frame(c: CourseData, x: int, y: int) -> StringName:
 	return StringName(frame)
 
 
+## Which land frame tile (x, y) shows: -1 on an owned tile, else the mask of its edges that
+## lie on a parcel edge (LAND_EDGE_W toward x - 1, _N y - 1, _E x + 1, _S y + 1), the map
+## border included, which is also the frame's index in the land sheet (art/specs/land.md).
+static func land_frame(c: CourseData, x: int, y: int) -> int:
+	if c.is_owned(x, y):
+		return -1
+	var p: Vector2i = c.parcel_of(x, y)
+	var mask: int = 0
+	if c.parcel_of(x - 1, y) != p or not c.in_bounds(x - 1, y):
+		mask |= LAND_EDGE_W
+	if c.parcel_of(x, y - 1) != p or not c.in_bounds(x, y - 1):
+		mask |= LAND_EDGE_N
+	if c.parcel_of(x + 1, y) != p or not c.in_bounds(x + 1, y):
+		mask |= LAND_EDGE_E
+	if c.parcel_of(x, y + 1) != p or not c.in_bounds(x, y + 1):
+		mask |= LAND_EDGE_S
+	return mask
+
+
 static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
 	if not c.in_bounds(x, y):
 		return 0
@@ -374,9 +431,11 @@ static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
 
 func _draw_cell(cell: Vector2i) -> void:
 	var h: int = _course.get_height(cell.x, cell.y)
+	var land: int = land_frame(_course, cell.x, cell.y)
+	var alt: int = 0 if land < 0 else DIM_ALT
 	for layer_h: int in _tops.size():
 		if layer_h == h:
-			_tops[layer_h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0))
+			_tops[layer_h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0), alt)
 		else:
 			_tops[layer_h].erase_cell(cell)
 	for k: int in _risers.size():
@@ -384,13 +443,18 @@ func _draw_cell(cell: Vector2i) -> void:
 		if frame.is_empty():
 			_risers[k].erase_cell(cell)
 		else:
-			_risers[k].set_cell(cell, RISER_SOURCE, _riser_atlas[frame])
+			_risers[k].set_cell(cell, RISER_SOURCE, _riser_atlas[frame], alt)
 	var cue: StringName = edge_cue_frame(_course, cell.x, cell.y)
 	for layer_h: int in _edges.size():
 		if layer_h == h and not cue.is_empty():
-			_edges[layer_h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue])
+			_edges[layer_h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue], alt)
 		else:
 			_edges[layer_h].erase_cell(cell)
+	for layer_h: int in _lands.size():
+		if layer_h == h and land >= 0:
+			_lands[layer_h].set_cell(cell, LAND_SOURCE, Vector2i(land, 0))
+		else:
+			_lands[layer_h].erase_cell(cell)
 
 
 ## `shift` moves the layer up by that many pixels and its sort origin down by as many, for a
@@ -408,22 +472,29 @@ func _make_layer(layer_name: String, h: int, bias: int, shift: int = 0) -> TileM
 	return layer
 
 
-static func _make_tile_set(art: TileArt) -> TileSet:
+## `tint` is the modulate of the DIM_ALT alternative of every surface, riser and edge frame.
+static func _make_tile_set(art: TileArt, tint: Color) -> TileSet:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
 	ts.tile_size = Vector2i(Iso.TILE_W, Iso.TILE_H)
-	ts.add_source(_make_source(art.surfaces), SURFACE_SOURCE)
-	ts.add_source(_make_source(art.risers), RISER_SOURCE)
-	ts.add_source(_make_source(art.edges), EDGE_SOURCE)
+	ts.add_source(_make_source(art.surfaces, tint), SURFACE_SOURCE)
+	ts.add_source(_make_source(art.risers, tint), RISER_SOURCE)
+	ts.add_source(_make_source(art.edges, tint), EDGE_SOURCE)
+	ts.add_source(_make_source(art.land), LAND_SOURCE)
 	return ts
 
 
-static func _make_source(sheet: TileSheet) -> TileSetAtlasSource:
+## One atlas source per sheet, a tile per frame; with a `tint`, each frame also gets the
+## DIM_ALT alternative modulated by it.
+static func _make_source(sheet: TileSheet, tint: Variant = null) -> TileSetAtlasSource:
 	var src := TileSetAtlasSource.new()
 	src.texture = sheet.texture
 	src.texture_region_size = sheet.frame_size
 	src.separation = Vector2i(sheet.gutter, 0)
 	for i: int in sheet.frame_count():
 		src.create_tile(Vector2i(i, 0))
+		if tint != null:
+			src.create_alternative_tile(Vector2i(i, 0), DIM_ALT)
+			src.get_tile_data(Vector2i(i, 0), DIM_ALT).modulate = tint
 	return src

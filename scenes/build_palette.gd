@@ -2,7 +2,7 @@ class_name BuildPalette
 extends PanelContainer
 ## The Build-mode HUD bar: the 9 surfaces, `oob` included (D9; each with its tile art, so the
 ## colorblind pattern shows on the button), raise and lower, the tee and cup tools (E2-S3),
-## brush 1/3/5 and undo. A view onto a BuildTool:
+## Buy land (E6-S5), brush 1/3/5 and undo. A view onto a BuildTool:
 ## buttons set the tool, and the tool's settings_changed keeps the buttons in step.
 ## Buttons are made in code from CourseBuilder.PALETTE and BuilderTuning.brush_sizes.
 
@@ -12,6 +12,7 @@ var raise_button: Button
 var lower_button: Button
 var tee_button: Button
 var cup_button: Button
+var buy_button: Button
 ## Brush buttons in BuilderTuning.brush_sizes order.
 var brush_buttons: Array[Button] = []
 var undo_button: Button
@@ -61,6 +62,10 @@ func _ready() -> void:
 	cup_button.tooltip_text = "Place the hole's cup"
 	cup_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CUP))
 	row.add_child(VSeparator.new())
+	buy_button = _toggle(row, "Buy land", _tools_group)
+	buy_button.tooltip_text = "Buy the parcel under the cursor (it must touch your land)"
+	buy_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.BUY))
+	row.add_child(VSeparator.new())
 	var brush_label := Label.new()
 	brush_label.text = "Brush"
 	row.add_child(brush_label)
@@ -105,6 +110,8 @@ func _sync() -> void:
 			on = tee_button
 		BuildTool.Tool.CUP:
 			on = cup_button
+		BuildTool.Tool.BUY:
+			on = buy_button
 	for b: BaseButton in _tools_group.get_buttons():
 		b.set_pressed_no_signal(b == on)
 	var n: int = _brush_sizes.find(_tool.brush_size)

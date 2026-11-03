@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scenes/aim_view.gd" id="10_aim_view"]
 [ext_resource type="Script" path="res://scenes/swing_panel.gd" id="11_swing_panel"]
 [ext_resource type="Script" path="res://scenes/score_card.gd" id="12_score_card"]
+[ext_resource type="Script" path="res://scenes/land_panel.gd" id="13_land_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -75,6 +76,13 @@ offset_right = 196.0
 offset_bottom = 120.0
 tooltip_text = "Start a new course on a blank 128 x 128 plot"
 text = "New sandbox"
+
+[node name="LandPanel" type="PanelContainer" parent="HUD"]
+offset_left = 16.0
+offset_top = 128.0
+offset_right = 196.0
+offset_bottom = 128.0
+script = ExtResource("13_land_panel")
 
 [node name="HolePanel" type="PanelContainer" parent="HUD"]
 anchors_preset = 1

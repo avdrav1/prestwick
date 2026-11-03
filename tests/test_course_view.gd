@@ -325,3 +325,68 @@ func test_markers_follow_the_holes_list() -> void:
 	assert_eq(_view.find_child("Holes", false, false).get_child_count(), 1, "old markers are gone")
 	_view.show_course(null)
 	assert_eq(_view.hole_markers().size(), 0, "clearing the view clears the markers")
+
+
+# --- E6-S5: unowned land draws dimmed, hatched, with parcel lines (art/specs/land.md) ---
+
+## 40 x 20 tiles (parcels 3 x 2, the last column partial), height 1, owning only parcel (0, 0).
+func _land_course() -> CourseData:
+	var c := CourseData.create(40, 20, Surface.Type.ROUGH, 1)
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			c.set_parcel_owned(Vector2i(p, q), Vector2i(p, q) == Vector2i.ZERO)
+	c.set_tile(20, 4, 3, Surface.Type.GREEN)
+	return c
+
+
+func test_owned_land_draws_as_before() -> void:
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 1)
+	_view.show_course(c)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		assert_eq(_view.land_layer(h).get_used_cells().size(), 0, "no overlay at height %d" % h)
+	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), 0, "not dimmed")
+
+
+func test_unowned_tiles_are_dimmed_and_hatched_at_their_height() -> void:
+	var c := _land_course()
+	_view.show_course(c)
+	assert_eq(_view.land_layer(1).get_cell_source_id(Vector2i(5, 5)), -1, "owned: no hatch")
+	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), 0, "owned: no shade")
+	var cell := Vector2i(20, 4)
+	assert_eq(_view.land_layer(3).get_cell_source_id(cell), CourseView.LAND_SOURCE, "hatch on the raised top")
+	assert_eq(_view.land_layer(1).get_cell_source_id(cell), -1, "only at its own height")
+	assert_eq(_view.top_layer(3).get_cell_alternative_tile(cell), CourseView.DIM_ALT, "top dimmed")
+	assert_eq(_view.riser_layer(1).get_cell_alternative_tile(cell), CourseView.DIM_ALT, "riser dimmed")
+	var data: TileData = _view.top_layer(3).get_cell_tile_data(cell)
+	assert_eq(data.modulate, BuilderTuning.load_default().unowned_tint, "shade is the tuned tint")
+	var unowned: int = 0
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		unowned += _view.land_layer(h).get_used_cells().size()
+	assert_eq(unowned, 40 * 20 - 16 * 16, "every unowned tile, once")
+
+
+func test_land_frame_marks_parcel_edges() -> void:
+	var c := _land_course()
+	assert_eq(CourseView.land_frame(c, 3, 3), -1, "owned")
+	assert_eq(CourseView.land_frame(c, 20, 5), 0, "inside a parcel: hatch alone")
+	assert_eq(CourseView.land_frame(c, 16, 5), CourseView.LAND_EDGE_W, "west edge, toward owned land")
+	assert_eq(CourseView.land_frame(c, 31, 15), CourseView.LAND_EDGE_E | CourseView.LAND_EDGE_S, "corner")
+	assert_eq(CourseView.land_frame(c, 20, 0), CourseView.LAND_EDGE_N, "map border")
+	assert_eq(CourseView.land_frame(c, 39, 19), CourseView.LAND_EDGE_E | CourseView.LAND_EDGE_S,
+			"partial parcel: the map's edge is its edge")
+	_view.show_course(c)
+	assert_eq(_view.land_layer(1).get_cell_atlas_coords(Vector2i(31, 15)), Vector2i(12, 0), "frame index is the mask")
+
+
+func test_refresh_parcel_after_a_purchase() -> void:
+	var c := _land_course()
+	_view.show_course(c)
+	var b := CourseBuilder.new(c)
+	b.land_changed.connect(_view.refresh_parcel)
+	assert_true(b.buy_parcel(Vector2i(1, 0)))
+	assert_eq(_view.land_layer(3).get_cell_source_id(Vector2i(20, 4)), -1, "bought: no hatch")
+	assert_eq(_view.top_layer(3).get_cell_alternative_tile(Vector2i(20, 4)), 0, "bought: no shade")
+	assert_eq(_view.land_layer(1).get_cell_atlas_coords(Vector2i(32, 5)), Vector2i(CourseView.LAND_EDGE_W, 0),
+			"the line moves to the next parcel's side")
+	assert_true(b.undo())
+	assert_eq(_view.land_layer(3).get_cell_source_id(Vector2i(20, 4)), CourseView.LAND_SOURCE, "undone: hatched again")

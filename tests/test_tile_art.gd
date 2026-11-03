@@ -52,7 +52,7 @@ func test_riser_frames() -> void:
 
 
 func test_sheet_layout_matches_art_spec() -> void:
-	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges, _art.land]:
 		assert_eq(sheet.frame_size, Vector2i(64, 32))
 		assert_eq(sheet.gutter, 1)
 		var n: int = sheet.frame_count()
@@ -62,7 +62,7 @@ func test_sheet_layout_matches_art_spec() -> void:
 
 
 func test_gutters_are_transparent() -> void:
-	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges, _art.land]:
 		var img: Image = sheet.texture.get_image()
 		for i: int in range(1, sheet.frame_count()):
 			var x: int = i * (sheet.frame_size.x + sheet.gutter) - 1
@@ -114,7 +114,7 @@ func test_every_surface_has_its_own_pattern() -> void:
 func test_sheets_use_only_palette_colors() -> void:
 	var palette: Dictionary = _palette()
 	assert_eq(palette.size(), 32, "palette has 32 colors")
-	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges]:
+	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges, _art.land]:
 		var img: Image = sheet.texture.get_image()
 		var bad: Dictionary = {}
 		for y: int in img.get_height():
@@ -185,3 +185,59 @@ func test_edge_shadow_sits_outside_the_top_and_the_highlight_inside() -> void:
 	# Back-left edge at x = 16 runs through y = 18 - 16 + 8 = 10 (anchor y 18).
 	assert_lt(img.get_pixel(16, 9).get_luminance(), 0.2, "dark shadow just outside the edge")
 	assert_gt(img.get_pixel(16, 10).get_luminance(), 0.8, "bright lip just inside")
+
+
+# E6-S5: the unowned-land hatch and parcel lines (art/specs/land.md).
+func test_land_frames_are_edge_masks() -> void:
+	assert_eq(_art.land.frame_count(), 16)
+	assert_eq(_art.land.frames[0], "hatch")
+	assert_eq(_art.land.frames[CourseView.LAND_EDGE_W | CourseView.LAND_EDGE_S], "hatch_ws")
+	assert_eq(_art.land.frames[15], "hatch_wnes")
+	assert_eq(_art.land.anchor, Vector2i(32, 16))
+	var chalk := Color8(240, 236, 224)
+	# Just inside the middle of each edge, on a chalk dash: w up-left, n up-right, e down-right,
+	# s down-left.
+	var probes: Array[Vector2i] = [Vector2i(16, 9), Vector2i(48, 9), Vector2i(48, 22), Vector2i(16, 22)]
+	for m: int in 16:
+		var img: Image = _frame_image(_art.land, m)
+		assert_eq(img.get_pixel(0, 0).a, 0.0, "%s: outside the top is clear" % _art.land.frames[m])
+		for b: int in 4:
+			var on: bool = img.get_pixel(probes[b].x, probes[b].y).is_equal_approx(chalk)
+			assert_eq(on, (m >> b) & 1 == 1, "%s: edge %d line" % [_art.land.frames[m], b])
+	var hatch: Image = _frame_image(_art.land, 0)
+	var ink: int = 0
+	for x: int in range(24, 40):
+		if hatch.get_pixel(x, 16).a == 1.0:
+			ink += 1
+	assert_eq(ink, 4, "a 2 px hatch line every 8 px across the middle")
+
+
+# E6-S5 review: the parcel line must not read as an edge cue (art/specs/edge_cue.md), whose
+# lip is one solid chalk line just inside the higher top's back edge. The parcel line is
+# dashed chalk and ink along the edge, so a boundary is never taken for a one-step rise.
+func test_land_edge_band_is_not_an_edge_cue_band() -> void:
+	var chalk := Color8(240, 236, 224)
+	var ink := Color8(26, 28, 34)
+	var land: Image = _frame_image(_art.land, CourseView.LAND_EDGE_W)
+	var cue: Image = _frame_image(_art.edges, _art.edges.frames.find("l1"))
+	var land_chalk: int = 0
+	var land_ink: int = 0
+	var cue_chalk: int = 0
+	var cue_total: int = 0
+	# The back-left edge runs from (0, 16) to (32, 0) in a land frame (anchor 16), and 2 px
+	# lower in an edge cue frame (anchor 18). The band is the first 2 px inside the top.
+	for x: int in range(4, 28):
+		var edge_y: float = 16.0 - (x + 0.5) / 2.0
+		for y: int in 32:
+			var v: float = y + 0.5 - edge_y
+			if v >= 0.0 and v < 2.0:
+				var c: Color = land.get_pixel(x, y)
+				land_chalk += 1 if c.is_equal_approx(chalk) else 0
+				land_ink += 1 if c.is_equal_approx(ink) else 0
+			if v >= 2.0 and v < 4.0:
+				cue_total += 1
+				cue_chalk += 1 if cue.get_pixel(x, y).is_equal_approx(chalk) else 0
+	assert_gt(cue_total, 0)
+	assert_eq(cue_chalk, cue_total, "the edge cue lip is one solid chalk line")
+	assert_gt(land_chalk, 0, "the parcel line has chalk dashes")
+	assert_gt(land_ink, land_chalk / 2, "and ink dashes between them, so it is not solid")

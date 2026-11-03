@@ -5,7 +5,8 @@ Usage:
   scripts/placeholder.py surfaces            -> art/tiles/surfaces_placeholder.png
   scripts/placeholder.py risers              -> art/tiles/risers_placeholder.png
   scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
-  scripts/placeholder.py all                 -> all three of the above
+  scripts/placeholder.py land                -> art/tiles/land_placeholder.png
+  scripts/placeholder.py all                 -> all four of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
 
@@ -329,6 +330,49 @@ def build_edges(p: dict[str, Color]) -> Image:
     return sheet([edge_frame(n, p) for n in EDGES])
 
 
+# --- unowned land (E6-S5) -------------------------------------------------
+
+# Frame index is a mask of the edges that lie on a parcel edge: bit 0 "w" the back-left edge
+# (towards x - 1), bit 1 "n" the back-right (y - 1), bit 2 "e" the front-right (x + 1), bit 3
+# "s" the front-left (y + 1). Frame 0 "hatch" is the pattern alone.
+LAND_SIDES = ["w", "n", "e", "s"]
+LAND = ["hatch" + ("_" + "".join(LAND_SIDES[b] for b in range(4) if m >> b & 1) if m else "")
+        for m in range(16)]
+# Screen-diagonal hatch, 2 px of ink every 8 px. 8 divides 32 and 16, so the lines of
+# neighbouring tiles (and of tiles one step higher) join into one pattern.
+LAND_HATCH_PERIOD = 8
+LAND_HATCH_WIDTH = 2
+# The parcel edge line, px straight down (or up) from the edge, inside the top.
+LAND_EDGE_PX = 2
+# The line is dashed, a survey-stake line: chalk then ink, LAND_DASH_PX of screen x each.
+# The edge cue's lip is one solid chalk line (art/specs/edge_cue.md), so a dashed line never
+# reads as a one-step rise. 2 * 8 = 16 px divides 32, so dashes join along a parcel edge.
+LAND_DASH_PX = 8
+
+
+def land_frame(mask: int, p: dict[str, Color]) -> Image:
+    img = Image(TILE_W, TILE_H)
+    for y in range(TILE_H):
+        for x in range(TILE_W):
+            if not in_diamond(x, y):
+                continue
+            dx = (x + 0.5 - TILE_W / 2) / (TILE_W / 2)
+            dy = (y + 0.5 - TILE_H / 2) / (TILE_H / 2)
+            # Closeness to each edge's line, 1 on the line: w up-left, n up-right,
+            # e down-right, s down-left.
+            near = [-dx - dy, dx - dy, dx + dy, -dx + dy]
+            edge = any(mask >> b & 1 and (1 - near[b]) * (TILE_H / 2) < LAND_EDGE_PX for b in range(4))
+            if edge:
+                img.set(x, y, p["chalk"] if (x // LAND_DASH_PX) % 2 == 0 else p["ink"])
+            elif (x + y) % LAND_HATCH_PERIOD < LAND_HATCH_WIDTH:
+                img.set(x, y, p["ink"])
+    return img
+
+
+def build_land(p: dict[str, Color]) -> Image:
+    return sheet([land_frame(m, p) for m in range(len(LAND))])
+
+
 # --- generic ---------------------------------------------------------------
 
 def build_generic(thing: str, size: tuple[int, int], frames: int, color: str, p: dict[str, Color]) -> Image:
@@ -370,6 +414,8 @@ def main(argv: list[str]) -> int:
         jobs.append((ROOT / "art/tiles/risers_placeholder.png", build_risers(p)))
     if args.thing in ("edges", "all"):
         jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
+    if args.thing in ("land", "all"):
+        jobs.append((ROOT / "art/tiles/land_placeholder.png", build_land(p)))
     if not jobs:
         if not args.size:
             ap.error(f"no built-in generator for {args.thing!r}; pass --size WxH and --frames N")

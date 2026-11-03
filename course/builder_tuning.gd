@@ -23,6 +23,12 @@ const PATH: String = "res://course/builder_tuning.tres"
 ## reasons (E2-S17).
 @export var issue_box_max_side: float = 160.0
 
+## Unowned land (E6-S5, art/specs/land.md): the modulate on every top, riser and edge cue of
+## a tile on a parcel the player does not own. The hatch and parcel lines are the pattern.
+@export var unowned_tint: Color = Color(0.62, 0.62, 0.68)
+## How long a refusal ("not your land") stays on the Build HUD after a click, seconds.
+@export var refusal_show_s: float = 3.0
+
 
 static func load_default() -> BuilderTuning:
 	return load(PATH) as BuilderTuning

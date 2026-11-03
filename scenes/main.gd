@@ -30,6 +30,7 @@ var course: CourseData
 @onready var score_card: ScoreCard = $HUD/ScoreCard
 @onready var new_sandbox_button: Button = $HUD/NewSandboxButton
 @onready var hole_panel: HolePanel = $HUD/HolePanel
+@onready var land_panel: LandPanel = $HUD/LandPanel
 @onready var swing_control: SwingControl = $SwingControl
 @onready var aim_view: AimView = $AimView
 @onready var swing_panel: SwingPanel = $HUD/SwingPanel
@@ -43,6 +44,7 @@ func _ready() -> void:
 	_refresh_label()
 	build_palette.bind(build_tool)
 	hole_panel.bind(build_tool)
+	land_panel.bind(build_tool)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
 	swing_control.changed.connect(_refresh_label)
@@ -74,7 +76,9 @@ func show_course(c: CourseData) -> void:
 	builder.tiles_changed.connect(_on_tiles_changed)
 	builder.holes_changed.connect(course_view.refresh_holes)
 	builder.checked.connect(_on_checked)
+	builder.land_changed.connect(course_view.refresh_parcel)
 	build_tool.builder = builder
+	land_panel.watch(builder)
 	_on_checked(builder.issues)
 	if mode == Mode.PLAY:
 		_begin_play()
@@ -165,7 +169,7 @@ func _on_came_to_rest(_at: Vector3) -> void:
 		camera.centre_on(_ball_world(), true)
 
 
-## The build tool, its palette, the hole panel, New sandbox and the issue highlights exist
+## The build tool, its palette, the hole and land panels, New sandbox and the issue highlights exist
 ## only in Build mode. Play never waits for the validator (pillar 1): a hole that fails a rule
 ## is still played; the rules only decide whether guests may play it (Open).
 func _apply_mode() -> void:
@@ -175,6 +179,7 @@ func _apply_mode() -> void:
 	swing_panel.visible = not building
 	build_palette.visible = building
 	hole_panel.visible = building
+	land_panel.visible = building
 	new_sandbox_button.visible = building
 	score_card.visible = not building
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"

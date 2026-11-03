@@ -12,3 +12,5 @@ plot_ground = 2
 default_par = 3
 issue_box_max_stack = 96.0
 issue_box_max_side = 160.0
+unowned_tint = Color(0.62, 0.62, 0.68, 1)
+refusal_show_s = 3.0

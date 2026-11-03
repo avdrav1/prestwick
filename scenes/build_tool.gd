@@ -12,19 +12,36 @@ extends Node2D
 ## The tee and cup tools (E2-S3) place hole `hole_number`'s tee or cup on the tile clicked,
 ## through the builder, creating the hole with `par` when it has none; a drag does not move
 ## them. select_par sets `par` and the existing hole's par.
+## Land (E6-S5): the Buy land tool does not buy on a click; it emits buy_requested with the
+## parcel under the cursor, and the HUD's confirm calls buy(). hover_hint gives, before the
+## click, why the current tool would do nothing on the hovered tile (CourseBuilder's
+## edit_refusal, place_refusal or buy_refusal), and the outline draws in refuse_color then.
+## With Buy land the outline is the whole hovered parcel, in buy_color when it can be bought.
+## While a purchase waits on the HUD's confirm, the HUD pins that parcel (pinned_parcel) and
+## it stays outlined in buy_color wherever the cursor goes (a buyable hovered parcel draws in
+## outline_color meanwhile), so the map shows what Buy buys.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
 
-enum Tool { PAINT, RAISE, LOWER, TEE, CUP }
+enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY }
 
 ## Emitted when the tool, surface or brush changes, so the palette can follow.
 signal settings_changed
+## Emitted when the tile under the cursor changes (TilePicker.NONE when it left the map).
+signal hover_changed
+## Emitted when the Buy land tool is clicked on parcel `parcel`; nothing is bought yet.
+signal buy_requested(parcel: Vector2i)
 
 const UNDO_ACTION: StringName = &"ui_undo"
 
 ## Brush outline colors (art/palette.gpl `ink` and `sand_light` would be the final pick).
 @export var outline_color: Color = Color(1.0, 0.97, 0.8, 0.95)
 @export var fill_color: Color = Color(1.0, 0.97, 0.8, 0.18)
+## Outline of a brush, tee or cup that would be refused, and of a parcel that cannot be
+## bought (art/palette.gpl `flag_red`).
+@export var refuse_color: Color = Color8(216, 58, 58, 242)
+## Outline of a parcel the Buy land tool can buy (art/palette.gpl `sun_yellow`).
+@export var buy_color: Color = Color8(240, 200, 58, 242)
 
 var builder: CourseBuilder
 var tool: Tool = Tool.PAINT
@@ -44,6 +61,12 @@ var active: bool = true:
 		if not active:
 			release()
 			_hover = TilePicker.NONE
+		queue_redraw()
+## The parcel waiting on the HUD's buy confirm, outlined in buy_color until it is cleared to
+## TilePicker.NONE. Display state only (LandPanel sets it); it never writes the course.
+var pinned_parcel: Vector2i = TilePicker.NONE:
+	set(value):
+		pinned_parcel = value
 		queue_redraw()
 ## Tile under the cursor, or TilePicker.NONE.
 var hover: Vector2i:
@@ -68,6 +91,7 @@ func select_surface(s: Surface.Type) -> void:
 
 func select_tool(t: Tool) -> void:
 	tool = t
+	queue_redraw()
 	settings_changed.emit()
 
 
@@ -94,11 +118,44 @@ func shown_par() -> int:
 	return h.par if h != null else par
 
 
+## The parcel under the cursor, or TilePicker.NONE.
+func hover_parcel() -> Vector2i:
+	if builder == null or _hover == TilePicker.NONE:
+		return TilePicker.NONE
+	return builder.course.parcel_of(_hover.x, _hover.y)
+
+
+## Why a click with the current tool on the hovered tile would do nothing, or "" when it
+## would act (or nothing is hovered): the builder's edit_refusal for paint, raise and lower,
+## place_refusal for the tee and cup, buy_refusal for Buy land.
+func hover_hint() -> String:
+	if builder == null or _hover == TilePicker.NONE:
+		return ""
+	match tool:
+		Tool.TEE, Tool.CUP:
+			return builder.place_refusal(_hover)
+		Tool.BUY:
+			return builder.buy_refusal(hover_parcel())
+	return builder.edit_refusal(_hover, brush_size)
+
+
+## Buys parcel `parcel` through the builder (the HUD's confirm). False, buying nothing,
+## when the builder refuses it.
+func buy(parcel: Vector2i) -> bool:
+	if builder == null or not active:
+		return false
+	var ok: bool = builder.buy_parcel(parcel)
+	queue_redraw()
+	return ok
+
+
 func undo() -> bool:
 	if builder == null or not active:
 		return false
 	_dragging = false
-	return builder.undo()
+	var ok: bool = builder.undo()
+	queue_redraw()
+	return ok
 
 
 ## Mouse moved to `local` (course screen space) with no button held.
@@ -107,6 +164,7 @@ func hover_at(local: Vector2) -> void:
 	if cell != _hover:
 		_hover = cell
 		queue_redraw()
+		hover_changed.emit()
 
 
 ## Left button went down at `local`: start a stroke and apply the tool there.
@@ -123,7 +181,7 @@ func press_at(local: Vector2) -> void:
 ## Mouse moved to `local` with the left button held: apply along the drag.
 func drag_to(local: Vector2) -> void:
 	hover_at(local)
-	if not _dragging or not active or _places_hole():
+	if not _dragging or not active or _single_click():
 		return
 	if _hover == TilePicker.NONE:
 		_last_cell = TilePicker.NONE  # left the map: do not join across the gap
@@ -194,18 +252,52 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
-	if not active or builder == null or _hover == TilePicker.NONE:
+	if not active or builder == null:
 		return
 	var c: CourseData = builder.course
+	if pinned_parcel != TilePicker.NONE:
+		_draw_parcel(c, pinned_parcel, buy_color)
+	if _hover == TilePicker.NONE:
+		return
+	var refused: bool = not hover_hint().is_empty()
+	if tool == Tool.BUY:
+		# While a parcel is pinned, buy_color is its alone: the hovered one draws pale.
+		var ok: Color = buy_color if pinned_parcel == TilePicker.NONE else outline_color
+		if hover_parcel() != pinned_parcel:
+			_draw_parcel(c, hover_parcel(), refuse_color if refused else ok)
+		return
+	var line: Color = refuse_color if refused else outline_color
+	var fill: Color = Color(refuse_color, fill_color.a) if refused else fill_color
 	for cell: Vector2i in builder.brush_cells(_hover, 1 if _places_hole() else brush_size):
 		var center: Vector2 = Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))
 		var pts := PackedVector2Array([
 			center + Vector2(0, -Iso.HALF_H), center + Vector2(Iso.HALF_W, 0),
 			center + Vector2(0, Iso.HALF_H), center + Vector2(-Iso.HALF_W, 0),
 		])
-		draw_colored_polygon(pts, fill_color)
+		draw_colored_polygon(pts, fill)
 		pts.append(pts[0])
-		draw_polyline(pts, outline_color, 1.0)
+		draw_polyline(pts, line, 1.0)
+
+
+## Outlines parcel `parcel`: each border tile's outer edges, at that tile's height, 3 px.
+func _draw_parcel(c: CourseData, parcel: Vector2i, color: Color) -> void:
+	var r: Rect2i = c.parcel_rect(parcel)
+	# Each side: the neighbour step, and the two corners of the tile's top on that side.
+	var sides: Array = [
+		[Vector2i.LEFT, Vector2(-0.5, -0.5), Vector2(-0.5, 0.5)],
+		[Vector2i.UP, Vector2(-0.5, -0.5), Vector2(0.5, -0.5)],
+		[Vector2i.RIGHT, Vector2(0.5, -0.5), Vector2(0.5, 0.5)],
+		[Vector2i.DOWN, Vector2(-0.5, 0.5), Vector2(0.5, 0.5)],
+	]
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			var cell := Vector2i(x, y)
+			for side: Array in sides:
+				if r.has_point(cell + (side[0] as Vector2i)):
+					continue
+				var h: int = c.get_height(x, y)
+				draw_line(Iso.tile_to_screen(Vector2(cell) + (side[1] as Vector2), h),
+						Iso.tile_to_screen(Vector2(cell) + (side[2] as Vector2), h), color, 3.0)
 
 
 func _apply(cell: Vector2i) -> void:
@@ -223,11 +315,18 @@ func _apply(cell: Vector2i) -> void:
 			builder.place_tee(hole_number, cell, par)
 		Tool.CUP:
 			builder.place_cup(hole_number, cell, par)
+		Tool.BUY:
+			buy_requested.emit(builder.course.parcel_of(cell.x, cell.y))
 	queue_redraw()
 
 
 func _places_hole() -> bool:
 	return tool == Tool.TEE or tool == Tool.CUP
+
+
+## Tools that act once per click, never along a drag.
+func _single_click() -> bool:
+	return _places_hole() or tool == Tool.BUY
 
 
 func _pick(local: Vector2) -> Vector2i:
