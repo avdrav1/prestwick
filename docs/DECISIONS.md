@@ -244,3 +244,12 @@ Options:
 Choice: keep the three-click bar with zone 20%, shank 30 degrees and half power, bar speed 0.5 to 1.5 (user, E2-S9 hand playtest, 2026-11-03). The one-click swing stays in the Icebox; its promotion trigger was not met.
 Why: pillar 2: the user found shots landed where the marker said and the bar felt right at its speed setting.
 Affects: docs/design.md Swing, docs/playtests/2026-11-03-e2-hand.md, the Claude Docs design doc (Open questions: "Swing bar feel")
+
+## D25: Where does the last-resort drop go when the stroke's start is beside the cup? (2026-11-03)
+Question: D15 makes the stroke's start the drop of last resort. E2-S13 found that a start within `cup_radius` of the cup leaves a free tap-in.
+Options:
+- Keep D15. Cost: a rare free tap-in. Benefit: no change.
+- Move the drop off the start in that case. Cost: one more search. Benefit: a hazard always costs a stroke.
+Choice: when the start is within `cup_radius` of the cup, the drop is the nearest tile centre the game may place a ball on (`Ball.may_place_on`); with none on the whole map, the cup's own tile, `cup_clear_drop_yd` 2.4 yd from its centre toward the start (E2-S13). This supersedes the last-resort clause of D15; the rest of D15 stands.
+Why: pillar 2: a penalty stroke always reads as a penalty.
+Affects: docs/design.md Cup and hazards (Drop point), golf/ball.gd, golf/ball_params.tres, the Claude Docs design doc (Flight and roll, rev 36)
