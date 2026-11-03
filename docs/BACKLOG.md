@@ -263,8 +263,9 @@ Planning notes:
   - Accept: `/course-file inspect <path>` prints the size, the holes with par, yardage and open flag, and each hole's validator result. `/course-file generate <par> hilly` adds a gentle ridge and still passes `validate`.
   - Test: `tests/test_course_file.gd` (new): a generated hilly par 4 passes the validator; inspect's output names every hole of `courses/example_par3.json`.
   - Touches: `course/`, `courses/`
-- [ ] E2-S19 Hand E3 planning the notes E2 left for it. So `/next-epic` reads them before writing E3's stories.
+- [x] E2-S19 Hand E3 planning the notes E2 left for it. So `/next-epic` reads them before writing E3's stories.
   - Note: (found in E2 review) the tee and cup tools build hole 1 only (`BuildTool.hole_number` is fixed at 1); E3-S2 needs a way to pick the hole. D11 checks one landing zone per hole: a par 5's second-shot zone is not checked, and doglegs are measured on the straight line; revisit if E3 guests hit each other on par 5s. The validator reruns after every click edit at about 8.5 ms on 128x128 (mostly the surface grid and the rule 3 component graph) and once at a drag's end; with nine holes, cache the graph between edits or move it to native code if frames hitch. The riser-foot decision (E2-S10) covers guest club choice. Trees are a flat surface pattern with nothing drawn for their 10 yd height, so the block cannot be seen (a note for E5-S3's tree art and for `/balance`). Main frames the camera at the course centre at 1x; when a course with holes is loaded, framing the first hole may read better.
+  - Done: E3 has a Planning notes block (hole picking, D11 landing zones, validator cost, D20 guest club choice, tree height, camera framing, and E6 running first per D19); E5-S3's Accept draws trees 10 yd tall.
   - Accept: the E3 planning notes in `docs/BACKLOG.md` list each item above, and E5-S3's Accept names the tree height.
   - Test: by hand: read E3's planning notes.
   - Touches: `docs/`
@@ -328,6 +329,16 @@ Done when: a new course opens on generated natural land, the player owns a start
 Ships as 0.4.0 (D19). Serves pillar 3: the course tells a story through its guests. No money yet, so arrivals are a flat number until E4 connects rating.
 
 Done when: nine holes are open, guests play them in order, and their complaints name a hole you can click and fix.
+
+Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it rewrites or extends E3's stories):
+
+- E6 Land runs before E3 (D19). By the time E3 starts, a course opens on generated land and holes go only on owned parcels; E3's stories assume that land, not the blank D10 plot, except in New sandbox.
+- Hole picking: the tee and cup tools build hole 1 only (`BuildTool.hole_number` is fixed at 1, `scenes/build_tool.gd`). E3-S2 needs a way to pick which hole the tools build.
+- Landing zones: D11 checks one landing zone per hole, from the tee. A par 5's second-shot zone is not checked, and doglegs are measured on the straight tee-to-cup line. Revisit if E3 guests hit each other on par 5s (with E3-S1's line-of-play item).
+- Validator cost: it reruns after every click edit, about 8.5 ms on 128 x 128 (mostly the surface grid and the rule 3 component graph), and once at a drag's end. With nine holes, cache the graph between edits, or move it to native code, if frames hitch (E3-S2's 60 fps check).
+- Guest club choice: the riser-foot rule (D20, E2-S10) covers it. Guests choose clubs with `ClubSet.is_blocked` and skip a blocked club; a blocked club stays legal for the player. E3-S3 reuses it.
+- Trees: a flat surface pattern, with nothing drawn for their 10 yd (`block_height`) height, so the block cannot be seen. A note for E5-S3's tree art and for `/balance`; guests hitting into trees in E3 will make it visible.
+- Camera framing: Main frames the camera at the course centre at 1x. When a course with holes is loaded, framing the first hole may read better (E3-S2's hole list, or E6-S6's start on land).
 
 - [ ] E3-S1 Settle the numbers guests need. `docs/design.md` names the checks but not what they measure.
   - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice.
@@ -435,7 +446,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Test: screenshots in color and grayscale at all three zooms.
   - Touches: `art/`
 - [ ] E5-S3 Replace sprites and decor. Final golfer, ball, trees and decor that does nothing to the ball.
-  - Accept: golfer sheet to spec (24 px, 8 directions, three animations), ball and shadow, trees, tee markers and cup. Benches, flags and signs are placeable through the builder and ignored by the ball and validator. No placeholder sprites remain.
+  - Accept: golfer sheet to spec (24 px, 8 directions, three animations), ball and shadow, trees drawn 10 yd tall (5 height steps, 80 px at 1x: the trees row `block_height`, so a tree reads as tall as the flight it blocks), tee markers and cup. Benches, flags and signs are placeable through the builder and ignored by the ball and validator. No placeholder sprites remain.
   - Test: `tests/test_decor.gd` shows decor has no effect on a seeded shot. Screenshot.
   - Touches: `art/`, `course/`, `tests/`
 - [ ] E5-S4 Add audio. Sound that serves readability.
