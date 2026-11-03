@@ -310,7 +310,7 @@ Planning notes:
   - Accept: a leak above its baseline, or from a script not on the list, fails `bash scripts/run_tests.sh` with the report printed. `_set_down` records the path only for tests that read it. `scripts/run_tests.sh` says how to recheck the baselines after a Godot upgrade.
   - Test: `bash scripts/run_tests.sh` green, with its time in the commit body; by hand, a test script that leaks on purpose makes it fail.
   - Touches: `scripts/`, `tests/`
-- [ ] E2-S27 Put the E2 swarm's feel questions to the hand playtest. Questions E2-S10 to E2-S20 left for a person.
+- [x] E2-S27 Put the E2 swarm's feel questions to the hand playtest. Questions E2-S10 to E2-S20 left for a person.
   - Note: (found in E2 review) run with E2-S9 and E2-S14; the notes go in the same `docs/playtests/` file. Questions, not fixes: answers become `/decision`s, `/balance` findings or stories.
   - Accept: the playtest notes answer each of these:
     - Blocked clubs (D20): only the selected club shows as blocked, at the current aim; the picker does not mark blocked clubs ahead of time, and the default club is still the longest legal one even when blocked. Does that read well?
