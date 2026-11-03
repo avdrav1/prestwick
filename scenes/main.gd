@@ -28,6 +28,9 @@ var course: CourseData
 @onready var fire_button: Button = $HUD/FireButton
 @onready var new_sandbox_button: Button = $HUD/NewSandboxButton
 @onready var hole_panel: HolePanel = $HUD/HolePanel
+@onready var swing_control: SwingControl = $SwingControl
+@onready var aim_view: AimView = $AimView
+@onready var swing_panel: SwingPanel = $HUD/SwingPanel
 
 
 func _ready() -> void:
@@ -38,6 +41,9 @@ func _ready() -> void:
 	_refresh_label()
 	build_palette.bind(build_tool)
 	hole_panel.bind(build_tool)
+	swing_control.bind(shot_view, aim_view)
+	swing_panel.bind(swing_control)
+	swing_control.changed.connect(_refresh_label)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -64,6 +70,8 @@ func show_course(c: CourseData) -> void:
 	builder.checked.connect(_on_checked)
 	build_tool.builder = builder
 	_on_checked(builder.issues)
+	if mode == Mode.PLAY:
+		_begin_play()
 
 
 ## Starts a new course on the blank plot (D10, BuilderTuning), with a fresh builder.
@@ -85,11 +93,19 @@ func set_mode(new_mode: Mode) -> void:
 	if new_mode == mode:
 		return
 	mode = new_mode
-	_refresh_label()
 	_apply_mode()
-	if mode != Mode.PLAY:
+	if mode == Mode.PLAY:
+		_begin_play()
+	else:
 		shot_view.clear()
+	_refresh_label()
 	mode_changed.emit(mode)
+
+
+## Puts the ball on hole 1's tee aimed at its cup (or on the debug shot's tile when the
+## course has no tee yet) for the swing (E2-S7).
+func _begin_play() -> void:
+	swing_control.begin(course, debug_shot.start_tile, debug_shot.heading_deg)
 
 
 ## The build tool, its palette, the hole panel, New sandbox and the issue highlights exist
@@ -98,6 +114,8 @@ func set_mode(new_mode: Mode) -> void:
 func _apply_mode() -> void:
 	var building: bool = mode == Mode.BUILD
 	build_tool.active = building
+	swing_control.active = not building
+	swing_panel.visible = not building
 	build_palette.visible = building
 	hole_panel.visible = building
 	new_sandbox_button.visible = building
@@ -115,14 +133,22 @@ func _on_checked(issues: Dictionary) -> void:
 	hole_panel.refresh()
 
 
-## Fires the debug shot at its fixed power and angle, predicting the landing first.
+## Fires the debug shot at its fixed power and angle, predicting the landing first. Not while
+## a swing is in progress or a ball is moving, so it never replaces the player's ball in
+## flight; and it never moves the swing ball or counts a stroke (SwingControl rests only its
+## own strokes).
 func fire_debug_shot() -> void:
-	if course == null:
+	if course == null or swing_control.swing.in_progress() or swing_control.is_ball_moving():
 		return
 	var field := HeightField.new(course, BallParams.load_default())
+	aim_view.clear()
 	shot_view.fire(course, debug_shot.start_position(field), debug_shot.velocity(), debug_shot.rng_seed)
+	_refresh_label()
 
 
+## The debug fire button stays in Play (E1-S7), hidden while a swing is in progress or a ball
+## is moving.
 func _refresh_label() -> void:
 	mode_label.text = Mode.keys()[mode]
-	fire_button.visible = mode == Mode.PLAY
+	fire_button.visible = (mode == Mode.PLAY and not swing_control.swing.in_progress()
+			and not swing_control.is_ball_moving())

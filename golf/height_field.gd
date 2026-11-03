@@ -32,6 +32,21 @@ func iso_point(p: Vector3) -> Vector3:
 	return Vector3(p.x / yards_per_tile - 0.5, p.y / yards_per_tile - 0.5, p.z / yards_per_step)
 
 
+## Drawn height, in steps, of the top of the tile under the ground point (x, y). Past the map
+## edge the edge tile's height holds, as it does for height_at.
+func tile_top_steps(x: float, y: float) -> int:
+	var cell := tile_at(x, y)
+	return course.get_height(clampi(cell.x, 0, course.width - 1), clampi(cell.y, 0, course.height - 1))
+
+
+## Screen point (CourseView space) of the ground point `p` drawn on the top of the tile under
+## it, never at the bilinear height (D17): the ball and shadow on the ground, the aim marker
+## and the struck ball's landing cross all use this one rule, so they sit on each other.
+func tile_top_screen(p: Vector3) -> Vector2:
+	var iso := iso_point(p)
+	return Iso.tile_to_screen(Vector2(iso.x, iso.y), tile_top_steps(p.x, p.y))
+
+
 ## Surface under (x, y). Off the map is Surface.Type.OOB.
 func surface_at(x: float, y: float) -> Surface.Type:
 	var t := tile_at(x, y)

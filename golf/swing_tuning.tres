@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SwingTuning" format=3]
+
+[ext_resource type="Script" path="res://golf/swing_tuning.gd" id="1_swing"]
+
+[resource]
+script = ExtResource("1_swing")
+fill_time = 1.2
+max_power = 1.1
+bar_min = -0.3
+zone_half = 0.2
+deg_per_10pct = 2.0
+overswing_zone_scale = 0.5
+shank_deg = 30.0
+shank_power = 0.5
+bar_speed_default = 1.0
+bar_speed_min = 0.5
+bar_speed_max = 1.5
+aim_key_step_deg = 1.0
+mouse_reaim_px = 24.0

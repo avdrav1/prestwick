@@ -2,7 +2,9 @@ class_name ShotView
 extends Node2D
 ## Shows one shot on the isometric map (E1-S7): the ball sprite at its projected 3D position,
 ## a ground shadow straight below it so its height reads, and a marker on the predicted
-## landing point. A reader only: it never writes the course.
+## landing point. A reader only: it never writes the course. On the ground the ball and its
+## shadow are drawn on the top of the tile under them (D17, E2-S7); in flight the ball is at
+## its true height and the shadow on that tile top.
 ##
 ## The live ball is a golf/ball.gd Ball stepped at a fixed 60 Hz from frame time (never per
 ## frame), so it follows the ShotPrediction made at fire time tick for tick.
@@ -63,10 +65,38 @@ func fire(course: CourseData, start: Vector3, velocity: Vector3, rng_seed: int) 
 	prediction = ShotPrediction.run(course, rng_seed, start, velocity)
 	ball = Ball.new(course, rng_seed)
 	ball.launch(start, velocity)
+	_start_live()
+
+
+## Fires a stroke built by ShotModel (a flight or a putt, E2-S7), predicted the same way.
+func fire_launch(course: CourseData, shot: ShotLaunch, rng_seed: int) -> void:
+	prediction = ShotPrediction.run_launch(course, rng_seed, shot)
+	ball = Ball.new(course, rng_seed)
+	shot.apply(ball)
+	_start_live()
+	# A putt starts on the ground: its "landing" is where it was struck.
+	marker.visible = not shot.is_putt()
+
+
+## Shows a ball resting at `at` (yards, on the ground) with nothing in play: the ball the
+## next swing strikes. No landing marker.
+func show_at_rest(course: CourseData, at: Vector2) -> void:
+	ball = Ball.new(course, 1)
+	ball.position = Vector3(at.x, at.y, ball.field.height_at(at.x, at.y))
+	ball.state = Ball.State.AT_REST
+	prediction = null
+	playing = false
+	visible = true
+	marker.visible = false
+	_refresh()
+
+
+func _start_live() -> void:
 	_elapsed = 0.0
 	_was_landed = false
 	playing = true
 	visible = true
+	marker.visible = true
 	_place_marker()
 	_refresh()
 
@@ -96,14 +126,30 @@ func advance(delta: float) -> void:
 	_refresh()
 
 
-## Screen point (in this node's parent space) of the ball.
+## Screen point (in this node's parent space) of the ball. In flight it is the projected 3D
+## point. On the ground (rolling or at rest) it is the top of the tile under the ball (D17):
+## the physics height between tile centres would draw it off the flat top, or on a riser.
 func ball_screen() -> Vector2:
+	if on_ground():
+		return shadow_screen()
 	return Iso.point_to_screen(ball.field.iso_point(ball.position))
 
 
-## Screen point of the shadow: the ground straight below the ball.
+## Screen point of the shadow: straight below the ball, on the top of the tile under it
+## (D17), in flight too.
 func shadow_screen() -> Vector2:
-	return Iso.point_to_screen(ball.field.iso_point(_ground_below(ball.position)))
+	return ball.field.tile_top_screen(ball.position)
+
+
+## True while the ball is on the ground: rolling, at rest, or not yet struck.
+func on_ground() -> bool:
+	return ball.state != Ball.State.FLYING
+
+
+## Drawn height, in steps, of the top of the tile under the ground point `p` (yards). Past
+## the map edge the edge tile's height holds, as it does for the ball (HeightField).
+func tile_top_steps(p: Vector3) -> float:
+	return float(ball.field.tile_top_steps(p.x, p.y))
 
 
 func _ground_below(p: Vector3) -> Vector3:
@@ -132,8 +178,16 @@ func _refresh() -> void:
 	_sort_at(sprite, _ground_below(ball.position))
 
 
+## The landing cross stands on the tile top under the landing point (D17's rule), like the
+## aim ring, so a perfect swing's cross sits exactly on the ring the player aimed with.
 func _place_marker() -> void:
-	_sort_at(marker, prediction.landing)
+	var p := prediction.landing
+	_sort_at(marker, Vector3(p.x, p.y, tile_top_steps(p) * ball.field.yards_per_step))
+
+
+## Screen point of the landing cross, on the tile top under the predicted landing.
+func marker_screen() -> Vector2:
+	return ball.field.tile_top_screen(prediction.landing)
 
 
 func _draw_ball(piece: Node2D) -> void:
@@ -154,7 +208,7 @@ func _draw_ball(piece: Node2D) -> void:
 func _draw_marker(piece: Node2D) -> void:
 	if prediction == null:
 		return
-	var at := Iso.point_to_screen(ball.field.iso_point(prediction.landing)) - piece.position
+	var at := marker_screen() - piece.position
 	var r := marker_radius
 	piece.draw_line(at + Vector2(-r, -r * 0.5), at + Vector2(r, r * 0.5), marker_color, 2.0)
 	piece.draw_line(at + Vector2(-r, r * 0.5), at + Vector2(r, -r * 0.5), marker_color, 2.0)

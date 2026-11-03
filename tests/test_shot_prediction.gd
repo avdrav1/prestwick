@@ -133,6 +133,8 @@ func test_debug_shot_on_main_course_lands_on_prediction() -> void:
 # --- drawing ---
 
 func test_sprite_follows_projected_path_and_shadow_shows_height() -> void:
+	# In flight the sprite is at the projected 3D point; on the ground it and the shadow are
+	# on the top of the tile under the ball (D17, E2-S7), in flight the shadow too.
 	var course := _hill()
 	var view := ShotView.new()
 	add_child_autofree(view)
@@ -141,24 +143,31 @@ func test_sprite_follows_projected_path_and_shadow_shows_height() -> void:
 	var field := view.ball.field
 	var max_gap := 0.0
 	var checked := 0
+	var on_ground := 0
 	while view.playing:
 		view.advance(1.0 / 30.0)
 		var p := view.ball.position
-		var ground := field.height_at(p.x, p.y)
 		var iso := field.iso_point(p)
-		var ground_steps := ground / field.yards_per_step
-		assert_almost_eq(view.ball_screen(), Iso.point_to_screen(iso), Vector2.ONE * EPS,
-				"sprite at the projected 3D position")
-		assert_almost_eq(view.shadow_screen(), Iso.tile_to_screen(Vector2(iso.x, iso.y), ground_steps),
-				Vector2.ONE * EPS, "shadow on the ground below")
+		var cell := field.tile_at(p.x, p.y)
+		var top := float(course.get_height(cell.x, cell.y))
+		assert_almost_eq(view.shadow_screen(), Iso.tile_to_screen(Vector2(iso.x, iso.y), top),
+				Vector2.ONE * EPS, "shadow on the top of the tile below")
 		# The shadow picks back to the tile the ball is over.
-		assert_eq(Iso.screen_to_cell(view.shadow_screen(), ground_steps), field.tile_at(p.x, p.y))
-		var gap := view.shadow_screen().y - view.ball_screen().y
-		assert_almost_eq(gap, (p.z - ground) / field.yards_per_step * Iso.STEP_PX, EPS,
-				"shadow sits below the ball by its height")
-		max_gap = maxf(max_gap, gap)
+		assert_eq(Iso.screen_to_cell(view.shadow_screen(), top), cell)
+		if view.ball.state == Ball.State.FLYING:
+			assert_almost_eq(view.ball_screen(), Iso.point_to_screen(iso), Vector2.ONE * EPS,
+					"in flight the sprite is at the projected 3D position")
+			var gap := view.shadow_screen().y - view.ball_screen().y
+			assert_almost_eq(gap, (p.z / field.yards_per_step - top) * Iso.STEP_PX, EPS,
+					"shadow sits below the ball by its height over the tile top")
+			max_gap = maxf(max_gap, gap)
+		else:
+			assert_almost_eq(view.ball_screen(), view.shadow_screen(), Vector2.ONE * EPS,
+					"on the ground the ball sits on the tile top")
+			on_ground += 1
 		checked += 1
 	assert_gt(checked, 10)
+	assert_gt(on_ground, 0, "the ball rolled")
 	assert_gt(max_gap, Iso.STEP_PX * 2.0, "in flight the ball rises well clear of its shadow")
 
 
@@ -251,6 +260,42 @@ func test_play_mode_button_fires_the_debug_shot() -> void:
 	main.set_mode(Main.Mode.BUILD)
 	assert_false(main.fire_button.visible)
 	assert_false(main.shot_view.visible, "the shot is cleared from the Build view")
+
+
+# --- the swing (E2-S7) ---
+
+func test_perfect_swing_lands_within_a_tile_of_the_aim_marker() -> void:
+	# Through the Play HUD: the marker comes from the aim's prediction, the ball from a swing
+	# clicked at 100% and at the centre, flown live in ShotView.
+	for club_id: String in ["driver", "5i", "9i", "sw"]:
+		var main := MAIN_SCENE.instantiate() as Main
+		main.course_path = "res://courses/example_par3.json"
+		add_child_autofree(main)
+		main.shot_view.set_process(false)
+		main.swing_control.set_process(false)
+		main.set_mode(Main.Mode.PLAY)
+		var sc := main.swing_control
+		sc.select_club(sc.model.clubs.club(club_id))
+		sc.rotate_aim(-4.0)
+		sc._refresh_aim()
+		var marker := main.aim_view.marker_point
+		assert_eq(marker, sc.aim_prediction.landing, "%s: the marker is the predicted touchdown" % club_id)
+		sc.press()
+		sc.advance(1.0 / sc.swing.rate())
+		sc.press()
+		sc.advance(1.0 / sc.swing.rate())
+		sc.press()
+		var view := main.shot_view
+		var i := 0
+		while view.playing and i < 100000:
+			view.advance(FRAMES[i % FRAMES.size()])
+			i += 1
+		var field := view.ball.field
+		var want := field.tile_at(marker.x, marker.y)
+		var got := field.tile_at(view.ball.landing_position.x, view.ball.landing_position.y)
+		assert_lte(_chebyshev(want, got), 1, "%s: lands within 1 tile of the marker" % club_id)
+		assert_lt(Vector2(marker.x - view.ball.landing_position.x, marker.y - view.ball.landing_position.y).length(),
+				0.5, "%s: in fact within half a yard" % club_id)
 
 
 func test_debug_shot_tunables_come_from_a_resource() -> void:

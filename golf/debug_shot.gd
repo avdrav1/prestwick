@@ -1,7 +1,8 @@
 class_name DebugShot
 extends Resource
-## The fixed debug shot fired by the Play-mode button (E1-S7), until the swing (E2-S7)
-## replaces it. Stored in golf/debug_shot.tres; listed in docs/design.md (Ball).
+## The fixed debug shot fired by the Play-mode button (E1-S7), beside the swing (E2-S7)
+## until E2-S8 moves it behind a debug key. Stored in golf/debug_shot.tres; listed in
+## docs/design.md (Ball).
 ## Defaults suit courses/heights_20x20.json, the course main loads today.
 
 const DEFAULT_PATH := "res://golf/debug_shot.tres"

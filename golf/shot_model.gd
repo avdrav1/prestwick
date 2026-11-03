@@ -7,7 +7,8 @@ extends RefCounted
 ## one whose flat carry at the club's launch angle is that target: with no drag,
 ## v_full × sqrt(power × lie). The heading is the aim plus the accuracy offset (hook or
 ## slice, E2-S7) plus the sidehill turn; the ball then flies straight.
-## Putter: a starting ground speed within the putter's range; no lie applies.
+## Putter: a starting ground speed within the putter's range, plus the accuracy offset; no
+## lie applies.
 
 var clubs: ClubSet
 var lies: LieTable
@@ -51,14 +52,16 @@ func full_with_lie(field: HeightField, club: Club, power: float, at: Vector2, ai
 	return s
 
 
-## A putt from `at` at `speed` yd/s (clamped to the putter's range) along `aim_deg`.
-func putt(field: HeightField, putter: Club, speed: float, at: Vector2, aim_deg: float) -> ShotLaunch:
+## A putt from `at` at `speed` yd/s (clamped to the putter's range) along `aim_deg`, turned
+## by the swing's accuracy offset `offset_deg` (E2-S7). No lie applies.
+func putt(field: HeightField, putter: Club, speed: float, at: Vector2, aim_deg: float,
+		offset_deg: float = 0.0) -> ShotLaunch:
 	assert(putter.is_putter(), "putt() takes the putter")
 	var s := ShotLaunch.new()
 	s.club = putter
 	s.lie = lies.flat(field.surface_at(at.x, at.y))
 	s.start = Vector3(at.x, at.y, field.height_at(at.x, at.y))
-	s.heading_deg = aim_deg
+	s.heading_deg = aim_deg + offset_deg
 	var v := clampf(speed, putter.putt_min_speed, putter.putt_max_speed)
-	s.ground_velocity = Vector2.RIGHT.rotated(deg_to_rad(aim_deg)) * v
+	s.ground_velocity = Vector2.RIGHT.rotated(deg_to_rad(s.heading_deg)) * v
 	return s

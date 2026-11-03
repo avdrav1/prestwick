@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scenes/shot_view.gd" id="6_shot"]
 [ext_resource type="Resource" path="res://golf/debug_shot.tres" id="7_debug_shot"]
 [ext_resource type="Script" path="res://scenes/hole_panel.gd" id="8_hole_panel"]
+[ext_resource type="Script" path="res://scenes/swing_control.gd" id="9_swing_control"]
+[ext_resource type="Script" path="res://scenes/aim_view.gd" id="10_aim_view"]
+[ext_resource type="Script" path="res://scenes/swing_panel.gd" id="11_swing_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -23,6 +26,12 @@ script = ExtResource("6_shot")
 
 [node name="BuildTool" type="Node2D" parent="."]
 script = ExtResource("4_tool")
+
+[node name="AimView" type="Node2D" parent="."]
+script = ExtResource("10_aim_view")
+
+[node name="SwingControl" type="Node2D" parent="."]
+script = ExtResource("9_swing_control")
 
 [node name="Camera" type="Camera2D" parent="."]
 script = ExtResource("3_camera")
@@ -76,3 +85,16 @@ offset_right = -16.0
 offset_bottom = 16.0
 grow_horizontal = 0
 script = ExtResource("8_hole_panel")
+
+[node name="SwingPanel" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_top = -8.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("11_swing_panel")

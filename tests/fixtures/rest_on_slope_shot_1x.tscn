@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/fixtures/rest_on_slope_shot.gd" id="1_shot"]
+
+[node name="RestOnSlopeShot1x" type="Node2D"]
+script = ExtResource("1_shot")
+zoom_index = 1
