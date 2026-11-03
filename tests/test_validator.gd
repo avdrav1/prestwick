@@ -1,6 +1,7 @@
 extends GutTest
-## E2-S2: the five hole rules of docs/design.md (Hole validation rules, D11), the one
-## validator the game and /course-file share. Every failing rule names a tile and a reason.
+## E2-S2: the hole rules of docs/design.md (Hole validation rules, D11), the one validator
+## the game and /course-file share. Every failing rule names a tile and a reason. Rule 6 and
+## rule 3's unowned land are E6-S4's (D30).
 
 const EXAMPLE_PATH := "res://courses/example_par3.json"
 
@@ -350,6 +351,99 @@ func test_rule5_a_cupless_hole_has_no_zone_to_stand_in() -> void:
 	var c := _course(100, 60, [a, b])
 	assert_eq(_v.check_hole(c, c.holes[0]), [] as Array[CourseValidator.Issue])
 
+# --- rule 6: tee and cup on owned land (D30) ---
+
+## A 64 x 32 course of 4 x 2 parcels owning only parcels (1, 0) and (2, 0), tiles 16 to 47 of
+## the top row, with hole 1 a 100 yd par 3 from `tee` to `cup`.
+func _owned_strip(tee: Vector2i, cup: Vector2i) -> CourseData:
+	var c := _course(64, 32, [HoleData.new(1, 3, tee, cup)])
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			c.set_parcel_owned(Vector2i(p, q), q == 0 and (p == 1 or p == 2))
+	c.set_land_budget(5000)
+	return c
+
+
+func test_rule_count_is_six() -> void:
+	assert_eq(CourseValidator.RULE_COUNT, 6)
+
+
+func test_rule6_passes_tee_and_cup_on_owned_land() -> void:
+	var c := _owned_strip(Vector2i(20, 8), Vector2i(40, 8))
+	assert_eq(_v.check_hole(c, c.holes[0]), [] as Array[CourseValidator.Issue])
+
+
+func test_rule6_passes_in_a_sandbox() -> void:
+	var c := _course(64, 32, [HoleData.new(1, 3, Vector2i(2, 20), Vector2i(22, 20))])
+	assert_null(_issue(_v.check_hole(c, c.holes[0]), 6), "every parcel owned")
+
+
+func test_rule6_passes_when_only_the_footprint_is_unowned() -> void:
+	# Tee and cup one tile inside the owned strip: the footprint runs 30 yd past both ends and
+	# 30 yd south of the line onto unowned land (D30 allows it).
+	var c := _owned_strip(Vector2i(16, 14), Vector2i(36, 14))
+	assert_eq(_v.check_hole(c, c.holes[0]), [] as Array[CourseValidator.Issue])
+
+
+func test_rule6_fails_a_tee_on_unowned_land() -> void:
+	var c := _owned_strip(Vector2i(10, 8), Vector2i(30, 8))
+	var issue := _issue(_v.check_hole(c, c.holes[0]), 6)
+	assert_not_null(issue)
+	assert_eq(issue.tile, Vector2i(10, 8), "the tee is highlighted")
+	assert_string_contains(issue.reason, "tee")
+	_assert_one_line(issue)
+
+
+func test_rule6_fails_a_cup_on_unowned_land() -> void:
+	var c := _owned_strip(Vector2i(30, 8), Vector2i(50, 8))
+	var issues := _v.check_hole(c, c.holes[0])
+	var issue := _issue(issues, 6)
+	assert_not_null(issue)
+	assert_eq(issue.tile, Vector2i(50, 8), "the cup is highlighted")
+	assert_string_contains(issue.reason, "cup")
+	_assert_one_line(issue)
+
+
+func test_rule6_reports_both_tee_and_cup_when_both_are_unowned() -> void:
+	var c := _owned_strip(Vector2i(4, 20), Vector2i(24, 20))
+	var tiles: Array[Vector2i] = []
+	for i: CourseValidator.Issue in _v.check_hole(c, c.holes[0]):
+		if i.rule == 6:
+			tiles.append(i.tile)
+	assert_eq(tiles, [Vector2i(4, 20), Vector2i(24, 20)] as Array[Vector2i])
+
+
+func test_rule6_is_not_measured_for_an_unplaced_hole() -> void:
+	var c := _owned_strip(Vector2i(4, 20), HoleData.UNPLACED)
+	assert_eq(_rules(_v.check_hole(c, c.holes[0])), [1] as Array[int])
+
+
+# --- rule 3 counts unowned land as OB (D30) ---
+
+func test_rule3_fails_a_path_cut_by_unowned_land() -> void:
+	# Tee on parcel (1, 0), cup on parcel (3, 0); parcel (2, 0) between them is not owned, nor
+	# is the row below, so no owned path joins them.
+	var c := _course(64, 32, [HoleData.new(1, 3, Vector2i(20, 8), Vector2i(52, 8))])
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			c.set_parcel_owned(Vector2i(p, q), q == 0 and (p == 1 or p == 3))
+	var issue := _issue(_v.check_hole(c, c.holes[0]), 3)
+	assert_not_null(issue)
+	assert_eq(issue.tile, Vector2i(32, 8), "the first unowned tile on the line")
+	assert_string_contains(issue.reason, "unowned")
+	_assert_one_line(issue)
+	assert_null(_issue(_v.check_hole(c, c.holes[0]), 6), "tee and cup are owned")
+
+
+func test_rule3_goes_round_unowned_land_through_owned_land() -> void:
+	# The same, but the row below is owned all along: the path detours through it.
+	var c := _course(64, 32, [HoleData.new(1, 3, Vector2i(20, 8), Vector2i(52, 8))])
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			c.set_parcel_owned(Vector2i(p, q), q == 1 or p == 1 or p == 3)
+	assert_null(_issue(_v.check_hole(c, c.holes[0]), 3))
+
+
 # --- the course as a whole, and the example ---
 
 func test_check_course_keys_every_hole_by_number() -> void:
@@ -358,7 +452,7 @@ func test_check_course_keys_every_hole_by_number() -> void:
 	assert_eq(all.keys(), [1, 2])
 
 
-func test_generated_par3_passes_all_five_rules() -> void:
+func test_generated_par3_passes_every_rule() -> void:
 	var c := CourseGenerator.generate(3, false, false)
 	assert_not_null(c)
 	assert_eq(c.holes.size(), 1)
@@ -395,7 +489,8 @@ func test_generated_par4_and_par5_with_water_pass() -> void:
 func test_cli_validate_example_passes() -> void:
 	var out: Array[String] = []
 	assert_eq(CourseFileTool.run(PackedStringArray(["validate", EXAMPLE_PATH]), out), 0, "\n".join(out))
-	assert_eq(out.filter(func(l: String) -> bool: return l.contains("rule")).size(), 5, "one line per rule")
+	assert_eq(out.filter(func(l: String) -> bool: return l.contains("rule")).size(), CourseValidator.RULE_COUNT,
+			"one line per rule")
 	assert_false("\n".join(out).contains("FAIL"))
 
 

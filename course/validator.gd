@@ -1,21 +1,23 @@
 class_name CourseValidator
 extends RefCounted
-## The five hole rules (docs/design.md Hole validation rules, D11). The only implementation:
+## The six hole rules (docs/design.md Hole validation rules, D11, D30). The only implementation:
 ## the game (E2-S3) and /course-file validate (course/course_file.gd) both call it.
 ## A reader only: it never writes the course.
 ##
 ##   1. Exactly one tee and one cup.
 ##   2. Cup sits on a green tile.
 ##   3. A path of non-water, non-OB tiles connects tee to cup (4 neighbours, heights ignored).
+##      A tile on an unowned parcel counts as OB (D30, E6-S4).
 ##   4. Tee-to-cup yardage matches par (rounded straight line, par 3 < 250, par 5 > 470).
 ##   5. No tee inside another hole's landing zone (a disc on each par 4 and par 5's line).
+##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
 ##
 ## Each failing rule is one Issue: the rule, the tile at fault and a one-line reason.
 ## Distances are between tile centres at YARDS_PER_TILE. Numbers come from ValidatorTuning.
 
 ## Grid constant (CLAUDE.md Grid, D4), the same as BallParams.yards_per_tile (a test checks).
 const YARDS_PER_TILE: float = 5.0
-const RULE_COUNT: int = 5
+const RULE_COUNT: int = 6
 
 
 ## One failing rule of one hole.
@@ -50,7 +52,7 @@ class Reach:
 	extends RefCounted
 	var _w: int
 	var _h: int
-	## 1 where a tile can be crossed (not water, not OB), 0 otherwise.
+	## 1 where a tile can be crossed (not water, not OB, on an owned parcel), 0 otherwise.
 	var _passable := PackedByteArray()
 	## Component id per tile, 0 = not flooded yet.
 	var _label := PackedInt32Array()
@@ -64,6 +66,15 @@ class Reach:
 		for i in grid.size():
 			var s: int = grid[i]
 			_passable[i] = 0 if s == Surface.Type.WATER or s == Surface.Type.OOB else 1
+		# Unowned land is OB for the path (D30): clear each unowned parcel's tiles.
+		for q: int in course.parcels_high:
+			for p: int in course.parcels_wide:
+				if course.is_parcel_owned(Vector2i(p, q)):
+					continue
+				var r: Rect2i = course.parcel_rect(Vector2i(p, q))
+				for y: int in range(r.position.y, r.end.y):
+					for x: int in range(r.position.x, r.end.x):
+						_passable[y * _w + x] = 0
 		_label.resize(grid.size())
 
 	## A 4-neighbour path of crossable tiles joins `a` and `b` (heights ignored).
@@ -129,7 +140,7 @@ func check_course(course: CourseData) -> Dictionary:
 	return out
 
 
-## The failing rules of `hole`, in rule order; empty when all five pass. When its tee or cup
+## The failing rules of `hole`, in rule order; empty when all six pass. When its tee or cup
 ## is not placed, only rule 1 is reported: the others cannot be measured yet.
 ## `hole` is matched to its entry in `course.holes` (rules 1 and 5 compare it with the
 ## others): by identity, else the first entry with the same content, since set_holes stores
@@ -153,6 +164,7 @@ func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Arra
 	_rule3(course, hole, reach if reach != null else Reach.new(course), issues)
 	_rule4(hole, issues)
 	_rule5(course, hole, own, issues)
+	_rule6(course, hole, issues)
 	return issues
 
 
@@ -234,8 +246,10 @@ func _rule3(course: CourseData, hole: HoleData, reach: Reach, issues: Array[Issu
 	if reach.connected(hole.tee, hole.cup):
 		return
 	var at: Vector2i = _first_blocked_on_line(course, hole.tee, hole.cup)
-	issues.append(Issue.new(3, at, "no path from tee to cup without water or oob: %s at %s"
-			% [Surface.name_of(course.get_surface(at.x, at.y)), _fmt(at)]))
+	var what: String = Surface.name_of(course.get_surface(at.x, at.y)) if course.is_owned(at.x, at.y) \
+			else "unowned land"
+	issues.append(Issue.new(3, at, "no path from tee to cup without water, oob or unowned land: %s at %s"
+			% [what, _fmt(at)]))
 
 
 func _rule4(hole: HoleData, issues: Array[Issue]) -> void:
@@ -273,6 +287,15 @@ func _rule5(course: CourseData, hole: HoleData, own: int, issues: Array[Issue]) 
 				return
 
 
+## One issue for the tee and one for the cup, each on its tile, when it stands on a parcel
+## the player does not own. A course that owns every parcel (New sandbox) always passes.
+func _rule6(course: CourseData, hole: HoleData, issues: Array[Issue]) -> void:
+	if not course.is_owned(hole.tee.x, hole.tee.y):
+		issues.append(Issue.new(6, hole.tee, "tee is on land you do not own, at %s" % _fmt(hole.tee)))
+	if not course.is_owned(hole.cup.x, hole.cup.y):
+		issues.append(Issue.new(6, hole.cup, "cup is on land you do not own, at %s" % _fmt(hole.cup)))
+
+
 # --- helpers ---
 
 ## The index of `hole` in `course.holes`: identity first, then the first entry with the same
@@ -293,13 +316,13 @@ static func _placed(course: CourseData, tile: Vector2i) -> bool:
 
 
 static func _crossable(course: CourseData, tile: Vector2i) -> bool:
-	if not course.in_bounds(tile.x, tile.y):
+	if not course.is_owned(tile.x, tile.y):
 		return false
 	var s: Surface.Type = course.get_surface(tile.x, tile.y)
 	return s != Surface.Type.WATER and s != Surface.Type.OOB
 
 
-## The first water or OB tile on a 4-connected walk along the tee-to-cup line. A walk with
+## The first water, OB or unowned tile on a 4-connected walk along the tee-to-cup line. A walk with
 ## none would itself be a path, so when rule 3 fails there is always one.
 static func _first_blocked_on_line(course: CourseData, from: Vector2i, to: Vector2i) -> Vector2i:
 	var line := Vector2(to - from)

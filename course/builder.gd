@@ -15,7 +15,7 @@ extends RefCounted
 ##
 ## Holes (E2-S3, D11, docs/design.md Hole validation rules): place_tee and place_cup create
 ## the hole with that number, closed, or move its tee or cup. A hole opens only through
-## open_hole, and only while all five rules of course/validator.gd pass. An open hole closes
+## open_hole, and only while every rule of course/validator.gd passes. An open hole closes
 ## when a surface or height edit touches a tile of its footprint, or when its own tee or cup
 ## moves. After every edit (a stroke counts as one, checked when it ends) and every undo the
 ## validator reruns for every hole: `issues` holds the result, and any open hole that now
@@ -29,6 +29,12 @@ extends RefCounted
 ## (no limit when the budget is unlimited). buy_refusal names the rule that fails. A purchase
 ## takes the price from the budget and is one undo step; undoing it gives the parcel up and
 ## the price back, and reruns the validator. Land is never sold back (D27).
+##
+## Owned land only (E6-S4, D30): paint, raise and lower write only tiles on owned parcels, so
+## a brush that straddles the line edits its owned tiles and leaves the rest. A brush with
+## tiles on the map but none owned, or a tee or cup placed on an unowned tile, changes
+## nothing and emits `refused` with the reason (edit_refusal, place_refusal: "not your
+## land"). New sandbox owns every parcel, so nothing is refused there.
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
@@ -39,6 +45,9 @@ signal holes_changed
 signal checked(issues: Dictionary)
 ## Emitted after a parcel was bought, or a purchase undone, with that parcel.
 signal land_changed(parcel: Vector2i)
+## Emitted when an edit or a tee or cup placement did nothing because of a rule the player
+## can act on (E6-S4: "not your land"), with that one-line reason.
+signal refused(reason: String)
 
 ## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
 ## OB ground from E2-S3 (D9).
@@ -49,6 +58,8 @@ const PALETTE: Array[Surface.Type] = [
 ]
 ## The pars a hole may have.
 const PARS: PackedInt32Array = [3, 4, 5]
+## The reason an edit or placement on land the player does not own is refused (E6-S4).
+const NOT_YOUR_LAND: String = "not your land"
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
@@ -133,22 +144,45 @@ func brush_cells(center: Vector2i, size: int) -> Array[Vector2i]:
 	return cells
 
 
-## Paints `surface` under the brush. Returns true when any tile changed.
+## Why a brush of `size` on `center` would edit nothing because of land, or "" when it may:
+## NOT_YOUR_LAND when it covers tiles on the map and none of them is owned (E6-S4). A brush
+## with any owned tile is not refused; it edits only those.
+func edit_refusal(center: Vector2i, size: int) -> String:
+	var cells: Array[Vector2i] = brush_cells(center, size)
+	if cells.is_empty() or not _owned_cells(cells).is_empty():
+		return ""
+	return NOT_YOUR_LAND
+
+
+## Why a tee or cup on `cell` would be refused because of land, or "" when it may go there:
+## NOT_YOUR_LAND for a tile on the map that is not owned (E6-S4, D30).
+func place_refusal(cell: Vector2i) -> String:
+	if _course.in_bounds(cell.x, cell.y) and not _course.is_owned(cell.x, cell.y):
+		return NOT_YOUR_LAND
+	return ""
+
+
+## Paints `surface` on the owned tiles under the brush. Returns true when any tile changed;
+## false, emitting `refused`, when none of the brush is owned (edit_refusal).
 func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 	assert(Surface.is_valid(surface), "surface out of range")
+	if _refuse(edit_refusal(center, size)):
+		return false
 	var tiles := {}
-	for c: Vector2i in brush_cells(center, size):
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
 		if _course.get_surface(c.x, c.y) != surface:
 			_write(tiles, c, _course.get_height(c.x, c.y), surface)
 	return _commit(tiles)
 
 
-## Raises the ground under the brush one step, clamped at MAX_HEIGHT. True when any tile changed.
+## Raises the owned ground under the brush one step, clamped at MAX_HEIGHT. True when any
+## tile changed; refused as paint is.
 func raise(center: Vector2i, size: int) -> bool:
 	return _lift(center, size, 1)
 
 
-## Lowers the ground under the brush one step, clamped at 0. True when any tile changed.
+## Lowers the owned ground under the brush one step, clamped at 0. True when any tile
+## changed; refused as paint is.
 func lower(center: Vector2i, size: int) -> bool:
 	return _lift(center, size, -1)
 
@@ -203,7 +237,7 @@ func issues_for(number: int) -> Array[CourseValidator.Issue]:
 	return out
 
 
-## True when hole `number` exists, is closed and passes all five rules.
+## True when hole `number` exists, is closed and passes every rule.
 func can_open(number: int) -> bool:
 	var h: HoleData = hole(number)
 	return h != null and not h.open and _issues.has(number) and (_issues[number] as Array).is_empty()
@@ -211,7 +245,8 @@ func can_open(number: int) -> bool:
 
 ## Puts hole `number`'s tee on `cell`, creating the hole (closed, with `par`, or the tuning's
 ## default par when `par` is not 3, 4 or 5) when there is none. Moving the tee closes it.
-## False when `cell` is off the map or the tee is already there.
+## False when `cell` is off the map or the tee is already there, and false, emitting
+## `refused`, when `cell` is not owned (place_refusal).
 func place_tee(number: int, cell: Vector2i, par: int = 0) -> bool:
 	return _place(number, cell, true, par)
 
@@ -332,9 +367,9 @@ func undo() -> bool:
 		_course.set_land_budget(step.land_budget)
 		land_changed.emit(step.land_parcel)
 	# The course is back as it was before the edit, when every open hole passed (_init closed
-	# any that came in failing), so this rerun refreshes `issues` and closes nothing. Once
-	# rule 6 reads ownership (E6-S4), an undone purchase may close a hole that stands on the
-	# land given up; that close is not itself an undo step.
+	# any that came in failing), so this rerun refreshes `issues` and usually closes nothing.
+	# An undone purchase may close a hole whose tee or cup (rule 6) or path (rule 3) stands
+	# on the land given up; that close is not itself an undo step.
 	_rerun(Step.new())
 	_announce()
 	return true
@@ -343,8 +378,10 @@ func undo() -> bool:
 # --- internals ---
 
 func _lift(center: Vector2i, size: int, delta: int) -> bool:
+	if _refuse(edit_refusal(center, size)):
+		return false
 	var tiles := {}
-	for c: Vector2i in brush_cells(center, size):
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
 		if _stroke != null and _stroke_lifted.has(c):
 			continue
 		var h: int = _course.get_height(c.x, c.y)
@@ -398,8 +435,27 @@ func _close_footprints(step: Step, cells: Array[Vector2i]) -> void:
 		_write_holes(step, hs)
 
 
+## The tiles of `cells` on owned parcels, in order.
+func _owned_cells(cells: Array[Vector2i]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for c: Vector2i in cells:
+		if _course.is_owned(c.x, c.y):
+			out.append(c)
+	return out
+
+
+## Emits `refused` and returns true when `reason` is not empty.
+func _refuse(reason: String) -> bool:
+	if reason.is_empty():
+		return false
+	refused.emit(reason)
+	return true
+
+
 func _place(number: int, cell: Vector2i, is_tee: bool, par: int) -> bool:
 	if not _course.in_bounds(cell.x, cell.y):
+		return false
+	if _refuse(place_refusal(cell)):
 		return false
 	var hs: Array[HoleData] = _holes_copy()
 	var i: int = _find(hs, number)
