@@ -18,11 +18,27 @@ var ticks: int = 0
 
 
 ## Predicts a flight launched from `start` (yards) at `velocity` (yd/s) with seed `rng_seed`.
+## `roll_factor` is the club's (D14, Ball.roll_factor).
 static func run(course: CourseData, rng_seed: int, start: Vector3, velocity: Vector3,
+		params: BallParams = null, surfaces: SurfaceTable = null,
+		roll_factor: float = 1.0) -> ShotPrediction:
+	var ball := Ball.new(course, rng_seed, params, surfaces)
+	ball.record_path = true
+	ball.roll_factor = roll_factor
+	ball.launch(start, velocity)
+	return _from(ball)
+
+
+## Predicts a stroke built by ShotModel (a flight or a putt) with seed `rng_seed`.
+static func run_launch(course: CourseData, rng_seed: int, shot: ShotLaunch,
 		params: BallParams = null, surfaces: SurfaceTable = null) -> ShotPrediction:
 	var ball := Ball.new(course, rng_seed, params, surfaces)
 	ball.record_path = true
-	ball.launch(start, velocity)
+	shot.apply(ball)
+	return _from(ball)
+
+
+static func _from(ball: Ball) -> ShotPrediction:
 	ball.run_to_rest()
 	var p := ShotPrediction.new()
 	p.path = ball.path

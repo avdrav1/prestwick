@@ -36,6 +36,9 @@ var has_landed: bool = false
 ## When true, every tick appends the position to `path` (for drawing or prediction).
 var record_path: bool = false
 var path: PackedVector3Array = PackedVector3Array()
+## The club's roll factor (D14, golf/clubs.tres): multiplies the ground speed kept after the
+## first touchdown, after the surface's bounce friction. 1.0 changes nothing. Set before launch.
+var roll_factor: float = 1.0
 
 var _rng := RandomNumberGenerator.new()
 
@@ -154,7 +157,8 @@ func _step_flight() -> void:
 
 func _touch_down(at: Vector3, v: Vector3) -> void:
 	position = at
-	if not has_landed:
+	var first := not has_landed
+	if first:
 		has_landed = true
 		landing_position = at
 	var row := surfaces.row(field.surface_at(at.x, at.y))
@@ -165,6 +169,8 @@ func _touch_down(at: Vector3, v: Vector3) -> void:
 	var n := HeightField.normal_for(field.gradient_at(at.x, at.y) * row.slope_scale)
 	var into := v.dot(n)
 	var along := (v - n * into) * (1.0 - row.bounce_friction)
+	if first:
+		along *= roll_factor
 	# Always draw, so the generator stream does not depend on which branch runs.
 	var turn := deg_to_rad(_rng.randf_range(-row.scatter_deg, row.scatter_deg))
 	var out := -into * row.bounce
