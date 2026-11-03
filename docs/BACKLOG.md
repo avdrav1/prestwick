@@ -205,6 +205,7 @@ Planning notes:
   - Settles: design doc open question "Swing bar feel".
 - [ ] E2-S10 Decide how a ball at the foot of a riser plays, and build it. The aim marker must not sit at the ball's feet without saying why.
   - Note: (found in E2 review) raised by E2-S5, E2-S7 and E2-S8, and never put to the user. A club launched flatter than the face ahead meets it on the first tick: on a one-step riser the driver, 3w, 3i, 4i and 5i carry under 2 yd, and on a two-step riser (an 80% face) every club does, the SW included (4.4 yd). The marker sits at the ball's feet, the club picker does not flag it, and for the driver and 3w the marker does not match the result: they bounce off the face and run over it (about 110 and 80 yd total), while the 8i, 9i and PW on two steps roll back 2 to 3 yd behind the ball. The gate in `docs/design.md` Shot model ("Known limit, a ball at the foot of a riser") was due before E2-S8 or E3, whichever came first. It is now overdue and must close before E3 starts.
+  - User answered 2026-11-03: (a), show the club as blocked; keep the physics. Record it with `/decision`; do not reopen it.
   - Settles: ask the user, then record with `/decision`, which of these applies: (a) accept it, and have the marker and the club picker show a blocked club; (b) give the first flight tick clearance over the start height; (c) raise the lowest launch angle above 21.8 degrees (this changes the driver to 5i ladder and needs `/balance clubs` again); (d) leave it to the physics, and look at the bounce off a near-vertical face. The answer also covers E3 guests' club choice, which meets the same face.
   - Accept: at the foot of a one-step and of a two-step riser, every club's marker either matches where the ball ends up or the picker shows the club as blocked, as the decision says. `docs/design.md` Shot model drops the Known limit and states the rule.
   - Test: `tests/test_clubs.gd` (`test_a_club_flatter_than_the_riser_ahead_meets_it_at_once` changes to match), plus a marker or picker case in `tests/test_shot_prediction.gd`.
@@ -227,7 +228,7 @@ Planning notes:
 - [ ] E2-S14 Put the E2 review's feel questions to the hand playtest. Questions the swarm could not answer by itself.
   - Note: (found in E2 review) run alongside E2-S9's `/playtest full` session, or straight after it; its notes go in the same `docs/playtests/` file. These are questions, not fixes: the answers become `/decision`s, `/balance` findings or new stories.
   - Accept: the playtest notes answer each of these:
-    - Putter marker: it shows a putt at 100%, a full-length putt, so its break reads only for long putts. Should the marker sit at the power that reaches the cup, should dragging it set the 100% speed, or should the bar carry a distance scale? Recorded with `/decision`.
+    - Putter marker: the user answered 2026-11-03: the marker and dots show the putt at the power that reaches the cup, and the bar's power still decides the result. This is now a build item, not a playtest question: record it with `/decision` and build it in E2-S20.
     - Swing numbers (zone 20%, shank 30 degrees and half power, bar speed range) are starting values; do they feel right?
     - Does a ball beside a bank on flat ground reading a sidehill tilt feel right (tilt depends on position by design)?
     - Checklist item 1 by hand: start a new sandbox, build a par 3; does the validator tell you what is wrong? (cost clause excluded)
@@ -263,6 +264,12 @@ Planning notes:
   - Accept: the E3 planning notes in `docs/BACKLOG.md` list each item above, and E5-S3's Accept names the tree height.
   - Test: by hand: read E3's planning notes.
   - Touches: `docs/`
+
+- [ ] E2-S20 Show the putt at the pace that reaches the cup. The putter's marker shows the break the player will actually play.
+  - Note: (found in E2 review; user answered 2026-11-03). A 100% putt rolls 27.5 yd on a flat green, so the marker sat 17 to 23 yd past the cup on `courses/example_par3.json`, and its dots showed the break of a roll nobody plays.
+  - Accept: a `/decision` records the rule. With the putter, the marker and dots show the predicted roll at the power whose putt comes to rest nearest the cup, solved from the same Ball step (E1-S7). The power the bar locks still decides the putt. A putt struck at that power rests within 1 yd of the marker on a flat green and on a contour. `docs/design.md` Aim marker states the rule.
+  - Test: cases in `tests/test_shot_prediction.gd` (flat green and `green_contour()`), and `tests/test_swing.gd` still passes.
+  - Touches: `golf/`, `scenes/`
 
 ## E3: Nine holes and guests — planned
 
