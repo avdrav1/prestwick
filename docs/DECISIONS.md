@@ -253,3 +253,58 @@ Options:
 Choice: when the start is within `cup_radius` of the cup, the drop is the nearest tile centre the game may place a ball on (`Ball.may_place_on`); with none on the whole map, the cup's own tile, `cup_clear_drop_yd` 2.4 yd from its centre toward the start (E2-S13). This supersedes the last-resort clause of D15; the rest of D15 stands.
 Why: pillar 2: a penalty stroke always reads as a penalty.
 Affects: docs/design.md Cup and hazards (Drop point), golf/ball.gd, golf/ball_params.tres, the Claude Docs design doc (Flight and roll, rev 36)
+
+## D26: How big is a parcel, and which land does a new course start with? (2026-11-03)
+Question: D19 split the map into parcels and left their size and the starting block to E6-S1.
+Options:
+- 8 x 8 tile parcels (40 yd). Cost: 256 parcels on the 128 x 128 map to draw, price and click, and a purchase barely changes what fits. Benefit: fine-grained growth.
+- 16 x 16 tile parcels (80 yd), 8 x 8 on the map. Cost: a purchase is a big step. Benefit: 64 parcels a player can read at a glance, D10's map and frame times unchanged, and one purchase is about one hole's worth of land.
+- 32 x 32 tile parcels (160 yd). Cost: 16 parcels, so a few purchases own the map and E4's money has little to buy. Benefit: almost no ownership UI.
+- Starting block: 1 x 1 parcel (no hole over 110 yd), 2 x 2 (160 yd on a side), or 3 x 3 (240 yd, a short par 4 nearly fits).
+Choice: 16 x 16 tile parcels, 8 x 8 on the 128 x 128 map, and a free starting block of 2 x 2 parcels at the map's centre (user, 2026-11-03). Ownership is one flag per parcel in CourseData, written only by `course/builder.gd` and `course/save.gd`, saved in course format version 2 with the land budget left (unlimited for New sandbox); a version 1 file loads with every parcel owned and an unlimited budget. The parcel size is a format constant (`CourseData.PARCEL_TILES`), not a tunable, since the saved flags are indexed by it.
+Why: pillar 3: the block holds a par 3 but not a par 4 (219 yd corner to corner, under 250), so the course's second hole is the reason for its first purchase (hand calculation in `docs/design.md` Land). Pillar 4: 64 parcels, and the map, draw and frame times D10 measured stay as they are.
+Affects: docs/design.md Land, course/ (CourseData, save format v2, E6-S3), scenes/ (E6-S5, E6-S6), the Claude Docs design doc (Course building: Land)
+
+## D27: Which parcels may be bought, and can land be sold back? (2026-11-03)
+Question: D19 says the player buys parcels that border owned land; E6-S1 settles what "border" means and whether a purchase can be reversed.
+Options:
+- Any parcel on the map. Cost: a course in scattered pieces, with unowned land between tee and green. Benefit: the most freedom.
+- A parcel sharing an edge with an owned one. Cost: one check. Benefit: owned land stays one connected piece, so a course grows outward like a real one.
+- A parcel sharing an edge or a corner. Cost: two parcels joined only at a corner, which no 4-neighbour rule-3 path crosses without unowned land. Benefit: little.
+- Selling back at the price paid or less, or never. Cost of selling: a sell action, a price rule, and holes on sold land to close. Benefit: a player can undo a bad purchase late.
+Choice: a parcel may be bought when it shares an edge with an owned parcel and its price fits the land budget; a refusal names the rule that failed. No selling back (user, 2026-11-03, the story's proposal). A purchase is one undo step, which gives the price back (E6-S3), and that is the only way a parcel is given up.
+Why: pillar 4: one adjacency check, and no sell action or sell price to tune. Undo already covers a misclick, the case selling would mostly serve. Pillar 3: the course's land is a record of what the player chose to buy.
+Affects: docs/design.md Land, course/builder.gd (E6-S3), scenes/ (E6-S5), the Claude Docs design doc (Course building: Land)
+
+## D28: What does land cost, and what is the land budget until E4? (2026-11-03)
+Question: D19 left parcel prices and the budget open; E4 has no money yet.
+Options:
+- One flat price per parcel. Cost: no reason to prefer one parcel over another. Benefit: nothing to tune.
+- A base price plus or minus what is on the parcel: hills (its height relief) up, trees and water down. Cost: a formula and its numbers. Benefit: a hilly parcel is worth more and a wooded or wet one is a bargain with work in it, a choice the player reads from the land.
+- A price that rises with every parcel bought. Cost: a curve to tune before E4 has an economy. Benefit: it limits sprawl, which the budget already does.
+- Budget: $5,000 spent on parcels only, or no limit until E4.
+Choice: `price = $1,000 + $100 per step of relief - $1 per tree tile - $2 per water tile`, clamped to $500 to $2,000 and rounded to $50, every number in `data/land.json`; provisional, for E6-S8's `/balance land`. A New course starts with a $5,000 land budget, spent on parcels only until E4-S1 folds it into the one balance; the starting block is free (user, 2026-11-03, the story's proposal). New sandbox has no limit. Under the generator's 60% rough floor every generated parcel prices $800 to $1,700, so the clamp never binds on generated land and trees and water take at most about $200 off; E6-S8 decides whether the discounts must rise for a wooded or wet parcel to be a real bargain.
+Why: pillar 3: what is on the land changes its cost, so where to grow is a decision. The budget buys about 4 typical parcels ($1,150 each), enough for a par 3 and a par 4 and far short of the roughly 34 parcels nine holes need, so E4's money has work to do (E6-S8's target).
+Affects: docs/design.md Land and Economy and time, data/land.json (E6-S3), course/builder.gd (E6-S3), docs/BACKLOG.md E6-S8 and E4-S1, the Claude Docs design doc (Economy)
+
+## D29: What does a ball do on land the player does not own? (2026-11-03)
+Question: D19 left it open. A shot can leave owned land wherever the course runs near its edge.
+Options:
+- It plays on as on any land. Cost: holes play over ground the player has not bought, so buying land never gives a hole room. Benefit: nothing new.
+- Out of bounds only if it comes to rest there, playing the real ground until then. Cost: a ball can kick off an unowned hill back into play, and the drop must also handle unowned water and trees. Benefit: closest to a real OB line.
+- Out of bounds as an `oob` tile is: a ball that touches down on or rolls onto unowned land stops there and is OB. Cost: a ball cannot kick back in off unowned ground. Benefit: D9 and D15's rule, its entry point and its drop walk already exist and are tested; one ownership check in the ball's surface lookup.
+Choice: out of bounds (user, 2026-11-03: a ball that comes to rest on unowned land is OB, one stroke and a drop, D9 and D15, drawn as a boundary). Measuring it as an `oob` tile is the implementer's reading of that answer, not the user's, chosen because existing `oob` tiles stop the ball that way: touching down on or rolling onto unowned land stops the ball there, so it rests OB, and the drop walk passes over unowned tiles. A flight over unowned land that comes down on owned land plays on. ShotPrediction reads the same ownership. Unowned heights stay in the height field. New sandbox owns every parcel, so its play is unchanged.
+Why: pillar 2: one OB rule with one visible line, which the aim marker already predicts. Pillar 1: a hole's ball never plays on land the player does not have, and buying the parcel beside a hole is how it gets room.
+Inconclusive: the user said "comes to rest"; the stricter reading also makes OB a ball that rolls onto unowned land and would have rolled back. E6-S8's hand playtest checks whether that feels fair beside the boundary; if not, the second option replaces it in a new decision before E6-S7 is built on it, or after with E6-S7 reworked.
+Affects: docs/design.md Land and Grid and terrain (Out of bounds), golf/ball.gd and golf/shot_prediction.gd (E6-S7), scenes/ aim view (E6-S7), the Claude Docs design doc (Course building: Land; Golf play: Flight and roll)
+
+## D30: Which tiles of a hole must be on owned land? (2026-11-03)
+Question: E6-S4's draft asks for a hole's whole D11 footprint (30 yd round the tee-to-cup line) on owned land. E6-S1's hand calculation shows that the 2 x 2 starting block (D26) then holds no hole over 134 yd, and a par 4 needs 4 purchases.
+Options:
+- The whole footprint. Cost: the tee and the cup must sit 6 tiles inside owned land, so the block's longest hole is 134 yd, the 160 yd par 3 does not fit, and a par 4 needs 2 x 4 parcels (272 yd), most of the $5,000. Benefit: no OB within 30 yd of a hole's line.
+- The tee tile, the cup tile and a rule-3 path, with unowned land counted as OB in rule 3. Cost: a hole may run beside the boundary, where a wide shot is OB. Benefit: the block holds a par 3 up to 219 yd, one purchase (2 x 3 parcels, 281 yd) holds a par 4, and OB beside a hole is ordinary golf. The footprint keeps its D11 job, closing a hole on an edit near it; unowned land cannot be edited anyway.
+- A narrower owned margin round the line, such as 10 yd. Cost: another tunable and a capsule test. Benefit: some room guaranteed. Little gained over the second option, since the OB line is drawn and the aim marker shows it.
+Choice: a hole needs its tee tile and its cup tile on owned land (a new validator rule 6, "Tee and cup on owned land", built in E6-S4) and a rule-3 path, which counts unowned land as OB. Its footprint need not be owned.
+Why: pillar 1 and D26's intent: the starting block fits the first par 3 and one purchase the second hole. Pillar 2: the boundary is drawn and predicted (D29), so a hole beside it reads as a tight hole, not a broken one.
+Inconclusive: the user chose the 2 x 2 block expecting room for a par 3; this decision is what lets a 160 yd par 3 fit in it. If the whole footprint should be owned after all, the block or the parcel size has to grow to hold it, and that reopens D26.
+Affects: docs/design.md Land and Hole validation rules (rules 3 and 6), course/validator.gd and course/builder.gd (E6-S4), docs/BACKLOG.md E6-S4, the Claude Docs design doc (Course builder: Hole rules)

@@ -303,7 +303,7 @@ Ships as 0.3.0. Runs before E3 (D19). Serves pillars 3 and 1: the course starts 
 
 Done when: a new course opens on generated natural land, the player owns a starting block, buys neighbouring parcels from a land budget, and builds and plays a hole on them. New sandbox still gives free, fully owned land.
 
-- [ ] E6-S1 Settle the land rules on paper. D19 chose the model and left the numbers open.
+- [x] E6-S1 Settle the land rules on paper. D19 chose the model and left the numbers open.
   - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice.
   - Test: none. Review the design.md diff.
   - Touches: `docs/`
@@ -317,6 +317,7 @@ Done when: a new course opens on generated natural land, the player owns a start
     - What a ball does on land the player does not own. Proposed: it plays as OB (D9), drawn as a boundary, so buying land is how a hole gets room.
     - Whether land can be sold back. Proposed: no.
     - What the generator lays down: hill heights within 0 to 7, tree stands, ponds, rough, and how often; and that it is seeded, so one seed gives one map.
+  - Done: D26 (16 x 16 parcels, a free 2 x 2 starting block at the centre, ownership in CourseData, format v2), D27 (buy across an edge only, no selling back, undo refunds), D28 (land budget $5,000; provisional price $1,000 + $100 per step of relief - $1 per tree tile - $2 per water tile, $500 to $2,000, in `data/land.json`), D29 (unowned land is OB as an `oob` tile is), D30 (a hole owns its tee, its cup and a rule-3 path, not its whole footprint; new rule 6). `docs/design.md` Land holds every number, the generator's rates and the hand calculation: the block fits a 160 yd par 3 and no par 4 (219 yd at most), one purchase fits a par 4 (281 yd). E6-S4 and E6-S7's Accept lines now follow D29 and D30.
 - [ ] E6-S2 Generate natural land. The map stops being blank.
   - Accept: a seeded generator in `course/` fills the map with hills, tree stands, ponds and rough, using only the existing surfaces and heights 0 to 7, at the rates E6-S1 set. The same seed gives the same map. Every parcel has some buildable ground. Tunables live in a resource.
   - Test: `tests/test_land_generator.gd`: same seed same map, heights in range, rates within tolerance, no parcel all water.
@@ -326,7 +327,7 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Test: `tests/test_land_ownership.gd`: buy, refuse (not adjacent, too expensive), undo, a v1 file loads fully owned, a v2 round-trip keeps ownership and `content_hash()`.
   - Touches: `course/`, `tests/`
 - [ ] E6-S4 Build only on owned land. The builder enforces the line.
-  - Accept: painting, raising, lowering and placing a tee or cup on a tile the player does not own does nothing and says why; a brush that straddles the line edits only the owned tiles. A hole whose 30 yd footprint (D11) reaches unowned land fails a new validator rule, with its tile highlighted.
+  - Accept: painting, raising, lowering and placing a tee or cup on a tile the player does not own does nothing and says why; a brush that straddles the line edits only the owned tiles. A hole whose tee or cup stands on unowned land fails a new validator rule 6, with its tile highlighted, and rule 3 counts unowned land as OB (D30: the footprint need not be owned).
   - Test: `tests/test_builder_land.gd`, plus the new rule's pass and fail cases in the validator tests.
   - Touches: `course/`, `tests/`
 - [ ] E6-S5 Show land and buy parcels in Build. Make ownership readable.
@@ -338,11 +339,12 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Test: `tests/test_new_course.gd`: New course owns only the starting block with the full budget; New sandbox owns everything.
   - Touches: `scenes/`, `course/`
 - [ ] E6-S7 Play across the land line. The ball respects what E6-S1 decided for unowned land.
-  - Accept: a ball that comes to rest on unowned land is treated as E6-S1 settled (proposed: OB, one stroke and a drop, D15), and the aim view shows the line so the player can read it before the shot. Sandbox play is unchanged.
+  - Accept: a ball that touches down on or rolls onto unowned land is OB as on an `oob` tile, one stroke and a drop that skips unowned tiles (D29, D15), and the aim view shows the line so the player can read it before the shot. Sandbox play is unchanged.
   - Test: `tests/test_ball_land.gd`
   - Touches: `golf/`, `tests/`
 - [ ] E6-S8 Tune land prices and playtest a start. Close the milestone on the first purchases.
   - Accept: `/balance land` shows that the budget buys enough land for a par 3 and a par 4 on a typical seed, but not nine holes, so E4's money has work to do. A `/playtest` session starts a new course, buys two parcels, builds a hole across them and plays it. Findings go in `docs/playtests/`.
+  - Note: (found in E6-S1 review) the generator's 60% rough floor puts every generated parcel at $800 to $1,700, so trees and water take at most about $200 off (`docs/design.md` Land, D28); the balance pass says whether the discounts rise. The hand playtest also checks D29's reading: a ball that rolls onto unowned land is OB even if it would have rolled back.
   - Test: sim output in the balance commit.
   - Touches: `data/`, `docs/`
 - [ ] E6-S9 Settle fast downhill putts over a steep green bank inside 8 s. The last green case over its D16 target.
