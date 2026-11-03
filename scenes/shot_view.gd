@@ -9,6 +9,14 @@ extends Node2D
 ## The live ball is a golf/ball.gd Ball stepped at a fixed 60 Hz from frame time (never per
 ## frame), so it follows the ShotPrediction made at fire time tick for tick.
 ##
+## Water and OB (E2-S13): Ball moves a dropped ball to its drop point the tick it stops in
+## the hazard. The view keeps drawing it where it went in (Ball.hazard_position) for
+## ShotViewTuning.hazard_show_time, and only then draws it at the drop, ends the shot and
+## emits came_to_rest with the drop point. For that hold the landing cross is hidden (a ball
+## in water stops where it lands, so the cross would sit on it) and a hazard cue is drawn
+## under the ball, its shape set by the hazard so it reads by shape, not only colour: a
+## splash ring for water, a struck-through circle for OB.
+##
 ## Place it as a child of CourseView: it is Y-sorted, and each piece sits at y = its
 ## Iso.object_sort_key and draws itself offset back to its screen point, so hills nearer the
 ## camera hide the ball and farther ones do not.
@@ -30,7 +38,14 @@ signal came_to_rest(at: Vector3)
 @export var shadow_fade_steps: float = 8.0
 ## Half-size of the landing marker cross, screen px.
 @export var marker_radius: float = 5.0
+## Hazard cue (E2-S13), from art/palette.gpl: chalk splash rings for water, flag_red for OB.
+@export var splash_color: Color = Color8(240, 236, 224)
+@export var ob_color: Color = Color8(216, 58, 58)
+## Half-width of the cue's outer ring, screen px at 1x; drawn 2:1 like the tile footprint.
+@export var hazard_cue_radius: float = 14.0
 
+## scenes/shot_view_tuning.tres.
+var tuning: ShotViewTuning
 var ball: Ball
 var prediction: ShotPrediction
 ## True from fire until the ball comes to rest.
@@ -39,14 +54,27 @@ var playing: bool = false
 var sprite: Node2D
 ## The predicted landing point.
 var marker: Node2D
+## The hazard cue, drawn only while showing_hazard().
+var hazard_cue: Node2D
 
 var _elapsed: float = 0.0
 var _was_landed: bool = false
+## Seconds of shot time (from the launch) at which a dropped ball's hazard show ends, or a
+## negative number when none is running.
+var _drop_at: float = -1.0
+## Whether this shot shows its landing cross at all (a putt does not).
+var _marker_wanted: bool = false
 
 
 func _init() -> void:
+	tuning = ShotViewTuning.load_default()
 	y_sort_enabled = true
 	visible = false
+	# Before the ball: at the same sort key it draws under the ball, as rings round it.
+	hazard_cue = _Piece.new(_draw_hazard_cue)
+	hazard_cue.name = "HazardCue"
+	hazard_cue.visible = false
+	add_child(hazard_cue)
 	sprite = _Piece.new(_draw_ball)
 	sprite.name = "Ball"
 	add_child(sprite)
@@ -78,7 +106,8 @@ func fire_launch(course: CourseData, shot: ShotLaunch, rng_seed: int,
 	shot.apply(ball)
 	_start_live()
 	# A putt starts on the ground: its "landing" is where it was struck.
-	marker.visible = not shot.is_putt()
+	_marker_wanted = not shot.is_putt()
+	_refresh()
 
 
 ## Shows a ball resting at `at` (yards, on the ground) with nothing in play: the ball the
@@ -90,16 +119,17 @@ func show_at_rest(course: CourseData, at: Vector2) -> void:
 	prediction = null
 	playing = false
 	visible = true
-	marker.visible = false
+	_marker_wanted = false
 	_refresh()
 
 
 func _start_live() -> void:
 	_elapsed = 0.0
+	_drop_at = -1.0
 	_was_landed = false
 	playing = true
 	visible = true
-	marker.visible = true
+	_marker_wanted = true
 	_place_marker()
 	_refresh()
 
@@ -123,10 +153,23 @@ func advance(delta: float) -> void:
 		if ball.has_landed and not _was_landed:
 			_was_landed = true
 			landed.emit(ball.landing_position)
-	if ball.is_at_rest():
+		if ball.is_at_rest() and ball.penalty_strokes > 0:
+			_drop_at = float(ball.steps) / Ball.TICK_HZ + tuning.hazard_show_time
+	if ball.is_at_rest() and not showing_hazard():
 		playing = false
+		_drop_at = -1.0
 		came_to_rest.emit(ball.position)
 	_refresh()
+
+
+## True while a dropped ball is still drawn where it went in (E2-S13).
+func showing_hazard() -> bool:
+	return playing and _drop_at >= 0.0 and _elapsed + 1e-6 < _drop_at
+
+
+## Where the ball is drawn, yards: where it went in while showing_hazard, else its position.
+func drawn_position() -> Vector3:
+	return ball.hazard_position if showing_hazard() else ball.position
 
 
 ## Screen point (in this node's parent space) of the ball. In flight it is the projected 3D
@@ -135,13 +178,13 @@ func advance(delta: float) -> void:
 func ball_screen() -> Vector2:
 	if on_ground():
 		return shadow_screen()
-	return Iso.point_to_screen(ball.field.iso_point(ball.position))
+	return Iso.point_to_screen(ball.field.iso_point(drawn_position()))
 
 
 ## Screen point of the shadow: straight below the ball, on the top of the tile under it
 ## (D17), in flight too.
 func shadow_screen() -> Vector2:
-	return ball.field.tile_top_screen(ball.position)
+	return ball.field.tile_top_screen(drawn_position())
 
 
 ## True while the ball is on the ground: rolling, at rest, or not yet struck.
@@ -178,7 +221,12 @@ func sort_ground(tile: Vector2, ground_steps: float) -> float:
 func _refresh() -> void:
 	if ball == null:
 		return
-	_sort_at(sprite, _ground_below(ball.position))
+	var hold := showing_hazard()
+	marker.visible = _marker_wanted and not hold
+	hazard_cue.visible = hold
+	_sort_at(sprite, _ground_below(drawn_position()))
+	if hold:
+		_sort_at(hazard_cue, _ground_below(drawn_position()))
 
 
 ## The landing cross stands on the tile top under the landing point (D17's rule), like the
@@ -215,6 +263,22 @@ func _draw_marker(piece: Node2D) -> void:
 	var r := marker_radius
 	piece.draw_line(at + Vector2(-r, -r * 0.5), at + Vector2(r, r * 0.5), marker_color, 2.0)
 	piece.draw_line(at + Vector2(-r, r * 0.5), at + Vector2(r, -r * 0.5), marker_color, 2.0)
+
+
+## Water: two splash rings round where the ball went in. OB: a circle struck through.
+func _draw_hazard_cue(piece: Node2D) -> void:
+	if ball == null or not showing_hazard():
+		return
+	var at := shadow_screen() - piece.position
+	var r := hazard_cue_radius
+	piece.draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
+	if ball.hazard == Ball.Hazard.OB:
+		piece.draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ob_color, 2.0)
+		piece.draw_line(Vector2(-r, r) * 0.7071, Vector2(r, -r) * 0.7071, ob_color, 2.0)
+	else:
+		piece.draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, splash_color, 2.0)
+		piece.draw_arc(Vector2.ZERO, r * 0.6, 0.0, TAU, 24, splash_color, 1.5)
+	piece.draw_set_transform(Vector2.ZERO)
 
 
 ## One Y-sorted piece of the shot, drawn by a callback on the view.

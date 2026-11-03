@@ -71,3 +71,70 @@ func test_a_rolling_ball_steps_16_px_at_a_riser() -> void:
 		assert_almost_eq(view.ball_screen().y, _top_y(view), EPS, "rolling, on the tile top")
 		cells[view.ball.field.tile_at(view.ball.position.x, view.ball.position.y)] = true
 	assert_gt(cells.size(), 2, "it crossed tiles")
+
+
+## E2-S13: a fairway strip along +x with water from tile 20 to 24 on every row.
+func _water_strip() -> CourseData:
+	var c := CourseData.create(40, 11, Surface.Type.FAIRWAY, 0)
+	for y: int in 11:
+		for x: int in range(20, 25):
+			c.set_tile(x, y, 0, Surface.Type.WATER)
+	return c
+
+
+func test_a_water_ball_is_shown_where_it_went_in_before_the_drop() -> void:
+	var course := _water_strip()
+	var params := BallParams.load_default()
+	var speed := sqrt(100.0 * params.gravity / sin(deg_to_rad(60.0)))
+	var view := _view()
+	var rests: Array[Vector3] = []
+	view.came_to_rest.connect(func(at: Vector3) -> void: rests.append(at))
+	view.fire(course, Vector3(10, 27.5, 0), Ball.launch_velocity(speed, 30.0, 0.0), 7)
+	var dt := 1.0 / 60.0
+	var guard := 0
+	while not view.ball.is_at_rest() and guard < 6000:
+		view.advance(dt)
+		guard += 1
+	var ball := view.ball
+	assert_eq(ball.hazard, Ball.Hazard.WATER, "the carry finds the water")
+	assert_ne(ball.drop_point, ball.hazard_position, "the drop is away from where it went in")
+	var hold := view.tuning.hazard_show_time
+	assert_gt(hold, 0.0)
+	assert_true(view.playing, "the shot is not over the tick the ball is dropped")
+	assert_true(rests.is_empty(), "no rest yet")
+	assert_eq(view.drawn_position(), ball.hazard_position, "drawn where it went in")
+	assert_almost_eq(view.ball_screen(), ball.field.tile_top_screen(ball.hazard_position),
+			Vector2(EPS, EPS), "on the water's tile top")
+	assert_false(view.marker.visible, "the landing cross does not cover the ball in the water")
+	assert_true(view.hazard_cue.visible, "a hazard cue marks the water stroke")
+	assert_eq(view.hazard_cue.position, view.sprite.position, "the cue sorts with the ball")
+	assert_lt(view.hazard_cue.get_index(), view.sprite.get_index(), "the ball draws over its cue")
+	# Held for the whole show time, then at the drop.
+	var held := dt
+	while held < hold - dt * 1.5:
+		view.advance(dt)
+		held += dt
+		assert_true(view.playing, "%.2f s after the splash: still shown in the water" % held)
+		assert_eq(view.drawn_position(), ball.hazard_position)
+	view.advance(dt * 3.0)
+	assert_false(view.playing, "the shot ends once the show time is up")
+	assert_eq(rests, [ball.drop_point], "came_to_rest reports the drop, once")
+	assert_eq(view.drawn_position(), ball.drop_point, "now drawn at the drop")
+	assert_false(view.hazard_cue.visible, "the cue goes with the hold")
+	assert_almost_eq(view.ball_screen(), ball.field.tile_top_screen(ball.drop_point),
+			Vector2(EPS, EPS), "on the drop tile's top")
+
+
+func test_a_dry_ball_rests_at_once() -> void:
+	var course := CourseData.create(40, 11, Surface.Type.FAIRWAY, 0)
+	var view := _view()
+	var rests: Array[Vector3] = []
+	view.came_to_rest.connect(func(at: Vector3) -> void: rests.append(at))
+	view.fire(course, Vector3(10, 27.5, 0), Ball.launch_velocity(20.0, 30.0, 0.0), 7)
+	while view.playing:
+		view.advance(1.0 / 60.0)
+		if view.ball.is_at_rest():
+			break
+	assert_false(view.playing, "no hold without a hazard")
+	assert_false(view.hazard_cue.visible, "no hazard cue on a dry ball")
+	assert_eq(rests, [view.ball.position])

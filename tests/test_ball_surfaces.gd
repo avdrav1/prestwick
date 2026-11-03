@@ -79,6 +79,7 @@ func test_trees_row_no_longer_copies_rough() -> void:
 func test_cup_and_scatter_tunables_come_from_the_resource() -> void:
 	assert_eq(params.cup_radius, 0.25)
 	assert_eq(params.cup_capture_speed, 2.0)
+	assert_eq(params.cup_clear_drop_yd, 2.4)
 	assert_eq(params.tree_scatter_min_yd, 5.0, "1 tile")
 	assert_eq(params.tree_scatter_max_yd, 10.0, "2 tiles")
 	assert_eq(params.tree_scatter_cone_deg, 90.0)
@@ -201,6 +202,61 @@ func test_drop_falls_back_to_the_stroke_start() -> void:
 	var ball := _fly(c, start, _carry(100.0, 30.0))
 	assert_eq(ball.hazard, Ball.Hazard.WATER)
 	assert_eq(ball.drop_point, start)
+
+
+func test_the_fallback_drop_is_never_within_the_cup_radius() -> void:
+	# E2-S13: struck from beside the cup's centre (inside cup_radius) over water. The cup's tile
+	# is the only open tile on the track and takes no placed ball, so the drop falls back; the
+	# stroke's start would leave a free tap-in, so it is the nearest tile centre that may take a
+	# ball instead (one fairway tile, off the track).
+	var c := _course(Surface.Type.WATER)
+	var cup := Vector2i(10, 5)
+	c.set_tile(cup.x, cup.y, 0, Surface.Type.GREEN)
+	c.set_tile(10, 1, 0, Surface.Type.FAIRWAY)
+	var start := Vector3(52.5 + params.cup_radius * 0.5, ROW_Y, 0)
+	var ball := _fly(c, start, _carry(40.0, 30.0), 7, cup)
+	assert_eq(ball.hazard, Ball.Hazard.WATER)
+	assert_false(ball.holed)
+	assert_eq(ball.drop_point, Vector3(52.5, 7.5, 0.0), "the nearest tile centre that takes a ball")
+	_assert_fallback_clear_of_cup(c, ball, cup)
+
+
+func test_the_fallback_drop_with_nowhere_to_place_a_ball_stays_clear_of_the_cup() -> void:
+	# The cup's tile is the only open tile on the whole map: the drop stays on it, but
+	# cup_clear_drop_yd from the cup's centre, on the side the stroke started.
+	var c := _course(Surface.Type.WATER)
+	var cup := Vector2i(10, 5)
+	c.set_tile(cup.x, cup.y, 0, Surface.Type.GREEN)
+	var start := Vector3(52.5 - params.cup_radius * 0.5, ROW_Y, 0)
+	var ball := _fly(c, start, _carry(40.0, 30.0), 7, cup)
+	assert_eq(ball.hazard, Ball.Hazard.WATER)
+	assert_lt(params.cup_clear_drop_yd, 2.5, "inside the cup's tile")
+	assert_gt(params.cup_clear_drop_yd, params.cup_radius)
+	assert_almost_eq(ball.drop_point, Vector3(52.5 - params.cup_clear_drop_yd, ROW_Y, 0.0),
+			Vector3(EPS, EPS, EPS))
+	assert_eq(_tile(ball), cup, "on the only tile a ball may rest on")
+	_assert_fallback_clear_of_cup(c, ball, cup)
+
+
+func test_a_fallback_drop_from_a_start_clear_of_the_cup_is_still_the_start() -> void:
+	var c := _course(Surface.Type.WATER)
+	var cup := Vector2i(10, 5)
+	c.set_tile(cup.x, cup.y, 0, Surface.Type.GREEN)
+	c.set_tile(10, 1, 0, Surface.Type.FAIRWAY)
+	var start := Vector3(51.0, ROW_Y, 0)
+	var ball := _fly(c, start, _carry(40.0, 30.0), 7, cup)
+	assert_eq(ball.hazard, Ball.Hazard.WATER)
+	assert_eq(ball.drop_point, start, "a start clear of the cup is the drop of last resort (D15)")
+
+
+func _assert_fallback_clear_of_cup(c: CourseData, ball: Ball, cup: Vector2i) -> void:
+	var drop := Vector2(ball.drop_point.x, ball.drop_point.y)
+	assert_gt(drop.distance_to(ball.cup_center()), params.cup_radius, "clear of the cup")
+	assert_true(ball.may_rest_on(_tile(ball)), "on ground that may hold a ball")
+	for speed: float in [0.0, 0.1, 0.3]:
+		var to_cup := (ball.cup_center() - drop).normalized()
+		var tap := _roll(c, drop, to_cup * speed, cup)
+		assert_false(tap.holed, "a %.1f yd/s tap toward the cup from the drop is not holed" % speed)
 
 
 # --- out of bounds ---

@@ -24,7 +24,9 @@ class Plan:
 
 ## The stroke to play next from where `sc`'s ball rests: aimed at the cup, the legal club
 ## and power whose predicted rest is nearest the cup (a holed putt first, a drop never).
-static func plan(sc: SwingControl) -> Plan:
+## With `putts_hole_only` a full club's stroke that would hole is passed over, so the player
+## holes out only with the putter (E2-S13: a test that must not hang on a perfect chip-in).
+static func plan(sc: SwingControl, putts_hole_only: bool = false) -> Plan:
 	var best: Plan = null
 	var best_d := INF
 	var cup := sc.cup_tile()
@@ -44,6 +46,8 @@ static func plan(sc: SwingControl) -> Plan:
 			p.ticks = t
 			p.prediction = predict(sc, c, aim, t)
 			if p.prediction.holed:
+				if putts_hole_only and not c.is_putter():
+					continue
 				return p
 			if p.prediction.penalty_strokes > 0:
 				continue

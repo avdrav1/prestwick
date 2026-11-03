@@ -34,6 +34,10 @@ const DEFAULT_PATH := "res://golf/ball_params.tres"
 @export var cup_radius: float = 0.25
 ## The fastest ground speed (yd/s) the cup still captures. Faster balls roll over it.
 @export var cup_capture_speed: float = 2.0
+## E2-S13: when no tile on the map may take a placed ball and the stroke's start is within
+## cup_radius of the cup, the ball is placed this far (yards) from the cup's centre on the
+## cup's own tile, toward the start. Keep it over cup_radius and under half a tile (2.5 yd).
+@export var cup_clear_drop_yd: float = 2.4
 ## Tree scatter distance from the blocked point, yards (D15: 1 to 2 tiles).
 @export var tree_scatter_min_yd: float = 5.0
 @export var tree_scatter_max_yd: float = 10.0

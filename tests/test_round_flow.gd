@@ -36,11 +36,12 @@ func _finish_shot(m: Main) -> void:
 
 
 ## Plays the hole with the scripted player until it is finished. Returns the strokes taken.
-func _play_out(m: Main) -> int:
+## `putts_hole_only`: ScriptedRound.plan's, the player holes out only with the putter.
+func _play_out(m: Main, putts_hole_only: bool = false) -> int:
 	var sc := m.swing_control
 	var n := 0
 	while not sc.is_finished() and n < MAX_STROKES:
-		var plan := ScriptedRound.plan(sc)
+		var plan := ScriptedRound.plan(sc, putts_hole_only)
 		assert_not_null(plan, "a stroke can be planned")
 		if plan == null:
 			break
@@ -146,6 +147,54 @@ func test_a_water_ball_costs_a_stroke_and_the_next_starts_at_the_drop() -> void:
 	assert_eq(sc.field.tile_at(sc.ball_at.x, sc.ball_at.y), Vector2i(29, 5), "on the tile before the water")
 	assert_eq(m.score_card.strokes_label.text, "Strokes 2 (1 penalty)")
 	assert_false(sc.driver_stroke, "a drop is not the tee shot")
+
+
+func test_a_water_carry_short_of_an_island_green_scores_the_penalty_not_par() -> void:
+	# E2-S13: a par 3 to an island green (tiles 34 to 38 by rows 2 to 7, water all round it
+	# from tile 16). A full iron that carries short splashes down in the water; the drop is
+	# back on the fairway before it, never beside the flag, so the hole costs the penalty.
+	var c := _strip(40, 3)
+	for y: int in 10:
+		for x: int in range(16, 40):
+			if x < 34 or x > 38 or y < 2 or y > 7:
+				c.set_tile(x, y, 0, Surface.Type.WATER)
+	var m := _main_on(c)
+	m.set_mode(Main.Mode.PLAY)
+	var sc := m.swing_control
+	var green_front := 34.0 * sc.field.yards_per_tile
+	var plan: ScriptedRound.Plan = null
+	for club: Club in sc.legal:
+		var full := ScriptedRound.ticks_for(sc, 1.0)
+		var p := ScriptedRound.predict(sc, club, sc.aim_deg, full)
+		if p.hazard == Ball.Hazard.WATER and p.path[p.path.size() - 1].x < green_front:
+			plan = ScriptedRound.Plan.new()
+			plan.club = club
+			plan.aim_deg = sc.aim_deg
+			plan.ticks = full
+			break
+	assert_not_null(plan, "a full club carries short into the water")
+	if plan == null:
+		return
+	ScriptedRound.swing(sc, plan)
+	_finish_shot(m)
+	var ball := m.shot_view.ball
+	assert_eq(ball.hazard, Ball.Hazard.WATER, "%s carries short into the water" % plan.club.id)
+	assert_lt(ball.hazard_position.x, green_front, "short of the island")
+	assert_eq(sc.score.total(), 2, "the tee shot and its penalty")
+	var drop_tile := sc.field.tile_at(sc.ball_at.x, sc.ball_at.y)
+	assert_eq(drop_tile, Vector2i(15, 5), "dropped on the fairway before the water")
+	var cup := sc.field.tile_center(sc.cup_tile())
+	assert_gt(sc.ball_at.distance_to(cup), 5.0 * sc.field.yards_per_tile, "far from the flag")
+	# A perfect-accuracy chip-in from the drop would be a real par; the test is about the
+	# drop, so the scripted player holes out with the putter only.
+	var rest := _play_out(m, true)
+	var score := sc.score
+	assert_true(score.holed, "the hole is played out")
+	assert_eq(score.penalty_strokes, 1, "one penalty stroke")
+	assert_eq(score.total(), score.strokes + 1, "the penalty counts")
+	assert_eq(score.strokes, rest + 1)
+	assert_gt(score.total(), score.par, "a water carry does not make par: %d" % score.total())
+	assert_eq(m.score_card.to_par_label.text, "Total %s" % HoleScore.to_par_text(score.to_par()))
 
 
 func test_the_ball_is_picked_up_at_double_par() -> void:

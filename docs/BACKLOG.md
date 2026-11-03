@@ -223,7 +223,7 @@ Planning notes:
   - Test: `tests/test_course_data.gd`: a round trip of a course with a tee-only hole and a cup-only hole.
   - Touches: `course/`
   - Done: `CourseSave.save_file` and `to_json` drop a hole whose tee or cup is off the map (UNPLACED included), report the dropped numbers through `dropped`, and leave the course in memory alone. No format change, so no decision.
-- [ ] E2-S13 Make the drop and the hazard end to end honest. A hazard stroke reads as a hazard, and a water carry cannot score a tap-in par.
+- [x] E2-S13 Make the drop and the hazard end to end honest. A hazard stroke reads as a hazard, and a water carry cannot score a tap-in par.
   - Note: (found in E2 review) from E2-S6. `scenes/shot_view.gd` emits `came_to_rest` with `ball.position`, which is the drop point after a hazard, so the drawn ball may jump from the hazard to the drop. No end-to-end test checks that a water carry over an island-green flag cannot score par with a tap-in, now that Ball enforces it. Edge case: if the cup's tile is the only open tile on the track, the drop falls back to the stroke's start, and if that start was within `cup_radius` of the cup the next tap could be holed.
   - Accept: after a ball goes in water or out of bounds, the drawn ball shows where it went in before it appears at the drop point. The fallback drop never lands within `cup_radius` of the cup.
   - Test: `tests/test_round_flow.gd`: a water carry short of an island green scores the penalty, not par. `tests/test_ball_surfaces.gd`: the fallback drop case.

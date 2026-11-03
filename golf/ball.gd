@@ -342,7 +342,27 @@ func _nearest_open(at: Vector2) -> Vector2:
 					best = centre
 		if best_d < INF:
 			return best
-	return Vector2(_start.x, _start.y)
+	return _last_resort()
+
+
+## True when a ball placed at rest at ground point `at` cannot be holed by a tap: there is no
+## cup, or `at` is further than cup_radius from its centre (E2-S13).
+func _clear_of_cup(at: Vector2) -> bool:
+	return not has_cup() or at.distance_to(cup_center()) > params.cup_radius
+
+
+## Where the game places a ball when no tile on the map may take one (E2-S13): the stroke's
+## start, unless that is within cup_radius of the cup (where the next tap could be holed);
+## then cup_clear_drop_yd from the cup's centre, on its own tile, toward the start.
+func _last_resort() -> Vector2:
+	var s := Vector2(_start.x, _start.y)
+	if _clear_of_cup(s):
+		return s
+	var c := cup_center()
+	var away := s - c
+	if away.length_squared() < 1e-8:
+		away = Vector2.LEFT
+	return c + away.normalized() * params.cup_clear_drop_yd
 
 
 func _touch_down(at: Vector3, v: Vector3) -> void:
@@ -571,7 +591,8 @@ func hazard_at(at: Vector2) -> Hazard:
 ## Water and OB (D15): walk the ground track back to where it last crossed into hazard `h`
 ## (the entry point), then drop the ball at rest on the centre of the tile the track was
 ## over just before it, or further back past water, OB, trees and the cup's tile, else at the
-## stroke's start.
+## stroke's start. A start within cup_radius of the cup would leave a free tap-in, so then
+## the nearest tile centre the game may place a ball on (E2-S13, _nearest_open).
 ## One penalty stroke.
 func _drop(h: Hazard) -> void:
 	hazard = h
@@ -580,6 +601,8 @@ func _drop(h: Hazard) -> void:
 	var track := _track.duplicate()
 	track.append(Vector2(position.x, position.y))
 	var drop := Vector2(_start.x, _start.y)
+	if not _clear_of_cup(drop):
+		drop = _nearest_open(drop)
 	var i := track.size() - 2
 	while i >= 0 and not (hazard_at(track[i]) != h and hazard_at(track[i + 1]) == h):
 		i -= 1
