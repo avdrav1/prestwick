@@ -35,6 +35,11 @@ const DEFAULT_PATH := "res://golf/swing_tuning.tres"
 ## many screen pixels (viewport space) from where it was, so a small nudge of the mouse does
 ## not throw away a key fine-tune.
 @export var mouse_reaim_px: float = 24.0
+## The putter's aim marker (D21, PuttAim): the solve for the power whose putt rests nearest
+## the cup stops once a putt's rest is this close to the cup along the line (yards), or after
+## this many predicted putts.
+@export var putt_aim_tolerance_yd: float = 0.1
+@export var putt_aim_max_runs: int = 8
 
 
 static func load_default() -> SwingTuning:

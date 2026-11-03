@@ -368,3 +368,167 @@ func test_debug_shot_tunables_come_from_a_resource() -> void:
 	assert_gt(shot.speed, 0.0)
 	assert_between(shot.launch_deg, 1.0, 89.0)
 	assert_eq(shot.velocity(), Ball.launch_velocity(shot.speed, shot.launch_deg, shot.heading_deg))
+
+
+# --- the putter's marker (E2-S20, D21) ---
+
+## A Main in Play on `course` with hole 1 from `tee` to `cup`; the ball then rests at `at`
+## (yards), aimed at the cup turned by `off_deg`.
+func _putt_main(course: CourseData, tee: Vector2i, cup: Vector2i, at: Vector2,
+		off_deg: float = 0.0) -> Main:
+	course.set_holes([HoleData.new(1, 3, tee, cup, true)] as Array[HoleData])
+	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(main)
+	main.shot_view.set_process(false)
+	main.swing_control.set_process(false)
+	main.show_course(course)
+	main.set_mode(Main.Mode.PLAY)
+	var sc := main.swing_control
+	sc.place_ball(at)
+	sc.aim_at(sc.field.tile_center(cup))
+	sc.rotate_aim(off_deg)
+	sc._refresh_aim()
+	return main
+
+
+## The rest nearest the cup over the bar from 0 to 100% in 1% steps, yards from its centre.
+func _brute_nearest(sc: SwingControl) -> float:
+	var cup := sc.field.tile_center(sc.cup_tile())
+	var best := INF
+	for i in 101:
+		var s := PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, i / 100.0)
+		var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), s, null, null, sc.cup_tile())
+		var d := 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup)
+		best = minf(best, d)
+	return best
+
+
+## The marker shows the putt at the solved power, nearest the cup; a putt struck through the
+## bar at that power rests within 1 yd of it; a putt at 100% still runs past (the bar decides).
+func _assert_putt_marker(main: Main, label: String) -> void:
+	var sc := main.swing_control
+	assert_true(sc.club.is_putter(), "%s: the putter" % label)
+	var cup := sc.field.tile_center(sc.cup_tile())
+	var marker := main.aim_view.marker_point
+	assert_eq(marker, sc.aim_prediction.rest, "%s: the marker is the shown putt's rest" % label)
+	assert_eq(sc.aim_prediction, sc.aim_putt.prediction, "%s: the shown putt is the solve's" % label)
+	assert_lt(sc.aim_power, 1.0, "%s: not the 100%% putt" % label)
+	var miss := Vector2(marker.x, marker.y).distance_to(cup)
+	assert_almost_eq(miss, 0.0 if sc.aim_prediction.holed else sc.aim_putt.miss_yd, 1e-4, label)
+	assert_lte(miss, _brute_nearest(sc) + 0.15, "%s: as near the cup as any power on the bar" % label)
+	var last := sc.aim_prediction.path[sc.aim_prediction.path.size() - 1]
+	assert_eq(Vector2(last.x, last.y), Vector2(marker.x, marker.y), "%s: the dots' roll ends on the marker" % label)
+	var full := ShotPrediction.run_launch(sc.course, sc.next_seed(),
+			PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, 1.0), null, null, sc.cup_tile())
+	assert_gt(Vector2(full.rest.x, full.rest.y).distance_to(Vector2(marker.x, marker.y)), 3.0,
+			"%s: a 100%% putt rests elsewhere" % label)
+	# Strike through the bar at the solved power, accuracy at the centre.
+	var power := sc.aim_power
+	sc.press()
+	sc.advance(power / sc.swing.rate())
+	sc.press()
+	sc.advance(power / sc.swing.rate())
+	sc.press()
+	assert_eq(sc.strokes, 1, "%s: struck" % label)
+	var view := main.shot_view
+	var i := 0
+	while view.playing and i < 100000:
+		view.advance(FRAMES[i % FRAMES.size()])
+		i += 1
+	var got := view.ball.position
+	assert_lt(Vector2(got.x - marker.x, got.y - marker.y).length(), 1.0,
+			"%s: the putt struck at that power rests within 1 yd of the marker" % label)
+
+
+func test_putter_marker_shows_the_pace_that_reaches_the_cup_on_a_flat_green() -> void:
+	var cup := Vector2i(10, 6)
+	for case: Array in [[3.0, 0.0], [8.0, 0.0], [17.0, 0.0], [12.0, 6.0]]:
+		var course := CourseData.create(30, 12, Surface.Type.GREEN, 0)
+		var at := Vector2(52.5 - float(case[0]), 32.5)
+		var main := _putt_main(course, Vector2i(2, 6), cup, at, case[1])
+		var label := "flat, %.0f yd, %.0f deg off" % [case[0], case[1]]
+		if is_zero_approx(case[1]):
+			assert_lt(main.swing_control.aim_putt.miss_yd, 0.3, "%s: on the cup" % label)
+		_assert_putt_marker(main, label)
+
+
+## E2-S20 review: with the aim turned well off the cup, the shown putt is still the one that
+## rests nearest it (the miss is measured along the aim), and a cup square to the aim or
+## behind it shows the 0% putt.
+func test_putter_marker_with_the_aim_turned_off_the_cup() -> void:
+	var cup := Vector2i(10, 6)
+	for off: float in [20.0, 30.0, 60.0, -60.0, 90.0, 135.0, 180.0]:
+		var course := CourseData.create(30, 12, Surface.Type.GREEN, 0)
+		var main := _putt_main(course, Vector2i(2, 6), cup, Vector2(40.0, 32.5), off)
+		var sc := main.swing_control
+		var label := "flat, 12.5 yd, %.0f deg off" % off
+		var marker := main.aim_view.marker_point
+		var miss := Vector2(marker.x, marker.y).distance_to(sc.field.tile_center(cup))
+		assert_lte(miss, _brute_nearest(sc) + 0.15, "%s: as near the cup as any power on the bar" % label)
+		assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs)
+		if absf(off) >= 90.0:
+			assert_eq(sc.aim_power, 0.0, "%s: the cup is not ahead, the 0%% putt" % label)
+		else:
+			assert_almost_eq(miss, 12.5 * sin(deg_to_rad(absf(off))), 0.3,
+					"%s: rests level with the cup along the aim" % label)
+		if absf(off) <= 60.0:
+			_assert_putt_marker(main, label)
+
+
+func test_putter_marker_shows_the_pace_that_reaches_the_cup_on_a_contour() -> void:
+	# The E1-S9 contour (terraces one step apart, two tiles deep): up across it diagonally,
+	# along it, and down the mirrored one.
+	for case: Array in [[false, Vector2(22.5, 37.5), Vector2i(7, 5)],
+			[false, Vector2(32.5, 22.5), Vector2i(7, 8)],
+			[true, Vector2(32.5, 22.5), Vector2i(10, 7)]]:
+		var course := GridHeightEvidence.green_contour(case[0])
+		var main := _putt_main(course, Vector2i(1, 5), case[2], case[1])
+		_assert_putt_marker(main, "contour%s from %s to %s" % [" mirrored" if case[0] else "", case[1], case[2]])
+
+
+func test_putter_marker_with_no_cup_is_the_full_putt() -> void:
+	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(main)
+	main.shot_view.set_process(false)
+	main.swing_control.set_process(false)
+	main.show_course(GridHeightEvidence.green_contour())
+	main.set_mode(Main.Mode.PLAY)
+	var sc := main.swing_control
+	sc.place_ball(Vector2(27.5, 27.5))
+	sc._refresh_aim()
+	assert_eq(sc.cup_tile(), Ball.NO_CUP)
+	assert_eq(sc.aim_power, 1.0, "no cup: the marker is the 100% putt")
+	var want := ShotPrediction.run_launch(sc.course, sc.next_seed(), sc.perfect_launch())
+	assert_eq(sc.aim_prediction.rest, want.rest)
+
+
+## The solve runs while the player aims, so it must stay cheap: a sweep of the aim, warm
+## started from the last solve, takes few runs per update. Prints its cost.
+func test_putter_marker_solve_is_cheap_while_aiming() -> void:
+	var course := GridHeightEvidence.green_contour()
+	var main := _putt_main(course, Vector2i(1, 5), Vector2i(7, 5), Vector2(22.5, 37.5), -6.0)
+	var sc := main.swing_control
+	var runs := 0
+	var usec := 0
+	var worst := 0
+	var updates := 25
+	for i in updates:
+		sc.rotate_aim(0.5)
+		var t0 := Time.get_ticks_usec()
+		sc._refresh_aim()
+		usec += Time.get_ticks_usec() - t0
+		runs += sc.aim_putt.runs
+		worst = maxi(worst, sc.aim_putt.runs)
+		assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs)
+	gut.p("putter aim solve: %.1f runs and %.1f ms per update (worst %d runs)" % [
+			float(runs) / updates, usec / 1000.0 / updates, worst])
+	assert_lt(float(runs) / updates, 4.0, "warm started: under 4 putts per update on average")
+	# A cold start (a new ball position) from the flat-roll guess.
+	sc.aim_putt = null
+	var t1 := Time.get_ticks_usec()
+	sc._refresh_aim()
+	gut.p("putter aim solve, cold: %d runs, %.1f ms" % [sc.aim_putt.runs,
+			(Time.get_ticks_usec() - t1) / 1000.0])
+	assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs)

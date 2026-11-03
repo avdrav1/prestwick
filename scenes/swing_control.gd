@@ -63,6 +63,12 @@ var aim_prediction: ShotPrediction
 ## D20: the selected club is blocked from here along this aim (ClubSet.is_blocked): the
 ## marker and the club picker show it. The club can still be struck.
 var aim_blocked: bool = false
+## D21: with the putter and a cup, the power the aim's putt is shown at (PuttAim: the putt
+## resting nearest the cup), else 1.0. The bar's locked power still decides the putt.
+var aim_power: float = 1.0
+## The last putter solve (PuttAim), or null: its power warm-starts the next one while the
+## ball stays put.
+var aim_putt: PuttAim
 var active: bool = false:
 	set(value):
 		active = value
@@ -125,6 +131,7 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float) -> v
 ## is already drawn).
 func place_ball(at: Vector2, p_driver_stroke: bool = false, show: bool = true) -> void:
 	ball_at = at
+	aim_putt = null
 	driver_stroke = p_driver_stroke
 	_key_aim_mouse = null
 	_refresh_legal()
@@ -215,7 +222,8 @@ func advance(delta: float) -> void:
 		changed.emit()
 
 
-## The stroke a perfect swing would make now (the aim's).
+## The stroke a perfect swing would make now (100% power, accuracy at the centre). The
+## putter's aim shows the putt at `aim_power` instead (D21).
 func perfect_launch() -> ShotLaunch:
 	return swing.perfect_launch(model, field, club, ball_at, aim_deg)
 
@@ -346,7 +354,17 @@ func _refresh_aim() -> void:
 			_aim_view.clear()
 		return
 	var shot := perfect_launch()
-	aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
+	aim_power = 1.0
+	if shot.is_putt() and cup_tile() != Ball.NO_CUP:
+		# D21: the putt at the pace that comes to rest nearest the cup.
+		var warm := aim_putt.power if aim_putt != null else -1.0
+		aim_putt = PuttAim.solve(course, field, model, tuning, ball_at, aim_deg, cup_tile(),
+				next_seed(), warm)
+		shot = aim_putt.shot
+		aim_power = aim_putt.power
+		aim_prediction = aim_putt.prediction
+	else:
+		aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
 	var was_blocked := aim_blocked
 	aim_blocked = model.clubs.is_blocked(shot, aim_prediction)
 	if _aim_view != null:

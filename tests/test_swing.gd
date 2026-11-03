@@ -206,7 +206,8 @@ func test_putt_speed_maps_the_bar_across_the_putters_range() -> void:
 	assert_almost_eq(s.putt_speed(putter), putter.putt_max_speed, EPS)
 
 
-## A perfect putt through the bar, and the aim marker's rest point (a putt at 100%).
+## A perfect putt through the bar, and a predicted putt at 100% (the putter's marker with no
+## cup; with a cup it shows the putt nearest the cup, D21, tests/test_shot_prediction.gd).
 func _perfect_putt_vs_marker(course: CourseData, from: Vector2, aim_deg: float) -> Array[Vector3]:
 	var model := ShotModel.new()
 	var field := HeightField.new(course, model.params)

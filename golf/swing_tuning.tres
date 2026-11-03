@@ -17,3 +17,5 @@ bar_speed_min = 0.5
 bar_speed_max = 1.5
 aim_key_step_deg = 1.0
 mouse_reaim_px = 24.0
+putt_aim_tolerance_yd = 0.1
+putt_aim_max_runs = 8

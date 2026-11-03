@@ -271,7 +271,8 @@ Planning notes:
   - Test: by hand: read E3's planning notes.
   - Touches: `docs/`
 
-- [ ] E2-S20 Show the putt at the pace that reaches the cup. The putter's marker shows the break the player will actually play.
+- [x] E2-S20 Show the putt at the pace that reaches the cup. The putter's marker shows the break the player will actually play.
+  - Done 2026-11-03: D21; `golf/putt_aim.gd` solves the power whose putt rests nearest the cup (a warm-started secant on the miss along the line), and SwingControl shows that putt with the putter when the hole has a cup. About 9 ms per aim update while sweeping (1.2 putts), 22 ms for a new ball position. Screenshot `docs/decisions/e2-s20-putt-marker.png`.
   - Note: (found in E2 review; user answered 2026-11-03). A 100% putt rolls 27.5 yd on a flat green, so the marker sat 17 to 23 yd past the cup on `courses/example_par3.json`, and its dots showed the break of a roll nobody plays.
   - Accept: a `/decision` records the rule. With the putter, the marker and dots show the predicted roll at the power whose putt comes to rest nearest the cup, solved from the same Ball step (E1-S7). The power the bar locks still decides the putt. A putt struck at that power rests within 1 yd of the marker on a flat green and on a contour. `docs/design.md` Aim marker states the rule.
   - Test: cases in `tests/test_shot_prediction.gd` (flat green and `green_contour()`), and `tests/test_swing.gd` still passes.

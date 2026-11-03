@@ -171,6 +171,10 @@ static func validate(t: SwingTuning) -> PackedStringArray:
 		errors.append("bar speed range must be 0 < min <= max")
 	if t.bar_speed_default < t.bar_speed_min or t.bar_speed_default > t.bar_speed_max:
 		errors.append("bar_speed_default must lie in the range")
+	if t.putt_aim_tolerance_yd <= 0.0:
+		errors.append("putt_aim_tolerance_yd must be positive")
+	if t.putt_aim_max_runs < 2:
+		errors.append("putt_aim_max_runs must be at least 2")
 	return errors
 
 
