@@ -693,9 +693,12 @@ func _valley(surface: Surface.Type, depth: int) -> CourseData:
 
 
 func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
-	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim.
+	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim. Cart
+	# path 5 deep is 9.95 s (E2-S11 keeps it there); deeper valleys are docs/design.md Ball,
+	# Known limit.
 	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.CART_PATH]:
-		for depth: int in [2, 3, 4]:
+		var depths: Array = [2, 3, 4, 5] if s == Surface.Type.CART_PATH else [2, 3, 4]
+		for depth: int in depths:
 			var course := _valley(s, depth)
 			var worst := 0
 			var x := 52.5 - depth * 5.0
@@ -745,6 +748,31 @@ func test_drive_down_a_stepped_cart_path_settles_under_the_target() -> void:
 			assert_lt(ticks, OFF_GREEN_SETTLE, "%s: %d ticks on the ground" % [label, ticks])
 
 
+func test_every_club_settles_under_the_target_on_flat_ground() -> void:
+	# E2-S11: the E2-S4 drives above are a raw 75 yd/s ball with no club. Every full club
+	# through the shot model (E2-S5: its launch and roll_factor), at 100% and at the bar's
+	# max_power, onto flat fairway, tee, rough and cart path (the 110% driver onto cart path,
+	# 8.9 s, is the slowest). Down a stepped cart path only the driver is held to the target
+	# (the test above): an iron that reaches the top of the steps nearly still takes up to
+	# 14.9 s (docs/design.md Ball, Known limit, long slopes off the green).
+	var model := ShotModel.new()
+	var top := SwingTuning.load_default().max_power
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH, Surface.Type.CART_PATH]:
+		var course := CourseData.create(120, 8, s, 0)
+		for c in model.clubs.clubs:
+			if c.is_putter():
+				continue
+			for power: float in [1.0, top]:
+				var ball := Ball.new(course, 1)
+				model.full(ball.field, c, power, Vector2(10, 20), 0.0).apply(ball)
+				while not ball.has_landed:
+					ball.step()
+				var landed := ball.steps
+				ball.run_to_rest()
+				assert_lt(ball.steps - landed, OFF_GREEN_SETTLE, "flat %s, %s at %.0f%%: %d ticks on the ground" % [
+						Surface.NAMES[s], c.id, power * 100.0, ball.steps - landed])
+
+
 ## Every surface a ball rolls on, the green included.
 const ROLLING: Array[Surface.Type] = [Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH,
 		Surface.Type.CART_PATH, Surface.Type.GREEN]
@@ -759,23 +787,56 @@ func _deep_pit(surface: Surface.Type, depth: int) -> CourseData:
 func test_deep_pits_settle_under_the_targets() -> void:
 	# E2-S4 review: one-tile pits 2 to 7 steps deep reached the 60 s cap (fairway and tee from
 	# 5 deep, cart path from 3, green from 4, rough from 6). Starts 0.5 to 2.4 yd out, 16
-	# ways round; on a 2-deep green, 0 to 2 yd (beyond that a still ball on the rim creeps:
-	# docs/design.md Ball, Known limit).
+	# ways round. The green's rim, further out, is the next test.
 	var centre := Vector2(12.5, 12.5)
 	for s: Surface.Type in ROLLING:
 		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
 		for depth: int in range(2, 8):
 			var course := _deep_pit(s, depth)
-			var radii: Array = [0.0, 1.0, 1.5, 2.0] if s == Surface.Type.GREEN and depth == 2 \
-					else [0.5, 0.975, 1.45, 1.925, 2.4]
 			var worst := 0
-			for r: float in radii:
+			for r: float in [0.5, 0.975, 1.45, 1.925, 2.4]:
 				for a: int in 16:
 					var ball := _set_down(course, centre + Vector2.RIGHT.rotated(a * PI / 8.0) * r)
 					worst = maxi(worst, ball.steps)
 					assert_lt(Vector2(ball.position.x, ball.position.y).distance_to(centre), 0.5,
 							"%s pit %d deep, r %.2f: rests at the bottom" % [Surface.NAMES[s], depth, r])
 			assert_lt(worst, target, "%s pit %d deep: longest %d ticks" % [Surface.NAMES[s], depth, worst])
+
+
+func test_green_pit_balls_settle_from_anywhere_on_the_plot() -> void:
+	# E2-S11: on the rim of a two-step green pit, where the walls blend at its corners, the
+	# felt pull was just over the D7 hold and a still ball crept at the rest speed: 20.7 s
+	# from (10.2, 10.2), 19.4 s from (9.5, 10.75), and 15.2 s on a three-step pit. Since green
+	# steep_from 0.4 and steep_scale 3.0, past a one-step contour a slope is felt well over the
+	# hold. Every 0.25 yd over one quarter of the 5x5 plot (the pit is symmetric).
+	var centre := Vector2(12.5, 12.5)
+	for depth: int in [2, 3]:
+		var course := _deep_pit(Surface.Type.GREEN, depth)
+		var worst := 0
+		var what := Vector2.ZERO
+		for i in range(1, 51):
+			for j in range(1, 51):
+				var at := Vector2(i, j) * 0.25
+				var ball := _set_down(course, at)
+				if ball.steps > worst:
+					worst = ball.steps
+					what = at
+				if Vector2(ball.position.x, ball.position.y).distance_to(centre) >= 0.5:
+					assert_true(ball.steps <= 1, "green pit %d deep, set at %s: held where set, or rolls to the bottom" % [depth, at])
+		assert_lt(worst, GREEN_SETTLE, "green pit %d deep: longest %d ticks, from %s" % [depth, worst, what])
+
+
+func test_a_green_slope_past_a_contour_is_felt_well_over_the_hold() -> void:
+	# E2-S11: a contour's slope (0.4 per axis, one step per tile, corners included) is felt as
+	# a break and held (D7). Just past it the felt slope must already pull a still ball
+	# clearly harder than the hold, or the ball creeps at the rest speed for many seconds.
+	var params := BallParams.load_default()
+	var green := SurfaceTable.load_default().row(Surface.Type.GREEN)
+	assert_almost_eq(green.steep_from, 0.4, 1e-6, "the steep part starts where a one-step contour ends")
+	var hold := _hold(params, green)
+	var felt := Ball.felt_gradient(Vector2(0.5, 0.0), green).x
+	var pull := params.gravity * felt / (1.0 + felt * felt)
+	assert_gt(pull, 3.0 * hold, "a quarter step past a contour pulls %.2f against the %.2f hold" % [pull, hold])
 
 
 func test_trench_balls_settle_under_the_targets() -> void:
