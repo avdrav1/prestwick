@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ValidatorTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://course/validator_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+par4_min_yd = 250
+par5_min_yd = 471
+landing_distance_yd = 240.0
+cup_clearance_yd = 60.0
+zone_radius_yd = 30.0
+footprint_half_width_yd = 30.0

@@ -5,7 +5,7 @@ extends Resource
 ##
 ## Readers (renderer, ball, guests, validator) use only the getters:
 ##   width, height, in_bounds(x, y), get_height(x, y), get_surface(x, y) (off-map
-##   reads give height 0 and Surface.Type.OOB), holes,
+##   reads give height 0 and Surface.Type.OOB), surface_grid(), holes,
 ##   course_name, author, thumbnail, to_dict(), content_hash(), copy().
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes
@@ -82,6 +82,17 @@ func get_surface(x: int, y: int) -> Surface.Type:
 	if not in_bounds(x, y):
 		return Surface.Type.OOB
 	return (_tiles[_index(x, y)] & 0x0F) as Surface.Type
+
+
+## Every tile's Surface.Type value, row-major (index = y * width + x), as a fresh copy.
+## For whole-map readers (the validator's rule 3 flood) that would otherwise call
+## get_surface once per tile.
+func surface_grid() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(_tiles.size())
+	for i in _tiles.size():
+		out[i] = _tiles[i] & 0x0F
+	return out
 
 
 ## Hex SHA-256 of the full serialised content (tiles, holes, name, author, thumbnail).

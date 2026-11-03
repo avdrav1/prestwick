@@ -241,3 +241,87 @@ func test_edge_cue_draws_over_its_top_and_under_objects() -> void:
 	var shift: int = edges.anchor.y - edges.frame_size.y / 2
 	assert_almost_eq(_view.edge_layer(3).position.y, _view.top_layer(3).position.y - shift, 0.001,
 			"the frame's anchor lands on the tile center")
+
+
+# E2-S2: a tee marker and a pin for every hole, on its tile's top, Y-sorted with the terrain.
+
+## Two holes on uneven ground: hole 1's tee on a 5-step pillar, its cup on a 3-step green;
+## hole 2 on flat ground at height 0.
+func _two_hole_course() -> CourseData:
+	var c := CourseData.create(12, 12, Surface.Type.ROUGH, 0)
+	c.set_tile(2, 3, 5, Surface.Type.TEE)
+	c.set_tile(9, 4, 3, Surface.Type.GREEN)
+	c.set_tile(8, 10, 0, Surface.Type.GREEN)
+	c.set_holes([HoleData.new(1, 3, Vector2i(2, 3), Vector2i(9, 4)),
+			HoleData.new(2, 3, Vector2i(1, 10), Vector2i(8, 10))])
+	return c
+
+
+func _assert_marker_on_top(m: HoleMarker, cell: Vector2i, h: int) -> void:
+	assert_not_null(m)
+	if m == null:
+		return
+	assert_eq(m.cell, cell)
+	assert_eq(m.ground, h, "stands on the tile's whole height")
+	assert_eq(m.draw_point(), Iso.tile_to_screen(Vector2(cell), h), "drawn on the tile's top centre")
+	assert_almost_eq(m.position.x, Iso.tile_to_screen(Vector2(cell), h).x, 0.001)
+	assert_almost_eq(m.sort_key(), Iso.object_sort_key(Vector2(cell), h), 0.001, "sorts as an object on its top")
+	assert_gt(m.sort_key(), float(Iso.top_sort_key(cell, h)), "over its own top")
+	assert_lt(m.sort_key(), float(Iso.riser_sort_key(cell + Vector2i(1, 0), 0)), "under the next row")
+	if h < CourseData.MAX_HEIGHT:
+		assert_lt(m.sort_key(), float(Iso.riser_sort_key(cell, h + 1)), "under a step above it")
+
+
+func test_every_hole_gets_a_tee_marker_and_a_pin_on_its_top() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	assert_eq(_view.hole_markers().size(), 4, "two holes, two markers each")
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.TEE), Vector2i(2, 3), 5)
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.PIN), Vector2i(9, 4), 3)
+	_assert_marker_on_top(_view.hole_marker(2, HoleMarker.Kind.TEE), Vector2i(1, 10), 0)
+	_assert_marker_on_top(_view.hole_marker(2, HoleMarker.Kind.PIN), Vector2i(8, 10), 0)
+
+
+func test_markers_y_sort_in_the_course_view_space() -> void:
+	_view.show_course(_two_hole_course())
+	var m: HoleMarker = _view.hole_marker(1, HoleMarker.Kind.TEE)
+	var parent := m.get_parent() as Node2D
+	assert_true(parent.y_sort_enabled, "the holes node sorts with the layers")
+	assert_eq(parent.get_parent(), _view, "a direct child of the view")
+	assert_eq(parent.position, Vector2.ZERO, "so a marker's y is its sort key in view space")
+	# A nearer, taller tile's riser hides the marker; a farther one does not.
+	var tee := Vector2i(2, 3)
+	assert_lt(_sort_key(_view.riser_layer(0), tee - Vector2i(1, 0)), m.sort_key(), "farther tile draws first")
+	assert_gt(_sort_key(_view.riser_layer(0), tee + Vector2i(0, 1)), m.sort_key(), "nearer tile draws later")
+
+
+func test_example_par3_shows_its_hole() -> void:
+	var c := CourseSave.load_file("res://courses/example_par3.json")
+	assert_not_null(c)
+	if c == null:
+		return
+	_view.show_course(c)
+	var hole: HoleData = c.holes[0]
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.TEE), hole.tee, c.get_height(hole.tee.x, hole.tee.y))
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.PIN), hole.cup, c.get_height(hole.cup.x, hole.cup.y))
+
+
+func test_refresh_cell_moves_a_marker_to_its_new_top() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	c.set_tile(9, 4, 6, Surface.Type.GREEN)
+	_view.refresh_cell(Vector2i(9, 4))
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.PIN), Vector2i(9, 4), 6)
+	_assert_marker_on_top(_view.hole_marker(1, HoleMarker.Kind.TEE), Vector2i(2, 3), 5)
+
+
+func test_markers_follow_the_holes_list() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	c.set_holes([HoleData.new(1, 3, Vector2i(2, 3), HoleData.UNPLACED)])
+	_view.refresh_holes()
+	assert_eq(_view.hole_markers().size(), 1, "an unplaced cup has no pin")
+	assert_null(_view.hole_marker(1, HoleMarker.Kind.PIN))
+	assert_eq(_view.find_child("Holes", false, false).get_child_count(), 1, "old markers are gone")
+	_view.show_course(null)
+	assert_eq(_view.hole_markers().size(), 0, "clearing the view clears the markers")

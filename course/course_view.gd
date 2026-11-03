@@ -19,6 +19,10 @@ extends Node2D
 ## same sort key as that height's tops; Y-sort breaks the tie by tree order, so the cue layers
 ## are added after every top and draw over their tile's top, still under objects on it.
 ## A back edge on the map border gets no cue.
+##
+## Hole markers (E2-S2): a HoleMarker tee marker and pin for every placed tee and cup in
+## CourseData, under one Y-sorted child at the origin, so each sorts with the terrain at
+## Iso.object_sort_key on its tile's top (course/hole_marker.gd).
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
@@ -39,6 +43,8 @@ var _risers: Array[TileMapLayer] = []
 var _edges: Array[TileMapLayer] = []
 var _riser_atlas: Dictionary = {}
 var _edge_atlas: Dictionary = {}
+var _holes_root: Node2D
+var _markers: Array[HoleMarker] = []
 
 
 func _init() -> void:
@@ -53,6 +59,10 @@ func _init() -> void:
 	var edge_shift: int = _art.edges.anchor.y - _art.edges.frame_size.y / 2
 	for k: int in CourseData.MAX_HEIGHT + 1:
 		_edges.append(_make_layer("Edges%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k), edge_shift))
+	_holes_root = Node2D.new()
+	_holes_root.name = "Holes"
+	_holes_root.y_sort_enabled = true
+	add_child(_holes_root)
 	for frame: String in _art.risers.frames:
 		_riser_atlas[StringName(frame)] = Vector2i(_art.risers.frame_index(StringName(frame)), 0)
 	for frame: String in _art.edges.frames:
@@ -64,16 +74,49 @@ func show_course(c: CourseData) -> void:
 	_course = c
 	for layer: TileMapLayer in _tops + _risers + _edges:
 		layer.clear()
-	if c == null:
+	if c != null:
+		for y: int in c.height:
+			for x: int in c.width:
+				_draw_cell(Vector2i(x, y))
+	refresh_holes()
+
+
+## Rebuilds the tee marker and pin of every hole from CourseData. Call after holes change
+## (E2-S3's tee and cup tools). A tee or cup not placed yet has no marker.
+func refresh_holes() -> void:
+	for m: HoleMarker in _markers:
+		_holes_root.remove_child(m)
+		m.free()
+	_markers.clear()
+	if _course == null:
 		return
-	for y: int in c.height:
-		for x: int in c.width:
-			_draw_cell(Vector2i(x, y))
+	for hole: HoleData in _course.holes:
+		for pair: Array in [[HoleMarker.Kind.TEE, hole.tee], [HoleMarker.Kind.PIN, hole.cup]]:
+			var at: Vector2i = pair[1]
+			if not _course.in_bounds(at.x, at.y):
+				continue
+			var m := HoleMarker.new(pair[0], hole.number, at)
+			m.place(_course)
+			_holes_root.add_child(m)
+			_markers.append(m)
+
+
+## Every hole marker drawn, tee and pin per hole in CourseData order.
+func hole_markers() -> Array[HoleMarker]:
+	return _markers.duplicate()
+
+
+## The tee marker (or pin) of hole `number`, or null when it has none.
+func hole_marker(number: int, kind: HoleMarker.Kind) -> HoleMarker:
+	for m: HoleMarker in _markers:
+		if m.hole_number == number and m.kind == kind:
+			return m
+	return null
 
 
 ## Redraws one tile after an edit, plus the two back neighbors whose walls it may now hide
 ## or reveal, and the two front neighbors whose edge cues depend on its height. Call from
-## the builder after it writes a tile (E1-S5).
+## the builder after it writes a tile (E1-S5). A hole marker on the tile moves to its new top.
 func refresh_cell(cell: Vector2i) -> void:
 	if _course == null:
 		return
@@ -81,6 +124,9 @@ func refresh_cell(cell: Vector2i) -> void:
 			cell + Vector2i(1, 0), cell + Vector2i(0, 1)]:
 		if _course.in_bounds(c.x, c.y):
 			_draw_cell(c)
+	for m: HoleMarker in _markers:
+		if m.cell == cell:
+			m.place(_course)
 
 
 ## The layer holding surface tops at height `h`.

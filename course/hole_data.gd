@@ -4,6 +4,10 @@ extends Resource
 ## Owned by CourseData. Readers treat these as read-only; course/builder.gd replaces
 ## holes through CourseData.set_holes.
 
+## A tee or cup not placed yet (E2-S3 places them one at a time). Any off-map tile counts as
+## not placed (course/validator.gd rule 1); course files never carry one (CourseData.from_dict).
+const UNPLACED: Vector2i = Vector2i(-1, -1)
+
 var number: int = 1
 var par: int = 3
 var tee: Vector2i = Vector2i.ZERO
