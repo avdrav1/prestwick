@@ -1,6 +1,7 @@
 extends GutTest
-## E1-S2: CourseData is the single source of truth, in course format version 1
-## (.claude/skills/course-file/SKILL.md): base64 tiles, byte = (height << 4) | surface, 8 = oob.
+## E1-S2: CourseData is the single source of truth, in course format version 2 since E6-S3
+## (.claude/skills/course-file/SKILL.md): base64 tiles, byte = (height << 4) | surface, 8 = oob,
+## plus parcel ownership and the land budget (tests/test_land_ownership.gd).
 
 const TMP_PATH := "user://test_course_data_roundtrip_%d.json"
 
@@ -52,8 +53,9 @@ func _rejected(dict: Dictionary, needle: String) -> void:
 
 func _tiles_dict(width: int, height: int, bytes: PackedByteArray) -> Dictionary:
 	return {
-		"version": 1, "name": "", "author": "", "width": width, "height": height,
-		"tiles": Marshalls.raw_to_base64(bytes), "holes": [], "thumbnail": "",
+		"version": CourseData.FORMAT_VERSION, "name": "", "author": "", "width": width,
+		"height": height, "tiles": Marshalls.raw_to_base64(bytes), "holes": [], "thumbnail": "",
+		"owned": CourseData.all_owned_rows(width, height), "land_budget": null,
 	}
 
 
@@ -133,11 +135,12 @@ func test_20x20_round_trips_through_json_text() -> void:
 		_assert_same_course(a, b)
 
 
-func test_to_dict_has_format_v1_keys() -> void:
+func test_to_dict_has_format_v2_keys() -> void:
 	var d := _make_course().to_dict()
-	for key in ["version", "name", "author", "width", "height", "tiles", "holes", "thumbnail"]:
+	for key in ["version", "name", "author", "width", "height", "tiles", "holes", "thumbnail",
+			"owned", "land_budget"]:
 		assert_has(d, key)
-	assert_eq(d["version"], 1)
+	assert_eq(d["version"], 2)
 	assert_eq(d["holes"][0], {"number": 1, "par": 3, "tee": [2, 2], "cup": [17, 3], "open": true})
 
 
@@ -278,7 +281,7 @@ func test_rejects_empty_tiles() -> void:
 
 func test_rejects_wrong_version() -> void:
 	var d := _tiles_dict(1, 1, PackedByteArray([0]))
-	d["version"] = 2
+	d["version"] = 3
 	_rejected(d, "version")
 
 

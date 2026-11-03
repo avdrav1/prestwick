@@ -3,20 +3,36 @@ extends Resource
 ## The single source of truth for a course: a width x height grid of tiles
 ## (height 0 to MAX_HEIGHT, Surface.Type) and a list of holes.
 ##
+## Land (D26, E6-S3): the map is split into parcels of PARCEL_TILES x PARCEL_TILES tiles,
+## parcel (p, q) holding tiles x 16p to 16p + 15 and y 16q to 16q + 15, clipped to the map.
+## Each parcel has one owned flag, and next to the flags the course holds the land budget left
+## in whole dollars, or UNLIMITED_BUDGET (New sandbox, and every version 1 file).
+##
 ## Readers (renderer, ball, guests, validator) use only the getters:
 ##   width, height, in_bounds(x, y), get_height(x, y), get_surface(x, y) (off-map
 ##   reads give height 0 and Surface.Type.OOB), surface_grid(), holes,
-##   course_name, author, thumbnail, to_dict(), content_hash(), copy().
+##   course_name, author, thumbnail, to_dict(), content_hash(), copy(),
+##   parcels_wide, parcels_high, parcel_in_bounds(p), parcel_of(x, y), parcel_rect(p),
+##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
+##   has_unlimited_budget().
 ##
-## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes
-## and set_info (CLAUDE.md Architecture). Tests may call them to build fixtures.
+## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
+## set_info, set_parcel_owned and set_land_budget (CLAUDE.md Architecture). Tests may call
+## them to build fixtures.
 ##
-## Serialised as course format version 1 (.claude/skills/course-file/SKILL.md):
+## Serialised as course format version 2 (.claude/skills/course-file/SKILL.md):
 ## tiles are row-major (index = y * width + x), one byte each, (height << 4) | surface,
-## base64 encoded.
+## base64 encoded; "owned" is one string per parcel row (q), one "1" or "0" per parcel (p);
+## "land_budget" is the dollars left, or null for unlimited. from_dict reads version 2 only:
+## course/save.gd migrates a version 1 file first (CourseSave.migrate).
 
-const FORMAT_VERSION: int = 1
+const FORMAT_VERSION: int = 2
 const MAX_HEIGHT: int = 7
+## Tiles along a parcel's edge (D26). A format constant, not a tunable: the saved owned flags
+## are indexed by it, so changing it needs a new format version and a migration.
+const PARCEL_TILES: int = 16
+## land_budget when there is no limit (New sandbox, version 1 files): null in a file.
+const UNLIMITED_BUDGET: int = -1
 
 var width: int:
 	get:
@@ -37,6 +53,17 @@ var author: String:
 var thumbnail: String:
 	get:
 		return _thumbnail
+## Parcels along x and along y: ceil(width / PARCEL_TILES), ceil(height / PARCEL_TILES).
+var parcels_wide: int:
+	get:
+		return ceili(_width / float(PARCEL_TILES))
+var parcels_high: int:
+	get:
+		return ceili(_height / float(PARCEL_TILES))
+## Dollars left to buy parcels with, or UNLIMITED_BUDGET.
+var land_budget: int:
+	get:
+		return _land_budget
 
 var _width: int = 0
 var _height: int = 0
@@ -45,13 +72,17 @@ var _holes: Array[HoleData] = []
 var _course_name: String = ""
 var _author: String = ""
 var _thumbnail: String = ""
+## One byte per parcel, row-major (index = q * parcels_wide + p): 1 owned, 0 not.
+var _owned: PackedByteArray = PackedByteArray()
+var _land_budget: int = UNLIMITED_BUDGET
 
 
 func _init() -> void:
 	_holes.make_read_only()
 
 
-## A new course filled with one surface at one height. Not a write to an existing course.
+## A new course filled with one surface at one height, every parcel owned and an unlimited
+## land budget (as New sandbox, D10). Not a write to an existing course.
 static func create(p_width: int, p_height: int, fill_surface: Surface.Type = Surface.Type.ROUGH,
 		fill_height: int = 0) -> CourseData:
 	assert(p_width > 0 and p_height > 0, "course size must be positive")
@@ -60,7 +91,20 @@ static func create(p_width: int, p_height: int, fill_surface: Surface.Type = Sur
 	c._height = p_height
 	c._tiles.resize(p_width * p_height)
 	c._tiles.fill(_pack(clampi(fill_height, 0, MAX_HEIGHT), fill_surface))
+	c._owned.resize(c.parcels_wide * c.parcels_high)
+	c._owned.fill(1)
 	return c
+
+
+## The "owned" field of a format version 2 file for a width x height map with every parcel
+## owned: one string of "1"s per parcel row. course/save.gd's version 1 migration and
+## course/course_generator.gd use it.
+static func all_owned_rows(p_width: int, p_height: int) -> Array:
+	var rows: Array = []
+	var row := "1".repeat(ceili(p_width / float(PARCEL_TILES)))
+	for q: int in ceili(p_height / float(PARCEL_TILES)):
+		rows.append(row)
+	return rows
 
 
 # --- read ---
@@ -84,6 +128,43 @@ func get_surface(x: int, y: int) -> Surface.Type:
 	return (_tiles[_index(x, y)] & 0x0F) as Surface.Type
 
 
+## True when parcel `p` (in parcel coordinates) is on the map.
+func parcel_in_bounds(p: Vector2i) -> bool:
+	return p.x >= 0 and p.y >= 0 and p.x < parcels_wide and p.y < parcels_high
+
+
+## The parcel holding tile (x, y). An off-map tile gives the parcel it would be in.
+func parcel_of(x: int, y: int) -> Vector2i:
+	return Vector2i(floori(x / float(PARCEL_TILES)), floori(y / float(PARCEL_TILES)))
+
+
+## The tiles of parcel `p`, clipped to the map (empty for a parcel off the map).
+func parcel_rect(p: Vector2i) -> Rect2i:
+	if not parcel_in_bounds(p):
+		return Rect2i()
+	var r := Rect2i(p * PARCEL_TILES, Vector2i(PARCEL_TILES, PARCEL_TILES))
+	return r.intersection(Rect2i(0, 0, _width, _height))
+
+
+## True when parcel `p` is owned. Parcels off the map are not.
+func is_parcel_owned(p: Vector2i) -> bool:
+	if not parcel_in_bounds(p):
+		return false
+	return _owned[_parcel_index(p)] != 0
+
+
+## True when tile (x, y) is on an owned parcel. Off-map tiles are never owned.
+func is_owned(x: int, y: int) -> bool:
+	if not in_bounds(x, y):
+		return false
+	return _owned[_parcel_index(parcel_of(x, y))] != 0
+
+
+## True when buying land has no budget limit (New sandbox, version 1 files).
+func has_unlimited_budget() -> bool:
+	return _land_budget == UNLIMITED_BUDGET
+
+
 ## Every tile's Surface.Type value, row-major (index = y * width + x), as a fresh copy.
 ## For whole-map readers (the validator's rule 3 flood) that would otherwise call
 ## get_surface once per tile.
@@ -95,7 +176,8 @@ func surface_grid() -> PackedByteArray:
 	return out
 
 
-## Hex SHA-256 of the full serialised content (tiles, holes, name, author, thumbnail).
+## Hex SHA-256 of the full serialised content (tiles, holes, name, author, thumbnail, parcel
+## ownership and land budget).
 ## Equal content gives an equal hash; any edit changes it.
 func content_hash() -> String:
 	return JSON.stringify(to_dict(), "", true).sha256_text()
@@ -110,11 +192,13 @@ func copy() -> CourseData:
 	c._course_name = _course_name
 	c._author = _author
 	c._thumbnail = _thumbnail
+	c._owned = _owned.duplicate()
+	c._land_budget = _land_budget
 	c._replace_holes(_holes)
 	return c
 
 
-## Course format version 1 dictionary, ready for JSON.stringify.
+## Course format version 2 dictionary, ready for JSON.stringify.
 func to_dict() -> Dictionary:
 	var hole_dicts: Array = []
 	for h in _holes:
@@ -128,6 +212,8 @@ func to_dict() -> Dictionary:
 		"tiles": Marshalls.raw_to_base64(_tiles),
 		"holes": hole_dicts,
 		"thumbnail": _thumbnail,
+		"owned": _owned_rows(),
+		"land_budget": null if has_unlimited_budget() else _land_budget,
 	}
 
 
@@ -151,12 +237,25 @@ func set_info(p_name: String, p_author: String, p_thumbnail: String) -> void:
 	_thumbnail = p_thumbnail
 
 
+## Marks parcel `p` owned or not.
+func set_parcel_owned(p: Vector2i, owned: bool) -> void:
+	assert(parcel_in_bounds(p), "parcel out of bounds")
+	_owned[_parcel_index(p)] = 1 if owned else 0
+
+
+## Sets the land budget left: whole dollars, 0 or more, or UNLIMITED_BUDGET.
+func set_land_budget(budget: int) -> void:
+	assert(budget >= 0 or budget == UNLIMITED_BUDGET, "budget must be 0 or more, or unlimited")
+	_land_budget = budget
+
+
 # --- load ---
 
-## Parses a course format version 1 dictionary (as from JSON.parse_string).
-## Returns null and appends a reason per problem to `errors` when the data is malformed:
-## wrong version, bad size, tiles not width*height bytes, height above MAX_HEIGHT,
-## unknown surface, malformed hole, or a tee/cup off the map.
+## Parses a course format version 2 dictionary (as from JSON.parse_string; course/save.gd
+## migrates older versions first). Returns null and appends a reason per problem to `errors`
+## when the data is malformed: wrong version, bad size, tiles not width*height bytes, height
+## above MAX_HEIGHT, unknown surface, owned rows not one "0" or "1" per parcel, a land budget
+## that is not null or a whole number of 0 or more, malformed hole, or a tee/cup off the map.
 ## Gameplay rules (one tee, cup on green, yardage vs par) belong to course/validator.gd.
 static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseData:
 	var start := errors.size()
@@ -198,6 +297,18 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	if errors.size() > start:
 		return null
 
+	var owned := _read_owned(data.get("owned"), ceili(w / float(PARCEL_TILES)),
+			ceili(h / float(PARCEL_TILES)), errors)
+	var budget := UNLIMITED_BUDGET
+	if not data.has("land_budget"):
+		errors.append("land_budget is missing (null for unlimited)")
+	elif data["land_budget"] != null:
+		budget = read_int(data, "land_budget", errors)
+		if errors.size() == start and budget < 0:
+			errors.append("land_budget must be 0 or more, or null, got %d" % budget)
+	if errors.size() > start:
+		return null
+
 	var parsed_holes: Array[HoleData] = []
 	var raw_holes: Variant = data.get("holes", [])
 	if typeof(raw_holes) != TYPE_ARRAY:
@@ -225,6 +336,8 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	c._course_name = texts["name"]
 	c._author = texts["author"]
 	c._thumbnail = texts["thumbnail"]
+	c._owned = owned
+	c._land_budget = budget
 	c._replace_holes(parsed_holes)
 	return c
 
@@ -252,6 +365,43 @@ static func read_int(data: Dictionary, key: String, errors: Array[String], conte
 
 func _index(x: int, y: int) -> int:
 	return y * _width + x
+
+
+func _parcel_index(p: Vector2i) -> int:
+	return p.y * parcels_wide + p.x
+
+
+func _owned_rows() -> Array:
+	var rows: Array = []
+	for q: int in parcels_high:
+		var row := ""
+		for p: int in parcels_wide:
+			row += "1" if _owned[q * parcels_wide + p] != 0 else "0"
+		rows.append(row)
+	return rows
+
+
+## Reads the "owned" field: `rows` strings of `cols` characters, each "0" or "1".
+static func _read_owned(v: Variant, cols: int, rows: int, errors: Array[String]) -> PackedByteArray:
+	var out := PackedByteArray()
+	if typeof(v) != TYPE_ARRAY:
+		errors.append("owned must be a list of %d parcel rows" % rows)
+		return out
+	var list: Array = v
+	if list.size() != rows:
+		errors.append("owned: expected %d parcel rows, got %d" % [rows, list.size()])
+		return out
+	for q: int in rows:
+		var row: Variant = list[q]
+		if typeof(row) != TYPE_STRING or (row as String).length() != cols:
+			errors.append("owned row %d must be a string of %d \"0\" or \"1\"" % [q, cols])
+			continue
+		for ch: String in (row as String):
+			if ch != "0" and ch != "1":
+				errors.append("owned row %d: \"%s\" is not \"0\" or \"1\"" % [q, ch])
+				break
+			out.append(1 if ch == "1" else 0)
+	return out
 
 
 static func _pack(tile_height: int, surface: int) -> int:

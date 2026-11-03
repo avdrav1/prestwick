@@ -22,6 +22,13 @@ extends RefCounted
 ## fails a rule closes. Undo puts the holes back as the step found them, open flags included.
 ## The same check runs when the builder is made, so a course that comes in with a failing open
 ## hole has it closed at once (no undo step, no signal: nothing is connected yet).
+##
+## Land (E6-S3, D26 to D28, docs/design.md Land): buy_parcel is the only way a parcel becomes
+## owned in play. A parcel may be bought when it is not owned yet, shares an edge with an owned
+## parcel, and its price (LandPrices, data/land.json) is no more than the land budget left
+## (no limit when the budget is unlimited). buy_refusal names the rule that fails. A purchase
+## takes the price from the budget and is one undo step; undoing it gives the parcel up and
+## the price back, and reruns the validator. Land is never sold back (D27).
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
@@ -30,6 +37,8 @@ signal tiles_changed(cells: Array[Vector2i])
 signal holes_changed
 ## Emitted after the validator reran (every edit and undo), with `issues`.
 signal checked(issues: Dictionary)
+## Emitted after a parcel was bought, or a purchase undone, with that parcel.
+signal land_changed(parcel: Vector2i)
 
 ## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
 ## OB ground from E2-S3 (D9).
@@ -42,15 +51,19 @@ const PALETTE: Array[Surface.Type] = [
 const PARS: PackedInt32Array = [3, 4, 5]
 
 
-## One undo step: each tile's packed (height << 4 | surface) before the step, and the holes
-## before the step when it changed them (null when it did not).
+## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
+## before the step when it changed them (null when it did not), and for a purchase the parcel
+## bought and the land budget before it (land_parcel NO_PARCEL when the step bought none).
 class Step:
 	extends RefCounted
+	const NO_PARCEL: Vector2i = Vector2i(-1, -1)
 	var tiles: Dictionary = {}
 	var holes: Variant = null
+	var land_parcel: Vector2i = NO_PARCEL
+	var land_budget: int = 0
 
 	func is_empty() -> bool:
-		return tiles.is_empty() and holes == null
+		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL
 
 
 var course: CourseData:
@@ -62,6 +75,9 @@ var tuning: BuilderTuning:
 var validator: CourseValidator:
 	get:
 		return _validator
+var prices: LandPrices:
+	get:
+		return _prices
 ## The latest validator run: every hole's failing rules, keyed by hole number
 ## (CourseValidator.check_course). Read-only.
 var issues: Dictionary:
@@ -71,6 +87,7 @@ var issues: Dictionary:
 var _course: CourseData
 var _tuning: BuilderTuning
 var _validator: CourseValidator
+var _prices: LandPrices
 var _issues: Dictionary = {}
 ## Undo steps, oldest first.
 var _undo: Array[Step] = []
@@ -82,10 +99,12 @@ var _stroke_lifted: Dictionary = {}
 var _holes_dirty: bool = false
 
 
-func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null) -> void:
+func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null,
+		p_prices: LandPrices = null) -> void:
 	_course = p_course
 	_tuning = p_tuning if p_tuning != null else BuilderTuning.load_default()
 	_validator = p_validator if p_validator != null else CourseValidator.new()
+	_prices = p_prices if p_prices != null else LandPrices.load_default()
 	# A loaded course may bring in an open hole that fails a rule (a hand-edited or older
 	# file): close it now, before anyone reads the open flag. Not an undo step.
 	_rerun(Step.new())
@@ -233,6 +252,53 @@ func open_hole(number: int) -> bool:
 	return true
 
 
+# --- land ---
+
+## What parcel `parcel` costs (LandPrices), in dollars.
+func parcel_price(parcel: Vector2i) -> int:
+	return _prices.price(_course, parcel)
+
+
+## Why parcel `parcel` cannot be bought now, or "" when it can: "no such parcel", "already
+## yours", "not next to your land" (no owned parcel shares an edge with it; a corner is not
+## enough), or "costs $X, you have $Y" (D27). Checked in that order.
+func buy_refusal(parcel: Vector2i) -> String:
+	if not _course.parcel_in_bounds(parcel):
+		return "no such parcel"
+	if _course.is_parcel_owned(parcel):
+		return "already yours"
+	var next_to_owned: bool = false
+	for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+		if _course.is_parcel_owned(parcel + d):
+			next_to_owned = true
+			break
+	if not next_to_owned:
+		return "not next to your land"
+	if not _course.has_unlimited_budget():
+		var cost: int = parcel_price(parcel)
+		if cost > _course.land_budget:
+			return "costs %s, you have %s" % [LandPrices.money(cost), LandPrices.money(_course.land_budget)]
+	return ""
+
+
+## Buys parcel `parcel`: owns it and takes its price from the land budget (nothing when the
+## budget is unlimited), as one undo step. False, changing nothing, when buy_refusal names a
+## rule; read it to say why.
+func buy_parcel(parcel: Vector2i) -> bool:
+	if not buy_refusal(parcel).is_empty():
+		return false
+	end_stroke()
+	var step := Step.new()
+	step.land_parcel = parcel
+	step.land_budget = _course.land_budget
+	if not _course.has_unlimited_budget():
+		_course.set_land_budget(_course.land_budget - parcel_price(parcel))
+	_course.set_parcel_owned(parcel, true)
+	land_changed.emit(parcel)
+	_finish(step)
+	return true
+
+
 # --- undo ---
 
 func can_undo() -> bool:
@@ -261,8 +327,14 @@ func undo() -> bool:
 	if step.holes != null:
 		_course.set_holes(step.holes)
 		_holes_dirty = true
+	if step.land_parcel != Step.NO_PARCEL:
+		_course.set_parcel_owned(step.land_parcel, false)
+		_course.set_land_budget(step.land_budget)
+		land_changed.emit(step.land_parcel)
 	# The course is back as it was before the edit, when every open hole passed (_init closed
-	# any that came in failing), so this rerun refreshes `issues` and closes nothing.
+	# any that came in failing), so this rerun refreshes `issues` and closes nothing. Once
+	# rule 6 reads ownership (E6-S4), an undone purchase may close a hole that stands on the
+	# land given up; that close is not itself an undo step.
 	_rerun(Step.new())
 	_announce()
 	return true

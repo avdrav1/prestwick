@@ -4,7 +4,8 @@ extends RefCounted
 ## (course/course_file.gd), used as test fixtures and smoke playtest courses. Every course it
 ## makes passes all five rules of course/validator.gd (tests/test_validator.gd checks).
 ##
-## It never writes a CourseData: it lays the tiles out as course format version 1 data and
+## It never writes a CourseData: it lays the tiles out as course format data (every parcel
+## owned, an unlimited land budget) and
 ## constructs a new course from that with CourseData.from_dict, the loader course/save.gd
 ## uses, so CourseData keeps its two writers (CLAUDE.md Architecture).
 ##
@@ -72,6 +73,9 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 		"tiles": Marshalls.raw_to_base64(tiles),
 		"holes": [HoleData.new(1, par, tee, cup, true).to_dict()],
 		"thumbnail": "",
+		# A fixture plays on land it owns, with no budget, as New sandbox does (D26).
+		"owned": CourseData.all_owned_rows(w, h),
+		"land_budget": null,
 	}
 	return CourseData.from_dict(data, errors)
 

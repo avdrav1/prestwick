@@ -7,11 +7,11 @@ description: Validate, generate, or inspect a Prestwick course JSON file in cour
 
 Argument: `validate <path>`, `generate <par> [flat|hilly] [water|dry]`, or `inspect <path>`.
 
-## Format (version 1)
+## Format (version 2)
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "Example Par 3",
   "author": "",
   "width": 40,
@@ -20,11 +20,15 @@ Argument: `validate <path>`, `generate <par> [flat|hilly] [water|dry]`, or `insp
   "holes": [
     {"number": 1, "par": 3, "tee": [4, 20], "cup": [34, 20], "open": true}
   ],
-  "thumbnail": ""
+  "thumbnail": "",
+  "owned": ["111", "111", "111"],
+  "land_budget": null
 }
 ```
 
 Surface enum: 0 fairway, 1 rough, 2 green, 3 tee, 4 bunker, 5 water, 6 trees, 7 cart_path, 8 oob. Height 0 to 7 in the high nibble.
+
+Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 tiles, `CourseData.PARCEL_TILES`), top row first, one character per parcel, `"1"` owned and `"0"` not, so a 40 x 40 map has 3 rows of 3 (the last parcels partial). `land_budget` is the whole dollars left to buy parcels with, or `null` for no limit (New sandbox). Version 1 files (no `owned`, no `land_budget`) still load: `course/save.gd` migrates them with every parcel owned and `land_budget` null, and saves them as version 2. `generate` writes every parcel owned and `null`.
 
 ## Headless entry point
 

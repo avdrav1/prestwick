@@ -322,10 +322,11 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: a seeded generator in `course/` fills the map with hills, tree stands, ponds and rough, using only the existing surfaces and heights 0 to 7, at the rates E6-S1 set. The same seed gives the same map. Every parcel has some buildable ground. Tunables live in a resource.
   - Test: `tests/test_land_generator.gd`: same seed same map, heights in range, rates within tolerance, no parcel all water.
   - Touches: `course/`, `tests/`
-- [ ] E6-S3 Record who owns each parcel. Ownership joins the single source of truth.
+- [x] E6-S3 Record who owns each parcel. Ownership joins the single source of truth.
   - Accept: CourseData holds parcel ownership. Course format version 2 saves it, and `course/save.gd` loads version 1 files as fully owned. Only the builder buys a parcel: it must border owned land and fit the land budget, and a refusal says which rule failed. Buying is an undo step.
   - Test: `tests/test_land_ownership.gd`: buy, refuse (not adjacent, too expensive), undo, a v1 file loads fully owned, a v2 round-trip keeps ownership and `content_hash()`.
   - Touches: `course/`, `tests/`
+  - Done: `CourseData` holds one owned flag per 16 x 16 parcel and the land budget left (`UNLIMITED_BUDGET` -1, `null` in the file); `create` owns every parcel with no limit, so the sandbox and every fixture play as before. Format version 2 adds `owned` (one "0"/"1" string per parcel row) and `land_budget`; `CourseSave.migrate` loads version 1 fully owned and unlimited, and `courses/` stay version 1 files that load through it. `CourseBuilder.buy_parcel` / `buy_refusal` ("no such parcel", "already yours", "not next to your land", "costs $X, you have $Y"), one undo step that refunds, and a `land_changed` signal. Prices: `course/land_prices.gd` reads `data/land.json` (D28's numbers and the $5,000 budget); the export presets now ship `data/*.json`.
 - [ ] E6-S4 Build only on owned land. The builder enforces the line.
   - Accept: painting, raising, lowering and placing a tee or cup on a tile the player does not own does nothing and says why; a brush that straddles the line edits only the owned tiles. A hole whose tee or cup stands on unowned land fails a new validator rule 6, with its tile highlighted, and rule 3 counts unowned land as OB (D30: the footprint need not be owned).
   - Test: `tests/test_builder_land.gd`, plus the new rule's pass and fail cases in the validator tests.

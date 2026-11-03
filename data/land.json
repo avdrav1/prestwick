@@ -1,0 +1,11 @@
+{
+  "_doc": "Land prices and the land budget in dollars (D28, docs/design.md Land), read by course/land_prices.gd. Provisional until E6-S8's /balance land.",
+  "land_budget": 5000,
+  "base_price": 1000,
+  "relief_step_price": 100,
+  "tree_tile_price": -1,
+  "water_tile_price": -2,
+  "min_price": 500,
+  "max_price": 2000,
+  "price_round": 50
+}
