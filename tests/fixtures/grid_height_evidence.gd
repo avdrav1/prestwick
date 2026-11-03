@@ -51,7 +51,46 @@ func _initialize() -> void:
 				[12.5, 27.5, 47.5])
 	_settle("green ramp", green_ramp(), params, built,
 			[20.0, 22.5, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 57.5, 60.0], [10.0, 30.0, 50.0])
+	print("== E2-S4 (D16): a green bank steeper than steep_from %.2f is felt as steep (steep_scale %.2f); target: under 8 s" % [
+		row.steep_from, row.steep_scale])
+	for per_tile: int in [2, 3]:
+		_steep_bank(per_tile, params, built)
 	quit(0)
+
+
+## E2-S4: an all-green plot rising `per_tile` steps per tile along +x from height 0 at tile
+## 2 (x 12.5 yd, the foot) to 7. Still balls up the bank and short uphill putts from x 10.
+func _steep_bank(per_tile: int, params: BallParams, table: SurfaceTable) -> void:
+	var c := CourseData.create(40, 40, Surface.Type.GREEN, 0)
+	for y: int in 40:
+		for x: int in 40:
+			c.set_tile(x, y, clampi((x - 2) * per_tile, 0, 7), Surface.Type.GREEN)
+	var top := 12.5 + 5.0 * ceili(7.0 / per_tile)
+	var worst := 0
+	var at := 0.0
+	var rest := 0.0
+	var x := 12.5
+	while x <= top:
+		var ball := Ball.new(c, 1, params, table)
+		ball.start_roll(Vector2(x, 100.0), Vector2.ZERO)
+		ball.run_to_rest()
+		if ball.steps > worst:
+			worst = ball.steps
+			at = x
+			rest = ball.position.x
+		x += 0.5
+	print("== green bank, %d steps per tile (foot x 12.5, top x %.1f): longest still ball %.1f s, set at x %.1f, rests x %.2f" % [
+		per_tile, top, worst / 60.0, at, rest])
+	for speed: float in [4.0, 5.0, 6.0, 7.0]:
+		var ball := Ball.new(c, 1, params, table)
+		ball.record_path = true
+		ball.start_roll(Vector2(10.0, 100.0), Vector2(speed, 0.0))
+		ball.run_to_rest()
+		var furthest := 0.0
+		for p in ball.path:
+			furthest = maxf(furthest, p.x)
+		print("   uphill %3.1f yd/s from x 10: furthest x %.2f, rests x %.2f in %.1f s" % [
+			speed, furthest, ball.position.x, ball.steps / 60.0])
 
 
 ## Fairway in front (x 0 to 3) at height 0, then an 8x8 green (x 4 to 11, y 2 to 9) in four

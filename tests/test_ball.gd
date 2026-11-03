@@ -3,6 +3,13 @@ extends GutTest
 ## Units are yards: x and y on the ground from the map's corner, z up.
 
 const EPS := 0.001
+## docs/design.md Ball, Settle targets (E2-S1, D16), in ticks: a ball that rests on green,
+## and one that rests on fairway, tee, rough or cart path (also a putt that runs off).
+const GREEN_SETTLE := 480
+const OFF_GREEN_SETTLE := 600
+## The slowest putt that must climb a steep green tier (test_putts_climb_a_steep_green_tier):
+## below the putter's top speed (18 yd/s since E2-S5) and about main's 14 yd/s from 7.5 yd.
+const PUTT_CLIMB_MAX := 15.0
 
 
 func _flat(surface: Surface.Type = Surface.Type.FAIRWAY, size: int = 40, h: int = 0) -> CourseData:
@@ -186,7 +193,8 @@ func _green_ramp() -> CourseData:
 
 ## Felt pull on a slope rising `steps` height steps per tile, on the surface of `row`.
 func _step_pull(params: BallParams, row: SurfaceRow, steps: float) -> float:
-	var grad := row.slope_scale * steps * params.yards_per_step / params.yards_per_tile
+	var terrain := Vector2(steps * params.yards_per_step / params.yards_per_tile, 0.0)
+	var grad := Ball.felt_gradient(terrain, row).x
 	return params.gravity * grad / (1.0 + grad * grad)
 
 
@@ -246,9 +254,8 @@ func test_ball_at_rest_on_a_green_slope_rolls_down() -> void:
 	ball.start_roll(Vector2(20, 100), Vector2.ZERO)
 	ball.run_to_rest()
 	assert_lt(ball.position.x, 13.0, "a ball set down on a steeper green slope runs down it")
-	# Known limit (docs/design.md Ball): it trickles, about 42 s; the 8 s target covers
-	# one-step green slopes only.
-	assert_lt(ball.steps, ball.params.max_steps, "and came to rest on its own")
+	# E2-S4: it used to trickle for about 42 s; a green now feels a bank this steep as steep.
+	assert_lt(ball.steps, GREEN_SETTLE, "within the green settle target (%d ticks)" % ball.steps)
 
 
 func test_ball_rolling_downhill_on_green_speeds_up() -> void:
@@ -271,7 +278,8 @@ func test_uphill_putt_that_stops_short_rolls_back() -> void:
 	var start := Vector2(10, 100)
 	var ball := Ball.new(course, 3)
 	ball.record_path = true
-	ball.start_roll(start, Vector2(5, 0))
+	# E2-S4: 7 yd/s, not 5, since the steep bank now takes a 5 yd/s putt only 0.7 yd up it.
+	ball.start_roll(start, Vector2(7, 0))
 	ball.run_to_rest()
 	var furthest := start.x
 	for p in ball.path:
@@ -279,7 +287,7 @@ func test_uphill_putt_that_stops_short_rolls_back() -> void:
 	assert_gt(furthest, 13.5, "went up the slope")
 	assert_lt(furthest, 27.5, "but not over the top")
 	assert_lt(ball.position.x, 13.0, "and came back down to the foot")
-	assert_lt(ball.steps, ball.params.max_steps, "on its own (about 14 s; see the test above)")
+	assert_lt(ball.steps, GREEN_SETTLE, "within the green settle target (%d ticks)" % ball.steps)
 
 
 ## A 5x5 plot at height 1 with a one-tile pit at height 0 in the middle, tile (2, 2), whose
@@ -395,6 +403,11 @@ func test_green_slope_columns_come_from_the_table() -> void:
 		var row := table.row(i)
 		assert_eq(row.slope_scale, 1.0, "%s feels the full slope" % row.name)
 		assert_eq(row.rest_decel_scale, 1.0, "%s keeps its constant friction" % row.name)
+		assert_eq(row.steep_scale, 0.0, "%s has no steep-bank term" % row.name)
+	# E2-S4: the steep term starts above every one-step contour, corners included (0.4 x
+	# sqrt 2 per axis is still 0.4), and below two steps per tile (0.8).
+	assert_gt(green.steep_scale, 0.0, "a green feels a steep bank as steep")
+	assert_between(green.steep_from, 0.4, 0.8, "from between one and two steps per tile")
 
 
 func test_flat_green_4_yds_putt_runs_about_3_7_yd() -> void:
@@ -540,6 +553,351 @@ func test_green_touchdown_normal_tilt_is_scaled() -> void:
 	assert_gt(kick[Surface.Type.FAIRWAY], 1.0, "fairway kicks the bounce downhill")
 	assert_gt(kick[Surface.Type.GREEN], 0.0, "green tilts the same way")
 	assert_lt(kick[Surface.Type.GREEN], kick[Surface.Type.FAIRWAY] * 0.15, "by far less")
+
+
+# --- settle every ball the builder can make (E2-S4, D16) ---
+# Each case asserts its ticks against GREEN_SETTLE or OFF_GREEN_SETTLE, counted from the
+# first touchdown, the set-down or the putt start (docs/design.md Ball, Settle targets).
+
+func _set_down(course: CourseData, at: Vector2, v: Vector2 = Vector2.ZERO) -> Ball:
+	var ball := Ball.new(course, 1)
+	ball.record_path = true
+	ball.start_roll(at, v)
+	ball.run_to_rest()
+	return ball
+
+
+## Ticks from the first touchdown to rest, for a flight from `start` at `v`.
+func _ground_ticks(ball: Ball, start: Vector3, v: Vector3) -> int:
+	ball.launch(start, v)
+	while not ball.has_landed:
+		ball.step()
+	var landed := ball.steps
+	ball.run_to_rest()
+	return ball.steps - landed
+
+
+func test_gradient_at_an_exact_tile_centre_averages_both_sides() -> void:
+	var params := BallParams.load_default()
+	var field := HeightField.new(_pit(Surface.Type.FAIRWAY), params)
+	var step := params.yards_per_step / params.yards_per_tile
+	for x: float in [11.0, 12.5, 13.5, 14.0]:
+		assert_eq(field.gradient_at(x, 12.5).y, 0.0, "no pull along y on the pit's floor line at x %.1f" % x)
+	assert_almost_eq(field.gradient_at(12.5, 12.4).y, -step, EPS, "just before the line: the wall")
+	assert_almost_eq(field.gradient_at(12.5, 12.6).y, step, EPS, "just after: the other wall")
+	# One step up on one side, level on the other: the mean.
+	var ramp := HeightField.new(_ramp(), params)
+	assert_almost_eq(ramp.gradient_at(37.5, 20.0).x, 0.5 * step, EPS, "the top of the ramp, tile 7's centre")
+	assert_almost_eq(ramp.gradient_at(20.0, 22.5).x, step, EPS, "mid-slope, on a y centre line")
+
+
+func test_still_ball_on_a_pit_floor_line_rolls_straight_to_the_centre() -> void:
+	# E2-S4 (old E2-S10): on y = 12.5 the one-sided gradient pulled a ball along y. Now it
+	# runs along x only and rests at the centre.
+	for dx: float in [1.0, 1.5, 2.0, -1.0, -2.0]:
+		var ball := _set_down(_pit(Surface.Type.FAIRWAY), Vector2(12.5 + dx, 12.5))
+		var off := 0.0
+		for p in ball.path:
+			off = maxf(off, absf(p.y - 12.5))
+		assert_eq(off, 0.0, "set %.1f yd out: no move along y" % dx)
+		assert_almost_eq(ball.position.x, 12.5, 0.1, "set %.1f yd out: rests at the centre" % dx)
+
+
+func test_pit_balls_settle_under_the_targets() -> void:
+	var centre := Vector2(12.5, 12.5)
+	for s: Surface.Type in [Surface.Type.GREEN, Surface.Type.FAIRWAY]:
+		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
+		for r: float in [0.0, 1.0, 1.5, 2.0]:
+			for a: int in 16:
+				var at := centre + Vector2.RIGHT.rotated(a * PI / 8.0) * r
+				var ball := _set_down(_pit(s), at)
+				assert_lt(ball.steps, target, "%s pit, set at %s: %d ticks" % [Surface.NAMES[s], at, ball.steps])
+				if s == Surface.Type.FAIRWAY:
+					assert_lt(Vector2(ball.position.x, ball.position.y).distance_to(centre), 0.1,
+							"fairway pit, set at %s: rests at the centre" % at)
+
+
+func test_gully_floor_balls_reach_the_bottom_under_the_target() -> void:
+	# E2-S4 (old E2-S11): a still ball in a rough gully crept 6 to 10 yd until the cap. The
+	# floor line rises one step per tile; the walls stand 1 to 3 steps above it.
+	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY]:
+		for wall: int in [1, 2, 3]:
+			for dx: float in [-2.0, -1.5, -1.0, 0.0, 1.0, 1.5, 2.0]:
+				for y: float in [12.0, 18.0, 22.0]:
+					var ball := _set_down(_gully(s, wall), Vector2(17.5 + dx, y))
+					var label := "%s gully, walls %d up, set at (%.1f, %.1f)" % [
+							Surface.NAMES[s], wall, 17.5 + dx, y]
+					assert_lt(ball.steps, OFF_GREEN_SETTLE, "%s: %d ticks" % [label, ball.steps])
+					assert_lte(ball.position.y, 3.0, "%s: at the flat bottom (y %.2f)" % [label, ball.position.y])
+					assert_almost_eq(ball.position.x, 17.5, 0.1, "%s: on the floor line" % label)
+
+
+func test_green_gully_balls_settle_under_the_green_target() -> void:
+	# E2-S4 (old E2-S13): balls in a green gully reached the cap at about y 8.2. The floor's
+	# one step per tile holds a ball (D7); the steeper walls roll it onto the floor.
+	for wall: int in [1, 2, 3]:
+		for dx: float in [-2.0, -1.5, -1.0, 0.0, 1.0, 1.5, 2.0]:
+			for y: float in [12.0, 18.0, 22.0]:
+				var ball := _set_down(_gully(Surface.Type.GREEN, wall), Vector2(17.5 + dx, y))
+				assert_lt(ball.steps, GREEN_SETTLE, "green gully, walls %d up, set at (%.1f, %.1f): %d ticks" % [
+						wall, 17.5 + dx, y, ball.steps])
+
+
+func test_still_balls_on_steep_greens_settle_under_the_green_target() -> void:
+	# E2-S4 (old E2-S15): on two steps per tile a still ball took about 42 s or reached the
+	# cap mid-slope; on three, about 15 s. Every 0.5 yd from the bank's foot to its top.
+	for cfg: Vector2i in [Vector2i(2, 2), Vector2i(3, 2), Vector2i(3, 10)]:
+		var course := _steep_green(cfg.x, cfg.y)
+		var foot := cfg.y * 5.0 + 2.5
+		var top := foot + 5.0 * ceili(7.0 / cfg.x)
+		var x := foot
+		while x <= top:
+			var ball := _set_down(course, Vector2(x, 100.0))
+			var label := "%d steps per tile, set at x %.1f" % [cfg.x, x]
+			assert_lt(ball.steps, GREEN_SETTLE, "%s: %d ticks" % [label, ball.steps])
+			x += 0.5
+
+
+func test_roll_backs_on_steep_greens_settle_under_the_green_target() -> void:
+	# E2-S4 (old E2-S18): short uphill putts that rolled back took 8 to 28 s.
+	for cfg: Vector2i in [Vector2i(2, 2), Vector2i(3, 2), Vector2i(3, 10)]:
+		var course := _steep_green(cfg.x, cfg.y)
+		var foot := cfg.y * 5.0 + 2.5
+		for speed: float in [4.0, 5.0, 6.0, 7.0]:
+			var ball := _set_down(course, Vector2(foot - 2.5, 100.0), Vector2(speed, 0.0))
+			var furthest := 0.0
+			for p in ball.path:
+				furthest = maxf(furthest, p.x)
+			var label := "%d steps per tile, %.0f yd/s" % [cfg.x, speed]
+			assert_gt(furthest, foot, "%s: went up the bank" % label)
+			assert_lt(ball.position.x, foot, "%s: and rolled back off it" % label)
+			assert_lt(ball.steps, GREEN_SETTLE, "%s: %d ticks" % [label, ball.steps])
+
+
+func test_off_green_diagonal_putt_settles_under_the_off_green_target() -> void:
+	# E2-S1 pinned it (9.6 s, D16): it leaves the contour's y = 50 edge and runs down the
+	# rough's tier slope.
+	var ball := _set_down(GridHeightEvidence.green_contour(), Vector2(58.1, 34.4), Vector2(-10.6, 10.6))
+	assert_eq(ball.field.surface_at(ball.position.x, ball.position.y), Surface.Type.ROUGH, "ran off the green")
+	assert_lt(ball.steps, OFF_GREEN_SETTLE, "%d ticks" % ball.steps)
+
+
+## A V valley along y: a one-tile floor at height 0 down column 10 (floor line x 52.5 yd),
+## walls rising one step per tile on both sides up to `depth`, then flat.
+func _valley(surface: Surface.Type, depth: int) -> CourseData:
+	var course := CourseData.create(21, 12, surface, 0)
+	for y: int in 12:
+		for x: int in 21:
+			course.set_tile(x, y, mini(absi(x - 10), depth), surface)
+	return course
+
+
+func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
+	# E2-S4: from up to 18.7 s (rough, 4 steps deep). Every 0.25 yd from rim to rim.
+	for s: Surface.Type in [Surface.Type.ROUGH, Surface.Type.FAIRWAY, Surface.Type.CART_PATH]:
+		for depth: int in [2, 3, 4]:
+			var course := _valley(s, depth)
+			var worst := 0
+			var x := 52.5 - depth * 5.0
+			while x <= 52.5 + depth * 5.0 + EPS:
+				var ball := _set_down(course, Vector2(x, 30.0))
+				worst = maxi(worst, ball.steps)
+				var label := "%s, %d deep, set at x %.2f" % [Surface.NAMES[s], depth, x]
+				if absf(absf(x - 52.5) - depth * 5.0) < EPS and ball.steps <= 1:
+					# On the rim's centre line the slope is the mean of the wall and the flat
+					# top, half a step per tile, which rough's still-ball friction holds.
+					assert_eq(s, Surface.Type.ROUGH, "%s: only rough holds a ball on the rim" % label)
+				else:
+					assert_almost_eq(ball.position.x, 52.5, 0.25, "%s: rests on the floor" % label)
+				x += 0.25
+			assert_lt(worst, OFF_GREEN_SETTLE, "%s valley %d steps deep: longest %d ticks" % [
+					Surface.NAMES[s], depth, worst])
+
+
+func test_drives_onto_flat_ground_settle_under_the_target() -> void:
+	# A 100% driver (75 yd/s at 14 degrees) onto each rolling surface off the green, and a
+	# 110% one (78.7 yd/s) onto cart path, the slowest.
+	var drives := [
+		[Surface.Type.FAIRWAY, 75.0], [Surface.Type.TEE, 75.0], [Surface.Type.ROUGH, 75.0],
+		[Surface.Type.CART_PATH, 75.0], [Surface.Type.CART_PATH, 78.7]]
+	for d: Array in drives:
+		var s: Surface.Type = d[0]
+		var ball := Ball.new(CourseData.create(120, 8, s, 0), 1)
+		var ticks := _ground_ticks(ball, Vector3(10, 20, 0), Ball.launch_velocity(d[1], 14.0, 0.0))
+		assert_lt(ticks, OFF_GREEN_SETTLE, "%s at %.1f yd/s: %d ticks on the ground" % [Surface.NAMES[s], d[1], ticks])
+
+
+func test_drive_down_a_stepped_cart_path_settles_under_the_target() -> void:
+	# A 100% and a 110% driver from the height-7 top carry to where the path steps down, one
+	# step every 1 to 4 tiles from tile 52 to height 0 (10.2 s on the ground before E2-S4 at
+	# every 4; E2-S4 review: 10.2 to 10.4 s at every 1 to 3 and at 110%).
+	for every: int in [1, 2, 3, 4]:
+		var course := CourseData.create(160, 8, Surface.Type.CART_PATH, 7)
+		for y: int in 8:
+			for x: int in 160:
+				course.set_tile(x, y, clampi(7 - (x - 52) / every, 0, 7) if x >= 52 else 7, Surface.Type.CART_PATH)
+		for speed: float in [75.0, 78.7]:
+			var ball := Ball.new(course, 1)
+			var ticks := _ground_ticks(ball, Vector3(10, 20, 14), Ball.launch_velocity(speed, 14.0, 0.0))
+			var label := "every %d tiles, %.1f yd/s" % [every, speed]
+			assert_gt(ball.landing_position.x, 250.0, "%s: carries to the steps" % label)
+			assert_gt(ball.position.x, (52.0 + 7.0 * every) * 5.0, "%s: runs past the foot of the steps" % label)
+			assert_lt(ticks, OFF_GREEN_SETTLE, "%s: %d ticks on the ground" % [label, ticks])
+
+
+## Every surface a ball rolls on, the green included.
+const ROLLING: Array[Surface.Type] = [Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH,
+		Surface.Type.CART_PATH, Surface.Type.GREEN]
+
+
+func _deep_pit(surface: Surface.Type, depth: int) -> CourseData:
+	var course := _flat(surface, 5, depth)
+	course.set_tile(2, 2, 0, surface)
+	return course
+
+
+func test_deep_pits_settle_under_the_targets() -> void:
+	# E2-S4 review: one-tile pits 2 to 7 steps deep reached the 60 s cap (fairway and tee from
+	# 5 deep, cart path from 3, green from 4, rough from 6). Starts 0.5 to 2.4 yd out, 16
+	# ways round; on a 2-deep green, 0 to 2 yd (beyond that a still ball on the rim creeps:
+	# docs/design.md Ball, Known limit).
+	var centre := Vector2(12.5, 12.5)
+	for s: Surface.Type in ROLLING:
+		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
+		for depth: int in range(2, 8):
+			var course := _deep_pit(s, depth)
+			var radii: Array = [0.0, 1.0, 1.5, 2.0] if s == Surface.Type.GREEN and depth == 2 \
+					else [0.5, 0.975, 1.45, 1.925, 2.4]
+			var worst := 0
+			for r: float in radii:
+				for a: int in 16:
+					var ball := _set_down(course, centre + Vector2.RIGHT.rotated(a * PI / 8.0) * r)
+					worst = maxi(worst, ball.steps)
+					assert_lt(Vector2(ball.position.x, ball.position.y).distance_to(centre), 0.5,
+							"%s pit %d deep, r %.2f: rests at the bottom" % [Surface.NAMES[s], depth, r])
+			assert_lt(worst, target, "%s pit %d deep: longest %d ticks" % [Surface.NAMES[s], depth, worst])
+
+
+func test_trench_balls_settle_under_the_targets() -> void:
+	# E2-S4 review: a one-tile trench 7 deep (column 4 of a 9x12 plot) held still balls at
+	# 0.3 yd/s across its floor until the cap on fairway, tee, cart path and green.
+	for s: Surface.Type in ROLLING:
+		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
+		for depth: int in range(2, 8):
+			var course := CourseData.create(9, 12, s, depth)
+			for y: int in 12:
+				course.set_tile(4, y, 0, s)
+			var worst := 0
+			var x := 17.5
+			while x <= 27.5 + EPS:
+				var ball := _set_down(course, Vector2(x, 30.0))
+				worst = maxi(worst, ball.steps)
+				x += 0.25
+			assert_lt(worst, target, "%s trench %d deep: longest %d ticks" % [Surface.NAMES[s], depth, worst])
+
+
+func test_putts_climb_a_steep_green_tier() -> void:
+	# E2-S4 review: the crease took nearly all of a putt's speed at the foot of a steep green
+	# riser, so no putt up to 40 yd/s climbed 5 steps, and 3 steps needed 19.6 yd/s from 1 yd
+	# short. The putter is the only club on green (D13), so a cup on the upper tier must be
+	# reachable. The riser runs from x 27.5 to 32.5; putts from 1 and 7.5 yd short of it.
+	for k: int in [1, 2, 3, 5, 7]:
+		var course := _flat(Surface.Type.GREEN, 14)
+		for y: int in 14:
+			for x: int in range(6, 14):
+				course.set_tile(x, y, k, Surface.Type.GREEN)
+		for from: float in [26.5, 20.0]:
+			var climbs := -1.0
+			var speed := 1.0
+			while speed <= PUTT_CLIMB_MAX and climbs < 0.0:
+				var ball := _set_down(course, Vector2(from, 35.0), Vector2(speed, 0.0))
+				if ball.position.x > 32.5:
+					climbs = speed
+				speed += 0.5
+			assert_gt(climbs, 0.0, "a %d-step riser from x %.1f: climbed at %.1f yd/s" % [k, from, climbs])
+
+
+func test_a_ball_over_a_drop_runs_no_shorter_than_on_flat_ground() -> void:
+	# E2-S4 review: the crease braked a ball at a lip, so a 20 yd/s ball over a 7-step drop
+	# on fairway rested at x 34.0 against 43.9 on flat ground.
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.GREEN]:
+		var flat := _set_down(_flat(s, 40, 7), Vector2(20.0, 20.0), Vector2(20.0, 0.0))
+		for k: int in range(1, 8):
+			var course := _flat(s, 40, 7)
+			for y: int in 40:
+				for x: int in range(6, 40):
+					course.set_tile(x, y, 7 - k, s)
+			var ball := _set_down(course, Vector2(20.0, 20.0), Vector2(20.0, 0.0))
+			assert_gte(ball.position.x, flat.position.x, "%s, %d steps down: rests at x %.1f, flat %.1f" % [
+					Surface.NAMES[s], k, ball.position.x, flat.position.x])
+
+
+func test_felt_gradient_feels_a_steep_green_bank_as_steep() -> void:
+	var green := SurfaceTable.load_default().row(Surface.Type.GREEN)
+	var fairway := SurfaceTable.load_default().row(Surface.Type.FAIRWAY)
+	var one := Vector2(0.4, 0.0)
+	assert_eq(Ball.felt_gradient(one, fairway), one, "fairway feels the terrain")
+	assert_almost_eq(Ball.felt_gradient(one, green).x, 0.4 * green.slope_scale, 1e-6, "a contour is a break")
+	assert_almost_eq(Ball.felt_gradient(Vector2(0.4, -0.4), green), Vector2(0.4, -0.4) * green.slope_scale,
+			Vector2.ONE * 1e-6, "so is a contour corner")
+	var two := Ball.felt_gradient(Vector2(0.8, 0.0), green).x
+	assert_gt(two, 0.8 * green.slope_scale * 3.0, "two steps per tile is felt far steeper than a break")
+	for steps: int in range(2, 8):
+		var g := Vector2(0.0, -0.4 * steps)
+		var felt := Ball.felt_gradient(g, green)
+		assert_lte(felt.length(), g.length() + 1e-6, "%d steps per tile: never steeper than the terrain" % steps)
+		assert_lt(felt.y, 0.0, "%d steps per tile: the same way down" % steps)
+	var gully := Ball.felt_gradient(Vector2(0.8, 0.4), green)
+	assert_almost_eq(gully.y, 0.4 * green.slope_scale, 1e-6, "per axis: a gentle floor between steep walls stays gentle")
+
+
+func test_meeting_steeper_ground_takes_the_speed_into_it() -> void:
+	var v := Vector2(10.0, 0.0)
+	assert_eq(Ball.meet_ground(v, Vector2.ZERO, Vector2.ZERO), v, "flat ground: unchanged")
+	assert_almost_eq(Ball.meet_ground(v, Vector2(0.4, 0), Vector2(0.4, 0)), v, Vector2.ONE * 1e-5,
+			"even slope: unchanged")
+	assert_almost_eq(Ball.meet_ground(v, Vector2(-0.4, 0), Vector2.ZERO), v, Vector2.ONE * 1e-5,
+			"down onto a flat foot: all the ground speed kept")
+	var across := Ball.meet_ground(v, Vector2(-0.4, 0), Vector2(0.4, 0))
+	assert_almost_eq(across.x, 10.0 * 0.84 / 1.16, 1e-4, "across a one-step V floor: cos of the crease angle kept")
+	assert_lt(Ball.meet_ground(v, Vector2.ZERO, Vector2(0.4, 0)).x, v.x, "onto a steeper uphill: slower")
+	var green := SurfaceTable.load_default().row(Surface.Type.GREEN)
+	var contour := Ball.meet_ground(v, Ball.felt_gradient(Vector2(-0.4, 0), green),
+			Ball.felt_gradient(Vector2(0.4, 0), green))
+	assert_gt(contour.x, 9.98, "across a green contour, felt as a break, almost nothing")
+
+
+func test_a_crease_never_brakes_a_lip_or_turns_the_ball_back() -> void:
+	# E2-S4 review: over a lip (a convex crease) the ball braked; past a 90 degree crease (a
+	# pit or trench floor, walls steeper than 45 degrees) it was turned back, and swung to
+	# and fro at 0.3 yd/s until the 60 s cap.
+	var v := Vector2(10.0, 0.0)
+	for drop: float in [0.4, 0.8, 2.8]:
+		assert_eq(Ball.meet_ground(v, Vector2.ZERO, Vector2(-drop, 0)), v, "over a lip into %.1f: unchanged" % drop)
+		assert_eq(Ball.meet_ground(v, Vector2(0.4, 0), Vector2(-drop, 0)), v, "over a crest into %.1f: unchanged" % drop)
+	for wall: float in [1.2, 2.0, 2.8]:
+		var met := Ball.meet_ground(Vector2(0.3, 0.0), Vector2(-wall, 0), Vector2(wall, 0))
+		assert_gte(met.x, 0.0, "across a V floor of %.1f walls: never turned back" % wall)
+		assert_lte(met.x, 0.3, "and never faster")
+	assert_eq(Ball.meet_ground(v, Vector2(-0.8, 0), Vector2(-0.4, 0)), v, "onto a gentler downhill: no faster")
+	var diag := Ball.meet_ground(Vector2(3.0, 4.0), Vector2(-0.8, 0.4), Vector2(0.8, 0.4))
+	assert_eq(diag.y, 4.0, "per axis: a crease across x leaves the run along y as it was")
+
+
+func test_rough_drag_fades_at_low_speed() -> void:
+	# E2-S4: below drag_full_speed the drag fades with speed, so a ball rolling down a rough
+	# slope is not held to the 1.2 yd/s crawl full drag allowed.
+	var rough := SurfaceTable.load_default().row(Surface.Type.ROUGH)
+	assert_gt(rough.drag_full_speed, 0.0, "rough fades its drag")
+	var course := _ramp()
+	for y in 40:
+		for x in 40:
+			course.set_tile(x, y, course.get_height(x, y), Surface.Type.ROUGH)
+	var ball := Ball.new(course, 1)
+	ball.start_roll(Vector2(36.0, 100.0), Vector2.ZERO)
+	for i in Ball.TICK_HZ * 3:
+		ball.step()
+	assert_gt(-ball.velocity.x, 2.0, "3 s down a one-step rough slope: %.2f yd/s" % -ball.velocity.x)
 
 
 # --- determinism ---

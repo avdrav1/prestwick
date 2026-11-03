@@ -165,8 +165,8 @@ func _touch_down(at: Vector3, v: Vector3) -> void:
 	if row.roll <= 0.0:
 		_rest()
 		return
-	# The normal tilts by the slope this surface lets the ball feel (slope_scale).
-	var n := HeightField.normal_for(field.gradient_at(at.x, at.y) * row.slope_scale)
+	# The normal tilts by the slope this surface lets the ball feel (felt_gradient).
+	var n := HeightField.normal_for(felt_gradient(field.gradient_at(at.x, at.y), row))
 	var into := v.dot(n)
 	var along := (v - n * into) * (1.0 - row.bounce_friction)
 	if first:
@@ -192,11 +192,14 @@ func _step_roll() -> void:
 	var grad := field.gradient_at(position.x, position.y)
 	# Gravity along the slope the surface lets the ball feel, projected onto the ground
 	# plane. Peaks at gravity / 2.
-	var feel := grad * row.slope_scale
+	var feel := felt_gradient(grad, row)
 	var pull := -feel * params.gravity / (1.0 + feel.length_squared())
 	var v := Vector2(velocity.x, velocity.y)
 	var full := params.roll_decel / row.roll
 	var hold := full * row.rest_decel_scale
+	# Axes stopped at a low point this tick (0), and the move that would have crossed it.
+	var stop := Vector2.ONE
+	var crossing := Vector2.ZERO
 	if v.length() < params.rest_speed:
 		# Static: stays put unless the slope pulls harder than the constant friction.
 		if pull.length() <= hold:
@@ -210,30 +213,61 @@ func _step_roll() -> void:
 		# and rests only if that pull is no more than the hold.
 		var keep := _low_point_axes(grad, v)
 		if keep != Vector2.ONE:
+			stop = keep
+			crossing = v
 			var floor_feel := feel * keep
 			var floor_pull := -floor_feel * params.gravity / (1.0 + floor_feel.length_squared())
 			if floor_pull.length() <= hold:
 				_rest()
 				return
 			v = still * keep + floor_pull.normalized() * (floor_pull.length() - hold) * DT
+			# If that pull would carry it across the other axis's low point too, it is at the
+			# bottom of both (E2-S4 review: it stepped to and fro over a steep pit's centre).
+			if _low_point_axes(grad, v) * keep != keep:
+				_rest()
+				return
 	else:
 		# Friction = constant part + grass drag that grows with speed. Where the surface holds
 		# a still ball more lightly, the constant part rises back to full by decel_ramp_speed.
+		# Where drag_full_speed is set (E2-S4), the drag fades below it in proportion to speed.
 		var constant := full
 		if row.rest_decel_scale != 1.0 and v.length() < row.decel_ramp_speed:
 			constant = lerpf(hold, full, v.length() / row.decel_ramp_speed)
-		var friction := constant + params.roll_drag * row.drag_scale * v.length() / row.roll
+		var drag := params.roll_drag * row.drag_scale * v.length() / row.roll
+		if row.drag_full_speed > 0.0 and v.length() < row.drag_full_speed:
+			drag *= v.length() / row.drag_full_speed
+		var friction := constant + drag
 		v += pull * DT
 		var speed := v.length() - friction * DT
 		v = v.normalized() * speed if speed > 0.0 else Vector2.ZERO
-		# A slow ball also stops along an axis where it is about to cross a low point
-		# (E1-S13), so it does not swing to and fro across a pit's centre or a gully's floor.
-		if v.length() < params.low_point_speed:
-			v *= _low_point_axes(grad, v)
+		# A ball also stops along an axis where it is about to cross a low point slowly on
+		# that axis (E1-S13; per axis since E2-S4), so it does not swing to and fro across a
+		# pit's centre or a gully's floor while it runs on along the other axis.
+		var keep := _low_point_axes(grad, v)
+		if absf(v.x) >= params.low_point_speed:
+			keep.x = 1.0
+		if absf(v.y) >= params.low_point_speed:
+			keep.y = 1.0
+		if keep != Vector2.ONE:
+			stop = keep
+			crossing = v
+			v *= keep
 	var x := position.x + v.x * DT
 	var y := position.y + v.y * DT
+	# A stopped axis sits exactly on the low point's line (a tile centre), where the slope
+	# along it is the mean of both sides (E2-S4 review): so a ball running down a gully's floor
+	# feels the floor's own pull, not one wall's trim of it.
+	if stop.x == 0.0:
+		x = _low_point_line(position.x, position.x + crossing.x * DT)
+	if stop.y == 0.0:
+		y = _low_point_line(position.y, position.y + crossing.y * DT)
 	position = Vector3(x, y, field.height_at(x, y))
-	velocity = Vector3(v.x, v.y, grad.dot(v))
+	# Where the ground under the ball turns up against it (a concave crease at a tile centre:
+	# a valley floor, the foot of a bank), the ball keeps only its velocity along the new
+	# ground (E2-S4).
+	var next := field.gradient_at(x, y)
+	var met := meet_ground(v, crease_slope(grad, next, v, row), crease_slope(next, grad, v, row, true))
+	velocity = Vector3(met.x, met.y, grad.dot(met))
 
 
 ## 0 on each axis (x, y) where this tick's move `v` would carry the ball from ground falling
@@ -245,6 +279,73 @@ func _low_point_axes(grad: Vector2, v: Vector2) -> Vector2:
 	return Vector2(
 			0.0 if grad.x * v.x < 0.0 and next.x * v.x > 0.0 else 1.0,
 			0.0 if grad.y * v.y < 0.0 and next.y * v.y > 0.0 else 1.0)
+
+
+## The tile centre line (yards on one axis) between `from` and `to`, where a low point's
+## gradient jumps; `to` if there is none between them.
+func _low_point_line(from: float, to: float) -> float:
+	var size := field.yards_per_tile
+	var k := floorf(maxf(from, to) / size - 0.5)
+	var line := (k + 0.5) * size
+	return line if line >= minf(from, to) else to
+
+
+## The slope a ball feels on the surface of `row` where the terrain's gradient is `grad`
+## (dh/dx, dh/dy). On each axis: `slope_scale` of it, plus `steep_scale` of the part steeper
+## than `steep_from` (E2-S4), never more than the terrain's own slope. So a green feels a
+## gentle contour as a break but a bank steeper than any contour as steep, and a gentle
+## gully floor stays gentle between steep walls.
+static func felt_gradient(grad: Vector2, row: SurfaceRow) -> Vector2:
+	if row.steep_scale <= 0.0:
+		return grad * row.slope_scale
+	return Vector2(_felt_axis(grad.x, row), _felt_axis(grad.y, row))
+
+
+static func _felt_axis(g: float, row: SurfaceRow) -> float:
+	var steepness := absf(g)
+	var felt := steepness * row.slope_scale
+	if steepness > row.steep_from:
+		felt = minf(felt + (steepness - row.steep_from) * row.steep_scale, steepness)
+	return signf(g) * felt
+
+
+## The slope a crease between terrain gradients `here` and `there` feels, per axis, for a
+## ball moving at `v` (`here` is the side it leaves, or the side it meets when `meeting`).
+## Across a low point (falling along v, then rising) it is the felt slope, so a steep pit or
+## gully floor damps the swing in full. Elsewhere, at the foot of a bank, it is slope_scale
+## of the terrain's alone, so on a green a steep bank pulls a ball back hard but does not
+## take a putt's speed at its foot (E2-S4 review: a putt could not climb a 3-step tier).
+## Off the green both are the terrain's slope.
+static func crease_slope(here: Vector2, there: Vector2, v: Vector2, row: SurfaceRow,
+		meeting: bool = false) -> Vector2:
+	var felt := felt_gradient(here, row)
+	var scaled := here * row.slope_scale
+	var leave := there if meeting else here
+	var meet := here if meeting else there
+	return Vector2(
+			felt.x if leave.x * v.x < 0.0 and meet.x * v.x > 0.0 else scaled.x,
+			felt.y if leave.y * v.y < 0.0 and meet.y * v.y > 0.0 else scaled.y)
+
+
+## Ground velocity `v` of a ball rolling on slope `from` (dh/dx, dh/dy, as the crease
+## feels it) once it is over slope `to` (E2-S4). Per axis, as the low points are: only where
+## the new ground rises against the ball more than the old along that axis (a concave crease:
+## a valley floor, the foot of an upslope) does the ball lose the part of its velocity along
+## the new ground's normal, as rigid ground held to it would take it. On that axis it keeps
+## (1 + from * to) / (1 + to²) of its speed: 72% across a one-step V floor at slope_scale 1.0,
+## all of it onto a flat foot. At a convex crease (a lip, or onto a steeper downhill) and
+## where the slope is the same, that axis is unchanged, so a ball over a drop runs on as far
+## as on flat ground. A crease never adds ground speed (from a steep downhill onto a gentler
+## one the projection would) and never turns the ball back: past a 90 degree crease that axis
+## stops instead.
+static func meet_ground(v: Vector2, from: Vector2, to: Vector2) -> Vector2:
+	return Vector2(_meet_axis(v.x, from.x, to.x), _meet_axis(v.y, from.y, to.y))
+
+
+static func _meet_axis(v: float, from: float, to: float) -> float:
+	if (to - from) * v <= 0.0:
+		return v
+	return v * clampf((1.0 + from * to) / (1.0 + to * to), 0.0, 1.0)
 
 
 func _rest() -> void:
