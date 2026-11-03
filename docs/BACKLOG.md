@@ -228,7 +228,7 @@ Planning notes:
   - Accept: after a ball goes in water or out of bounds, the drawn ball shows where it went in before it appears at the drop point. The fallback drop never lands within `cup_radius` of the cup.
   - Test: `tests/test_round_flow.gd`: a water carry short of an island green scores the penalty, not par. `tests/test_ball_surfaces.gd`: the fallback drop case.
   - Touches: `golf/`, `scenes/`
-- [ ] E2-S14 Put the E2 review's feel questions to the hand playtest. Questions the swarm could not answer by itself.
+- [x] E2-S14 Put the E2 review's feel questions to the hand playtest. Questions the swarm could not answer by itself.
   - Note: (found in E2 review) run alongside E2-S9's `/playtest full` session, or straight after it; its notes go in the same `docs/playtests/` file. These are questions, not fixes: the answers become `/decision`s, `/balance` findings or new stories.
   - Accept: the playtest notes answer each of these:
     - Putter marker: the user answered 2026-11-03: the marker and dots show the putt at the power that reaches the cup, and the bar's power still decides the result. This is now a build item, not a playtest question: record it with `/decision` and build it in E2-S20.
