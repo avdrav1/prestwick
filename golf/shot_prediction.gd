@@ -32,6 +32,9 @@ var holed: bool = false
 ## 1 when the ball was dropped from water or OB (E2-S6), with the hazard it stopped in.
 var penalty_strokes: int = 0
 var hazard: Ball.Hazard = Ball.Hazard.NONE
+## Where the ball stopped in that hazard, before the drop, yards (Ball.hazard_position; the
+## path's last point). The aim marker draws the hazard cue there (E6-S7 review).
+var hazard_position: Vector3 = Vector3.ZERO
 ## Trees blocked the flight and scattered it (E2-S6).
 var scattered: bool = false
 
@@ -76,5 +79,6 @@ static func _from(ball: Ball, start: Vector3) -> ShotPrediction:
 	p.holed = ball.holed
 	p.penalty_strokes = ball.penalty_strokes
 	p.hazard = ball.hazard
+	p.hazard_position = ball.hazard_position
 	p.scattered = ball.scattered
 	return p

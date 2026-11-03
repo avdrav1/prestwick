@@ -1,6 +1,7 @@
 class_name HeightField
 extends RefCounted
 ## Reads a CourseData as continuous ground in yards, for the ball, its shadow and guests.
+## Land the player does not own reads as `oob` (surface_at, D29).
 ## Height is interpolated bilinearly between tile centres, so a one-step rise between two
 ## tiles becomes a slope from one centre to the next. Past the map edge the edge height holds.
 ## x and y are yards from the map corner (tile (i, j) covers [5i, 5i + 5)); heights are yards.
@@ -47,8 +48,26 @@ func tile_top_screen(p: Vector3) -> Vector2:
 	return Iso.tile_to_screen(Vector2(iso.x, iso.y), tile_top_steps(p.x, p.y))
 
 
-## Surface under (x, y). Off the map is Surface.Type.OOB.
+## Surface the ball plays under (x, y). Off the map is Surface.Type.OOB, and so is every tile
+## of a parcel the player does not own (D29, E6-S7): unowned land plays as an `oob` tile,
+## whatever is painted on it, though its heights still shape the ground (height_at). On a
+## fully owned course (New sandbox, every version 1 file) it is the tile's own surface.
 func surface_at(x: float, y: float) -> Surface.Type:
+	return surface_of(tile_at(x, y))
+
+
+## Surface the ball plays on `tile`, as surface_at.
+func surface_of(tile: Vector2i) -> Surface.Type:
+	if not course.is_owned(tile.x, tile.y):
+		return Surface.Type.OOB
+	return course.get_surface(tile.x, tile.y)
+
+
+## Surface painted under (x, y), owned or not (off the map is Surface.Type.OOB). Only the
+## in-flight tree block reads it (Ball._blocks, E6-S7 review): trees standing on unowned land
+## still stop a flight, as trees past the white stakes do, and are drawn there, so the shot
+## reads as it plays. Touchdown, roll, rest and the drop read surface_at.
+func painted_surface_at(x: float, y: float) -> Surface.Type:
 	var t := tile_at(x, y)
 	return course.get_surface(t.x, t.y)
 

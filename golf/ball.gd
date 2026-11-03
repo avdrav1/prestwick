@@ -12,13 +12,14 @@ extends RefCounted
 ##
 ## Cup and hazards (D15, E2-S6; docs/design.md Ball, Cup and hazards): the cup (set_cup)
 ## captures a slow ball at the end of a rolling tick. A ball that stops on water or OB
-## (an `oob` tile or off the map) is dropped, at rest, with one penalty stroke, and reports
+## (an `oob` tile, off the map, or land the player does not own, D29) is dropped, at rest, with one penalty stroke, and reports
 ## it (penalty_strokes, hazard, entry_point, drop_point). A flight lower than the trees row's
 ## block_height over trees is scattered back toward the start; a rolling ball stops at the
 ## edge of trees. A ball never rests on water, OB or inside trees.
 
 enum State { READY, FLYING, ROLLING, AT_REST }
-## Which hazard dropped the ball (D15). OB is an `oob` tile or off the map.
+## Which hazard dropped the ball (D15). OB is an `oob` tile, off the map, or a tile of a
+## parcel the player does not own (D29: HeightField.surface_at reads it as `oob`).
 enum Hazard { NONE, WATER, OB }
 
 const TICK_HZ: int = 60
@@ -257,9 +258,11 @@ func _blocked_in(t: float) -> bool:
 
 ## True when a flight at `p` is inside trees: over a tree tile, lower than the trees row's
 ## block_height above that tile's top (its whole height, as drawn, not the bilinear ground,
-## which leans up toward a higher neighbour), or meeting its ground.
+## which leans up toward a higher neighbour), or meeting its ground. Trees on unowned land
+## block too (HeightField.painted_surface_at, D29): they stand there and are drawn there; the
+## scatter then rests only on owned land (may_rest_on).
 func _blocks(p: Vector3) -> bool:
-	if field.surface_at(p.x, p.y) != Surface.Type.TREES:
+	if field.painted_surface_at(p.x, p.y) != Surface.Type.TREES:
 		return false
 	var row := surfaces.row(Surface.Type.TREES)
 	if row.block_height <= 0.0:
@@ -307,11 +310,12 @@ func _scatter(from: Vector3, v: Vector3) -> void:
 	state = State.ROLLING
 
 
-## True when a ball may come to rest on `tile`: on the map, and not water, `oob` or trees.
+## True when a ball may come to rest on `tile`: on the map, on owned land (D29), and not
+## water, `oob` or trees.
 func may_rest_on(tile: Vector2i) -> bool:
 	if not field.course.in_bounds(tile.x, tile.y):
 		return false
-	var s := field.course.get_surface(tile.x, tile.y)
+	var s := field.surface_of(tile)
 	return s != Surface.Type.WATER and s != Surface.Type.OOB and s != Surface.Type.TREES
 
 
@@ -578,7 +582,8 @@ func _rest() -> void:
 		position = Vector3(open.x, open.y, field.height_at(open.x, open.y))
 
 
-## The hazard under ground point `at`: water, OB (an `oob` tile or off the map), or none.
+## The hazard under ground point `at`: water, OB (an `oob` tile, off the map or unowned
+## land), or none.
 func hazard_at(at: Vector2) -> Hazard:
 	match field.surface_at(at.x, at.y):
 		Surface.Type.WATER:
