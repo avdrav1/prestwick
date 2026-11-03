@@ -7,7 +7,8 @@ extends Control
 ## band with bracket ends round the tall centre line (green, chalk); the 100% mark is a tall
 ## chalk line, and the overswing part past it is hatched (flag_red); the bar's position is a
 ## sun_yellow triangle above the bar; the locked power is an ink-outlined chalk triangle
-## below it, and the locked accuracy a diamond.
+## below it, and the locked accuracy a diamond. It redraws each frame while a swing is in
+## progress and on a resize.
 
 @export var bar_width: float = 420.0
 @export var bar_height: float = 18.0
@@ -32,6 +33,13 @@ func _init() -> void:
 
 func _process(_delta: float) -> void:
 	if swing != null and swing.in_progress():
+		queue_redraw()
+
+
+## The bar redraws every frame only while a swing is in progress, so a resize while idle
+## asks for its own redraw (E2-S17).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
 
 

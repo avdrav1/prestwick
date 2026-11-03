@@ -252,10 +252,11 @@ Planning notes:
   - Accept: the sweeps keep their worst cases and a few depths, so every D16 case listed in `docs/design.md` Settle targets is still covered, and `bash scripts/run_tests.sh` takes under 60 s. The leak lines are explained and fixed, or recorded in `scripts/run_tests.sh` as known and harmless.
   - Test: `bash scripts/run_tests.sh` green, with its time in the commit body.
   - Touches: `tests/`, `scripts/`
-- [ ] E2-S17 Tidy the issue markers and the swing bar. Small readability fixes from the E2 review.
+- [x] E2-S17 Tidy the issue markers and the swing bar. Small readability fixes from the E2 review.
   - Note: (found in E2 review) behind a hill, an issue's diamond is hidden, but its badge (top layer, at the tile's right corner) and the leader line's foot dot still draw over the hill in front. The issue box layout only pushes boxes upward, so with E3's nine holes many faults close together could stack boxes far above their tiles. `SwingBar` redraws only while a swing is in progress, so a resize while idle relies on Control's normal redraw. Not changed: the aim line draws over the terrain at z_index 2 and is not Y-sorted, on purpose, so a hill never hides it.
   - Accept: a leader foot whose tile has a higher tile in front draws dashed or faded. Issue text shows for the hovered or selected hole only, or boxes may also move sideways, so no box sits more than a set distance above its tile (the distance in the builder tuning). The swing bar redraws on resize while idle.
   - Test: `tests/test_issue_marker.gd` (new) for the hidden foot and the box distance; a screenshot through `scripts/screenshot.sh` in `docs/decisions/`.
+  - Done: boxes move sideways past `issue_box_max_stack` (96 px, builder tuning), at most `issue_box_max_side` (160 px), to just past the box in the way; a box with no room within both collapses to its badge (the hole panel lists every reason). A 196-fault cluster lays out in about 30 ms; a covered foot draws a dashed leader, faded ring and faded badge. Screenshots `docs/decisions/e2-s17-issue-markers.png` (26 faults close together, 1x) and `e2-s17-hidden-foot-2x.png`. Godot 4.7's Control already redraws on resize; SwingBar now asks for it explicitly.
   - Touches: `course/`, `scenes/`
 - [x] E2-S18 Finish `/course-file inspect` and `generate hilly`. Both are named in the skill and not built.
   - Note: (found in E2 review) left optional in E2-S2. `courses/example_par3.json` is `generate 3 flat dry`; nothing generates a hilly fixture.

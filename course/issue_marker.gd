@@ -14,9 +14,15 @@ extends Node2D
 ## behind a hill does not read as being on the hill. The badge, leader and text box are a
 ## child drawn over everything (`label`, z_index 2), so the fault still shows.
 ##
+## The leader's foot (the dot on the tile centre) draws over everything too, so when a tile
+## in front stands high enough to cover the tile centre (`foot_hidden`, E2-S17) the leader
+## draws dashed, the foot as a faded ring and the badge faded, so the fault does not read
+## as being on the hill.
+##
 ## The text keeps its screen size at every zoom step, so a reason reads at 0.5x. CourseView
-## lays the boxes out in screen space (`text_scale`, `stack`) so neighbouring boxes never
-## cover each other.
+## lays the boxes out in screen space (`text_scale`, `stack`, `shift`) so neighbouring boxes
+## never cover each other and none sits far above or beside its tile; one with no room
+## near its tile collapses to its badge (`collapsed`).
 
 @export var line_color: Color = Color8(216, 58, 58)
 @export var ink_color: Color = Color8(26, 28, 34)
@@ -29,10 +35,18 @@ extends Node2D
 @export var font_size: int = 14
 @export var text_width: float = 320.0
 @export var text_padding: float = 4.0
+## A hidden foot's (and its badge's) alpha, and its leader's dash length (screen px at 1x).
+@export var hidden_alpha: float = 0.45
+@export var dash_length: float = 4.0
 
 var cell: Vector2i = Vector2i.ZERO
 ## The whole height of the tile it stands on.
 var ground: int = 0
+## Whether a tile in front covers this tile's centre, so the leader's foot is hidden (E2-S17).
+var foot_hidden: bool = false:
+	set(value):
+		foot_hidden = value
+		label.queue_redraw()
 ## The failing rules on this tile, one per reason, in the validator's order.
 var rules: PackedInt32Array = PackedInt32Array()
 var reasons: PackedStringArray = PackedStringArray()
@@ -47,6 +61,17 @@ var text_scale: float = 1.0:
 var stack: float = 0.0:
 	set(value):
 		stack = value
+		label.queue_redraw()
+## How far the text box is moved sideways off centre, screen px, set by CourseView's layout.
+var shift: float = 0.0:
+	set(value):
+		shift = value
+		label.queue_redraw()
+## Whether the layout found no room for the text box near the tile, so only the diamond and
+## badge draw (the hole panel still lists the reasons), set by CourseView's layout.
+var collapsed: bool = false:
+	set(value):
+		collapsed = value
 		label.queue_redraw()
 
 
@@ -73,8 +98,24 @@ func place(course: CourseData) -> void:
 	var at: Vector2 = draw_point()
 	position = Vector2(at.x, Iso.object_sort_key(Vector2(cell), ground))
 	label.position = at - position
+	foot_hidden = covered(course, cell)
 	queue_redraw()
 	label.queue_redraw()
+
+
+## Whether a tile in front of `at` (nearer the camera) stands high enough to cover the centre
+## of `at`'s top, or touch it, so a dot drawn there would sit on that tile's art. A tile k rows
+## straight in front (at + (k, k)) covers it from `ground + 2k - 1` steps; one beside the
+## straight line (at + (k, k - 1) or at + (k - 1, k)) from the same height, by its corner.
+static func covered(course: CourseData, at: Vector2i) -> bool:
+	var h: int = course.get_height(at.x, at.y)
+	var k: int = 1
+	while h + 2 * k - 1 <= CourseData.MAX_HEIGHT:
+		for c: Vector2i in [at + Vector2i(k, k), at + Vector2i(k, k - 1), at + Vector2i(k - 1, k)]:
+			if course.in_bounds(c.x, c.y) and course.get_height(c.x, c.y) >= h + 2 * k - 1:
+				return true
+		k += 1
+	return false
 
 
 ## Where it is drawn, in the CourseView's space: its tile's centre on its top.
@@ -108,11 +149,12 @@ func box_size() -> Vector2:
 
 
 ## The text box in screen px, relative to the tile centre, at a zoom of `scale` screen px per
-## local unit, pushed up by `push` px: centred over the tile, its bottom text_lift above it.
-func box_rect(scale: float, push: float) -> Rect2:
+## local unit, pushed up by `push` px and sideways by `side` px: centred over the tile, its
+## bottom text_lift above it.
+func box_rect(scale: float, push: float, side: float = 0.0) -> Rect2:
 	var size: Vector2 = box_size()
 	var bottom: float = -text_lift * scale - push
-	return Rect2(Vector2(-size.x * 0.5, bottom - size.y), size)
+	return Rect2(Vector2(-size.x * 0.5 + side, bottom - size.y), size)
 
 
 ## `line` broken at spaces into pieces no wider than text_width (a single long word stays whole).
@@ -155,22 +197,31 @@ func _draw() -> void:
 ## The badge, leader line and text box, over everything; drawn on `label`, at the tile centre.
 func _draw_label() -> void:
 	var font: Font = ThemeDB.fallback_font
-	# The warning badge on the right corner: a triangle with "!".
+	# The warning badge on the right corner: a triangle with "!", faded with a hidden foot.
+	var a: float = hidden_alpha if foot_hidden else 1.0
 	var corner := Vector2(Iso.HALF_W - 2.0, -4.0)
 	var tri := PackedVector2Array([corner + Vector2(-7, 6), corner + Vector2(7, 6), corner + Vector2(0, -7), corner + Vector2(-7, 6)])
-	label.draw_colored_polygon(tri, line_color)
-	label.draw_polyline(tri, ink_color, 1.0)
-	label.draw_string(font, corner + Vector2(-2, 5), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, text_color)
-	if rules.is_empty():
+	label.draw_colored_polygon(tri, Color(line_color, a))
+	label.draw_polyline(tri, Color(ink_color, a), 1.0)
+	label.draw_string(font, corner + Vector2(-2, 5), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(text_color, a))
+	if rules.is_empty() or collapsed:
 		return
 	# The reasons, at screen size, above the tile; a leader line down to the tile centre.
 	label.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * text_scale)
 	var s: float = 1.0 / text_scale if text_scale > 0.0 else 1.0
-	var box: Rect2 = box_rect(s, stack)
-	var foot := Vector2(0.0, box.end.y)
-	label.draw_line(Vector2.ZERO, foot, ink_color, 3.0)
-	label.draw_line(Vector2.ZERO, foot, line_color, 1.0)
-	label.draw_circle(Vector2.ZERO, 2.5, line_color)
+	var box: Rect2 = box_rect(s, stack, shift)
+	# The leader meets the box bottom straight above the tile, or its nearest end when shifted.
+	var inset: float = minf(text_padding * 2.0, box.size.x * 0.5)
+	var top := Vector2(clampf(0.0, box.position.x + inset, box.end.x - inset), box.end.y)
+	if foot_hidden:
+		var faded := Color(line_color, hidden_alpha)
+		label.draw_dashed_line(Vector2.ZERO, top, Color(ink_color, hidden_alpha), 3.0, dash_length)
+		label.draw_dashed_line(Vector2.ZERO, top, faded, 1.0, dash_length)
+		label.draw_arc(Vector2.ZERO, 2.5, 0.0, TAU, 12, faded, 1.0)
+	else:
+		label.draw_line(Vector2.ZERO, top, ink_color, 3.0)
+		label.draw_line(Vector2.ZERO, top, line_color, 1.0)
+		label.draw_circle(Vector2.ZERO, 2.5, line_color)
 	label.draw_rect(box, Color(ink_color, 0.85))
 	label.draw_rect(box, line_color, false, 1.0)
 	var line_h: float = font.get_height(font_size)

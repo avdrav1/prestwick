@@ -10,3 +10,5 @@ plot_size = Vector2i(128, 128)
 plot_surface = 1
 plot_ground = 2
 default_par = 3
+issue_box_max_stack = 96.0
+issue_box_max_side = 160.0

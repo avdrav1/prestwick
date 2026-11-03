@@ -15,6 +15,13 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export_range(0, 7) var plot_ground: int = 2
 ## The par the tee and cup tools give a new hole until the player picks another (3, 4 or 5).
 @export_range(3, 5) var default_par: int = 3
+## How far past its resting height an issue text box may be pushed up to clear its
+## neighbours, screen px at every zoom; past that it moves sideways instead (E2-S17).
+@export var issue_box_max_stack: float = 96.0
+## How far sideways off centre an issue text box may move, screen px at every zoom; a box
+## that fits nowhere within both limits collapses to its badge, and the hole panel lists its
+## reasons (E2-S17).
+@export var issue_box_max_side: float = 160.0
 
 
 static func load_default() -> BuilderTuning:

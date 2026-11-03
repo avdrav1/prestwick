@@ -30,8 +30,11 @@ extends Node2D
 ## hides it; the badge, leader line and text box draw over everything (z_index), so a fault
 ## behind a hill still shows without reading as being on the hill. The text boxes keep their
 ## screen size, so they are laid out in screen space at the current zoom (layout_issue_labels):
-## nearest the camera first, each pushed up clear of the boxes already placed. Main shows them
-## in Build only.
+## nearest the camera first, each pushed up clear of the boxes already placed, but never more
+## than BuilderTuning.issue_box_max_stack; past that it moves sideways instead, at most
+## issue_box_max_side, and past both it collapses to its badge (E2-S17). A
+## leader foot covered by a tile in front draws dashed and faded (IssueMarker.foot_hidden).
+## Main shows them in Build only.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
@@ -60,6 +63,11 @@ var _issues_root: Node2D
 var _issue_markers: Array[IssueMarker] = []
 ## The zoom (screen px per local unit) the issue boxes were last laid out at; 0 forces a layout.
 var _issue_layout_scale: float = 0.0
+## How far past its resting height a text box may be pushed up, screen px
+## (BuilderTuning.issue_box_max_stack).
+var issue_max_stack: float = 0.0
+## How far sideways off centre a text box may move, screen px (BuilderTuning.issue_box_max_side).
+var issue_max_side: float = 0.0
 
 ## Whether the issue highlights show (Build mode).
 var issues_visible: bool = true:
@@ -70,6 +78,9 @@ var issues_visible: bool = true:
 
 func _init() -> void:
 	y_sort_enabled = true
+	var tuning := BuilderTuning.load_default()
+	issue_max_stack = tuning.issue_box_max_stack
+	issue_max_side = tuning.issue_box_max_side
 	_art = TileArt.load_default()
 	_tile_set = _make_tile_set(_art)
 	for k: int in CourseData.MAX_HEIGHT + 1:
@@ -168,8 +179,12 @@ func show_issues(issues: Dictionary) -> void:
 
 ## Lays the issue text boxes out in screen space at a zoom of `scale` screen px per local unit:
 ## the box nearest the camera (lowest on screen) stays just above its tile, and each one
-## further back is pushed up until it overlaps no box already placed. Sets every marker's
-## text_scale and stack. CourseView reruns it when the zoom changes or a marker moves.
+## further back is pushed up until it overlaps no box already placed. A box that would be
+## pushed more than issue_max_stack tries again moved sideways, to just past the edge of a box
+## in its way, nearest first, but never more than issue_max_side. A box that fits nowhere
+## within both limits collapses (IssueMarker.collapsed): its badge and diamond still show, and
+## the hole panel lists its reasons. Sets every marker's text_scale, stack, shift and
+## collapsed. CourseView reruns it when the zoom changes or a marker moves.
 func layout_issue_labels(scale: float) -> void:
 	_issue_layout_scale = scale
 	var order: Array[IssueMarker] = _issue_markers.duplicate()
@@ -177,30 +192,70 @@ func layout_issue_labels(scale: float) -> void:
 		return a.draw_point().y > b.draw_point().y)
 	var placed: Array[Rect2] = []
 	for m: IssueMarker in order:
-		var anchor: Vector2 = m.draw_point() * scale
-		var push: float = 0.0
-		var rect: Rect2 = m.box_rect(scale, push)
-		rect.position += anchor
-		var moved: bool = true
-		while moved:
-			moved = false
-			for r: Rect2 in placed:
-				if rect.intersects(r):
-					push += rect.end.y - r.position.y + ISSUE_BOX_GAP
-					rect = m.box_rect(scale, push)
-					rect.position += anchor
-					moved = true
-		placed.append(rect)
 		m.text_scale = 1.0 / scale
-		m.stack = push
+		var anchor: Vector2 = m.draw_point() * scale
+		var rest: Rect2 = m.box_rect(scale, 0.0)
+		rest.position += anchor
+		# Only boxes within reach of every allowed position can be in the way.
+		var reach: Rect2 = rest.grow_individual(issue_max_side + ISSUE_BOX_GAP,
+			issue_max_stack + rest.size.y + ISSUE_BOX_GAP, issue_max_side + ISSUE_BOX_GAP, 0.0)
+		var near: Array[Rect2] = []
+		var sides: Array[float] = [0.0]
+		for r: Rect2 in placed:
+			if r.intersects(reach):
+				near.append(r)
+				# Just right of r, or just left of it.
+				sides.append(r.end.x + ISSUE_BOX_GAP - rest.position.x)
+				sides.append(r.position.x - ISSUE_BOX_GAP - rest.end.x)
+		sides.sort_custom(func(a: float, b: float) -> bool: return absf(a) < absf(b))
+		var done: bool = false
+		for side: float in sides:
+			if absf(side) > issue_max_side:
+				break
+			var push: float = _clear_push(m, scale, anchor, side, near)
+			if push <= issue_max_stack:
+				var rect: Rect2 = m.box_rect(scale, push, side)
+				rect.position += anchor
+				placed.append(rect)
+				m.stack = push
+				m.shift = side
+				m.collapsed = false
+				done = true
+				break
+		if not done:
+			m.stack = 0.0
+			m.shift = 0.0
+			m.collapsed = true
+
+
+## How far `m`'s box, `side` px sideways, must be pushed up to clear every box in `placed`,
+## or a value past issue_max_stack as soon as it would go that far.
+func _clear_push(m: IssueMarker, scale: float, anchor: Vector2, side: float, placed: Array[Rect2]) -> float:
+	var push: float = 0.0
+	var rect: Rect2 = m.box_rect(scale, push, side)
+	rect.position += anchor
+	var moved: bool = true
+	while moved and push <= issue_max_stack:
+		moved = false
+		for r: Rect2 in placed:
+			if rect.intersects(r):
+				push += rect.end.y - r.position.y + ISSUE_BOX_GAP
+				rect = m.box_rect(scale, push, side)
+				rect.position += anchor
+				moved = true
+				break
+	return push
 
 
 ## Every issue text box as laid out, in screen px at the last layout's zoom (one per marker,
-## in issue_markers() order).
+## in issue_markers() order; an empty Rect2 for a collapsed one).
 func issue_label_rects() -> Array[Rect2]:
 	var out: Array[Rect2] = []
 	for m: IssueMarker in _issue_markers:
-		var r: Rect2 = m.box_rect(_issue_layout_scale, m.stack)
+		if m.collapsed:
+			out.append(Rect2())
+			continue
+		var r: Rect2 = m.box_rect(_issue_layout_scale, m.stack, m.shift)
 		r.position += m.draw_point() * _issue_layout_scale
 		out.append(r)
 	return out
@@ -241,10 +296,13 @@ func refresh_cell(cell: Vector2i) -> void:
 	for m: HoleMarker in _markers:
 		if m.cell == cell:
 			m.place(_course)
+	# An edit in front of a fault may cover or uncover its leader's foot.
 	for m: IssueMarker in _issue_markers:
 		if m.cell == cell:
 			m.place(_course)
 			_issue_layout_scale = 0.0
+		else:
+			m.foot_hidden = IssueMarker.covered(_course, m.cell)
 
 
 ## The layer holding surface tops at height `h`.
