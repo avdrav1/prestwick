@@ -57,11 +57,25 @@ static func run(course: CourseData, rng_seed: int, start: Vector3, velocity: Vec
 static func run_launch(course: CourseData, rng_seed: int, shot: ShotLaunch,
 		params: BallParams = null, surfaces: SurfaceTable = null,
 		cup_tile: Vector2i = Ball.NO_CUP) -> ShotPrediction:
+	return of_ball(launched(course, rng_seed, shot, params, surfaces, cup_tile), shot.start)
+
+
+## The ball `run_launch` runs, launched but not yet stepped (E6-S12): a caller that must
+## spread a prediction over frames steps it itself (Ball.step until Ball.is_at_rest), then
+## reads it with `of_ball`. Stepped to rest, it is the same prediction tick for tick.
+static func launched(course: CourseData, rng_seed: int, shot: ShotLaunch,
+		params: BallParams = null, surfaces: SurfaceTable = null,
+		cup_tile: Vector2i = Ball.NO_CUP) -> Ball:
 	var ball := Ball.new(course, rng_seed, params, surfaces)
 	ball.record_path = true
 	ball.set_cup(cup_tile)
 	shot.apply(ball)
-	return _from(ball, shot.start)
+	return ball
+
+
+## The prediction of `ball`, launched from `start`, run on to rest first if it still moves.
+static func of_ball(ball: Ball, start: Vector3) -> ShotPrediction:
+	return _from(ball, start)
 
 
 static func _from(ball: Ball, start: Vector3) -> ShotPrediction:

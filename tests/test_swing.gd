@@ -513,6 +513,7 @@ func test_a_putt_line_follows_the_ground_without_tile_edge_jumps() -> void:
 	assert_true(sc.club.is_putter())
 	sc.rotate_aim(-25.0 - sc.aim_deg)
 	sc._refresh_aim()
+	sc.settle_aim()
 	var view := main.aim_view
 	var dots := view.dots
 	assert_gt(dots.size(), 4)
@@ -542,3 +543,153 @@ func _max_turn(dots: PackedVector2Array) -> float:
 		var step_b := dots[i] - dots[i - 1]
 		worst = maxf(worst, step_a.distance_to(step_b))
 	return worst
+
+
+# --- the putter's solve over frames (E6-S12) ---
+
+## A green rising two steps per tile along +x from tile 10, with hole 1's cup on the bank
+## at `cup` and the ball at `at` below it. From the defaults no putt rests near the cup: the
+## cold solve pins, scans and refines: 14 putts, about 3,500 Ball ticks (some 130 ms).
+func _steep_bank_main(cup: Vector2i = Vector2i(12, 6), at: Vector2 = Vector2(42.5, 32.5)) -> Main:
+	var course := CourseData.create(30, 12, Surface.Type.GREEN, 0)
+	for y in 12:
+		for x in 30:
+			course.set_tile(x, y, clampi((x - 10) * 2, 0, 7), Surface.Type.GREEN)
+	course.set_holes([HoleData.new(1, 3, Vector2i(1, 6), cup, true)] as Array[HoleData])
+	var main := _main_on(course)
+	var sc := main.swing_control
+	sc.place_ball(at)
+	sc.aim_at(sc.field.tile_center(cup))
+	return main
+
+
+## E6-S12 Accept: no aim update takes more than one frame. Each frame steps the solve by at
+## most putt_aim_frame_ticks Ball ticks and putt_aim_frame_usec; the marker shows a first
+## answer, then the refined putt, the same one the solve at once finds. Prints the worst and
+## the mean update (E6-S12 review: the worst varies with the machine's load).
+func test_the_putter_solve_spreads_over_frames_within_a_frame_budget() -> void:
+	var main := _steep_bank_main()
+	var sc := main.swing_control
+	var budget := sc.tuning.putt_aim_frame_ticks
+	assert_gt(budget, 0, "the cap lives in golf/swing_tuning.tres")
+	assert_gt(sc.tuning.putt_aim_frame_usec, 0, "and its time cap")
+	var t0 := Time.get_ticks_usec()
+	sc._process(1.0 / 60.0)  # the aim is dirty: this frame starts the solve
+	var worst_usec := Time.get_ticks_usec() - t0
+	var total_usec := worst_usec
+	assert_lte(sc.aim_putt.ticks, budget, "the first frame stays inside the budget")
+	var frames := 1
+	var first_answer := -1
+	while sc.is_aim_solving() and frames < 10000:
+		var before := sc.aim_putt.ticks
+		var t := Time.get_ticks_usec()
+		sc._process(1.0 / 60.0)
+		var took := Time.get_ticks_usec() - t
+		worst_usec = maxi(worst_usec, took)
+		total_usec += took
+		assert_lte(sc.aim_putt.ticks - before, budget, "frame %d: inside the budget" % frames)
+		if first_answer < 0 and sc.aim_prediction != null:
+			first_answer = frames
+		frames += 1
+	gut.p("putter solve over frames: %d runs, %d ticks, %d frames (first answer at frame %d), worst update %.1f ms, mean %.1f ms" % [
+			sc.aim_putt.runs, sc.aim_putt.ticks, frames, first_answer, worst_usec / 1000.0,
+			total_usec / 1000.0 / frames])
+	assert_lt(float(total_usec) / frames, sc.tuning.putt_aim_frame_usec * 1.5,
+			"a frame's aim work stays near its time cap on average")
+	assert_false(sc.is_aim_solving(), "the solve ends")
+	assert_true(sc.aim_putt.scanned, "this one needs the scan")
+	assert_gt(frames, 2, "a cold solve on a steep bank needs several frames")
+	assert_between(first_answer, 0, frames - 2, "a first answer shows before the solve ends")
+	assert_lt(worst_usec, 16667, "no aim update takes more than a 60 Hz frame")
+	var whole := PuttAim.solve(sc.course, sc.field, sc.model, sc.tuning, sc.ball_at, sc.aim_deg,
+			sc.cup_tile(), sc.next_seed())
+	assert_eq(sc.aim_power, whole.power, "the same putt as the solve at once")
+	assert_eq(sc.aim_prediction.rest, whole.prediction.rest)
+	assert_eq(main.aim_view.marker_point, whole.prediction.rest, "and the marker shows it")
+
+
+## Turning the aim mid-solve starts again from there, once the running solve's first putt
+## has rested (E6-S12 review); striking stops it, so the struck
+## ball's flight is never overdrawn by a late marker.
+func test_the_putter_solve_restarts_on_a_turn_and_stops_on_a_strike() -> void:
+	var main := _steep_bank_main()
+	var sc := main.swing_control
+	sc._process(1.0 / 60.0)
+	var first := sc.aim_putt
+	assert_true(sc.is_aim_solving())
+	sc.rotate_aim(1.0)
+	var waited := 0
+	while sc.aim_putt == first and waited < 30:
+		sc._process(1.0 / 60.0)
+		waited += 1
+	assert_ne(sc.aim_putt, first, "a new solve for the new aim")
+	assert_not_null(first.prediction, "once the old aim's first putt had rested")
+	assert_almost_eq(sc.aim_putt.get_aim_deg(), sc.aim_deg, 1e-4, "along the new aim")
+	assert_true(sc.is_aim_solving())
+	sc.press()
+	sc.advance(0.3 / sc.swing.rate())
+	sc.press()
+	sc.advance(0.3 / sc.swing.rate())
+	sc.press()
+	assert_true(main.shot_view.playing, "struck")
+	sc._process(1.0 / 60.0)
+	assert_false(sc.is_aim_solving(), "a moving ball stops the solve")
+	assert_false(main.aim_view.visible, "no marker over the moving ball")
+
+
+## E6-S12 review: the frame a ball comes to rest spends one budget, not two. ShotView's
+## came_to_rest only starts the new solve; that frame's `_process` steps it.
+func test_the_frame_a_ball_rests_spends_one_aim_budget() -> void:
+	var main := _steep_bank_main()
+	var sc := main.swing_control
+	sc.settle_aim()
+	_perfect_swing(sc)
+	assert_true(main.shot_view.playing, "struck")
+	var i := 0
+	while main.shot_view.playing and i < 100000:
+		main.shot_view.advance(1.0 / 60.0)
+		i += 1
+	assert_false(main.shot_view.playing, "the putt came to rest")
+	if sc.is_finished():
+		pass_test("holed: no next putt to aim")
+		return
+	assert_true(sc.is_aim_solving(), "came_to_rest started a solve from the new spot")
+	assert_eq(sc.aim_putt.ticks, 0, "and stepped none of it")
+	sc._process(1.0 / 60.0)
+	assert_lte(sc.aim_putt.ticks, sc.tuning.putt_aim_frame_ticks, "one budget in that frame")
+
+
+## E6-S12 review: a sweep of the aim on a steep downhill putt. Each frame turns the aim; a
+## turned aim waits for the running solve's first putt, so the marker keeps up: it moves at
+## least every few frames and the putt it shows was aimed close to the current aim. (Before,
+## each turn threw the first putt away mid-roll and the marker froze for the whole sweep,
+## up to 30 degrees behind.)
+func test_a_sweep_of_the_aim_on_a_steep_bank_keeps_the_marker_up() -> void:
+	for case: Array in [[Vector2i(9, 6), Vector2(92.5, 31.0)], [Vector2i(13, 6), Vector2(80.0, 22.5)]]:
+		var main := _steep_bank_main(case[0], case[1])
+		var sc := main.swing_control
+		sc._process(1.0 / 60.0)
+		sc.settle_aim()
+		var label := "cup %s from %s" % [case[0], case[1]]
+		var shown := sc.aim_prediction
+		var since := 0
+		var longest := 0
+		var moves := 0
+		var worst_lag := 0.0
+		for f in 60:
+			sc.rotate_aim(1.0)
+			sc._process(1.0 / 60.0)
+			if sc.aim_prediction != shown:
+				shown = sc.aim_prediction
+				moves += 1
+				since = 0
+			else:
+				since += 1
+				longest = maxi(longest, since)
+			worst_lag = maxf(worst_lag, absf(angle_difference(deg_to_rad(sc.aim_prediction_deg),
+					deg_to_rad(sc.aim_deg))))
+		gut.p("%s, sweep 1 deg a frame: marker moved on %d of 60 frames, longest still %d, worst lag %.1f deg" % [
+				label, moves, longest, rad_to_deg(worst_lag)])
+		assert_gte(moves, 6, "%s: the marker moves while the aim sweeps" % label)
+		assert_lte(longest, 10, "%s: never still for more than 10 frames of turning" % label)
+		assert_lte(rad_to_deg(worst_lag), 12.0, "%s: the shown putt trails the aim by little" % label)

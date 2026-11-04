@@ -175,6 +175,14 @@ static func validate(t: SwingTuning) -> PackedStringArray:
 		errors.append("putt_aim_tolerance_yd must be positive")
 	if t.putt_aim_max_runs < 2:
 		errors.append("putt_aim_max_runs must be at least 2")
+	if t.putt_aim_scan_powers < 2:
+		errors.append("putt_aim_scan_powers must be at least 2")
+	if t.putt_aim_refine_power <= 0.0:
+		errors.append("putt_aim_refine_power must be positive")
+	if t.putt_aim_frame_ticks < 1:
+		errors.append("putt_aim_frame_ticks must be at least 1")
+	if t.putt_aim_frame_usec < 1:
+		errors.append("putt_aim_frame_usec must be at least 1")
 	return errors
 
 

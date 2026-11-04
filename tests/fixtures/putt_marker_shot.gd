@@ -23,5 +23,6 @@ func _ready() -> void:
 	sc.aim_at(sc.field.tile_center(Vector2i(7, 5)))
 	sc.rotate_aim(-4.0)
 	sc._refresh_aim()
+	sc.settle_aim()
 	main.swing_panel.refresh()
 	print("putt marker: power %.2f, %d runs, miss %.2f yd" % [sc.aim_power, sc.aim_putt.runs, sc.aim_putt.miss_yd])

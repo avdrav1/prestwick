@@ -67,8 +67,14 @@ var aim_blocked: bool = false
 ## resting nearest the cup), else 1.0. The bar's locked power still decides the putt.
 var aim_power: float = 1.0
 ## The last putter solve (PuttAim), or null: its power warm-starts the next one while the
-## ball stays put.
+## ball stays put. E6-S12: a solve runs over frames, SwingTuning.putt_aim_frame_ticks Ball
+## ticks a frame; the marker shows its best putt so far and `settle_aim` finishes it at once.
 var aim_putt: PuttAim
+## True when `aim_prediction` is a putt's (the putter's solve may keep it on screen).
+var aim_prediction_is_putt: bool = false
+## The aim `aim_prediction` was predicted along, degrees: `aim_deg`, or for a putt shown while
+## a turned aim's solve catches up, the aim before the turn.
+var aim_prediction_deg: float = 0.0
 var active: bool = false:
 	set(value):
 		active = value
@@ -237,8 +243,48 @@ func _process(delta: float) -> void:
 	if not active:
 		return
 	advance(delta)
-	if _aim_dirty:
+	# E6-S12 review: one frame budget per frame, spent here only. A turned aim waits for the
+	# running solve's first putt to rest (a sweep would otherwise throw every long putt
+	# away mid-roll and freeze the marker on a putt from before the sweep), then starts warm
+	# from it, so the marker trails the aim by at most one putt.
+	var waits := _aim_turn_waits()
+	if _aim_dirty and not waits:
 		_refresh_aim()
+	if is_aim_solving():
+		step_aim(tuning.putt_aim_frame_ticks, tuning.putt_aim_frame_usec, waits)
+
+
+## True when a turned aim should wait for the putter's running solve to show its first putt.
+func _aim_turn_waits() -> bool:
+	return _aim_dirty and is_aim_solving() and aim_putt.prediction == null \
+			and club != null and club.is_putter()
+
+
+## True while the putter's solve (`aim_putt`) has not ended: the marker may still move.
+func is_aim_solving() -> bool:
+	return aim_putt != null and not aim_putt.done
+
+
+## Steps the putter's solve by up to `max_ticks` Ball ticks (below 0: to its end) or
+## `max_usec` microseconds (below 0: no cap) and shows its best putt so far; `until_answer`
+## stops once its first putt rests. One frame's aim work (E6-S12) is this call, from
+## `_process`; `_refresh_aim` only starts a solve.
+func step_aim(max_ticks: int, max_usec: int = -1, until_answer: bool = false) -> void:
+	if not is_aim_solving():
+		return
+	if not active or course == null or is_ball_moving() or is_finished():
+		aim_putt.done = true
+		return
+	var shown := aim_putt.prediction
+	aim_putt.advance(max_ticks, max_usec, until_answer)
+	if aim_putt.prediction != null and aim_putt.prediction != shown:
+		aim_power = aim_putt.power
+		_show_aim(aim_putt.shot, aim_putt.prediction, aim_putt.get_aim_deg())
+
+
+## Finishes the putter's solve now, whatever it costs (tests, screenshots).
+func settle_aim() -> void:
+	step_aim(-1)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -354,17 +400,32 @@ func _refresh_aim() -> void:
 			_aim_view.clear()
 		return
 	var shot := perfect_launch()
-	aim_power = 1.0
 	if shot.is_putt() and cup_tile() != Ball.NO_CUP:
-		# D21: the putt at the pace that comes to rest nearest the cup.
-		var warm := aim_putt.power if aim_putt != null else -1.0
-		aim_putt = PuttAim.solve(course, field, model, tuning, ball_at, aim_deg, cup_tile(),
+		# D21: the putt at the pace that comes to rest nearest the cup, solved over frames
+		# (E6-S12): this only starts the solve, `_process` steps it. Until its first putt
+		# rests, the last putt shown stays (a sweep of the aim moves it little); any other
+		# marker is cleared.
+		var warm := -1.0
+		var keep := aim_putt != null and aim_prediction != null and aim_prediction_is_putt
+		if aim_putt != null:
+			warm = aim_putt.power if aim_putt.prediction != null else aim_putt.start_power
+		aim_putt = PuttAim.begin(course, field, model, tuning, ball_at, aim_deg, cup_tile(),
 				next_seed(), warm)
-		shot = aim_putt.shot
-		aim_power = aim_putt.power
-		aim_prediction = aim_putt.prediction
-	else:
-		aim_prediction = ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
+		if not keep:
+			aim_prediction = null
+			if _aim_view != null:
+				_aim_view.clear()
+		return
+	aim_putt = null
+	aim_power = 1.0
+	_show_aim(shot, ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile()),
+			aim_deg)
+
+
+func _show_aim(shot: ShotLaunch, prediction: ShotPrediction, along_deg: float) -> void:
+	aim_prediction = prediction
+	aim_prediction_is_putt = shot.is_putt()
+	aim_prediction_deg = along_deg
 	var was_blocked := aim_blocked
 	aim_blocked = model.clubs.is_blocked(shot, aim_prediction)
 	if _aim_view != null:

@@ -37,9 +37,19 @@ const DEFAULT_PATH := "res://golf/swing_tuning.tres"
 @export var mouse_reaim_px: float = 24.0
 ## The putter's aim marker (D21, PuttAim): the solve for the power whose putt rests nearest
 ## the cup stops once a putt's rest is this close to the cup along the line (yards), or after
-## this many predicted putts.
+## this many predicted putts (the scan and its refining included, E6-S12).
 @export var putt_aim_tolerance_yd: float = 0.1
-@export var putt_aim_max_runs: int = 8
+@export var putt_aim_max_runs: int = 16
+## E6-S12: when the solve pins at the bar's edge or its secant slope is not positive (a bank
+## of about two steps per tile), it scans this many powers spread from 0 to 100%, then
+## refines around the nearest until its power bracket is narrower than `putt_aim_refine_power`.
+@export var putt_aim_scan_powers: int = 5
+@export var putt_aim_refine_power: float = 0.02
+## E6-S12: the most Ball ticks the aim's putt solve steps in one frame (about 36 us each), and
+## the most microseconds it spends doing so (E6-S12 review: a tick costs more on a busy
+## machine); a longer solve goes on next frame, showing its best putt so far.
+@export var putt_aim_frame_ticks: int = 160
+@export var putt_aim_frame_usec: int = 6000
 
 
 static func load_default() -> SwingTuning:

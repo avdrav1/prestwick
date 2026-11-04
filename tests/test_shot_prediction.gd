@@ -389,6 +389,7 @@ func _putt_main(course: CourseData, tee: Vector2i, cup: Vector2i, at: Vector2,
 	sc.aim_at(sc.field.tile_center(cup))
 	sc.rotate_aim(off_deg)
 	sc._refresh_aim()
+	sc.settle_aim()
 	return main
 
 
@@ -534,6 +535,7 @@ func test_putter_marker_solve_is_cheap_while_aiming() -> void:
 		sc.rotate_aim(0.5)
 		var t0 := Time.get_ticks_usec()
 		sc._refresh_aim()
+		sc.settle_aim()
 		usec += Time.get_ticks_usec() - t0
 		runs += sc.aim_putt.runs
 		worst = maxi(worst, sc.aim_putt.runs)
@@ -545,6 +547,108 @@ func test_putter_marker_solve_is_cheap_while_aiming() -> void:
 	sc.aim_putt = null
 	var t1 := Time.get_ticks_usec()
 	sc._refresh_aim()
+	sc.settle_aim()
 	gut.p("putter aim solve, cold: %d runs, %.1f ms" % [sc.aim_putt.runs,
 			(Time.get_ticks_usec() - t1) / 1000.0])
 	assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs)
+
+
+# --- steep banks (E6-S12) ---
+
+## A 30 x 12 green rising two steps per tile along +x from tile 10 (heights 0, 2, 4, 6, then
+## 7): a bank a ball cannot rest on, so a harder uphill putt can roll back further.
+func _steep_bank() -> CourseData:
+	var course := CourseData.create(30, 12, Surface.Type.GREEN, 0)
+	for y in 12:
+		for x in 30:
+			course.set_tile(x, y, clampi((x - 10) * 2, 0, 7), Surface.Type.GREEN)
+	return course
+
+
+## E6-S12 review: a 60 x 60 staircase bank whose risers run diagonally, each two steps in one
+## tile (height ((x + y) / 2 - 10) * 2, clamped to 0 to 7), so the bands are not aligned with
+## the grid axes.
+func _diagonal_staircase() -> CourseData:
+	var course := CourseData.create(60, 60, Surface.Type.GREEN, 0)
+	for y in 60:
+		for x in 60:
+			course.set_tile(x, y, clampi(((x + y) / 2 - 10) * 2, 0, 7), Surface.Type.GREEN)
+	return course
+
+
+## The brute-force nearest putt: every 1% of the bar, yards from the cup (0 when holed). A
+## capture window on a bank can be 2% wide, so no coarse first pass.
+func _brute_nearest_every_percent(sc: SwingControl) -> float:
+	var cup := sc.field.tile_center(sc.cup_tile())
+	var best := INF
+	for i in 101:
+		var s := PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, i / 100.0)
+		var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), s, null, null, sc.cup_tile())
+		best = minf(best, 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup))
+	return best
+
+
+## E6-S12 Accept: on a bank of two steps per tile the marker rests within 1 yd of the
+## brute-force nearest putt. Before the scan the solve stopped up to 7 yd off on these:
+## a cup on the bank holed only in a narrow window (0.83 to 0.88, and 0.77 to 0.78 from just
+## off the line), a cup up the bank out of reach (the nearest rest is at its foot, from a
+## soft putt), and downhill over the bank's edge. E6-S12 review, on the diagonal staircase:
+## the nearest rest is the hardest putt that stops before it rolls back (3.9 yd at 71%, 7.6
+## yd at 72%; the scan and golden search alone stopped at 6.6 yd), and a downhill putt whose
+## reach jumps where it crests a riser (false position spent every run on the jump, 1.7 yd
+## off).
+func test_putter_marker_on_a_steep_bank_is_near_the_nearest_putt() -> void:
+	for case: Array in [
+			[Vector2i(11, 6), Vector2(42.5, 32.5)],
+			[Vector2i(11, 6), Vector2(45.0, 31.0)],
+			[Vector2i(12, 6), Vector2(42.5, 32.5)],
+			[Vector2i(13, 6), Vector2(35.0, 22.5)],
+			[Vector2i(15, 6), Vector2(47.5, 32.5)],
+			[Vector2i(13, 6), Vector2(80.0, 22.5)],
+			[Vector2i(9, 6), Vector2(92.5, 31.0)],
+			[Vector2i(11, 11), Vector2(41.0, 43.0), true],
+			[Vector2i(11, 11), Vector2(90.0, 70.0), true, 4.0]]:
+		var cup: Vector2i = case[0]
+		var at: Vector2 = case[1]
+		var diagonal: bool = case.size() > 2 and case[2]
+		var off: float = case[3] if case.size() > 3 else 0.0
+		var course := _diagonal_staircase() if diagonal else _steep_bank()
+		var main := _putt_main(course, Vector2i(1, 6), cup, at, off)
+		var sc := main.swing_control
+		var label := "%s, cup %s from %s, %+.0f deg" % [
+				"diagonal staircase" if diagonal else "steep bank", cup, at, off]
+		var nearest := _brute_nearest_every_percent(sc)
+		var marker := main.aim_view.marker_point
+		assert_eq(marker, sc.aim_putt.prediction.rest, "%s: the marker is the solve's rest" % label)
+		assert_true(sc.aim_putt.done, "%s: solved" % label)
+		assert_lte(sc.aim_putt.runs, sc.tuning.putt_aim_max_runs, label)
+		var miss := 0.0 if sc.aim_putt.prediction.holed \
+				else Vector2(marker.x, marker.y).distance_to(sc.field.tile_center(cup))
+		gut.p("%s: marker %.2f yd from the cup, nearest %.2f, %d runs%s" % [label, miss, nearest,
+				sc.aim_putt.runs, ", scanned" if sc.aim_putt.scanned else ""])
+		assert_lte(miss, nearest + 1.0, "%s: within 1 yd of the nearest putt the bar makes" % label)
+
+
+## A solve stepped a few Ball ticks at a time ends on the same putt as one run at once: a
+## budget only spreads it over frames.
+func test_putter_solve_over_frames_matches_the_solve_at_once() -> void:
+	var course := _steep_bank()
+	var model := ShotModel.new()
+	var tuning := SwingTuning.load_default()
+	var field := HeightField.new(course, model.params)
+	var cup := Vector2i(11, 6)
+	var at := Vector2(42.5, 32.5)
+	var aim := rad_to_deg((field.tile_center(cup) - at).angle())
+	var whole := PuttAim.solve(course, field, model, tuning, at, aim, cup, 1)
+	var spread := PuttAim.begin(course, field, model, tuning, at, aim, cup, 1)
+	var calls := 0
+	while not spread.done and calls < 100000:
+		assert_lte(spread.advance(37), 37, "never more than the budget")
+		calls += 1
+	assert_true(spread.done)
+	assert_gt(calls, whole.runs, "spread over many calls")
+	assert_eq(spread.power, whole.power)
+	assert_eq(spread.runs, whole.runs)
+	assert_eq(spread.ticks, whole.ticks)
+	assert_eq(spread.prediction.rest, whole.prediction.rest)
+	assert_eq(spread.prediction.holed, whole.prediction.holed)
