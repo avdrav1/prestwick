@@ -9,7 +9,8 @@ extends RefCounted
 ##   3. A path of non-water, non-OB tiles connects tee to cup (4 neighbours, heights ignored).
 ##      A tile on an unowned parcel counts as OB (D30, E6-S4).
 ##   4. Tee-to-cup yardage matches par (rounded straight line, par 3 < 320, par 5 > 470).
-##   5. No tee inside another hole's landing zone (a disc on each par 4 and par 5's line).
+##   5. No tee inside another hole's landing zone (a disc on the line of each hole of
+##      zone_from_yd or more, whatever its par: D35, E6-S37).
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
 ##
 ## Each failing rule is one Issue: the rule, the tile at fault and a one-line reason.
@@ -210,14 +211,15 @@ func footprint(course: CourseData, hole: HoleData) -> Array[Vector2i]:
 	return out
 
 
-## Rule 5's landing zone centre, in tile coordinates, or null for a par 3 (which has none).
+## Rule 5's landing zone centre, in tile coordinates, or null for a hole shorter than
+## `zone_from_yd` on the rounded yardage (which has none), whatever its par (D35, E6-S37).
 func landing_zone(hole: HoleData) -> Variant:
-	if hole.par < 4:
-		return null
 	var line := Vector2(hole.cup - hole.tee)
 	if line == Vector2.ZERO:
 		return null
 	var yards: int = yardage(hole.tee, hole.cup)
+	if yards < tuning.zone_from_yd:
+		return null
 	var out_yd: float = maxf(minf(tuning.landing_distance_yd, yards - tuning.cup_clearance_yd), 0.0)
 	return Vector2(hole.tee) + line.normalized() * (out_yd / YARDS_PER_TILE)
 

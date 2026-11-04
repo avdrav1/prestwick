@@ -532,11 +532,12 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: the design doc carries all 9 edits and the Sandbox fix, and a re-read finds it matching `docs/design.md`. Either `docs/design.md` gains an Open questions list or the design doc's par question points at rule 4 (E6-S25 may settle it first). The "Open:" note on E6-S24 is removed.
   - Test: none. Review the design doc revision and the `docs/` diff.
   - Touches: `docs/`
-- [ ] E6-S37 Give long holes a landing zone whatever their par. A 300 yd par 3's tee shots land somewhere safe.
+- [x] E6-S37 Give long holes a landing zone whatever their par. A 300 yd par 3's tee shots land somewhere safe.
   - Note: (from D35, E6-S25) a par 3 of about 298 to 319 yd cannot be reached in one on level ground, and rule 5 gives par 3s no zone, so another tee may sit where its tee shots land.
   - Accept: rule 5 gives every hole whose yardage is at least a new tunable (`zone_from_yd`, 300 yd, in `course/validator_tuning.tres` with a line in `docs/design.md`) a landing zone at `min(240, yardage - 60)` yd from its tee, whatever its par; holes under it have none, so short par 3s keep none and every par 4 and par 5 (320 yd and up) keeps its zone as now. The footprint still holds the zone. The validator highlights the failing tee as for any rule 5 case.
   - Test: `tests/test_hole_open.gd` (a 300 yd par 3 with another tee inside and outside its zone; a 299 yd par 3 with a tee where the zone would be still opens; the rule 5 cases for par 4 and par 5 unchanged).
   - Touches: `course/`, `tests/`
+  - Done: `CourseValidator.landing_zone` now keys on the rounded yardage, not par: a hole of `zone_from_yd` (300, `course/validator_tuning.tres`) or more has its disc at `min(240, yardage - 60)` yd out, a shorter one none, so a 300 to 319 yd par 3 gets a zone 240 yd out and every par 4 and par 5 keeps its own. A par 4 under 300 yd (only a pre-D33 course, closed on rule 4 anyway) loses its zone. New tests in `tests/test_hole_open.gd`: a 300 yd par 3 with a tee 20 yd from its centre fails rule 5 on both holes with the tee highlighted, 35 yd away both open; a 299 yd par 3 with a tee 1 yd from where its zone would be opens; the shortest par 4 and a 500 yd par 5 unchanged; the footprint holds a long par 3's whole disc. `tests/test_validator.gd`'s clearance case lowers `zone_from_yd` with the shortest par 4. `docs/design.md` rule 4, rule 5 and Tunables updated.
 
 ## E3: Nine holes and guests — planned
 

@@ -346,3 +346,88 @@ func test_play_stays_available_while_the_hole_fails() -> void:
 	assert_eq(m.mode, Main.Mode.PLAY, "pillar 1: the validator never blocks Play")
 	assert_true(m.score_card.visible, "the scorecard shows")
 	assert_true(m.swing_control.active, "and the swing takes input")
+
+
+# --- rule 5 by length (D35, E6-S37) ---
+
+## Hole 1 a par `par1` from TEE to `cup1` and hole 2 a 150 yd par 3 from `tee2` back 30
+## tiles west, on a rough course `w` x 40, each cup on a green. Neither hole is opened.
+func _long_par3_and_a_tee(cup1: Vector2i, tee2: Vector2i, par1: int = 3, w: int = 80) -> CourseBuilder:
+	var c := CourseData.create(w, 40, Surface.Type.ROUGH, 2)
+	var b := CourseBuilder.new(c)
+	b.paint(cup1, Surface.Type.GREEN, 3)
+	b.place_tee(1, TEE, par1)
+	b.place_cup(1, cup1)
+	var cup2 := Vector2i(tee2.x - 30, tee2.y)
+	b.paint(cup2, Surface.Type.GREEN, 1)
+	b.place_tee(2, tee2, 3)
+	b.place_cup(2, cup2)
+	return b
+
+
+func test_zone_from_yd_is_tuned_at_300() -> void:
+	assert_eq(ValidatorTuning.load_default().zone_from_yd, 300)
+
+
+func test_a_300_yd_par3_has_a_zone_and_a_tee_inside_it_fails() -> void:
+	# 60 tiles along y = 20: 300 yd, a par 3 (under 320), zone centre 240 yd out at (53, 20).
+	var b := _long_par3_and_a_tee(Vector2i(65, 20), Vector2i(53, 24))  # 20 yd from the centre
+	assert_eq(CourseValidator.yardage(TEE, Vector2i(65, 20)), 300)
+	var zone: Variant = CourseValidator.new().landing_zone(b.hole(1))
+	assert_not_null(zone, "a 300 yd par 3 has a zone")
+	assert_almost_eq((zone as Vector2).x, 53.0, 0.001, "240 yd out")
+	assert_eq(_rules(b.issues_for(1)), [5] as Array[int], "the long par 3 fails rule 5")
+	assert_eq(_rules(b.issues_for(2)), [5] as Array[int], "and so does the hole whose tee is in it")
+	assert_eq(b.issues_for(1)[0].tile, Vector2i(53, 24), "the failing tee is highlighted")
+	assert_eq(b.issues_for(2)[0].tile, Vector2i(53, 24))
+	assert_false(b.can_open(1))
+	assert_false(b.can_open(2))
+
+
+func test_a_300_yd_par3_with_a_tee_outside_its_zone_opens() -> void:
+	var b := _long_par3_and_a_tee(Vector2i(65, 20), Vector2i(53, 27))  # 35 yd from the centre
+	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue])
+	assert_eq(b.issues_for(2), [] as Array[CourseValidator.Issue])
+	assert_true(b.open_hole(1))
+	assert_true(b.open_hole(2))
+
+
+func test_a_299_yd_par3_has_no_zone_and_a_tee_where_it_would_be_opens() -> void:
+	# (59, 10) tiles apart is 299.2 yd, rounded 299. min(240, 299 - 60) = 239 yd out puts
+	# the zone it would have at about (52.1, 23.0).
+	var cup1 := TEE + Vector2i(59, 10)
+	var b := _long_par3_and_a_tee(cup1, Vector2i(52, 23))
+	assert_eq(CourseValidator.yardage(TEE, cup1), 299)
+	assert_null(CourseValidator.new().landing_zone(b.hole(1)), "under zone_from_yd, no zone")
+	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue])
+	assert_eq(b.issues_for(2), [] as Array[CourseValidator.Issue])
+	assert_true(b.open_hole(1))
+	assert_true(b.open_hole(2))
+
+
+func test_par4_and_par5_zones_are_unchanged() -> void:
+	# The shortest par 4 (320 yd) and a 500 yd par 5 keep their zone 240 yd out, and a tee
+	# inside it fails both holes as before.
+	for case: Array in [[Vector2i(69, 20), 4, 80], [Vector2i(105, 20), 5, 120]]:
+		var b := _long_par3_and_a_tee(case[0], Vector2i(53, 24), case[1], case[2])
+		var zone: Variant = CourseValidator.new().landing_zone(b.hole(1))
+		assert_not_null(zone, "par %d has a zone" % case[1])
+		assert_almost_eq((zone as Vector2).x, 53.0, 0.001, "par %d: 240 yd out" % case[1])
+		assert_eq(_rules(b.issues_for(1)), [5] as Array[int], "par %d" % case[1])
+		assert_eq(_rules(b.issues_for(2)), [5] as Array[int], "par %d" % case[1])
+		assert_eq(b.issues_for(2)[0].tile, Vector2i(53, 24))
+		b.place_tee(2, Vector2i(53, 27))
+		assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue], "par %d, tee outside" % case[1])
+
+
+func test_footprint_holds_the_zone_of_a_long_par3() -> void:
+	var v := CourseValidator.new()
+	var c := _course()
+	var h := HoleData.new(1, 3, TEE, Vector2i(65, 20), false)
+	var zone: Vector2 = v.landing_zone(h)
+	var r: int = ceili(v.tuning.zone_radius_yd / CourseValidator.YARDS_PER_TILE)
+	for dy: int in range(-r, r + 1):
+		for dx: int in range(-r, r + 1):
+			var t := Vector2i(roundi(zone.x) + dx, roundi(zone.y) + dy)
+			if Vector2(t).distance_to(zone) * CourseValidator.YARDS_PER_TILE <= v.tuning.zone_radius_yd:
+				assert_true(v.in_footprint(c, h, t), str(t))

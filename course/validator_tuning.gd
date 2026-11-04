@@ -12,7 +12,11 @@ const PATH: String = "res://course/validator_tuning.tres"
 ## Change it with the driver's carry and roll (golf/clubs.tres), not alone.
 @export var par4_min_yd: int = 320
 @export var par5_min_yd: int = 471
-## Rule 5: a par 4 or par 5's landing zone is a disc centred
+## Rule 5: every hole of zone_from_yd or more (rounded yardage), whatever its par, has a
+## landing zone; shorter holes have none (D35, E6-S37). 300 yd: a par 3 of about 298 to 319
+## yd cannot be reached in one on level ground, so its tee shots land short of the green.
+@export var zone_from_yd: int = 300
+## Rule 5: the landing zone is a disc centred
 ## min(landing_distance_yd, yardage - cup_clearance_yd) from the tee along the tee-to-cup line.
 @export var landing_distance_yd: float = 240.0
 @export var cup_clearance_yd: float = 60.0

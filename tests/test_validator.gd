@@ -47,6 +47,7 @@ func test_tuning_holds_the_d11_numbers() -> void:
 	assert_eq(t.landing_distance_yd, 240.0)
 	assert_eq(t.cup_clearance_yd, 60.0)
 	assert_eq(t.zone_radius_yd, 30.0)
+	assert_eq(t.zone_from_yd, 300, "a zone on every hole of 300 yd or more, whatever its par (D35, E6-S37)")
 	assert_eq(t.footprint_half_width_yd, 30.0)
 	assert_eq(t.par4_min_yd, 320, "past a perfect drive's 297 yd on flat fairway (D33, E6-S19)")
 	assert_eq(t.par5_min_yd, 471)
@@ -282,7 +283,7 @@ func test_landing_zone_centre_and_radius() -> void:
 	assert_not_null(zone)
 	assert_almost_eq((zone as Vector2).x, 53.0, 0.001)
 	assert_almost_eq((zone as Vector2).y, 20.0, 0.001)
-	assert_null(_v.landing_zone(c.holes[1]), "a par 3 has no zone")
+	assert_null(_v.landing_zone(c.holes[1]), "a 150 yd par 3 has no zone (under zone_from_yd)")
 
 
 func test_rule5_fails_both_holes_for_a_tee_in_the_zone() -> void:
@@ -339,9 +340,10 @@ func test_rule5_short_par4_next_tee_beside_the_green_passes() -> void:
 func test_rule5_cup_clearance_moves_the_zone_on_a_short_par4() -> void:
 	# With a shortest par 4 under landing distance + clearance (250 yd, before D33), the zone
 	# sits 60 yd short of the cup: a 260 yd par 4's centre is 200 yd out, and a tee 25 yd
-	# beside its cup passes.
+	# beside its cup passes. zone_from_yd comes down with it, or a 260 yd hole has no zone.
 	var t: ValidatorTuning = ValidatorTuning.load_default().duplicate()
 	t.par4_min_yd = 250
+	t.zone_from_yd = 250
 	var v := CourseValidator.new(t)
 	var a := HoleData.new(1, 4, Vector2i(10, 10), Vector2i(62, 10))
 	var b := HoleData.new(2, 3, Vector2i(62, 15), Vector2i(62, 45))
