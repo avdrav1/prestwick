@@ -55,13 +55,13 @@ func test_budget_is_always_on_the_build_hud() -> void:
 
 func test_hover_shows_price_and_whether_it_can_be_bought() -> void:
 	_tool.hover_at(_at(_tile_in(BUYABLE)))
-	assert_eq(_panel.parcel_label.text, "Parcel 2, 3: %s, for sale (Buy land)" % LandPrices.money(_price(BUYABLE)))
+	assert_eq(_panel.parcel_label.text, "NW parcel, 130 yd out: %s, for sale (Buy land)" % LandPrices.money(_price(BUYABLE)))
 	_tool.select_tool(BuildTool.Tool.BUY)
-	assert_eq(_panel.parcel_label.text, "Parcel 2, 3: %s, click to buy" % LandPrices.money(_price(BUYABLE)))
+	assert_eq(_panel.parcel_label.text, "NW parcel, 130 yd out: %s, click to buy" % LandPrices.money(_price(BUYABLE)))
 	_tool.hover_at(_at(_tile_in(FAR)))
-	assert_eq(_panel.parcel_label.text, "Parcel 0, 0: %s, can't buy: not next to your land" % LandPrices.money(_price(FAR)))
+	assert_eq(_panel.parcel_label.text, "N parcel, 400 yd out: %s, can't buy: not next to your land" % LandPrices.money(_price(FAR)))
 	_tool.hover_at(_at(_tile_in(BLOCK[0])))
-	assert_eq(_panel.parcel_label.text, "Parcel 3, 3: yours")
+	assert_eq(_panel.parcel_label.text, "N parcel, 60 yd out: yours")
 
 
 func test_buy_waits_for_the_confirm() -> void:
@@ -103,10 +103,10 @@ func test_pending_parcel_stays_marked_while_the_cursor_moves() -> void:
 	_tool.hover_at(_at(_tile_in(other)))
 	assert_eq(_tool.hover_parcel(), other)
 	assert_eq(_tool.pinned_parcel, BUYABLE, "still, with the cursor over another parcel")
-	assert_eq(_panel.parcel_label.text, "Parcel 2, 3: %s, click to buy" % LandPrices.money(_price(BUYABLE)))
+	assert_eq(_panel.parcel_label.text, "NW parcel, 130 yd out: %s, click to buy" % LandPrices.money(_price(BUYABLE)))
 	_panel.cancel_button.pressed.emit()
 	assert_eq(_tool.pinned_parcel, TilePicker.NONE, "cancel unpins it")
-	assert_string_contains(_panel.parcel_label.text, "Parcel 3, 2:")
+	assert_string_contains(_panel.parcel_label.text, "NE parcel, 130 yd out:")
 	_tool.press_at(_at(_tile_in(BUYABLE)))
 	_tool.release()
 	_panel.confirm_button.pressed.emit()
@@ -170,3 +170,150 @@ func test_palette_has_buy_land() -> void:
 	_main.build_palette.buy_button.pressed.emit()
 	assert_eq(_tool.tool, BuildTool.Tool.BUY)
 	assert_true(_main.build_palette.buy_button.button_pressed)
+
+
+# E6-S17: a drag across the land line makes the builder refuse every unowned dab; the HUD
+# says so once per drag, and again on the next drag.
+func test_one_message_per_drag() -> void:
+	_tool.select_tool(BuildTool.Tool.RAISE)
+	var shown: int = _panel.messages_shown
+	var start: Vector2i = _tile_in(BUYABLE)
+	_tool.press_at(_at(start))
+	for i: int in range(1, 6):
+		_tool.drag_to(_at(start + Vector2i(0, i)))
+	_tool.release()
+	assert_eq(_panel.messages_shown, shown + 1, "one message for the whole drag")
+	assert_eq(_panel.message_label.text, "Can't: not your land")
+	_tool.press_at(_at(start))
+	_tool.drag_to(_at(start + Vector2i(1, 0)))
+	_tool.release()
+	assert_eq(_panel.messages_shown, shown + 2, "the next drag says it again")
+
+
+func _key(physical: Key) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = physical
+	e.keycode = physical
+	e.pressed = true
+	return e
+
+
+func _click_buyable() -> void:
+	_tool.select_tool(BuildTool.Tool.BUY)
+	_tool.press_at(_at(_tile_in(BUYABLE)))
+	_tool.release()
+
+
+func test_enter_confirms_a_pending_purchase() -> void:
+	_click_buyable()
+	var cost: int = _price(BUYABLE)
+	_panel._unhandled_input(_key(KEY_ENTER))
+	assert_true(_main.course.is_parcel_owned(BUYABLE))
+	assert_eq(_main.course.land_budget, 5000 - cost)
+	assert_false(_panel.confirm_box.visible)
+	_tool.press_at(_at(_tile_in(Vector2i(3, 2))))
+	_tool.release()
+	_panel._unhandled_input(_key(KEY_KP_ENTER))
+	assert_true(_main.course.is_parcel_owned(Vector2i(3, 2)), "keypad Enter too")
+
+
+func test_esc_cancels_a_pending_purchase() -> void:
+	_click_buyable()
+	_panel._unhandled_input(_key(KEY_ESCAPE))
+	assert_false(_main.course.is_parcel_owned(BUYABLE))
+	assert_eq(_main.course.land_budget, 5000)
+	assert_false(_panel.confirm_box.visible)
+	assert_eq(_tool.pinned_parcel, TilePicker.NONE)
+	_panel._unhandled_input(_key(KEY_ENTER))
+	assert_false(_main.course.is_parcel_owned(BUYABLE), "Enter with nothing pending buys nothing")
+
+
+func test_owned_parcel_under_buy_land_draws_neutral() -> void:
+	_tool.select_tool(BuildTool.Tool.BUY)
+	_tool.hover_at(_at(_tile_in(BLOCK[0])))
+	assert_eq(_tool.parcel_outline_color(), _tool.outline_color, "the starting block")
+	_tool.hover_at(_at(_tile_in(FAR)))
+	assert_eq(_tool.parcel_outline_color(), _tool.refuse_color, "out of reach")
+	_tool.hover_at(_at(_tile_in(BUYABLE)))
+	assert_eq(_tool.parcel_outline_color(), _tool.buy_color, "buyable")
+	_tool.press_at(_at(_tile_in(BUYABLE)))
+	_tool.release()
+	_panel.confirm_buy()
+	assert_eq(_tool.parcel_outline_color(), _tool.outline_color, "just bought, still hovered: not red")
+
+
+func test_parcels_are_named_by_compass_not_grid() -> void:
+	var c: CourseData = _main.course
+	assert_eq(LandPanel.parcel_name(c, BUYABLE), "NW parcel, 130 yd out")
+	assert_eq(LandPanel.parcel_name(c, Vector2i(3, 3)), "N parcel, 60 yd out")
+	var names: Dictionary = {}
+	for p: Vector2i in [Vector2i(2, 3), Vector2i(2, 4), Vector2i(5, 3), Vector2i(5, 4),
+			Vector2i(3, 2), Vector2i(4, 2), Vector2i(3, 5), Vector2i(4, 5)]:
+		names[LandPanel.parcel_name(c, p)] = p
+	assert_eq(names.size(), 8, "every parcel the block can buy has its own name: %s" % [names.keys()])
+	_tool.select_tool(BuildTool.Tool.BUY)
+	_tool.hover_at(_at(_tile_in(BUYABLE)))
+	assert_eq(_panel.parcel_label.text, "NW parcel, 130 yd out: %s, click to buy" % LandPrices.money(_price(BUYABLE)))
+
+
+func test_confirm_sits_by_the_clicked_parcel() -> void:
+	var clicked: Vector2i = _tile_in(BUYABLE)
+	_main.camera.tracking = false
+	_main.camera.position = _at(clicked)
+	_main.camera.force_update_scroll()
+	_click_buyable()
+	var text: String = _panel.confirm_label.text
+	assert_string_contains(text, "Buy the NW parcel, 130 yd out, for %s?" % LandPrices.money(_price(BUYABLE)))
+	assert_false(text.contains("2, 3"), "no grid coordinates")
+	assert_eq(_panel.pending_tile, clicked)
+	var anchor: Vector2 = _panel.confirm_anchor(clicked)
+	var view: Rect2 = _panel.get_viewport_rect()
+	assert_true(view.has_point(anchor), "the parcel is on screen: %s" % anchor)
+	var box: Rect2 = _panel.confirm_box.get_global_rect()
+	assert_true(box.grow(_panel.confirm_gap + 1.0).has_point(anchor),
+			"the confirm touches the clicked tile: box %s, tile %s" % [box, anchor])
+	assert_true(view.encloses(box), "and stays on screen")
+	var far_from_panel: bool = box.position.distance_to(_panel.get_global_rect().position) > 100.0
+	assert_true(far_from_panel, "not up in the land panel")
+
+
+# E6-S17 review: names stay unique beyond the block. Mirror parcels a few out share a point and
+# a distance; they are told apart by the point each leans toward.
+func test_every_parcel_on_the_map_has_its_own_name() -> void:
+	var c: CourseData = _main.course
+	assert_eq(LandPanel.parcel_name(c, Vector2i(3, 0)), "ENE parcel, 280 yd out, toward NE")
+	assert_eq(LandPanel.parcel_name(c, Vector2i(4, 0)), "ENE parcel, 280 yd out, toward E")
+	assert_eq(LandPanel.parcel_name(c, BUYABLE), "NW parcel, 130 yd out", "no suffix when alone")
+	for size: Vector2i in [Vector2i(128, 128), Vector2i(96, 96), Vector2i(160, 160),
+			Vector2i(256, 256), Vector2i(200, 120), Vector2i(100, 100)]:
+		var m := CourseData.create(size.x, size.y, Surface.Type.ROUGH, 2)
+		var names: Dictionary = {}
+		for q: int in m.parcels_high:
+			for p: int in m.parcels_wide:
+				var name: String = LandPanel.parcel_name(m, Vector2i(p, q))
+				assert_false(names.has(name), "%s: %s and %s are both \"%s\"" % [size,
+						names.get(name), Vector2i(p, q), name])
+				names[name] = Vector2i(p, q)
+
+
+# E6-S17 review: a click on a tile under the HUD puts the confirm clear of it, and opaque.
+func test_confirm_keeps_clear_of_the_hud() -> void:
+	_main.camera.set_zoom_index(_main.camera.tuning.zoom_levels.find(1.0))
+	_main.camera.tracking = false
+	var clicked: Vector2i = _tile_in(BUYABLE)
+	var view_centre: Vector2 = _panel.get_viewport_rect().get_center()
+	_click_buyable()
+	# Pan so the clicked tile sits under the land panel, then let the confirm follow.
+	var under: Vector2 = _panel.get_global_rect().get_center()
+	_main.camera.position = _at(clicked) + (view_centre - under) / _main.camera.zoom
+	_main.camera.force_update_scroll()
+	_panel._process(0.0)
+	assert_true(_panel.get_global_rect().grow(4.0).has_point(_panel.confirm_anchor(clicked)),
+			"the clicked tile is under the land panel")
+	var box: Rect2 = _panel.confirm_box.get_global_rect()
+	assert_eq(_panel.hud_rects().size(), 1 + 6, "the land panel and the six HUD controls")
+	for r: Rect2 in _panel.hud_rects():
+		assert_false(box.intersects(r), "the confirm %s clears the HUD %s" % [box, r])
+	assert_true(_panel.get_viewport_rect().encloses(box), "and stays on screen")
+	var style := _panel.confirm_box.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_eq(style.bg_color.a, 1.0, "opaque")

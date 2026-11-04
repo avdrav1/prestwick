@@ -6,8 +6,11 @@ extends Node
 ##   buyable  the Buy land tool hovering the parcel west of the block (the default)
 ##   far      the Buy land tool hovering a parcel out of reach
 ##   confirm  after a click on the buyable parcel, the cursor moved on: the confirm, the
-##            parcel still outlined in yellow
-##   bought   after confirming it: the line has moved and the budget dropped
+##            parcel still outlined in yellow; since E6-S17 the confirm floats by the
+##            clicked tile and names the parcel "NW parcel, 130 yd out"; at LAND_ZOOM=1
+##            the tile is under the land panel, so the confirm drops below it, clear of the HUD
+##   bought   after confirming it: the line has moved and the budget dropped; since E6-S17
+##            the hovered parcel, now owned, is outlined in pale ink, not red
 ##   refused  Raise clicked on unowned land: the hint and the "not your land" message
 ##   LAND_ZOOM=0.5|1|2 picks a camera zoom step (default 0.5).
 

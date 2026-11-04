@@ -19,7 +19,9 @@ extends Node2D
 ## With Buy land the outline is the whole hovered parcel, in buy_color when it can be bought.
 ## While a purchase waits on the HUD's confirm, the HUD pins that parcel (pinned_parcel) and
 ## it stays outlined in buy_color wherever the cursor goes (a buyable hovered parcel draws in
-## outline_color meanwhile), so the map shows what Buy buys.
+## outline_color meanwhile), so the map shows what Buy buys. An owned parcel under Buy land
+## draws in outline_color too (E6-S17): owning it is no error (parcel_outline_color).
+## stroke_count counts presses, so the HUD can tell one drag's refusals from the next's.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
 
@@ -68,6 +70,9 @@ var pinned_parcel: Vector2i = TilePicker.NONE:
 	set(value):
 		pinned_parcel = value
 		queue_redraw()
+## Presses so far: each starts a stroke (one click or drag). The HUD says a refusal once per
+## stroke (E6-S17), however many dabs of a drag the builder refuses.
+var stroke_count: int = 0
 ## Tile under the cursor, or TilePicker.NONE.
 var hover: Vector2i:
 	get:
@@ -139,6 +144,18 @@ func hover_hint() -> String:
 	return builder.edit_refusal(_hover, brush_size)
 
 
+## The Buy land tool's outline for the hovered parcel: outline_color when it is already owned
+## (neutral, not an error) or while another purchase is pinned, refuse_color when it cannot
+## be bought, else buy_color.
+func parcel_outline_color() -> Color:
+	var parcel: Vector2i = hover_parcel()
+	if parcel != TilePicker.NONE and builder.course.is_parcel_owned(parcel):
+		return outline_color
+	if not hover_hint().is_empty():
+		return refuse_color
+	return buy_color if pinned_parcel == TilePicker.NONE else outline_color
+
+
 ## Buys parcel `parcel` through the builder (the HUD's confirm). False, buying nothing,
 ## when the builder refuses it.
 func buy(parcel: Vector2i) -> bool:
@@ -173,6 +190,7 @@ func press_at(local: Vector2) -> void:
 		return
 	hover_at(local)
 	_dragging = true
+	stroke_count += 1
 	builder.begin_stroke()
 	_last_cell = TilePicker.NONE
 	_apply(_hover)
@@ -259,13 +277,12 @@ func _draw() -> void:
 		_draw_parcel(c, pinned_parcel, buy_color)
 	if _hover == TilePicker.NONE:
 		return
-	var refused: bool = not hover_hint().is_empty()
 	if tool == Tool.BUY:
 		# While a parcel is pinned, buy_color is its alone: the hovered one draws pale.
-		var ok: Color = buy_color if pinned_parcel == TilePicker.NONE else outline_color
 		if hover_parcel() != pinned_parcel:
-			_draw_parcel(c, hover_parcel(), refuse_color if refused else ok)
+			_draw_parcel(c, hover_parcel(), parcel_outline_color())
 		return
+	var refused: bool = not hover_hint().is_empty()
 	var line: Color = refuse_color if refused else outline_color
 	var fill: Color = Color(refuse_color, fill_color.a) if refused else fill_color
 	for cell: Vector2i in builder.brush_cells(_hover, 1 if _places_hole() else brush_size):
