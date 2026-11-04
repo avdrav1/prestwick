@@ -20,7 +20,8 @@ extends Node2D
 ## A blocked club (D20, ClubSet.is_blocked: a riser face or trees ahead stop a perfect
 ## swing while it is still climbing): the marker sits where the flight is stopped
 ## (ShotPrediction.stop_point: the first touchdown on a face, or the point trees block it),
-## drawn as a flag_red ring struck through by a slash, with no ticks, and no dots are drawn.
+## drawn as a filled flag_red octagon with a chalk bar (HazardCue, E6-S16: not a slashed
+## ring, so it never reads as the OB cue), with no ticks, and no dots are drawn.
 ## The club picker says "blocked" too.
 ##
 ## The land line (D29, E6-S7): with the aim it draws every edge between owned and unowned
@@ -32,10 +33,13 @@ extends Node2D
 ## is out. An edge hidden by a tile in front (LandBoundary.covered) draws faded
 ## (land_line_hidden_alpha), as an issue marker's leader does behind a hill (E2-S17), so the
 ## line never reads as running over the hill's top while the ground behind it decides OB.
+## The line stays drawn through the struck ball's flight and its water or OB hold (E6-S16):
+## the strike calls clear_aim, which drops the dots and marker but keeps the line, so the
+## player sees the boundary the ball crossed. clear (Build, a finished hole) hides it all.
 ##
 ## A shot that ends in water or OB (prediction.penalty_strokes, E6-S7 review): the marker
-## shows the hazard cue the struck ball shows there (ShotView): a flag_red circle struck
-## through from lower left to upper right for OB, chalk splash rings for water, on an ink
+## shows the hazard cue the struck ball shows there (ShotView, HazardCue): a flag_red circle
+## struck through by a slash running past it for OB, chalk splash rings for water, on an ink
 ## outline, at the point the ball stops in the hazard (prediction.hazard_position, where the
 ## dots end). A putt draws it in place of the rest ring; a full club keeps its landing ring
 ## when it lands clear and rolls in, and draws the cue in place of the ring when it lands
@@ -59,7 +63,7 @@ extends Node2D
 ## The unowned-side tick, in tiles from the edge, and the alpha of an edge hidden by terrain.
 @export var land_tick_tiles: float = 0.3
 @export var land_line_hidden_alpha: float = 0.3
-## chalk: the water cue's splash rings (ShotView's hazard cue).
+## chalk: the water cue's splash rings (ShotView's hazard cue) and the blocked marker's bar.
 @export var splash_color: Color = Color8(240, 236, 224)
 
 ## The prediction drawn, or null.
@@ -93,6 +97,8 @@ var show_ring: bool = true
 const HAZARD_AT_LANDING_YD: float = 0.5
 
 var _field: HeightField
+## scenes/shot_view_tuning.tres: the OB slash's reach, as ShotView draws it.
+var _cue_tuning: ShotViewTuning = ShotViewTuning.load_default()
 ## The canvas scale the shapes were last drawn for.
 var _view_scale: float = 1.0
 
@@ -144,7 +150,18 @@ func _process(_delta: float) -> void:
 		queue_redraw()
 
 
-## Hides the aim.
+## Drops the aim (its dots, marker and cue) at the strike but keeps the land line drawn
+## through the flight and the hazard hold (E6-S16). Visible only while there is a line.
+func clear_aim() -> void:
+	prediction = null
+	blocked = false
+	dots = PackedVector2Array()
+	hazard_cue = Ball.Hazard.NONE
+	visible = not land_line.is_empty()
+	queue_redraw()
+
+
+## Hides the aim and the land line.
 func clear() -> void:
 	prediction = null
 	blocked = false
@@ -214,17 +231,17 @@ func _dots_along_roll(points: PackedVector3Array) -> void:
 
 
 func _draw() -> void:
-	if prediction == null:
-		return
 	var k := 1.0 / clampf(_view_scale, 0.01, 1.0)
 	_draw_land_line(k)
+	if prediction == null:
+		return
 	for d in dots:
 		draw_circle(d, (dot_radius + 1.0) * k, outline_color)
 		draw_circle(d, dot_radius * k, line_color)
 	var at := marker_screen
 	var r := marker_radius * k
 	if blocked:
-		_draw_blocked(at, r, k)
+		HazardCue.draw_blocked(self, at, r, k, blocked_color, outline_color, splash_color)
 		return
 	if hazard_cue != Ball.Hazard.NONE:
 		_draw_hazard(hazard_screen, r, k)
@@ -241,35 +258,13 @@ func _draw() -> void:
 	draw_circle(at, 1.5 * k, line_color)
 
 
-## The blocked marker (D20): a flag_red ring on an ink outline, struck through from upper
-## left to lower right, a "no entry" sign laid on the ground.
-func _draw_blocked(at: Vector2, r: float, k: float) -> void:
-	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, outline_color, 5.0 * k)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, blocked_color, 3.0 * k)
-	var d := Vector2(r, r) * 0.7071
-	draw_line(-d, d, outline_color, 5.0 * k)
-	draw_line(-d, d, blocked_color, 3.0 * k)
-	draw_set_transform(Vector2.ZERO)
-
-
-## The hazard cue at the end of the shot, as ShotView draws it: OB a flag_red circle struck
-## through from lower left to upper right (the blocked marker's slash runs the other way),
-## water two chalk splash rings, each on an ink outline.
+## The hazard cue at the end of the shot, as ShotView draws it (HazardCue): OB a flag_red
+## circle struck through by a slash running past it, water two chalk splash rings.
 func _draw_hazard(at: Vector2, r: float, k: float) -> void:
-	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
 	if hazard_cue == Ball.Hazard.OB:
-		var d := Vector2(r, -r) * 0.7071
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, outline_color, 5.0 * k)
-		draw_line(-d, d, outline_color, 5.0 * k)
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, blocked_color, 3.0 * k)
-		draw_line(-d, d, blocked_color, 3.0 * k)
+		HazardCue.draw_ob(self, at, r, k, _cue_tuning.ob_slash_reach, blocked_color, outline_color)
 	else:
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, outline_color, 4.0 * k)
-		draw_arc(Vector2.ZERO, r * 0.6, 0.0, TAU, 24, outline_color, 3.5 * k)
-		draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, splash_color, 2.0 * k)
-		draw_arc(Vector2.ZERO, r * 0.6, 0.0, TAU, 24, splash_color, 1.5 * k)
-	draw_set_transform(Vector2.ZERO)
+		HazardCue.draw_water(self, at, r, k, splash_color, outline_color)
 
 
 ## The land line: a solid ink line under chalk dashes along every owned-to-unowned edge,

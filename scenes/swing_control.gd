@@ -116,6 +116,8 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float) -> v
 	strokes = 0
 	_own_shot = false
 	swing.reset()
+	if _aim_view != null:
+		_aim_view.clear()  # a new course: no land line of the last one lingers (E6-S16)
 	hole = _first_hole(c)
 	score = HoleScore.new(hole.par) if hole != null else null
 	if hole != null:
@@ -356,7 +358,7 @@ func _strike() -> void:
 	_own_shot = true
 	swing.reset()
 	if _aim_view != null:
-		_aim_view.clear()
+		_aim_view.clear_aim()  # E6-S16: the land line stays through the shot
 	if _shot_view != null:
 		_shot_view.fire_launch(course, shot, rng_seed, cup_tile())
 	struck.emit(shot)
@@ -414,7 +416,7 @@ func _refresh_aim() -> void:
 		if not keep:
 			aim_prediction = null
 			if _aim_view != null:
-				_aim_view.clear()
+				_aim_view.clear_aim()
 		return
 	aim_putt = null
 	aim_power = 1.0

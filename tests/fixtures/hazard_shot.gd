@@ -7,17 +7,22 @@ extends Node2D
 ## tests/fixtures/hazard_shot_drop.tscn.
 ##
 ## `out_of_bounds` (E6-S13): a par 3 over owned land with the parcel behind the green not
-## owned (D29), the 3-iron flown long onto it, captured in the hold, so the OB cue (a flag_red
-## circle struck through) shows where the ball came to rest on unowned land. The land line
-## itself is not in frame: Play does not draw it during flight or the hold yet, and Build's
-## unowned shading (E6-S5) is not on this branch. Captured at 2x zoom, not the 1x Play starts at.
-## Run: scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn
+## owned (D29), the 6-iron flown long onto it (E6-S16: 2 tiles past the line; the 3-iron went
+## 8), captured in the hold, so the OB cue (a flag_red circle struck through) shows where the
+## ball came to rest on unowned land. E6-S16: the land line stays drawn through the hold, so
+## the boundary the ball crossed is in frame, and the
+## camera is settled on the ball before the capture. `zoom_index` picks the zoom (0.5x, 1x,
+## 2x); the cue keeps its size on screen at each.
+## Run: scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn (2x),
+## tests/fixtures/hazard_shot_ob_1x.tscn, tests/fixtures/hazard_shot_ob_0_5x.tscn
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const FLAT_PATH: String = "res://tests/fixtures/flat_20x20.json"
 
 @export var dropped: bool = false
 @export var out_of_bounds: bool = false
+## The camera zoom level for the OB capture (CameraTuning.zoom_levels).
+@export var zoom_index: int = 2
 
 
 func _ready() -> void:
@@ -29,7 +34,7 @@ func _ready() -> void:
 	var sc := main.swing_control
 	main.shot_view.set_process(false)
 	var plan := ScriptedRound.Plan.new()
-	plan.club = sc.model.clubs.club("3i" if out_of_bounds else "9i")
+	plan.club = sc.model.clubs.club("6i" if out_of_bounds else "9i")
 	plan.aim_deg = sc.aim_deg
 	plan.ticks = ScriptedRound.ticks_for(sc, 1.0)
 	ScriptedRound.swing(sc, plan)
@@ -44,8 +49,10 @@ func _ready() -> void:
 	main._process(0.0)
 	main.camera.centre_on(main._ball_world(), true)
 	if out_of_bounds:
-		# 2x, so the cue's slash reads at a glance (after centre_on, which restores 1x).
-		main.camera.set_zoom_index(2)
+		# After centre_on, which restores 1x.
+		main.camera.set_zoom_index(zoom_index)
+	# Settle the camera on the ball now (E6-S16): the capture comes before it eases there.
+	main.camera.position = main.camera._clamped(main.camera.goal())
 	print("hazard shot: hazard %s, showing %s, drawn %s, drop %s" % [view.ball.hazard,
 			view.showing_hazard(), view.drawn_position(), view.ball.drop_point])
 

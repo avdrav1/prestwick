@@ -144,3 +144,134 @@ func test_a_dry_ball_rests_at_once() -> void:
 	assert_false(view.playing, "no hold without a hazard")
 	assert_false(view.hazard_cue.visible, "no hazard cue on a dry ball")
 	assert_eq(rests, [view.ball.position])
+
+
+# --- E6-S16: the land line through the shot, and the hazard cues by shape ---
+
+const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+
+
+## The E6-S13 OB fixture's course in Play: a par 3 over owned land, the parcel behind the
+## green unowned, a long 3-iron struck at full power.
+func _ob_main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	m.shot_view.set_process(false)
+	m.swing_control.set_process(false)
+	m.camera.set_process(false)
+	m.show_course(HazardShot.long_par3())
+	m.mode_button.pressed.emit()
+	return m
+
+
+func test_the_land_line_stays_drawn_through_the_flight_and_the_ob_hold() -> void:
+	var m := _ob_main()
+	var sc := m.swing_control
+	var aim := m.aim_view
+	assert_true(aim.visible, "the aim shows before the shot")
+	var line := aim.land_line.duplicate()
+	assert_gt(line.size(), 0, "with the land line")
+	var plan := ScriptedRound.Plan.new()
+	plan.club = sc.model.clubs.club("3i")
+	plan.aim_deg = sc.aim_deg
+	plan.ticks = ScriptedRound.ticks_for(sc, 1.0)
+	ScriptedRound.swing(sc, plan)
+	var view := m.shot_view
+	assert_true(view.playing, "struck")
+	assert_null(aim.prediction, "the aim's dots and marker go at the strike")
+	assert_eq(aim.dots.size(), 0)
+	var flying := 0
+	var held := 0
+	while view.playing:
+		view.advance(1.0 / 60.0)
+		if not view.playing:
+			break
+		if view.ball.state == Ball.State.FLYING:
+			flying += 1
+		if view.showing_hazard():
+			held += 1
+		assert_true(aim.visible, "the line shows at tick %d" % view.ball.steps)
+		assert_eq(aim.land_line, line, "the same line, every edge")
+	assert_gt(flying, 30, "checked in flight")
+	assert_gt(held, 10, "and through the hold")
+	assert_eq(view.ball.hazard, Ball.Hazard.OB, "the 3-iron goes long onto unowned land")
+	m.mode_button.pressed.emit()
+	assert_false(aim.visible, "Build hides it")
+	assert_eq(aim.land_line.size(), 0)
+
+
+func test_a_fully_owned_course_shows_nothing_in_flight() -> void:
+	var course := CourseData.create(40, 11, Surface.Type.FAIRWAY, 0)
+	var field := HeightField.new(course, BallParams.load_default())
+	var aim := AimView.new()
+	add_child_autofree(aim)
+	var start := Vector3(10, 27.5, 0)
+	aim.show_prediction(field, ShotPrediction.run(course, 7, start,
+			Ball.launch_velocity(20.0, 30.0, 0.0)), false, start)
+	aim.clear_aim()
+	assert_false(aim.visible, "no line on a fully owned course, so nothing in flight")
+	assert_null(aim.prediction)
+
+
+func test_the_ob_cue_keeps_a_fixed_screen_size() -> void:
+	for s: float in [0.5, 1.0, 2.0]:
+		assert_almost_eq(HazardCue.screen_k(s), 1.0 / s, EPS, "k at %.1fx" % s)
+	var view := _view()
+	assert_almost_eq(view.cue_k(), 1.0, EPS, "1x with no camera")
+
+
+func test_the_ob_slash_runs_past_the_ring_and_over_the_ball() -> void:
+	var tuning := ShotViewTuning.load_default()
+	assert_gt(tuning.ob_slash_reach, 1.0, "past the ring")
+	var at := Vector2(100, 50)
+	var r := 14.0
+	var slash := HazardCue.ob_slash(at, r, tuning.ob_slash_reach)
+	assert_eq(slash.size(), 2)
+	for p in slash:
+		var e := Vector2((p - at).x, (p - at).y * 2.0)  # back to the ring's circle
+		assert_gt(e.length(), r + 2.0, "each end past the ring")
+	assert_almost_eq((slash[0] + slash[1]) * 0.5, at, Vector2(EPS, EPS), "through the ball")
+	# The cue is in two pieces: the ring under the ball and the slash over it.
+	var view := _view()
+	assert_lt(view.hazard_cue.get_index(), view.sprite.get_index(), "ring under the ball")
+	assert_gt(view.hazard_slash.get_index(), view.sprite.get_index(), "slash over the ball")
+
+
+func test_the_ob_slash_leaves_the_ball_clear_at_every_zoom() -> void:
+	var tuning := ShotViewTuning.load_default()
+	var view := _view()
+	var at := Vector2(100, 50)
+	for s: float in [0.5, 1.0, 2.0]:
+		var k := HazardCue.screen_k(s)
+		var r := view.hazard_cue_radius * k
+		var gap := view.ob_slash_gap(k)
+		var whole := HazardCue.ob_slash(at, r, tuning.ob_slash_reach)
+		var pieces := HazardCue.ob_slash_pieces(at, r, tuning.ob_slash_reach, gap)
+		assert_eq(pieces.size(), 4)
+		assert_almost_eq(pieces[0], whole[0], Vector2(EPS, EPS), "outer end kept at %.1fx" % s)
+		assert_almost_eq(pieces[3], whole[1], Vector2(EPS, EPS), "outer end kept at %.1fx" % s)
+		# The ball and its outline span ball_radius + 1 canvas units; the slash's ink (its
+		# inner ends) stops at least 1 screen px (k) past that.
+		for p: Vector2 in [pieces[1], pieces[2]]:
+			assert_gt((p - at).length() * s, (view.ball_radius + 1.0) * s + 0.99,
+					"the slash stops clear of the ball at %.1fx" % s)
+		# Each piece still has length, so the slash reads on both sides of the ball.
+		assert_gt((pieces[1] - pieces[0]).length() * s, 4.0, "lower piece at %.1fx" % s)
+		assert_gt((pieces[3] - pieces[2]).length() * s, 4.0, "upper piece at %.1fx" % s)
+	# Gap 0 is one unbroken slash (the aim marker's preview has no ball under it).
+	var one := HazardCue.ob_slash_pieces(at, 10.0, 1.8, 0.0)
+	assert_almost_eq(one[1], at, Vector2(EPS, EPS))
+	assert_almost_eq(one[2], at, Vector2(EPS, EPS))
+
+
+func test_ob_water_and_blocked_differ_by_shape() -> void:
+	var at := Vector2.ZERO
+	var r := 10.0
+	# OB: one ring struck through by a slash past it (above). Blocked is a filled octagon with a bar, not a slashed ring.
+	var octagon := HazardCue.blocked_outline(at, r)
+	assert_eq(octagon.size(), 8)
+	var bar := HazardCue.blocked_bar(at, r)
+	assert_almost_eq(bar[0].y, bar[1].y, EPS, "the bar is level")
+	# Water: two rings, no slash.
+	assert_eq(HazardCue.water_rings(r).size(), 2)

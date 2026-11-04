@@ -256,7 +256,7 @@ func fire_debug_shot() -> void:
 	if not can_fire_debug_shot():
 		return
 	var field := HeightField.new(course, BallParams.load_default())
-	aim_view.clear()
+	aim_view.clear_aim()
 	shot_view.fire(course, debug_shot.start_position(field, debug_shot_tile()), debug_shot.velocity(),
 			debug_shot.rng_seed)
 	_refresh_label()

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/fixtures/hazard_cues_shot.gd" id="1_cues"]
+
+[node name="HazardCuesShot" type="Node2D"]
+script = ExtResource("1_cues")

@@ -18,6 +18,12 @@ extends Node2D
 ## under the ball, its shape set by the hazard so it reads by shape, not only colour: a
 ## splash ring for water, a struck-through circle for OB.
 ##
+## E6-S16 (HazardCue): the cue is a fixed size on screen at every zoom (k = 1 / view scale),
+## on an ink outline. The OB slash runs past its ring (ShotViewTuning.ob_slash_reach) and is a
+## piece of its own drawn over the ball, so at 1x the ball no longer covers it and at 0.5x it
+## still reads; it breaks round the ball (ob_slash_gap), so it does not cover the ball either; OB, water and the blocked marker differ by shape (HazardCue). Both cue pieces
+## draw over the terrain (z_index 1), as the aim marker does, so no tile in front cuts them.
+##
 ## Place it as a child of CourseView: it is Y-sorted, and each piece sits at y = its
 ## Iso.object_sort_key and draws itself offset back to its screen point, so hills nearer the
 ## camera hide the ball and farther ones do not.
@@ -42,8 +48,9 @@ signal came_to_rest(at: Vector3)
 ## Hazard cue (E2-S13), from art/palette.gpl: chalk splash rings for water, flag_red for OB.
 @export var splash_color: Color = Color8(240, 236, 224)
 @export var ob_color: Color = Color8(216, 58, 58)
-## Half-width of the cue's outer ring, screen px at 1x; drawn 2:1 like the tile footprint.
-@export var hazard_cue_radius: float = 14.0
+## Half-width of the cue's outer ring, screen px at every zoom; drawn 2:1 like the tile
+## footprint.
+@export var hazard_cue_radius: float = 16.0
 
 ## scenes/shot_view_tuning.tres.
 var tuning: ShotViewTuning
@@ -55,8 +62,10 @@ var playing: bool = false
 var sprite: Node2D
 ## The predicted landing point.
 var marker: Node2D
-## The hazard cue, drawn only while showing_hazard().
+## The hazard cue, drawn only while showing_hazard(): its ring(s) under the ball, and the
+## OB slash over it.
 var hazard_cue: Node2D
+var hazard_slash: Node2D
 
 var _elapsed: float = 0.0
 var _was_landed: bool = false
@@ -75,10 +84,19 @@ func _init() -> void:
 	hazard_cue = _Piece.new(_draw_hazard_cue)
 	hazard_cue.name = "HazardCue"
 	hazard_cue.visible = false
+	# Over the terrain (E6-S16): at a fixed screen size the cue spans more ground the further
+	# out the zoom, and the tiles in front would cut its lower half off at 0.5x.
+	hazard_cue.z_index = 1
 	add_child(hazard_cue)
 	sprite = _Piece.new(_draw_ball)
 	sprite.name = "Ball"
 	add_child(sprite)
+	# After the ball: at the same sort key it draws over it (E6-S16).
+	hazard_slash = _Piece.new(_draw_hazard_slash)
+	hazard_slash.name = "HazardSlash"
+	hazard_slash.visible = false
+	hazard_slash.z_index = 1
+	add_child(hazard_slash)
 	marker = _Piece.new(_draw_marker)
 	marker.name = "LandingMarker"
 	add_child(marker)
@@ -227,9 +245,11 @@ func _refresh() -> void:
 	# the water or OB where the ball went in, away from the ball now at its drop.
 	marker.visible = _marker_wanted and ball.penalty_strokes == 0
 	hazard_cue.visible = hold
+	hazard_slash.visible = hold and ball.hazard == Ball.Hazard.OB
 	_sort_at(sprite, _ground_below(drawn_position()))
 	if hold:
 		_sort_at(hazard_cue, _ground_below(drawn_position()))
+		_sort_at(hazard_slash, _ground_below(drawn_position()))
 
 
 ## The landing cross stands on the tile top under the landing point (D17's rule), like the
@@ -268,28 +288,59 @@ func _draw_marker(piece: Node2D) -> void:
 	piece.draw_line(at + Vector2(-r, r * 0.5), at + Vector2(r, -r * 0.5), marker_color, 2.0)
 
 
-## Water: two splash rings round where the ball went in. OB: a circle struck through.
+## The `k` that keeps the hazard cue a fixed size on screen: 1 / the canvas scale.
+func cue_k() -> float:
+	if not is_inside_tree():
+		return 1.0
+	return HazardCue.screen_k(get_viewport().get_canvas_transform().get_scale().x)
+
+
+## Water: two splash rings round where the ball went in. OB: the ring of a circle struck
+## through (its slash is hazard_slash, over the ball).
 func _draw_hazard_cue(piece: Node2D) -> void:
 	if ball == null or not showing_hazard():
 		return
 	var at := shadow_screen() - piece.position
-	var r := hazard_cue_radius
-	piece.draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
+	var k := cue_k()
+	var r := hazard_cue_radius * k
 	if ball.hazard == Ball.Hazard.OB:
-		piece.draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ob_color, 2.0)
-		piece.draw_line(Vector2(-r, r) * 0.7071, Vector2(r, -r) * 0.7071, ob_color, 2.0)
+		HazardCue.draw_ob_ring(piece, at, r, k, ob_color, outline_color)
 	else:
-		piece.draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, splash_color, 2.0)
-		piece.draw_arc(Vector2.ZERO, r * 0.6, 0.0, TAU, 24, splash_color, 1.5)
-	piece.draw_set_transform(Vector2.ZERO)
+		HazardCue.draw_water(piece, at, r, k, splash_color, outline_color)
+
+
+## The OB slash, over the ball, with a gap round it (ob_slash_gap) so the ball shows.
+func _draw_hazard_slash(piece: Node2D) -> void:
+	if ball == null or not showing_hazard() or ball.hazard != Ball.Hazard.OB:
+		return
+	var k := cue_k()
+	HazardCue.draw_ob_slash(piece, shadow_screen() - piece.position, hazard_cue_radius * k, k,
+			tuning.ob_slash_reach, ob_color, outline_color, ob_slash_gap(k))
+
+
+## The OB slash's gap round the ball's centre, canvas units: the ball and its outline
+## (world size, ball_radius + 1) plus 1 px on screen (k), so the ball is never under the
+## slash at any zoom (E2-S13: the player sees where it stopped).
+func ob_slash_gap(k: float) -> float:
+	return ball_radius + 1.0 + k
 
 
 ## One Y-sorted piece of the shot, drawn by a callback on the view.
+## A visible piece redraws when the zoom changes, so a fixed-size cue keeps its size.
 class _Piece extends Node2D:
 	var _draw_fn: Callable
+	var _scale: float = 1.0
 
 	func _init(draw_fn: Callable) -> void:
 		_draw_fn = draw_fn
+
+	func _process(_delta: float) -> void:
+		if not visible:
+			return
+		var s := get_viewport().get_canvas_transform().get_scale().x
+		if not is_equal_approx(s, _scale):
+			_scale = s
+			queue_redraw()
 
 	func _draw() -> void:
 		_draw_fn.call(self)
