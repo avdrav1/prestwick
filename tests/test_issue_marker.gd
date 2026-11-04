@@ -116,6 +116,8 @@ func test_many_faults_close_together_stay_near_their_tiles_and_never_overlap() -
 
 
 func test_a_dense_cluster_lays_out_quickly() -> void:
+	if BestTime.later(self):
+		return
 	var c := CourseData.create(40, 40, Surface.Type.ROUGH, 2)
 	var v := _view(c)
 	var issues: Array = []

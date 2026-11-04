@@ -568,6 +568,8 @@ func _steep_bank_main(cup: Vector2i = Vector2i(12, 6), at: Vector2 = Vector2(42.
 ## answer, then the refined putt, the same one the solve at once finds. Prints the worst and
 ## the mean update (E6-S12 review: the worst varies with the machine's load).
 func test_the_putter_solve_spreads_over_frames_within_a_frame_budget() -> void:
+	if BestTime.later(self):
+		return
 	var main := _steep_bank_main()
 	var sc := main.swing_control
 	var budget := sc.tuning.putt_aim_frame_ticks
@@ -667,7 +669,8 @@ func test_the_frame_a_ball_rests_spends_one_aim_budget() -> void:
 ## E6-S22: each frame spends the tick budget alone (the time cap lifted on a copy of the
 ## tuning), so the count does not hang on how busy the machine is: under parallel test jobs the
 ## 6,000 us cap cut frames short and the lag reached 14 degrees. The time cap has its own test
-## above.
+## above. E6-S30: so this test is not a timed one; with every hardware thread kept busy it
+## measured the same lags (8.0 and 6.0 degrees) as on an idle machine.
 func test_a_sweep_of_the_aim_on_a_steep_bank_keeps_the_marker_up() -> void:
 	for case: Array in [[Vector2i(9, 6), Vector2(92.5, 31.0)], [Vector2i(13, 6), Vector2(80.0, 22.5)]]:
 		var main := _steep_bank_main(case[0], case[1])

@@ -483,7 +483,7 @@ func _grid(xs: Array, ys: Array) -> Array[Vector2]:
 ## diagonals from every start (yards) in `starts`. The 8 s target is for balls that come
 ## to rest on green ("steps"); a putt that runs off the green and on down the rough's slope
 ## is held to the off-green target, reported apart ("off_steps", D16).
-func _settle_worst(course: CourseData, starts: Array[Vector2]) -> Dictionary:
+func _settle_worst(course: CourseData, starts: Array) -> Dictionary:
 	var worst := {"steps": 0, "what": "", "off_steps": 0, "off_what": "", "capped": 0}
 	var cases: Array[Vector2] = [Vector2.ZERO]
 	for speed in range(1, 16):
@@ -525,7 +525,7 @@ func test_green_settle_time_on_the_contour() -> void:
 			starts = []
 			for p: Vector2 in quick:
 				starts.append(Vector2(80.0 - p.x, p.y) if mirrored else p)
-		var w := _settle_worst(GridHeightEvidence.green_contour(mirrored), starts)
+		var w := _settle_worst(GridHeightEvidence.green_contour(mirrored), Sweep.part(starts))
 		assert_eq(w["capped"], 0, "no ball reaches max_steps")
 		assert_lt(w["steps"], GREEN_SETTLE, "mirrored %s: longest settle on green %.1f s, %s (off green %.1f s, %s)" % [
 				mirrored, w["steps"] / 60.0, w["what"], w["off_steps"] / 60.0, w["off_what"]])
@@ -743,7 +743,7 @@ func test_still_balls_across_v_valleys_settle_under_the_target() -> void:
 				var quick := at <= 52.5 + EPS and (i <= 6 or i % (4 if depth <= 4 else 8) == 0)
 				if quick or Sweep.full():
 					xs.append(at)
-			for x: float in xs:
+			for x: float in Sweep.part(xs):
 				var ball := _set_down(course, Vector2(x, 30.0))
 				worst = maxi(worst, ball.steps)
 				var label := "%s, %d deep, set at x %.2f" % [Surface.NAMES[s], depth, x]
@@ -832,7 +832,7 @@ func test_balls_down_a_long_one_step_slope_settle_under_the_target() -> void:
 					x += 5.0
 			var worst := 0
 			var at := Vector2.ZERO
-			for st: Vector2 in starts:
+			for st: Vector2 in Sweep.part(starts):
 				var ball := Ball.new(course, 1)
 				ball.start_roll(Vector2(st.x, 20.0), Vector2(st.y, 0.0))
 				ball.run_to_rest()
@@ -902,7 +902,7 @@ func test_clubs_down_a_long_slope_settle_under_the_target() -> void:
 			strikes.append(worst_strikes[key])
 		var worst := 0
 		var label := ""
-		for st: Array in strikes:
+		for st: Array in Sweep.part(strikes):
 			var ball := Ball.new(course, 1)
 			model.full(ball.field, model.clubs.club(st[0]), st[1], Vector2(st[2], 20.0), 0.0).apply(ball)
 			while not ball.has_landed:
@@ -1136,16 +1136,21 @@ func _random_greens(hmax: int) -> Array[CourseData]:
 	return greens
 
 
-## Longest settle of still balls on `greens`: `quick`, a list of [green index, start], and
-## with --full also every `stride` yards on both axes (at x.5, y.5).
-func _random_green_worst(greens: Array[CourseData], quick: Array, stride: int = 1) -> Dictionary:
-	var worst := {"steps": 0, "what": "", "capped": 0}
+## Still balls on `greens` as [green index, start]: `quick`, and with --full also every
+## `stride` yards on both axes (at x.5, y.5).
+func _random_green_cases(greens: Array[CourseData], quick: Array, stride: int = 1) -> Array:
 	var cases: Array = quick.duplicate()
 	if Sweep.full():
 		for g in greens.size():
 			for i in range(0, 30, stride):
 				for j in range(0, 30, stride):
 					cases.append([g, Vector2(i + 0.5, j + 0.5)])
+	return cases
+
+
+## Longest settle of the still balls `cases` ([green index, start]) on `greens`.
+func _random_green_worst(greens: Array[CourseData], cases: Array) -> Dictionary:
+	var worst := {"steps": 0, "what": "", "capped": 0}
 	for c: Array in cases:
 		var ball := _set_down(greens[c[0]], c[1])
 		if ball.steps >= ball.params.max_steps:
@@ -1165,7 +1170,8 @@ func test_random_greens_up_to_two_steps_settle_under_the_green_target() -> void:
 			[15, Vector2(20.5, 18.5)], [22, Vector2(11.5, 9.5)], [15, Vector2(21.5, 18.5)],
 			[22, Vector2(11.5, 8.5)], [6, Vector2(4.5, 26.5)], [14, Vector2(19.5, 21.5)],
 			[12, Vector2(26.5, 24.5)], [16, Vector2(3.5, 10.5)], [22, Vector2(10.5, 10.5)]]
-	var w := _random_green_worst(_random_greens(2), quick)
+	var greens := _random_greens(2)
+	var w := _random_green_worst(greens, Sweep.part(_random_green_cases(greens, quick)))
 	assert_eq(w["capped"], 0, "no ball reaches max_steps")
 	assert_lt(w["steps"], GREEN_SETTLE, "heights 0 to 2: longest %d ticks, %s" % [w["steps"], w["what"]])
 
@@ -1185,7 +1191,8 @@ func test_random_steep_greens_stay_within_their_known_limit() -> void:
 				[17, Vector2(9.5, 19.5)], [29, Vector2(16.5, 4.5)], [22, Vector2(21.5, 8.5)]]},
 	}
 	for hmax: int in cases:
-		var w := _random_green_worst(_random_greens(hmax), cases[hmax]["quick"], 2)
+		var greens := _random_greens(hmax)
+		var w := _random_green_worst(greens, Sweep.part(_random_green_cases(greens, cases[hmax]["quick"], 2)))
 		assert_eq(w["capped"], 0, "heights 0 to %d: no ball reaches max_steps" % hmax)
 		assert_lt(w["steps"], cases[hmax]["bound"], "heights 0 to %d: longest %d ticks, %s" % [
 				hmax, w["steps"], w["what"]])

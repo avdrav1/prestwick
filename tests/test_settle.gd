@@ -6,8 +6,10 @@ extends GutTest
 ## touchdown to rest (D16, docs/design.md Ball, Settle targets): under 480 for a ball that
 ## rests on green, under 600 elsewhere. By default each variant strikes the worst shots the full
 ## sweep found; `scripts/run_tests.sh --full` (tests/fixtures/sweep.gd) runs the sweep: every
-## lane row from -6 to 6 and a start every 2 tiles. No class-typed members, and clubs are
-## reached through a ClubSet local, so the exit-leak case in scripts/run_tests.sh does not apply.
+## lane row from -6 to 6 and a start every 2 tiles, each variant in parts at once (E6-S30;
+## each variant's test passes `Sweep.part` in, which is how run_tests.sh finds it). No
+## class-typed members, and clubs are reached through a ClubSet local, so the exit-leak case
+## in scripts/run_tests.sh does not apply.
 
 const GREEN_SETTLE := 480
 const OFF_GREEN_SETTLE := 600
@@ -64,7 +66,8 @@ func _strike(c: CourseData, club_id: String, power: float, x: int, row: int) -> 
 			"on_green": ball.field.surface_at(ball.position.x, ball.position.y) == Surface.Type.GREEN}
 
 
-func _check_variant(par: int, water: bool) -> void:
+## `parted` picks this run's part of the strikes (Sweep.part).
+func _check_variant(par: int, water: bool, parted: Callable) -> void:
 	var key := "par %d %s" % [par, "water" if water else "dry"]
 	var c := CourseGenerator.generate(par, true, water)
 	assert_not_null(c, key)
@@ -89,7 +92,8 @@ func _check_variant(par: int, water: bool) -> void:
 			strikes.append([w[0], top if w[1] is String else float(w[1]), w[2], w[3]])
 	var limits: Array = GUARDS.get(key, [OFF_GREEN_SETTLE, GREEN_SETTLE])
 	var worst := {true: [0, ""], false: [0, ""]}
-	for st: Array in strikes:
+	var mine: Array = parted.call(strikes)
+	for st: Array in mine:
 		var r := _strike(c, st[0], st[1], st[2], st[3])
 		if r.ticks > worst[r.on_green][0]:
 			worst[r.on_green] = [r.ticks, "%s at %.0f%% from (%d, %d)" % [st[0], st[1] * 100.0, st[2], st[3]]]
@@ -97,32 +101,32 @@ func _check_variant(par: int, water: bool) -> void:
 			key, worst[false][0], worst[false][1]])
 	assert_lt(worst[true][0], limits[1], "%s: longest settle on the green %d ticks (%s)" % [
 			key, worst[true][0], worst[true][1]])
-	gut.p("%s: off the green %d ticks (%s), on it %d (%s), %d strikes" % [key, worst[false][0],
-			worst[false][1], worst[true][0], worst[true][1], strikes.size()])
+	gut.p("%s: off the green %d ticks (%s), on it %d (%s), %d of %d strikes" % [key, worst[false][0],
+			worst[false][1], worst[true][0], worst[true][1], mine.size(), strikes.size()])
 
 
 func test_par_3_dry_hilly_settles_inside_d16() -> void:
-	_check_variant(3, false)
+	_check_variant(3, false, Sweep.part)
 
 
 func test_par_3_water_hilly_settles_inside_d16() -> void:
-	_check_variant(3, true)
+	_check_variant(3, true, Sweep.part)
 
 
 func test_par_4_dry_hilly_settles_inside_d16() -> void:
-	_check_variant(4, false)
+	_check_variant(4, false, Sweep.part)
 
 
 func test_par_4_water_hilly_settles_inside_d16() -> void:
-	_check_variant(4, true)
+	_check_variant(4, true, Sweep.part)
 
 
 func test_par_5_dry_hilly_settles_inside_d16() -> void:
-	_check_variant(5, false)
+	_check_variant(5, false, Sweep.part)
 
 
 func test_par_5_water_hilly_settles_inside_d16() -> void:
-	_check_variant(5, true)
+	_check_variant(5, true, Sweep.part)
 
 
 func test_the_guarded_cases_meet_d16_on_the_ground() -> void:

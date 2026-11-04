@@ -247,38 +247,54 @@ func test_the_scripted_player_does_not_hole_every_chip_from_80_yd_or_more() -> v
 			Vector2(EPS_YD, EPS_YD), "the live ball rests where the plan said")
 
 
+## The plans where the drawn noise would hole a chip and the plan falls back to the centre
+## (E6-S22): [strokes, yards from the cup].
+const NOISY_CHIP_HELD_BACK := [[1, 105.0], [5, 105.0]]
+
+
 func test_putts_hole_only_holds_for_noisy_chips_too() -> void:
 	# E6-S13 review: the noise is drawn after the centred plan passed over full-club strokes
 	# that hole, so a noisy chip could still hole. With putts_hole_only it never does.
 	# E6-S22: on the full grid (strokes 0, 1, 2, 4 and 5, every yard from 60 to 120 yd, 305
 	# plans, about 90 s) the noise drawn would hole at only two plans, 105 yd on strokes 1 and
 	# 5, where the plan falls back to the centre. By default strokes 1 and 5 every 10 yd from 65
-	# (12 plans) take both in. Sweep.full() (scripts/run_tests.sh --full) runs the full grid.
+	# (12 plans) take both in. Sweep.full() (scripts/run_tests.sh --full) runs the full grid,
+	# in parts at once (E6-S30); each part holds the fallbacks that fall in it.
 	var m := _main_on(_strip(60, 4))
 	m.set_mode(Main.Mode.PLAY)
 	var sc := m.swing_control
 	var cup := sc.field.tile_center(sc.cup_tile())
+	var distances: Array = range(60, 121, 1) if Sweep.full() else range(65, 121, 10)
+	var grid: Array = []
+	for strokes: int in Sweep.pick([1, 5], [0, 1, 2, 4, 5]):
+		for d: int in distances:
+			grid.append([strokes, float(d)])
+	var cases: Array = Sweep.part(grid)
 	var plans := 0
 	var held_back := 0
-	var distances: Array = range(60, 121, 1) if Sweep.full() else range(65, 121, 10)
-	for strokes: int in Sweep.pick([1, 5], [0, 1, 2, 4, 5]):
+	for case: Array in cases:
+		var strokes: int = case[0]
+		var d: float = case[1]
 		sc.strokes = strokes
-		for d: float in distances:
-			sc.place_ball(cup - Vector2(d, 0.0))
-			var p := ScriptedRound.plan(sc, true)
-			if p == null or p.club.is_putter():
-				continue
-			plans += 1
-			assert_false(p.prediction.holed, "stroke %d, %d yd: no chip-in" % [strokes, d])
-			var live := ScriptedRound.predict(sc, p.club, p.aim_deg, p.ticks, p.accuracy_offset)
-			assert_eq(p.prediction.rest, live.rest, "stroke %d, %d yd: the plan is its swing" % [strokes, d])
-			if p.held_back_offset != 0:
-				held_back += 1
-				assert_eq(p.accuracy_offset, 0, "stroke %d, %d yd: the fallback is the centre" % [strokes, d])
-				assert_true(ScriptedRound.predict(sc, p.club, p.aim_deg, p.ticks, p.held_back_offset).holed,
-						"stroke %d, %d yd: the noise passed over would have holed" % [strokes, d])
-	assert_gt(plans, 100 if Sweep.full() else 10, "full-club plans were checked")
-	assert_gte(held_back, 2, "the plans checked include ones where the noise would hole")
+		sc.place_ball(cup - Vector2(d, 0.0))
+		var p := ScriptedRound.plan(sc, true)
+		if p == null or p.club.is_putter():
+			continue
+		plans += 1
+		assert_false(p.prediction.holed, "stroke %d, %d yd: no chip-in" % [strokes, d])
+		var live := ScriptedRound.predict(sc, p.club, p.aim_deg, p.ticks, p.accuracy_offset)
+		assert_eq(p.prediction.rest, live.rest, "stroke %d, %d yd: the plan is its swing" % [strokes, d])
+		if p.held_back_offset != 0:
+			held_back += 1
+			assert_eq(p.accuracy_offset, 0, "stroke %d, %d yd: the fallback is the centre" % [strokes, d])
+			assert_true(ScriptedRound.predict(sc, p.club, p.aim_deg, p.ticks, p.held_back_offset).holed,
+					"stroke %d, %d yd: the noise passed over would have holed" % [strokes, d])
+	var known := 0
+	for k: Array in NOISY_CHIP_HELD_BACK:
+		if cases.has(k):
+			known += 1
+	assert_gt(plans, cases.size() / 3, "full-club plans were checked (%d of %d)" % [plans, cases.size()])
+	assert_gte(held_back, known, "the plans checked include ones where the noise would hole")
 
 
 func test_long_full_shots_and_putts_are_not_noisy() -> void:

@@ -567,6 +567,8 @@ func _walled_sandbox() -> CourseData:
 
 
 func test_check_course_on_a_walled_128_plot_is_fast() -> void:
+	if BestTime.later(self):
+		return
 	var c := _walled_sandbox()
 	var all := _v.check_course(c)
 	var ms: float = BestTime.ms(func() -> void: _v.check_course(c))
@@ -577,6 +579,8 @@ func test_check_course_on_a_walled_128_plot_is_fast() -> void:
 
 
 func test_check_hole_on_a_128_plot_is_fast() -> void:
+	if BestTime.later(self):
+		return
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	c.set_tile(100, 64, 2, Surface.Type.GREEN)
 	c.set_holes([HoleData.new(1, 5, Vector2i(4, 64), Vector2i(100, 64))])

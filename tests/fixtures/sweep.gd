@@ -18,3 +18,34 @@ static func full() -> bool:
 ## `dense` with --full, else `quick`.
 static func pick(quick: Array, dense: Array) -> Array:
 	return dense if full() else quick
+
+
+## E6-S30: `scripts/run_tests.sh --full` runs a test that names `Sweep.part` in its own body
+## as SWEEP_PARTS Godots at once (scripts/run_tests.sh), each with PRESTWICK_SWEEP_PART set to
+## "<k>/<n>", so no one sweep bounds the run. Each takes every n-th item of the list from its
+## k-th. A parted test
+## asserts only what holds for any slice (a worst under a bound, none capped); without the
+## variable (the default run, GUT on its own) `part` returns the whole list.
+const PART_ENV := "PRESTWICK_SWEEP_PART"
+
+
+## [k, n] from PRESTWICK_SWEEP_PART, or [0, 1] when it is unset or malformed.
+static func part_of() -> Array[int]:
+	var bits := OS.get_environment(PART_ENV).split("/")
+	if bits.size() == 2 and bits[0].is_valid_int() and bits[1].is_valid_int():
+		var k := bits[0].to_int()
+		var n := bits[1].to_int()
+		if n >= 1 and k >= 0 and k < n:
+			return [k, n] as Array[int]
+	return [0, 1] as Array[int]
+
+
+## The items of `items` this part runs: every n-th from the k-th.
+static func part(items: Array) -> Array:
+	var kn := part_of()
+	if kn[1] == 1:
+		return items
+	var mine: Array = []
+	for i: int in range(kn[0], items.size(), kn[1]):
+		mine.append(items[i])
+	return mine
