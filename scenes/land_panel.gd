@@ -56,9 +56,6 @@ var messages_shown: int = 0
 @export var confirm_gap: float = 12.0
 ## Pixels the confirm keeps from the viewport's edge when the corner is near or past it.
 @export var confirm_margin: float = 8.0
-## HUD controls the confirm keeps clear of, besides this panel (main.tscn: the mode and
-## new-course buttons, HolePanel, BuildPalette).
-@export var confirm_avoid: Array[NodePath] = []
 
 var _tool: BuildTool
 var _message_left: float = 0.0
@@ -66,7 +63,6 @@ var _refusal_show_s: float = 3.0
 ## The stroke and the reason of the latest builder refusal shown.
 var _message_stroke: int = -1
 var _message_reason: String = ""
-var _avoid: Array[Control] = []
 
 
 func _ready() -> void:
@@ -90,10 +86,6 @@ func _ready() -> void:
 		var opaque := style.duplicate() as StyleBoxFlat
 		opaque.bg_color.a = 1.0
 		confirm_box.add_theme_stylebox_override("panel", opaque)
-	for path: NodePath in confirm_avoid:
-		var control := get_node_or_null(path) as Control
-		if control != null:
-			_avoid.append(control)
 	var confirm_rows := VBoxContainer.new()
 	confirm_rows.add_theme_constant_override("separation", 4)
 	confirm_box.add_child(confirm_rows)
@@ -198,7 +190,10 @@ func confirm_anchor(cell: Vector2i) -> Vector2:
 ## name: when other parcels share the point and the distance (mirror images about the map's
 ## centre do, a few parcels out), they are told apart by the neighbouring point each leans
 ## toward, the most anticlockwise and the most clockwise of them: "ENE parcel, 280 yd out,
-## toward NE" and "..., toward E" (any between, on a large map, count clockwise: "2 of 4").
+## toward NE" and "..., toward E" (any between, on a large map, count clockwise: "2 of 4";
+## the middle one of three keeps the plain name). Leans in a group never tie: equal bearings
+## mean parcel centres on one ray from the centre, at least 40 yd apart, so a different rounded
+## distance. tests/test_land_hud.gd checks every square map from 16 x 16 to 256 x 256 (E6-S26).
 static func parcel_name(c: CourseData, parcel: Vector2i) -> String:
 	var mine: Vector3 = _compass(c, parcel)
 	if mine.x < 0.0:
@@ -334,8 +329,8 @@ func _parcel_line(b: CourseBuilder) -> String:
 	return "%s, %s" % [line, "click to buy" if buying else "for sale (Buy land)"]
 
 
-## Puts the confirm by the clicked tile, inside the viewport and clear of the HUD (this panel
-## and confirm_avoid): just above the tile, else just below it, else to its right or left.
+## Puts the confirm by the clicked tile, inside the viewport and clear of the HUD (hud_rects):
+## just above the tile, else just below it, else to its right or left.
 ## Of those, the first that covers no HUD and needs no clamping to stay on screen wins; else
 ## the one covering the least HUD, then moved least by the clamp.
 func _place_confirm() -> void:
@@ -368,12 +363,18 @@ func _place_confirm() -> void:
 	confirm_box.global_position = best
 
 
-## Viewport rects of the HUD the confirm keeps clear of: this panel and every visible
-## confirm_avoid control, each grown by confirm_margin.
+## Viewport rects of the HUD the confirm keeps clear of, each grown by confirm_margin: this
+## panel and every other visible Control beside it on the HUD (its parent; main.tscn's HUD
+## CanvasLayer), looked up on each call, so a control added to the HUD later is avoided with
+## no list to keep (E6-S26). Hidden ones (the Play HUD, in Build) are not.
 func hud_rects() -> Array[Rect2]:
 	var out: Array[Rect2] = [get_global_rect().grow(confirm_margin)]
-	for control: Control in _avoid:
-		if control.is_visible_in_tree():
+	var hud: Node = get_parent()
+	if hud == null:
+		return out
+	for child: Node in hud.get_children():
+		var control := child as Control
+		if control != null and control != self and control.is_visible_in_tree():
 			out.append(control.get_global_rect().grow(confirm_margin))
 	return out
 

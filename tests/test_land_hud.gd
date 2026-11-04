@@ -317,3 +317,55 @@ func test_confirm_keeps_clear_of_the_hud() -> void:
 	assert_true(_panel.get_viewport_rect().encloses(box), "and stays on screen")
 	var style := _panel.confirm_box.get_theme_stylebox("panel") as StyleBoxFlat
 	assert_eq(style.bg_color.a, 1.0, "opaque")
+
+
+# E6-S26: no two parcels share a name on any square map from 16 x 16 to 256 x 256, in parcel
+# steps (E6-S17 checked six sizes; groups with numbered middles show only on large maps).
+func test_every_square_map_size_names_each_parcel_once() -> void:
+	var size: int = CourseData.PARCEL_TILES
+	while size <= 256:
+		var m := CourseData.create(size, size, Surface.Type.ROUGH, 2)
+		var names: Dictionary = {}
+		var clashes: Array[String] = []
+		for q: int in m.parcels_high:
+			for p: int in m.parcels_wide:
+				var name: String = LandPanel.parcel_name(m, Vector2i(p, q))
+				if names.has(name):
+					clashes.append("%s and %s are both \"%s\"" % [names[name], Vector2i(p, q), name])
+				names[name] = Vector2i(p, q)
+		assert_eq(clashes.size(), 0, "%d x %d: %s" % [size, size, clashes.slice(0, 4)])
+		size += CourseData.PARCEL_TILES
+
+
+# E6-S26: the confirm keeps clear of every visible Build HUD control, found from the HUD
+# itself rather than a hand list, so a control added later is avoided too.
+func test_confirm_avoids_every_visible_build_hud_control() -> void:
+	var hud: Node = _panel.get_parent()
+	var expected: Array[Rect2] = []
+	for child: Node in hud.get_children():
+		var control := child as Control
+		if control != null and control.is_visible_in_tree():
+			expected.append(control.get_global_rect().grow(_panel.confirm_margin))
+	assert_gt(expected.size(), 1, "the Build HUD has controls besides the land panel")
+	var rects: Array[Rect2] = _panel.hud_rects()
+	for r: Rect2 in expected:
+		assert_true(r in rects, "the confirm avoids the HUD control at %s" % r)
+	# A control added to the HUD after the panel was ready, right where the confirm would go.
+	_main.camera.set_zoom_index(_main.camera.tuning.zoom_levels.find(1.0))
+	_main.camera.tracking = false
+	var clicked: Vector2i = _tile_in(BUYABLE)
+	_main.camera.position = _at(clicked)
+	_main.camera.force_update_scroll()
+	_click_buyable()
+	var before: Rect2 = _panel.confirm_box.get_global_rect()
+	var late := Button.new()
+	late.text = "Added later"
+	hud.add_child(late)
+	late.global_position = before.position
+	late.size = before.size
+	_panel._process(0.0)
+	var box: Rect2 = _panel.confirm_box.get_global_rect()
+	assert_false(box.intersects(late.get_global_rect()), "the confirm %s clears the new control %s" % [box, late.get_global_rect()])
+	late.visible = false
+	assert_false(late.get_global_rect().grow(_panel.confirm_margin) in _panel.hud_rects(), "a hidden control is not avoided")
+	late.queue_free()
