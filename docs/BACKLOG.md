@@ -456,7 +456,8 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: a new D entry records E6-S16's blocked marker shape against D20 and D33's two-purchase par 4 against D26 and D30. The design doc matches `docs/design.md` on every item above.
   - Test: none. Review the design doc and `docs/DECISIONS.md` diffs.
   - Touches: `docs/`
-- [ ] E6-S25 Settle the par questions D33 left. A spike: decide them before E3 rates par.
+- [x] E6-S25 Settle the par questions D33 left. A spike: decide them before E3 rates par.
+  - Done 2026-11-04 (D35, the user's answers to the spike's measured options): par 5 in two accepted (driver plus 3-wood 543 yd flat); long par 3s get rule 5's landing zone by length, built in E6-S37; flat yardage kept (a tee-to-cup allowance only takes the 14% of downhill drives reaching a 320 yd green to about 11%); one notice on load and import, added to E4-S7's and E5-S5's Accept lines. Lines in `docs/design.md` Hole validation rules, rule 4, and Balance targets, clubs.
   - Note: (found in E6 review) E6-S19 (D33) moved the shortest par 4 to 320 yd and the driver carry to 235 and left these open.
   - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice. Any rule change becomes its own story with a GUT test.
   - Test: none. Review the design.md diff; `scripts/sim.gd --table clubs` output for any number quoted.
@@ -529,6 +530,11 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: the design doc carries all 9 edits and the Sandbox fix, and a re-read finds it matching `docs/design.md`. Either `docs/design.md` gains an Open questions list or the design doc's par question points at rule 4 (E6-S25 may settle it first). The "Open:" note on E6-S24 is removed.
   - Test: none. Review the design doc revision and the `docs/` diff.
   - Touches: `docs/`
+- [ ] E6-S37 Give long holes a landing zone whatever their par. A 300 yd par 3's tee shots land somewhere safe.
+  - Note: (from D35, E6-S25) a par 3 of about 298 to 319 yd cannot be reached in one on level ground, and rule 5 gives par 3s no zone, so another tee may sit where its tee shots land.
+  - Accept: rule 5 gives every hole whose yardage is at least a new tunable (`zone_from_yd`, 300 yd, in `course/validator_tuning.tres` with a line in `docs/design.md`) a landing zone at `min(240, yardage - 60)` yd from its tee, whatever its par; holes under it have none, so short par 3s keep none and every par 4 and par 5 (320 yd and up) keeps its zone as now. The footprint still holds the zone. The validator highlights the failing tee as for any rule 5 case.
+  - Test: `tests/test_hole_open.gd` (a 300 yd par 3 with another tee inside and outside its zone; a 299 yd par 3 with a tee where the zone would be still opens; the rule 5 cases for par 4 and par 5 unchanged).
+  - Touches: `course/`, `tests/`
 
 ## E3: Nine holes and guests — planned
 
@@ -636,7 +642,7 @@ Done when: a player starts with $5,000, funds the course from green fees, and ca
   - Test: `tests/test_fee.gd`. By hand: checklist item 7.
   - Touches: `guests/`, `scenes/`, `tests/`
 - [ ] E4-S7 Save and load. Nothing lost across a quit.
-  - Accept: the course plus money, day, rating history and guest feed serialize to JSON in `user://`. Only `course/` save code writes CourseData on load. Save, quit, load restores all of it. In-progress guests are not in the design doc's save data, so a load resumes at the morning of the saved day. A corrupt file shows an error and leaves the current game alone.
+  - Accept: the course plus money, day, rating history and guest feed serialize to JSON in `user://`. Only `course/` save code writes CourseData on load. Save, quit, load restores all of it. In-progress guests are not in the design doc's save data, so a load resumes at the morning of the saved day. A corrupt file shows an error and leaves the current game alone. A load shows one notice listing every hole the validator closed, each with its one-line reason, for example "Hole 3 closed: 280 yd is a par 3, not par 4" (D35; a course saved before D33 with an open 250 to 319 yd par 4 is the GUT case, from a v1 fixture).
   - Note: (found in E2 review) `CourseSave.save_file` drops a half-placed hole and reports it through `dropped` (E2-S12). Show the player the dropped hole numbers when the game saves, since a half-placed tee or cup is lost. If losing it is not acceptable, the alternative is an explicit unplaced value in the course format, which needs a `/decision` and a format version bump.
   - Test: `tests/test_save.gd`. By hand: checklist item 8.
   - Touches: `course/`, `scenes/`, `tests/`
@@ -669,7 +675,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Test: by hand with `/playtest full`. Run headless with no audio errors.
   - Touches: `audio/`, `scenes/`
 - [ ] E5-S5 Export and import courses. A course is one JSON file friends can swap.
-  - Accept: export and import from a main menu. Files carry name, author and thumbnail, and show par and yardage, derived from the holes because format version 1 has no fields for them. An import runs the validator, closes failing holes, and refuses a malformed file or a newer version with a clear message. An exported course imports identically on a second machine.
+  - Accept: export and import from a main menu. Files carry name, author and thumbnail, and show par and yardage, derived from the holes because format version 1 has no fields for them. An import runs the validator, closes failing holes and lists them in one notice with each hole's reason, as E4-S7's load does (D35), and refuses a malformed file or a newer version with a clear message. An exported course imports identically on a second machine.
   - Test: `tests/test_course_export.gd`, including malformed and wrong-version files.
   - Touches: `course/`, `scenes/`, `tests/`
 - [ ] E5-S6 Finish keyboard and accessibility. Every action reachable without a mouse.
