@@ -49,11 +49,11 @@ Runs `course/validator.gd` headless on the file and prints each rule as pass or 
 
 ## generate
 
-Writes `courses/gen_par<par>_<terrain>_<water>.json` (or `--out=<path>`): a tee box, a fairway corridor of the right yardage, rough either side, a green with the cup, optional water on the direct line, and with `hilly` a gentle ridge: a one-step terrace 4 tiles wide across the map at 35% of the way to the cup, clear of the tee box, green and pond (E2-S18; E6-S2's land generator replaces it, D19). It must pass `validate`, and the tool validates what it wrote. Used for test fixtures and smoke playtests. `courses/example_par3.json` is `generate 3 flat dry`.
+Writes `courses/gen_par<par>_<terrain>_<water>.json` (or `--out=<path>`): a tee box, a fairway corridor of the right yardage, rough either side, a green with the cup, optional water on the direct line, and with `hilly` the same hole laid over `LandGenerator` heights (seed `CourseGenerator.HILLY_LAND_SEED`, the window centred on the land map) with the tee box, green and pond levelled flat and edge neighbours one step apart at most (E2-S18, E6-S20, D19). It must pass `validate`, and the tool validates what it wrote. Used for test fixtures and smoke playtests. `courses/example_par3.json` is `generate 3 flat dry`.
 
 ## inspect
 
-Prints the size in tiles and yards, the height range, the tile count of each surface present, and one line per hole: par, yardage, open or closed, and the validator's PASS or FAIL, then a line for each failing rule with its tile and reason. Build cost at the rates in `docs/design.md` is not printed yet: tile costs get a resource in E4.
+Prints the size in tiles and yards, the height range, the tile count of each surface present, the land (`land: <w>x<h> parcels of 16 tiles, <n> owned`, then the owned grid one parcel row per line as in `owned`, then `land budget: $4,200` or `land budget: unlimited`), and one line per hole: par, yardage, open or closed, and the validator's PASS or FAIL, then a line for each failing rule with its tile and reason. Build cost at the rates in `docs/design.md` is not printed yet: tile costs get a resource in E4.
 
 ## Rules
 

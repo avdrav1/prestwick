@@ -424,7 +424,8 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: `/balance clubs` (driver carry and roll in `golf/clubs.tres`) or a raised `par4_min_yd` makes a perfect drive on the shortest legal par 4 stop short of the green on generated land, with every other clubs, lies and surfaces sim target still met, or a `/decision` says why it may. `floor_keep_speed` is checked on generated land and kept or retuned.
   - Test: `scripts/sim.gd --table clubs` and `--table surfaces` output in the commit; the E6-S8 scripted land playtest still passes.
   - Touches: `golf/`, `course/`
-- [ ] E6-S20 Teach `/course-file` about land. Inspect shows ownership, and hilly uses the land generator.
+- [x] E6-S20 Teach `/course-file` about land. Inspect shows ownership, and hilly uses the land generator.
+  - Done 2026-11-04: `inspect` prints `land: WxH parcels of 16 tiles, N owned`, the owned grid and `land budget: $X` or `unlimited`; `generate hilly` uses `CourseGenerator.hilly_heights` over `LandGenerator.generate(7)` (ridge_rise removed). Tests in `tests/test_course_file.gd` (all six hilly variants pass the six rules with flat tee box, green and pond; inspect land lines for a sandbox file and a part-owned $4,200 one). Flat output and `courses/example_par3.json` unchanged.
   - Note: (found in E6 review) `/course-file inspect` prints no owned parcels or land budget (E6-S3). `generate hilly` still uses `CourseGenerator.ridge_rise`; replacing it with the land generator (D19, E2-S18) needs a hole laid over generated heights with the tee box, green and pond kept flat (E6-S2).
   - Accept: `inspect` prints the owned parcel grid and the land budget (or "unlimited"). `generate hilly` lays its hole over `LandGenerator` heights with the tee box, green and pond flat, and the result passes all six rules.
   - Test: `tests/test_course_file.gd` (inspect output, a hilly generate that validates).

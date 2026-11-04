@@ -8,10 +8,10 @@ extends SceneTree
 ##
 ## validate runs the game's own validator (course/validator.gd) on the file and prints each
 ## rule of each hole as pass or FAIL, with the tile at fault and the reason. generate writes
-## a CourseGenerator course, by default to courses/gen_par<par>_<terrain>_<water>.json.
+## a CourseGenerator course (hilly: over LandGenerator heights), by default to courses/gen_par<par>_<terrain>_<water>.json.
 ## inspect prints the size, the height range, the tile count of each surface present, and
-## one line per hole (par, yardage, open or closed, the validator's PASS or FAIL) with a line
-## for each failing rule. Paths without res:// or user:// are taken from the project folder.
+## the owned parcel grid and the land budget left (or "unlimited"), and one line per hole
+## (par, yardage, open or closed, the validator's PASS or FAIL) with a line for each failing rule. Paths without res:// or user:// are taken from the project folder.
 ##
 ## Exit code: 0 when every rule passes (or the file was written, or inspected), 1 when a rule
 ## fails or the write fails, 2 for bad arguments or a file that will not load. inspect only
@@ -94,6 +94,7 @@ static func inspect(path: String, out: Array[String]) -> int:
 		if counts[s] > 0:
 			parts.append("%s %d" % [Surface.name_of(s), counts[s]])
 	out.append("surfaces: %s" % ", ".join(parts))
+	_inspect_land(course, out)
 	out.append("holes: %d" % course.holes.size())
 	var validator := CourseValidator.new()
 	var reach := CourseValidator.Reach.new(course)
@@ -105,6 +106,27 @@ static func inspect(path: String, out: Array[String]) -> int:
 		for issue: CourseValidator.Issue in issues:
 			out.append("  rule %d FAIL at (%d, %d): %s" % [issue.rule, issue.tile.x, issue.tile.y, issue.reason])
 	return 0
+
+
+## The land lines of inspect (E6-S20): the parcel count, how many are owned, the owned grid
+## as the file holds it (one row per parcel row, top first, "1" owned, "0" not) and the land
+## budget left, or "unlimited".
+static func _inspect_land(course: CourseData, out: Array[String]) -> void:
+	var rows: PackedStringArray = []
+	var owned: int = 0
+	for q: int in course.parcels_high:
+		var row := ""
+		for p: int in course.parcels_wide:
+			var mine: bool = course.is_parcel_owned(Vector2i(p, q))
+			row += "1" if mine else "0"
+			owned += 1 if mine else 0
+		rows.append(row)
+	out.append("land: %dx%d parcels of %d tiles, %d owned" % [course.parcels_wide, course.parcels_high,
+			CourseData.PARCEL_TILES, owned])
+	for row: String in rows:
+		out.append("  %s" % row)
+	out.append("land budget: %s" % ("unlimited" if course.has_unlimited_budget()
+			else LandPrices.money(course.land_budget)))
 
 
 static func _load(path: String, out: Array[String]) -> CourseData:
