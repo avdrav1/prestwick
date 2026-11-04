@@ -3,7 +3,6 @@ extends GutTest
 ## against the targets in docs/design.md Land, "Generated land", over seeds 1 to 20.
 
 const SEEDS: int = 20
-const PARCEL: int = 16
 ## Tolerances from docs/design.md Land (the targets themselves live in the tuning).
 const TREE_SHARE := Vector2(0.08, 0.16)
 const WATER_SHARE := Vector2(0.02, 0.06)
@@ -195,9 +194,10 @@ func test_ponds_of_the_set_size_flat_and_one_step_below_their_shore() -> void:
 func test_every_parcel_keeps_its_rough_floor_and_is_never_all_water() -> void:
 	for s: int in SEEDS:
 		var c := _maps[s]
-		for q: int in ceili(c.height / float(PARCEL)):
-			for p: int in ceili(c.width / float(PARCEL)):
-				var rect := Rect2i(p * PARCEL, q * PARCEL, PARCEL, PARCEL).intersection(
+		for q: int in ceili(c.height / float(CourseData.PARCEL_TILES)):
+			for p: int in ceili(c.width / float(CourseData.PARCEL_TILES)):
+				var rect := Rect2i(p * CourseData.PARCEL_TILES, q * CourseData.PARCEL_TILES,
+						CourseData.PARCEL_TILES, CourseData.PARCEL_TILES).intersection(
 						Rect2i(0, 0, c.width, c.height))
 				var rough: int = _count(c, Surface.Type.ROUGH, rect)
 				var water: int = _count(c, Surface.Type.WATER, rect)
@@ -215,6 +215,21 @@ func test_the_starting_block_is_mostly_rough_and_dry() -> void:
 		assert_true(rough >= _t.start_block_min_rough * block.get_area(),
 				"seed %d block: %d of %d rough" % [s + 1, rough, block.get_area()])
 		assert_eq(_count(c, Surface.Type.WATER, block), 0, "seed %d block has no water" % (s + 1))
+
+
+## E6-S15: generated land comes back with every parcel owned and no land budget (D26, D19:
+## the starting block and the $5,000 budget are the builder's New course to set).
+func test_generated_land_is_fully_owned_with_an_unlimited_budget() -> void:
+	for s: int in SEEDS:
+		var c := _maps[s]
+		assert_true(c.has_unlimited_budget(), "seed %d has an unlimited budget" % (s + 1))
+		for q: int in c.parcels_high:
+			for p: int in c.parcels_wide:
+				assert_true(c.is_parcel_owned(Vector2i(p, q)),
+						"seed %d parcel (%d, %d) owned" % [s + 1, p, q])
+				var r := c.parcel_rect(Vector2i(p, q))
+				assert_true(c.is_owned(r.position.x, r.position.y) and c.is_owned(r.end.x - 1, r.end.y - 1),
+						"seed %d parcel (%d, %d) tiles owned" % [s + 1, p, q])
 
 
 # --- tunables ---

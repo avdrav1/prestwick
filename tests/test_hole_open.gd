@@ -1,5 +1,5 @@
 extends GutTest
-## E2-S3: opening a hole (D11). Open is enabled only when all five rules pass. An edit inside
+## E2-S3: opening a hole (D11). Open is enabled only when all six rules pass. An edit inside
 ## an open hole's footprint closes it; after every build edit the validator reruns for every
 ## open hole and closes any that now fails. Failing rules reach the view, tile and reason.
 ## Play never waits for the validator (pillar 1).
@@ -75,7 +75,7 @@ func test_open_only_when_every_rule_passes() -> void:
 	assert_false(b.open_hole(1), "Open refuses a failing hole")
 	assert_false(b.hole(1).open)
 	b.paint(CUP, Surface.Type.GREEN, 1)
-	assert_eq(b.issues_for(1), [], "all five pass")
+	assert_eq(b.issues_for(1), [], "all six pass")
 	assert_true(b.can_open(1))
 	assert_true(b.open_hole(1))
 	assert_true(b.hole(1).open)

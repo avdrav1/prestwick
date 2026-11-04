@@ -2,7 +2,7 @@ class_name CourseGenerator
 extends RefCounted
 ## Builds the one-hole courses `/course-file generate <par> [flat|hilly] [water|dry]` writes
 ## (course/course_file.gd), used as test fixtures and smoke playtest courses. Every course it
-## makes passes all five rules of course/validator.gd (tests/test_validator.gd checks).
+## makes passes all six rules of course/validator.gd (tests/test_validator.gd checks).
 ##
 ## It never writes a CourseData: it lays the tiles out as course format data (every parcel
 ## owned, an unlimited land budget) and
@@ -83,7 +83,7 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 ## Steps above the plot at column `x` on a hilly hole from `tee_x`, `length` tiles long: 1 on
 ## the ridge, 0 elsewhere. A one-step terrace with one-step risers, the gentlest hill the
 ## height model has (D5), clear of the tee box, the green and the pond, so the surfaces and
-## the five rules are those of the flat hole. Kept on its own on purpose: E6-S2's land
+## the six rules are those of the flat hole. Kept on its own on purpose: E6-S2's land
 ## generator replaces it (D19).
 static func ridge_rise(x: int, tee_x: int, length: int) -> int:
 	var start: int = tee_x + roundi(length * RIDGE_AT)

@@ -19,10 +19,9 @@ extends RefCounted
 ##   that is flat for POND_MARGIN tiles all round, so its risers keep the slope rule too.
 ## - Floors: every parcel keeps parcel_min_rough of its tiles rough (so it is never all water),
 ##   and the starting block (D26) start_block_min_rough, with no water at all.
+## - Land: every parcel owned and no land budget (CourseData.all_owned_rows). Parcels are
+##   CourseData.PARCEL_TILES square, the format's one parcel size.
 
-## Parcel size in tiles (D26). The format constant CourseData.PARCEL_TILES (E6-S3) has the same
-## value; the generator keeps its own copy only until that lands.
-const PARCEL_TILES: int = 16
 ## Hill terrace cell, in tiles. Structural (it is what makes the slope rule exact), not a tunable.
 const TERRACE: int = 2
 ## Flat ground every pond tile needs round it, in tiles (Chebyshev). Structural, as TERRACE.
@@ -55,32 +54,23 @@ static func generate(land_seed: int, tuning: LandTuning = null, errors: Array[St
 		"tiles": Marshalls.raw_to_base64(tiles),
 		"holes": [],
 		"thumbnail": "",
-		# Every parcel owned, no budget: the format version 2 fields (E6-S3), which version 1
-		# from_dict ignores. Ownership of a new course (the starting block, the $5,000 budget)
-		# is the builder's to set (CourseBuilder.new_course, E6-S6), not the land's.
-		"owned": _all_owned_rows(run.w, run.h),
+		# Every parcel owned, no budget (format version 2, E6-S3). Ownership of a new course
+		# (the starting block, the $5,000 budget) is the builder's to set
+		# (CourseBuilder.new_course, E6-S6), not the land's.
+		"owned": CourseData.all_owned_rows(run.w, run.h),
 		"land_budget": null,
 	}
 	return CourseData.from_dict(data, errors)
 
 
-## The "owned" field with every parcel owned: one string of "1"s per parcel row. The same as
-## CourseData.all_owned_rows (E6-S3); swap to it once both stories are on one branch.
-static func _all_owned_rows(w: int, h: int) -> Array:
-	var rows: Array = []
-	var row := "1".repeat(ceili(w / float(PARCEL_TILES)))
-	for q: int in ceili(h / float(PARCEL_TILES)):
-		rows.append(row)
-	return rows
-
-
 ## The starting block (D26): 2 x 2 parcels at the centre of a `w` x `h` map, clipped to it.
+## The builder's New course (CourseBuilder.new_course) owns exactly this block.
 ## On the 128 x 128 map, parcels 3 and 4 on each axis: tiles 48 to 79.
 static func start_block(w: int, h: int) -> Rect2i:
-	var pw: int = ceili(w / float(PARCEL_TILES))
-	var ph: int = ceili(h / float(PARCEL_TILES))
-	var block := Rect2i((pw / 2 - 1) * PARCEL_TILES, (ph / 2 - 1) * PARCEL_TILES,
-			2 * PARCEL_TILES, 2 * PARCEL_TILES)
+	var pw: int = ceili(w / float(CourseData.PARCEL_TILES))
+	var ph: int = ceili(h / float(CourseData.PARCEL_TILES))
+	var side: int = CourseData.PARCEL_TILES
+	var block := Rect2i((pw / 2 - 1) * side, (ph / 2 - 1) * side, 2 * side, 2 * side)
 	return block.intersection(Rect2i(0, 0, w, h))
 
 
@@ -113,14 +103,15 @@ class _Run:
 		surf.resize(w * h)
 		surf.fill(Surface.Type.ROUGH)
 		_stand.resize(w * h)
-		_pw = ceili(w / float(PARCEL_TILES))
-		var ph: int = ceili(h / float(PARCEL_TILES))
+		_pw = ceili(w / float(CourseData.PARCEL_TILES))
+		var ph: int = ceili(h / float(CourseData.PARCEL_TILES))
 		_parcel_cap.resize(_pw * ph)
 		_parcel_used.resize(_pw * ph)
 		for q: int in ph:
 			for p: int in _pw:
-				var tiles: int = (mini(w, (p + 1) * PARCEL_TILES) - p * PARCEL_TILES) \
-						* (mini(h, (q + 1) * PARCEL_TILES) - q * PARCEL_TILES)
+				var side: int = CourseData.PARCEL_TILES
+				var tiles: int = (mini(w, (p + 1) * side) - p * side) \
+						* (mini(h, (q + 1) * side) - q * side)
 				_parcel_cap[q * _pw + p] = floori((1.0 - tuning.parcel_min_rough) * tiles + 1e-6)
 		_block = LandGenerator.start_block(w, h)
 		_block_cap = floori((1.0 - tuning.start_block_min_rough) * _block.get_area() + 1e-6)
@@ -420,4 +411,4 @@ class _Run:
 		return true
 
 	func _parcel_of(i: int) -> int:
-		return ((i / w) / PARCEL_TILES) * _pw + (i % w) / PARCEL_TILES
+		return ((i / w) / CourseData.PARCEL_TILES) * _pw + (i % w) / CourseData.PARCEL_TILES

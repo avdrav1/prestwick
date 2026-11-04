@@ -4,7 +4,7 @@ extends PanelContainer
 ## status, par 3/4/5, the Open button and every failing rule with its tile and reason. A view
 ## onto a BuildTool and its builder: buttons go through the tool, and refresh() (on the tool's
 ## settings_changed and after every builder check, from Main) shows the builder's state.
-## Open is enabled only when the hole is closed and all five rules pass (D11).
+## Open is enabled only when the hole is closed and all six rules pass (D11, D30).
 
 ## Par buttons in CourseBuilder.PARS order.
 var par_buttons: Array[Button] = []
