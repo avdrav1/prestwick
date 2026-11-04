@@ -42,6 +42,23 @@ Grayscale check (`art/tiles/tile_preview.tscn`, right half): rough, water and oo
 close in luminance (about 108, 116, 100 of 255) and are told apart by pattern alone. Final
 art should spread them further (E5-S2 requires a grayscale-distinguishable set).
 
+## Height shade (E6-S18)
+
+The sheet has one frame per surface, not per height. `CourseView` draws each top through an
+alternative tile per height (`CourseView.top_alt(h, owned)`). The land surfaces (rough, water,
+trees, oob; `BuilderTuning.height_shaded`) are modulated by a grey value,
+`BuilderTuning.height_shade[h]` (0.80 at height 0 up to 1.15 at height 7, 1.0 at the D10 plot's
+height 2), so low ground is darker and high ground lighter. Course surfaces (fairway, green,
+tee, bunker, cart path) are not shaded, so their colour names the lie at every height. The
+shade is a multiply, and above 1 it is capped per frame where the brightest coloured
+(saturation 0.1 or more) pixel would reach 255, so no channel clips and the hue holds; water
+(water_light 232) caps at about 1.10. Only the near-grey label chalk may clip toward white. It
+holds in grayscale (`docs/decisions/e6-s18-land-0.5x-gray.png`), and on a rise that faces away
+from the camera (no riser, only the edge cue's lip) the lighter side is the higher one. Final
+art must keep rough's value band over heights 0 to 7 at least 5% clear of fairway, tee, green
+and trees (`tests/test_course_view.gd`); a lighter rough or a darker fairway means retuning
+the ramp.
+
 ## Anchor
 
 Pixel (32, 16) of a frame, the diamond's center, sits on the screen point the isometric

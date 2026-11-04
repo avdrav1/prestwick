@@ -26,6 +26,20 @@ const PATH: String = "res://course/builder_tuning.tres"
 ## Unowned land (E6-S5, art/specs/land.md): the modulate on every top, riser and edge cue of
 ## a tile on a parcel the player does not own. The hatch and parcel lines are the pattern.
 @export var unowned_tint: Color = Color(0.62, 0.62, 0.68)
+## Height shade (E6-S18, art/specs/surfaces.md): the value the top of each surface named in
+## height_shaded is multiplied by at height 0 to 7, grey so it changes value, not hue
+## (colorblind rule). Low ground is darker and high ground lighter, so a plateau reads from a
+## lowland and the lighter side of any edge is the higher one. The entry at plot_ground stays
+## 1, so a New sandbox draws as before. Kept narrow so shaded rough stays clear of fairway and
+## tee in value at every height (tests/test_course_view.gd). Above 1 a frame's shade is capped
+## where its brightest coloured pixel would reach 255 (CourseView.frame_headroom), so a channel
+## never clips and the hue holds.
+@export var height_shade: PackedFloat32Array = PackedFloat32Array([0.8, 0.9, 1.0, 1.03, 1.06, 1.09, 1.12, 1.15])
+## The surfaces whose tops take height_shade: the natural land the player reads relief on.
+## Course surfaces (fairway, green, tee, bunker, cart path) are left out so they keep their
+## identity colours at every height (pillar 2: lie and target read by colour at 0.5x); their
+## edge cues and risers still show their height.
+@export var height_shaded: PackedStringArray = PackedStringArray(["rough", "water", "trees", "oob"])
 ## How long a refusal ("not your land") stays on the Build HUD after a click, seconds.
 @export var refusal_show_s: float = 3.0
 

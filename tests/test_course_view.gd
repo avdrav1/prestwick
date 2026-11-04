@@ -344,21 +344,28 @@ func test_owned_land_draws_as_before() -> void:
 	_view.show_course(c)
 	for h: int in CourseData.MAX_HEIGHT + 1:
 		assert_eq(_view.land_layer(h).get_used_cells().size(), 0, "no overlay at height %d" % h)
-	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), 0, "not dimmed")
+	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), CourseView.top_alt(1, true), "not dimmed")
+	assert_eq(_view.riser_layer(0).get_cell_alternative_tile(Vector2i(5, 19)), 0, "riser not dimmed")
 
 
 func test_unowned_tiles_are_dimmed_and_hatched_at_their_height() -> void:
 	var c := _land_course()
 	_view.show_course(c)
 	assert_eq(_view.land_layer(1).get_cell_source_id(Vector2i(5, 5)), -1, "owned: no hatch")
-	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), 0, "owned: no shade")
+	assert_eq(_view.top_layer(1).get_cell_alternative_tile(Vector2i(5, 5)), CourseView.top_alt(1, true), "owned: no dim")
 	var cell := Vector2i(20, 4)
 	assert_eq(_view.land_layer(3).get_cell_source_id(cell), CourseView.LAND_SOURCE, "hatch on the raised top")
 	assert_eq(_view.land_layer(1).get_cell_source_id(cell), -1, "only at its own height")
-	assert_eq(_view.top_layer(3).get_cell_alternative_tile(cell), CourseView.DIM_ALT, "top dimmed")
+	assert_eq(_view.top_layer(3).get_cell_alternative_tile(cell), CourseView.top_alt(3, false), "top dimmed")
 	assert_eq(_view.riser_layer(1).get_cell_alternative_tile(cell), CourseView.DIM_ALT, "riser dimmed")
-	var data: TileData = _view.top_layer(3).get_cell_tile_data(cell)
-	assert_eq(data.modulate, BuilderTuning.load_default().unowned_tint, "shade is the tuned tint")
+	var tuning := BuilderTuning.load_default()
+	var data: TileData = _view.riser_layer(1).get_cell_tile_data(cell)
+	assert_eq(data.modulate, tuning.unowned_tint, "riser shade is the tuned tint")
+	data = _view.top_layer(3).get_cell_tile_data(cell)
+	assert_eq(data.modulate, tuning.unowned_tint, "green top: the tint alone (course surfaces take no height shade)")
+	var shade: float = tuning.height_shade[1]
+	data = _view.top_layer(1).get_cell_tile_data(Vector2i(20, 5))
+	assert_eq(data.modulate, Color(shade, shade, shade) * tuning.unowned_tint, "rough top: the tint times its height's shade")
 	var unowned: int = 0
 	for h: int in CourseData.MAX_HEIGHT + 1:
 		unowned += _view.land_layer(h).get_used_cells().size()
@@ -385,8 +392,131 @@ func test_refresh_parcel_after_a_purchase() -> void:
 	b.land_changed.connect(_view.refresh_parcel)
 	assert_true(b.buy_parcel(Vector2i(1, 0)))
 	assert_eq(_view.land_layer(3).get_cell_source_id(Vector2i(20, 4)), -1, "bought: no hatch")
-	assert_eq(_view.top_layer(3).get_cell_alternative_tile(Vector2i(20, 4)), 0, "bought: no shade")
+	assert_eq(_view.top_layer(3).get_cell_alternative_tile(Vector2i(20, 4)), CourseView.top_alt(3, true), "bought: no dim")
 	assert_eq(_view.land_layer(1).get_cell_atlas_coords(Vector2i(32, 5)), Vector2i(CourseView.LAND_EDGE_W, 0),
 			"the line moves to the next parcel's side")
 	assert_true(b.undo())
 	assert_eq(_view.land_layer(3).get_cell_source_id(Vector2i(20, 4)), CourseView.LAND_SOURCE, "undone: hatched again")
+
+
+# --- E6-S18: a grey shade step per height on every top (art/specs/surfaces.md) ---
+
+func test_height_shade_is_grey_and_rises_with_height() -> void:
+	var tuning := BuilderTuning.load_default()
+	var shades: PackedFloat32Array = tuning.height_shade
+	assert_eq(shades.size(), CourseData.MAX_HEIGHT + 1, "one shade per height")
+	assert_eq(shades[tuning.plot_ground], 1.0, "the D10 plot's height is unshaded, so a New sandbox draws as before")
+	for h: int in range(1, shades.size()):
+		assert_gt(shades[h], shades[h - 1], "height %d lighter than %d" % [h, h - 1])
+	# A height-6 plateau tells from a height-2 lowland by value (E6-S18's note).
+	assert_gt(shades[6] - shades[2], 0.1, "plateau against lowland")
+	assert_gt(shades[2] - shades[0], 0.15, "valley against lowland")
+
+
+func test_every_top_draws_with_its_height_shade() -> void:
+	var tuning := BuilderTuning.load_default()
+	var c := CourseData.create(8, 8, Surface.Type.ROUGH, 0)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		c.set_tile(h, 3, h, Surface.Type.ROUGH if h % 2 == 0 else Surface.Type.TREES)
+	_view.show_course(c)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		var cell := Vector2i(h, 3)
+		assert_eq(_view.top_layer(h).get_cell_alternative_tile(cell), CourseView.top_alt(h, true), "alt at %d" % h)
+		var m: Color = _view.top_layer(h).get_cell_tile_data(cell).modulate
+		var want: float = CourseView.top_shades(TileArt.load_default().surfaces, tuning.height_shade,
+				tuning.height_shaded)[c.get_surface(h, 3)][h]
+		assert_almost_eq(m.r, want, 0.0001, "value at %d" % h)
+		assert_almost_eq(want, tuning.height_shade[h], 0.0001, "rough and trees take the ramp at %d" % h)
+		assert_true(m.r == m.g and m.g == m.b, "grey at %d: value, not hue (colorblind rule)" % h)
+	# Risers and edge cues keep their own values.
+	assert_eq(_view.riser_layer(4).get_cell_alternative_tile(Vector2i(7, 3)), 0, "riser unshaded")
+	assert_eq(_view.edge_layer(1).get_cell_alternative_tile(Vector2i(1, 3)), 0, "cue unshaded")
+
+
+func test_refresh_cell_reshades_a_raised_top() -> void:
+	var c := CourseData.create(6, 6, Surface.Type.ROUGH, 2)
+	_view.show_course(c)
+	c.set_tile(2, 2, 5, Surface.Type.ROUGH)
+	_view.refresh_cell(Vector2i(2, 2))
+	assert_eq(_view.top_layer(5).get_cell_alternative_tile(Vector2i(2, 2)), CourseView.top_alt(5, true))
+	assert_eq(_view.top_layer(2).get_cell_source_id(Vector2i(2, 2)), -1, "old top gone")
+
+
+# E6-S18 review: course surfaces keep their colour, no channel clips, grass bands stay apart.
+
+func test_course_surfaces_are_unshaded_at_every_height() -> void:
+	var c := CourseData.create(8, 8, Surface.Type.ROUGH, 0)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		c.set_tile(h, 3, h, Surface.Type.FAIRWAY)
+		c.set_tile(h, 5, h, Surface.Type.GREEN)
+	_view.show_course(c)
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		assert_eq(_view.top_layer(h).get_cell_tile_data(Vector2i(h, 3)).modulate, Color.WHITE, "fairway at %d" % h)
+		assert_eq(_view.top_layer(h).get_cell_tile_data(Vector2i(h, 5)).modulate, Color.WHITE, "green at %d" % h)
+	var tuning := BuilderTuning.load_default()
+	var shades := CourseView.top_shades(TileArt.load_default().surfaces, tuning.height_shade, tuning.height_shaded)
+	for t: int in [Surface.Type.FAIRWAY, Surface.Type.GREEN, Surface.Type.TEE, Surface.Type.BUNKER, Surface.Type.CART_PATH]:
+		for h: int in CourseData.MAX_HEIGHT + 1:
+			assert_eq(shades[t][h], 1.0, "%s unshaded at %d" % [Surface.name_of(t), h])
+
+
+## The shade never pushes a coloured pixel's channel past 1, so it changes value, not hue.
+func test_no_coloured_pixel_clips_at_any_height() -> void:
+	var tuning := BuilderTuning.load_default()
+	var sheet: TileSheet = TileArt.load_default().surfaces
+	var shades := CourseView.top_shades(sheet, tuning.height_shade, tuning.height_shaded)
+	var img: Image = sheet.texture.get_image()
+	for i: int in sheet.frame_count():
+		var top: float = 0.0
+		var r: Rect2i = sheet.region(i)
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var p: Color = img.get_pixel(x, y)
+				if p.a > 0.0 and p.s >= CourseView.HUE_MIN_SAT:
+					top = maxf(top, maxf(p.r, maxf(p.g, p.b)))
+		for h: int in CourseData.MAX_HEIGHT + 1:
+			assert_true(top * shades[i][h] <= 1.0 + 0.0001,
+					"%s at %d: %.3f x %.3f" % [sheet.frames[i], h, top, shades[i][h]])
+	# Water's light ramp is the tight one: its top heights are capped, not clipped.
+	var water: int = sheet.frame_index(&"water")
+	assert_lt(shades[water][CourseData.MAX_HEIGHT], tuning.height_shade[CourseData.MAX_HEIGHT], "water capped")
+
+
+## Over heights 0 to 7 the shaded value band of each grass lie (rough, fairway, tee, green,
+## and trees) stays at least BAND_GAP apart from every other one's, so the lie still reads by
+## value at 0.5x where labels and stipple are gone. Two unshaded surfaces keep the art's own
+## gap (fairway and tee are close in value and told apart by pattern, art/specs/surfaces.md).
+const BAND_GAP: float = 0.05
+
+func test_grass_value_bands_do_not_overlap() -> void:
+	var tuning := BuilderTuning.load_default()
+	var sheet: TileSheet = TileArt.load_default().surfaces
+	var shades := CourseView.top_shades(sheet, tuning.height_shade, tuning.height_shaded)
+	var img: Image = sheet.texture.get_image()
+	var names: PackedStringArray = ["rough", "fairway", "tee", "green", "trees"]
+	var lo: Dictionary = {}
+	var hi: Dictionary = {}
+	for n: String in names:
+		var i: int = sheet.frame_index(StringName(n))
+		var r: Rect2i = sheet.region(i)
+		var sum: float = 0.0
+		var count: int = 0
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var p: Color = img.get_pixel(x, y)
+				if p.a > 0.0:
+					sum += p.get_luminance()
+					count += 1
+		var base: float = sum / count
+		lo[n] = base * Array(shades[i]).min()
+		hi[n] = base * Array(shades[i]).max()
+	for a: int in names.size():
+		for b: int in range(a + 1, names.size()):
+			var na: String = names[a]
+			var nb: String = names[b]
+			if lo[na] == hi[na] and lo[nb] == hi[nb]:
+				continue
+			var under: String = na if hi[na] <= hi[nb] else nb
+			var over: String = nb if under == na else na
+			assert_true(lo[over] >= hi[under] * (1.0 + BAND_GAP),
+					"%s %.3f..%.3f against %s %.3f..%.3f" % [under, lo[under], hi[under], over, lo[over], hi[over]])

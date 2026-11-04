@@ -44,14 +44,30 @@ extends Node2D
 ## owned land (New sandbox, every older file) draws exactly as before. Shown in Build and Play:
 ## the line is the OB boundary (D29). refresh_parcel redraws a parcel after a purchase or its
 ## undo.
+##
+## Height shade (E6-S18, art/specs/surfaces.md): every surface top draws through the
+## alternative tile top_alt(h, owned). On the land surfaces in BuilderTuning.height_shaded
+## (rough, water, trees, oob) it is modulated by the grey BuilderTuning.height_shade[h] (times
+## unowned_tint off owned land), a value step per height: low ground darker, high ground
+## lighter. So a plateau reads from a lowland, and across a rise that faces away from the
+## camera, where no riser shows, the lighter side is the higher one. Course surfaces (fairway,
+## green, tee, bunker, cart path) keep shade 1 at every height so their colour still names the
+## lie. Above 1 a frame's shade is capped at its frame_headroom, so no coloured pixel clips
+## and the shade stays value, not hue. Risers and edge cues keep their own values. The shade
+## at the D10 plot's height is 1, so a New sandbox draws as before. A modulate, not new
+## frames: the draw count and the tile sheet do not change.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
 const RISER_SOURCE: int = 1
 const EDGE_SOURCE: int = 2
 const LAND_SOURCE: int = 3
-## The alternative tile id of every surface, riser and edge frame drawn on unowned land.
+## The alternative tile id of every riser and edge frame drawn on unowned land, and the bit
+## that marks unowned land in a surface top's alternative id (top_alt).
 const DIM_ALT: int = 1
+## frame_headroom: a pixel less saturated than this counts as grey (label chalk and ink), and
+## may clip toward white without a hue shift.
+const HUE_MIN_SAT: float = 0.1
 ## land_frame bits: the tile's edge toward x - 1, y - 1, x + 1, y + 1 lies on a parcel edge.
 const LAND_EDGE_W: int = 1
 const LAND_EDGE_N: int = 2
@@ -100,7 +116,7 @@ func _init() -> void:
 	issue_max_stack = tuning.issue_box_max_stack
 	issue_max_side = tuning.issue_box_max_side
 	_art = TileArt.load_default()
-	_tile_set = _make_tile_set(_art, tuning.unowned_tint)
+	_tile_set = _make_tile_set(_art, tuning.unowned_tint, top_shades(_art.surfaces, tuning.height_shade, tuning.height_shaded))
 	for k: int in CourseData.MAX_HEIGHT + 1:
 		if k < CourseData.MAX_HEIGHT:
 			_risers.append(_make_layer("Risers%d" % k, k, Iso.riser_sort_key(Vector2i.ZERO, k)))
@@ -423,6 +439,12 @@ static func land_frame(c: CourseData, x: int, y: int) -> int:
 	return mask
 
 
+## The alternative tile id of a surface top at height `h`, on owned land or not: one per
+## height and ownership, each modulated by its height's shade (and the unowned tint).
+static func top_alt(h: int, owned: bool) -> int:
+	return h * 2 + (0 if owned else DIM_ALT)
+
+
 static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
 	if not c.in_bounds(x, y):
 		return 0
@@ -435,7 +457,8 @@ func _draw_cell(cell: Vector2i) -> void:
 	var alt: int = 0 if land < 0 else DIM_ALT
 	for layer_h: int in _tops.size():
 		if layer_h == h:
-			_tops[layer_h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0), alt)
+			_tops[layer_h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
+					top_alt(h, land < 0))
 		else:
 			_tops[layer_h].erase_cell(cell)
 	for k: int in _risers.size():
@@ -472,13 +495,15 @@ func _make_layer(layer_name: String, h: int, bias: int, shift: int = 0) -> TileM
 	return layer
 
 
-## `tint` is the modulate of the DIM_ALT alternative of every surface, riser and edge frame.
-static func _make_tile_set(art: TileArt, tint: Color) -> TileSet:
+## `tint` is the modulate of the DIM_ALT alternative of every riser and edge frame; each
+## surface frame gets a top_alt alternative per height and ownership, modulated by that
+## frame's `shades` entry for the height (top_shades; times `tint` off owned land).
+static func _make_tile_set(art: TileArt, tint: Color, shades: Array[PackedFloat32Array]) -> TileSet:
 	var ts := TileSet.new()
 	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
 	ts.tile_size = Vector2i(Iso.TILE_W, Iso.TILE_H)
-	ts.add_source(_make_source(art.surfaces, tint), SURFACE_SOURCE)
+	ts.add_source(_make_surface_source(art.surfaces, tint, shades), SURFACE_SOURCE)
 	ts.add_source(_make_source(art.risers, tint), RISER_SOURCE)
 	ts.add_source(_make_source(art.edges, tint), EDGE_SOURCE)
 	ts.add_source(_make_source(art.land), LAND_SOURCE)
@@ -498,3 +523,51 @@ static func _make_source(sheet: TileSheet, tint: Variant = null) -> TileSetAtlas
 			src.create_alternative_tile(Vector2i(i, 0), DIM_ALT)
 			src.get_tile_data(Vector2i(i, 0), DIM_ALT).modulate = tint
 	return src
+
+
+## The surface sheet's source: every frame i gets top_alt(h, owned) for each height h,
+## modulated by the grey shades[i][h], times `tint` when not owned.
+static func _make_surface_source(sheet: TileSheet, tint: Color, shades: Array[PackedFloat32Array]) -> TileSetAtlasSource:
+	var src := _make_source(sheet)
+	for i: int in sheet.frame_count():
+		var coords := Vector2i(i, 0)
+		for h: int in CourseData.MAX_HEIGHT + 1:
+			var shade := Color(shades[i][h], shades[i][h], shades[i][h])
+			for owned: bool in [true, false]:
+				var alt: int = top_alt(h, owned)
+				if alt != 0:
+					src.create_alternative_tile(coords, alt)
+				src.get_tile_data(coords, alt).modulate = shade if owned else shade * tint
+	return src
+
+
+## The grey shade each surface frame's top draws with at height 0 to 7, indexed [frame][h]:
+## `shades` for a frame named in `shaded`, capped at its frame_headroom; 1 at every height
+## for any other frame.
+static func top_shades(sheet: TileSheet, shades: PackedFloat32Array, shaded: PackedStringArray) -> Array[PackedFloat32Array]:
+	assert(shades.size() == CourseData.MAX_HEIGHT + 1, "height_shade needs one entry per height")
+	var out: Array[PackedFloat32Array] = []
+	for i: int in sheet.frame_count():
+		var row := PackedFloat32Array()
+		var on: bool = sheet.frames[i] in shaded
+		var cap: float = frame_headroom(sheet, i) if on else 1.0
+		for h: int in CourseData.MAX_HEIGHT + 1:
+			row.append(minf(shades[h], maxf(cap, 1.0)) if on else 1.0)
+		out.append(row)
+	return out
+
+
+## The largest modulate frame `i` takes before a coloured pixel's brightest channel passes 1:
+## 1 / that channel over the frame's opaque pixels with saturation at least HUE_MIN_SAT.
+## Near-grey pixels (the chalk and ink of the 2-letter labels) are left out: clipping them only
+## moves them toward white, not to another hue.
+static func frame_headroom(sheet: TileSheet, i: int) -> float:
+	var img: Image = sheet.texture.get_image()
+	var r: Rect2i = sheet.region(i)
+	var top: float = 0.0
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			var c: Color = img.get_pixel(x, y)
+			if c.a > 0.0 and c.s >= HUE_MIN_SAT:
+				top = maxf(top, maxf(c.r, maxf(c.g, c.b)))
+	return INF if top <= 0.0 else 1.0 / top
