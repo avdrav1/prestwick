@@ -501,7 +501,33 @@ Done when: a new course opens on generated natural land, the player owns a start
     - At 2x, does the ring-and-slash OB cue still read as OB and not water (E6-S16)? Pillar 2.
     - On a large map, does the "2 of 4" parcel wording read (E6-S17)? Pillar 2.
     - Are fairways on hills readable now that course surfaces show height only through edge cues and risers? If not, consider a pattern step (a contour hatch per 2 heights), not a value swing (E6-S18). Pillar 2.
+    - At 0.5x, does the ball's 3 px minimum size read (E6-S27)? Pillar 2.
   - Test: none. Review the playtest notes.
+  - Touches: `docs/`
+- [ ] E6-S32 Close the test gaps E6-S26 and E6-S27 left. Parcel names on every map shape, the aim marker's OB preview at 2x.
+  - Note: (found in E6 review) unique parcel names are swept over every square size from 16 x 16 to 256 x 256, but non-square maps only at the sizes E6-S17's test uses (200 x 120 and the square sizes); the comment's reasoning covers them, but no test does (E6-S26). The aim marker's OB preview (`scenes/aim_view.gd`) still uses the plain `ob_slash_reach`; it draws the slash unbroken because no ball sits under it, but its on-screen length at 2x was never checked against 1x (E6-S27).
+  - Accept: a test sweeps unique names over non-square maps in parcel steps (each side 16 to 256), or over a stated sample that covers the widest and tallest ratios. The aim marker's OB slash is at least as long on screen at 2x as at 1x, or the commit says why it need not be.
+  - Test: `tests/test_land_hud.gd` (non-square sweep); `tests/test_shot_view.gd` or an aim view test (preview slash length at 0.5x, 1x and 2x).
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S33 Settle what D16 measures on hilly holes and long rolls. A `/decision` before E3 sends guests over generated land.
+  - Note: (found in E6 review) E6-S29 guards three hilly-hole cases in `tests/test_settle.gd` `GUARDS` that sit over D16: par 4 water, rests on the green after 596 ticks (3-wood at 110% from (14, 13)); par 4 dry, rests on the green after 535 ticks (3-wood at 110% from (22, 13)); par 5 dry, rests off the green after 637 ticks (driver at 100% from (20, 10)). D31's accepted-limits ruling names only the earlier cases. D16's 8 s green target counts from first touchdown, so a long fairway roll that ends on the green counts against it (par 4 dry: 429 ticks before reaching the green, 106 on it).
+  - Accept: a new D entry says whether D31's accepted limits cover the three E6-S29 cases, and whether D16's green target counts from first touchdown or from reaching the green. `docs/design.md` matches. Any change to how settle time is measured is applied to the settle tests and their guards in the same story.
+  - Test: `tests/test_settle.gd` green with the ruling applied; review the `docs/DECISIONS.md` and `docs/design.md` diffs.
+  - Touches: `docs/`, `tests/`
+- [ ] E6-S34 Stop a full club from bouncing for 4 s off a one-step rise. The cause of E6-S29's overruns.
+  - Note: (found in E6 review) a full club that comes down on a one-step rise (bilinear upslope) bounces about 4 s (221 to 247 ticks) and 80 to 100 yd before it rolls. This causes the off-green and on-green overruns E6-S29 guards, and the same shape exists on generated land in play, not only on hilly fixtures.
+  - Accept: a full club landing on a one-step rise starts rolling inside a tunable bounce budget (in `*.tres`), found with `/balance`, without moving any D16 or D31 guard over its target. How the bounce uses the tilted ground normal is written in `docs/design.md`. If E6-S33 has ruled first, the E6-S29 guards tighten to the new times.
+  - Test: `tests/test_ball.gd` (a full club onto a one-step rise rolls inside the budget); `tests/test_settle.gd` green; `scripts/sim.gd --table clubs` output for any carry quoted.
+  - Touches: `golf/`, `tests/`
+- [ ] E6-S35 Write down the measures E6-S28 and E6-S30 found. So E5-S2 and later runs read the right figures.
+  - Note: (found in E6 review) the E6-S28 review's brightness figures (rough at height 7 about 143 against fairway about 144; fairway 139, tee 137.5) match no measure tried; E6-S28 used Rec. 709: fairway main colour 153, tee 139, rough 119, and its new test in `tests/test_course_view.gd` holds the measures E5-S2's final art should use. Frame time on generated land is about 2.2 ms at 0.5x and 1.5 ms at 1x against D10's flat-plot 1.0 and 0.7 ms on the same machine (risers, edge cues and land hatch, not the shade); D10 names only the flat plot. Splitting `--full` raised total CPU from 1333 s to 1480 s (the noisy-chip parts take 4 x 32 s against 107 s whole), so its 138 s depends on core count (12). The timed phase guards against the other test jobs and a playtest beside the run, not sustained full-machine load; each timed test still has to pass on one core while other work runs. `test_putter_marker_solve_is_cheap_while_aiming` (`tests/test_shot_prediction.gd`) only prints its wall time and asserts run counts, so it is rightly untagged.
+  - Accept: E5-S2 points at the value measures in `tests/test_course_view.gd` (Rec. 709 mean and fill). `docs/design.md` states a frame-time figure for generated land next to D10's flat-plot one. `.claude/skills/godot-check/SKILL.md` says `--full` time scales with core count (with the total CPU figure) and what the timed phase does and does not guard against.
+  - Test: none. Review the docs and skill diffs.
+  - Touches: `docs/`, `.claude/skills/`
+- [ ] E6-S36 Apply E6-S24's Claude Docs edits and re-read the doc. Close E6-S24's Open note.
+  - Note: (found in E6 review) the 9 Claude Docs edits from the E6-S24 implementer's notes are not yet in design doc EBqB9DUmqQS7sszpWZQwTm (still rev 38): Hole rules m8nzeynwg9g.3320 (par 3 up to 319 yd, par 4 320 to 470), Aim .4147 (upright filled flag_red octagon with a chalk bar), Land .16103 (two-purchase second hole: 6 parcels, 351 yd, about $2,100), plus Clubs, Flight and roll, Terrain, Sandbox and Open questions. The Sandbox paragraph (.7320) still says Sandbox is the only mode at MVP, which D19 changed. `docs/design.md` has no Open questions list while the design doc does, so a par open question added there has no matching line in `docs/design.md` beyond Hole validation rules, rule 4.
+  - Accept: the design doc carries all 9 edits and the Sandbox fix, and a re-read finds it matching `docs/design.md`. Either `docs/design.md` gains an Open questions list or the design doc's par question points at rule 4 (E6-S25 may settle it first). The "Open:" note on E6-S24 is removed.
+  - Test: none. Review the design doc revision and the `docs/` diff.
   - Touches: `docs/`
 
 ## E3: Nine holes and guests — planned
