@@ -5,7 +5,8 @@ extends RefCounted
 ## D16 case in docs/design.md Settle targets is still asserted. `scripts/run_tests.sh --full`
 ## (PRESTWICK_FULL_SWEEPS=1) runs the full grids the Measured-for column was measured on,
 ## for `/balance surfaces` work and before a ship. E6-S22: it also gates the noisy-chip grid in
-## tests/test_round_flow.gd and the brute-force nearest putts in tests/test_shot_prediction.gd.
+## tests/test_round_flow.gd and the brute-force nearest putts in tests/test_shot_prediction.gd,
+## and E6-S29 the club sweep over the hilly holes in tests/test_settle.gd (one Godot per test).
 
 const ENV := "PRESTWICK_FULL_SWEEPS"
 

@@ -89,63 +89,96 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 	return CourseData.from_dict(data, errors)
 
 
-## Heights (row-major, index y * w + x) of a hilly hole on a `w` x `h` map: the land of
-## LandGenerator.generate(HILLY_LAND_SEED) (course/land_tuning.tres), its w x h window centred
-## on the land map (clamped to it), with each flat part levelled to its lowest tile: the tee
-## box, the green, and with `water` the pond and a one-tile dry ring round it, the pond then
-## dug one step below the ring (never below 0). Then every tile is lowered to at most one step
-## above each edge neighbour (the least over all tiles of height + 4-neighbour distance, in two
-## raster passes), so edge neighbours differ by one step at most. Levelling to the lowest tile
-## keeps a flat part flat through that pass: land edge neighbours differ by one step at most,
-## so nothing near a flat part is lower than its level minus the distance
-## (tests/test_course_file.gd checks every par and water case). Only lowers, so 0 to 7 holds.
+## Heights (row-major, index y * w + x) of a hilly hole on a `w` x `h` map, laid on the terrace
+## cells of LandGenerator.generate(HILLY_LAND_SEED) (course/land_tuning.tres) so that it keeps
+## the land's slope rule: edge neighbours one step apart at most, and along either axis at most
+## one riser every 2 tiles (E6-S29, D16; tests/test_course_file.gd). The window is the w x h
+## one centred on the land map. The land's own ponds are filled back to their shore (the hole
+## drops their water, and a basin left as a rough pit would have risers off the cell edges),
+## which gives back the land's per-cell levels exactly. Then, on those LandGenerator.TERRACE
+## cells: each flat part's cells (every cell holding a tile of it) are levelled to their lowest
+## cell, the tee box, the green and with `water` the pond grown by POND_MARGIN tiles, and every
+## cell is lowered to at most one step above each edge-neighbouring cell (the least over all
+## cells of level + cell distance, in two raster passes), repeated until nothing moves. Risers
+## then sit only on cell edges, 2 tiles apart, as on the land. Last the pond's own tiles are dug
+## one step below that level (never below 0): the next riser out from a pond's edge is on a cell
+## edge at least POND_MARGIN tiles out, and its one-tile dry ring is level. Only lowers past
+## the filled ponds, so 0 to 7 holds.
 static func hilly_heights(w: int, h: int, tee: Vector2i, cup: Vector2i, pond_x: int,
 		water: bool) -> PackedByteArray:
 	var land := LandGenerator.generate(HILLY_LAND_SEED)
-	var x0: int = (land.width - w) / 2
-	var y0: int = (land.height - h) / 2
+	var t: int = LandGenerator.TERRACE
+	var x0: int = clampi((land.width - w) / 2, 0, maxi(0, land.width - w))
+	var y0: int = clampi((land.height - h) / 2, 0, maxi(0, land.height - h))
 	var mid: int = h / 2
-	var out := PackedByteArray()
-	out.resize(w * h)
+	# The terrace cells under the window: cell (cx, cy) holds land tiles from (cx0 + cx) * t.
+	var cx0: int = x0 / t
+	var cy0: int = y0 / t
+	var cw: int = (x0 + w - 1) / t - cx0 + 1
+	var ch: int = (y0 + h - 1) / t - cy0 + 1
+	var cell_of := func(x: int, y: int) -> int:
+		return ((y0 + y) / t - cy0) * cw + (x0 + x) / t - cx0
+	var level := PackedInt32Array()
+	level.resize(cw * ch)
 	for y: int in h:
 		for x: int in w:
-			out[y * w + x] = land.get_height(clampi(x0 + x, 0, land.width - 1),
-					clampi(y0 + y, 0, land.height - 1))
+			var lx: int = clampi(x0 + x, 0, land.width - 1)
+			var ly: int = clampi(y0 + y, 0, land.height - 1)
+			var filled: int = land.get_height(lx, ly)
+			if land.get_surface(lx, ly) == Surface.Type.WATER:
+				filled += 1
+			level[cell_of.call(x, y)] = filled
 	var parts: Array[Callable] = [
 		func(x: int, y: int) -> bool: return _on_tee_box(x, y, tee),
 		func(x: int, y: int) -> bool: return _on_green(x, y, cup),
 	]
 	if water:
-		parts.append(func(x: int, y: int) -> bool: return _in_pond(x, y, pond_x, mid, 1))
+		parts.append(func(x: int, y: int) -> bool:
+				return _in_pond(x, y, pond_x, mid, LandGenerator.POND_MARGIN))
+	var part_cells: Array[PackedInt32Array] = []
 	for part: Callable in parts:
-		var level: int = CourseData.MAX_HEIGHT
+		var cells := {}
 		for y: int in h:
 			for x: int in w:
 				if part.call(x, y):
-					level = mini(level, out[y * w + x])
-		for y: int in h:
-			for x: int in w:
-				if part.call(x, y):
-					out[y * w + x] = level
-	if water:
-		for y: int in h:
-			for x: int in w:
-				if _in_pond(x, y, pond_x, mid, 0):
-					out[y * w + x] = maxi(0, out[y * w + x] - 1)
+					cells[cell_of.call(x, y)] = true
+		part_cells.append(PackedInt32Array(cells.keys()))
+	var moved: bool = true
+	while moved:
+		moved = false
+		for cells: PackedInt32Array in part_cells:
+			var lowest: int = CourseData.MAX_HEIGHT
+			for i: int in cells:
+				lowest = mini(lowest, level[i])
+			for i: int in cells:
+				if level[i] != lowest:
+					level[i] = lowest
+					moved = true
+		var before := level.duplicate()
+		for cy: int in ch:
+			for cx: int in cw:
+				var i: int = cy * cw + cx
+				if cx > 0:
+					level[i] = mini(level[i], level[i - 1] + 1)
+				if cy > 0:
+					level[i] = mini(level[i], level[i - cw] + 1)
+		for cy: int in range(ch - 1, -1, -1):
+			for cx: int in range(cw - 1, -1, -1):
+				var i: int = cy * cw + cx
+				if cx < cw - 1:
+					level[i] = mini(level[i], level[i + 1] + 1)
+				if cy < ch - 1:
+					level[i] = mini(level[i], level[i + cw] + 1)
+		if level != before:
+			moved = true
+	var out := PackedByteArray()
+	out.resize(w * h)
 	for y: int in h:
 		for x: int in w:
-			var i: int = y * w + x
-			if x > 0:
-				out[i] = mini(out[i], out[i - 1] + 1)
-			if y > 0:
-				out[i] = mini(out[i], out[i - w] + 1)
-	for y: int in range(h - 1, -1, -1):
-		for x: int in range(w - 1, -1, -1):
-			var i: int = y * w + x
-			if x < w - 1:
-				out[i] = mini(out[i], out[i + 1] + 1)
-			if y < h - 1:
-				out[i] = mini(out[i], out[i + w] + 1)
+			var height: int = level[cell_of.call(x, y)]
+			if water and _in_pond(x, y, pond_x, mid, 0):
+				height = maxi(0, height - 1)
+			out[y * w + x] = height
 	return out
 
 

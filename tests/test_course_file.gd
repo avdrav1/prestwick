@@ -36,7 +36,8 @@ func test_generated_hilly_par4_passes_the_validator() -> void:
 
 ## Fails the test where the hilly course `c` is not laid over land as E6-S20 says: tee box,
 ## green and pond each flat, the pond one step below its dry ring, edge neighbours one step
-## apart at most, the flat hole's surfaces, and at least two steps of relief.
+## apart at most, along either axis at most one riser every 2 tiles (the land's slope rule,
+## E6-S29), the flat hole's surfaces, and at least two steps of relief.
 func _assert_hilly(c: CourseData, flat: CourseData, label: String) -> void:
 	var hole: HoleData = c.holes[0]
 	var range_h := _height_range(c)
@@ -48,6 +49,7 @@ func _assert_hilly(c: CourseData, flat: CourseData, label: String) -> void:
 				assert_true(absi(c.get_height(x, y) - c.get_height(x + 1, y)) <= 1, "%s: step at (%d, %d) x" % [label, x, y])
 			if y + 1 < c.height:
 				assert_true(absi(c.get_height(x, y) - c.get_height(x, y + 1)) <= 1, "%s: step at (%d, %d) y" % [label, x, y])
+	assert_eq(_crowded_risers(c), [] as Array[String], "%s: risers on two neighbouring edges" % label)
 	var tee_level: int = c.get_height(hole.tee.x, hole.tee.y)
 	var green_level: int = c.get_height(hole.cup.x, hole.cup.y)
 	var water_level: int = -1
@@ -72,6 +74,23 @@ func _assert_hilly(c: CourseData, flat: CourseData, label: String) -> void:
 				if not water_rect.has_point(Vector2i(x, y)):
 					assert_eq(c.get_height(x, y), water_level + 1,
 							"%s: dry ring one step above the pond at (%d, %d)" % [label, x, y])
+
+
+## Every tile where two neighbouring edges along one axis both have a riser, as
+## tests/test_land_generator.gd counts them on the land: "(x, y) x" for a riser on each side
+## of (x, y) along x.
+func _crowded_risers(c: CourseData) -> Array[String]:
+	var found: Array[String] = []
+	for y: int in c.height:
+		for x: int in c.width:
+			for d: Vector2i in [Vector2i.RIGHT, Vector2i.DOWN]:
+				var a: Vector2i = Vector2i(x, y) - d
+				var b: Vector2i = Vector2i(x, y) + d
+				if not c.in_bounds(a.x, a.y) or not c.in_bounds(b.x, b.y):
+					continue
+				if c.get_height(a.x, a.y) != c.get_height(x, y) and c.get_height(b.x, b.y) != c.get_height(x, y):
+					found.append("(%d, %d) %s" % [x, y, "x" if d == Vector2i.RIGHT else "y"])
+	return found
 
 
 func test_hilly_lays_the_hole_over_generated_land() -> void:

@@ -4,8 +4,9 @@
 #   scripts/run_tests.sh          the default run, under a minute (E2-S16, E6-S22)
 #   scripts/run_tests.sh --full   the heavy sweeps at full density (tests/fixtures/sweep.gd): the
 #                                 settle sweeps in tests/test_ball.gd, the brute-force putts in
-#                                 tests/test_shot_prediction.gd and the noisy chips in
-#                                 tests/test_round_flow.gd; for /balance surfaces and before a ship
+#                                 tests/test_shot_prediction.gd, the noisy chips in
+#                                 tests/test_round_flow.gd and the hilly-hole club sweep in
+#                                 tests/test_settle.gd (E6-S29); for /balance surfaces and before a ship
 #   scripts/run_tests.sh --leaks  show Godot's exit-time leak report unfiltered (below)
 #
 # E6-S22: GUT runs one Godot per test script, as many at once as there are physical cores (TEST_JOBS
@@ -199,7 +200,7 @@ export -f gut_one
 # With --full, the scripts whose sweeps run for minutes run one Godot per test (GUT's
 # -gunit_test_name matches a substring; no test name in them is part of another), so the wall
 # time is about the slowest test's. Every other script runs in one Godot.
-FULL_SPLIT="tests/test_ball.gd tests/test_round_flow.gd tests/test_shot_prediction.gd"
+FULL_SPLIT="tests/test_ball.gd tests/test_round_flow.gd tests/test_shot_prediction.gd tests/test_settle.gd"
 jobs_file="$TEST_LOGS/jobs"
 # Biggest scripts first, so the slowest start at once on a machine with few cores.
 for f in $(find tests -maxdepth 1 -name 'test_*.gd' -printf '%s %p\n' | sort -rn | cut -d' ' -f2-); do
