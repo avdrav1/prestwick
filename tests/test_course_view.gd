@@ -409,7 +409,8 @@ func test_height_shade_is_grey_and_rises_with_height() -> void:
 	for h: int in range(1, shades.size()):
 		assert_gt(shades[h], shades[h - 1], "height %d lighter than %d" % [h, h - 1])
 	# A height-6 plateau tells from a height-2 lowland by value (E6-S18's note).
-	assert_gt(shades[6] - shades[2], 0.1, "plateau against lowland")
+	# E6-S28 brought the top down (shaded rough clear of tee by its fill), so 0.08, not 0.1.
+	assert_gt(shades[6] - shades[2], 0.08, "plateau against lowland")
 	assert_gt(shades[2] - shades[0], 0.15, "valley against lowland")
 
 
@@ -520,3 +521,97 @@ func test_grass_value_bands_do_not_overlap() -> void:
 			var over: String = nb if under == na else na
 			assert_true(lo[over] >= hi[under] * (1.0 + BAND_GAP),
 					"%s %.3f..%.3f against %s %.3f..%.3f" % [under, lo[under], hi[under], over, lo[over], hi[over]])
+
+
+# --- E6-S28: shaded land stays apart from the course lies by value ---
+
+## A frame's value two ways, as Rec. 709 luminance: [mean over its opaque pixels, its fill].
+## The fill is the frame's most common colour, the ground with the speckle, stipple and label
+## left out, which is what is left of rough at 0.5x (E6-S28's note: rough at the top of the
+## ramp read close to fairway once its speckle was gone).
+func _frame_values(sheet: TileSheet, i: int) -> PackedFloat32Array:
+	var img: Image = sheet.texture.get_image()
+	var r: Rect2i = sheet.region(i)
+	var sum: float = 0.0
+	var count: int = 0
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			var p: Color = img.get_pixel(x, y)
+			if p.a > 0.0:
+				sum += p.get_luminance()
+				count += 1
+	return PackedFloat32Array([sum / count, _fill(sheet, i).get_luminance()])
+
+
+## A frame's most common opaque colour.
+func _fill(sheet: TileSheet, i: int) -> Color:
+	var img: Image = sheet.texture.get_image()
+	var r: Rect2i = sheet.region(i)
+	var seen: Dictionary = {}
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			var p: Color = img.get_pixel(x, y)
+			if p.a > 0.0:
+				seen[p] = int(seen.get(p, 0)) + 1
+	var fill := Color.BLACK
+	var best: int = 0
+	for p: Color in seen:
+		if int(seen[p]) > best:
+			best = int(seen[p])
+			fill = p
+	return fill
+
+
+## Every shaded land surface (rough above all) at every height stays at least BAND_GAP in
+## value from fairway, tee and green at the plot's height, by its mean and by its fill.
+func test_shaded_land_stays_clear_of_course_lies_at_every_height() -> void:
+	var tuning := BuilderTuning.load_default()
+	var sheet: TileSheet = TileArt.load_default().surfaces
+	var shades := CourseView.top_shades(sheet, tuning.height_shade, tuning.height_shaded)
+	var plot: int = tuning.plot_ground
+	assert_true("rough" in tuning.height_shaded, "rough takes the ramp")
+	for land: String in tuning.height_shaded:
+		var li: int = sheet.frame_index(StringName(land))
+		var lv := _frame_values(sheet, li)
+		for lie: String in ["fairway", "tee", "green"]:
+			var ci: int = sheet.frame_index(StringName(lie))
+			var cv := _frame_values(sheet, ci)
+			for m: int in 2:
+				var course_value: float = cv[m] * shades[ci][plot]
+				for h: int in CourseData.MAX_HEIGHT + 1:
+					var v: float = lv[m] * shades[li][h]
+					var lo: float = minf(v, course_value)
+					var hi: float = maxf(v, course_value)
+					assert_true(hi >= lo * (1.0 + BAND_GAP), "%s at %d (%.1f) against %s (%.1f), %s" % [
+							land, h, v * 255.0, lie, course_value * 255.0, ["mean", "fill"][m]])
+
+
+## Bunker sand is the lightest surface: at height 7 it keeps its own colour, not white. It is a
+## course surface, so unshaded; and if it were ever shaded the headroom cap holds it short of
+## clipping with its hue (its fill keeps a sand tint, not a near-white).
+func test_bunker_at_height_7_does_not_clip_to_white() -> void:
+	var tuning := BuilderTuning.load_default()
+	var sheet: TileSheet = TileArt.load_default().surfaces
+	var bunker: int = sheet.frame_index(&"bunker")
+	var top: int = CourseData.MAX_HEIGHT
+	var c := CourseData.create(4, 4, Surface.Type.ROUGH, 0)
+	c.set_tile(1, 1, top, Surface.Type.BUNKER)
+	_view.show_course(c)
+	assert_eq(_view.top_layer(top).get_cell_tile_data(Vector2i(1, 1)).modulate, Color.WHITE, "bunker unshaded at 7")
+	var shaded_too: PackedStringArray = tuning.height_shaded.duplicate()
+	shaded_too.append("bunker")
+	var img: Image = sheet.texture.get_image()
+	var r: Rect2i = sheet.region(bunker)
+	for shades: Array[PackedFloat32Array] in [
+			CourseView.top_shades(sheet, tuning.height_shade, tuning.height_shaded),
+			CourseView.top_shades(sheet, tuning.height_shade, shaded_too)]:
+		var s: float = shades[bunker][top]
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var p: Color = img.get_pixel(x, y)
+				if p.a > 0.0 and p.s >= CourseView.HUE_MIN_SAT:
+					assert_true(maxf(p.r, maxf(p.g, p.b)) * s <= 1.0 + 0.0001, "no channel clips at (%d, %d)" % [x, y])
+		var fill: Color = _fill(sheet, bunker) * s
+		assert_lt(minf(fill.r, minf(fill.g, fill.b)), 0.8, "sand keeps its tint at 7, shade %.3f" % s)
+		assert_gt(maxf(fill.r, maxf(fill.g, fill.b)) - minf(fill.r, minf(fill.g, fill.b)), 0.2, "sand, not white")
+

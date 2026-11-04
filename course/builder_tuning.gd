@@ -34,7 +34,7 @@ const PATH: String = "res://course/builder_tuning.tres"
 ## tee in value at every height (tests/test_course_view.gd). Above 1 a frame's shade is capped
 ## where its brightest coloured pixel would reach 255 (CourseView.frame_headroom), so a channel
 ## never clips and the hue holds.
-@export var height_shade: PackedFloat32Array = PackedFloat32Array([0.8, 0.9, 1.0, 1.03, 1.06, 1.09, 1.12, 1.15])
+@export var height_shade: PackedFloat32Array = PackedFloat32Array([0.8, 0.9, 1.0, 1.025, 1.05, 1.07, 1.09, 1.1])
 ## The surfaces whose tops take height_shade: the natural land the player reads relief on.
 ## Course surfaces (fairway, green, tee, bunker, cart path) are left out so they keep their
 ## identity colours at every height (pillar 2: lie and target read by colour at 0.5x); their

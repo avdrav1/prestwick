@@ -13,6 +13,6 @@ default_par = 3
 issue_box_max_stack = 96.0
 issue_box_max_side = 160.0
 unowned_tint = Color(0.62, 0.62, 0.68, 1)
-height_shade = PackedFloat32Array(0.8, 0.9, 1, 1.03, 1.06, 1.09, 1.12, 1.15)
+height_shade = PackedFloat32Array(0.8, 0.9, 1, 1.025, 1.05, 1.07, 1.09, 1.1)
 height_shaded = PackedStringArray("rough", "water", "trees", "oob")
 refusal_show_s = 3.0
