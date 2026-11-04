@@ -230,8 +230,24 @@ func _dots_along_roll(points: PackedVector3Array) -> void:
 		carry -= seg
 
 
+## The marker's k at canvas scale `view_scale`: its sizes are screen px at 1x times k. Below
+## 1x the marker keeps its 1x size on screen; above 1x it grows with the map, so at 2x the
+## marker, its hazard cue and the OB slash are twice their 1x length on screen (E6-S32).
+static func marker_k(view_scale: float) -> float:
+	return 1.0 / clampf(view_scale, 0.01, 1.0)
+
+
+## The OB preview's slash at canvas scale `view_scale`, its two ends in the CourseView's space,
+## as _draw_hazard draws it: one unbroken slash at the plain ob_slash_reach, since no ball sits
+## under the marker to break it round (ShotView's ob_slash_reach_at lengthens the struck
+## ball's slash at 2x only to make up for the gap round its growing ball).
+func ob_preview_slash(view_scale: float) -> PackedVector2Array:
+	return HazardCue.ob_slash(hazard_screen, marker_radius * marker_k(view_scale),
+			_cue_tuning.ob_slash_reach)
+
+
 func _draw() -> void:
-	var k := 1.0 / clampf(_view_scale, 0.01, 1.0)
+	var k := marker_k(_view_scale)
 	_draw_land_line(k)
 	if prediction == null:
 		return

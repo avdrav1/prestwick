@@ -337,6 +337,32 @@ func test_every_square_map_size_names_each_parcel_once() -> void:
 		size += CourseData.PARCEL_TILES
 
 
+# E6-S32: no two parcels share a name on any non-square map either, each side 16 to 256 in
+# parcel steps (E6-S26 swept the squares). This covers the widest (256 x 16) and tallest
+# (16 x 256) ratios, and maps with an odd number of parcels one way and even the other, where
+# the centre sits on a parcel's middle one way and on a parcel line the other.
+func test_every_non_square_map_size_names_each_parcel_once() -> void:
+	var step: int = CourseData.PARCEL_TILES
+	var maps: int = 0
+	var clashes: Array[String] = []
+	for w: int in range(step, 256 + 1, step):
+		for h: int in range(step, 256 + 1, step):
+			if w == h:
+				continue
+			var m := CourseData.create(w, h, Surface.Type.ROUGH, 2)
+			var names: Dictionary = {}
+			for q: int in m.parcels_high:
+				for p: int in m.parcels_wide:
+					var name: String = LandPanel.parcel_name(m, Vector2i(p, q))
+					if names.has(name):
+						clashes.append("%d x %d: %s and %s are both \"%s\"" % [w, h, names[name],
+								Vector2i(p, q), name])
+					names[name] = Vector2i(p, q)
+			maps += 1
+	assert_eq(maps, 16 * 16 - 16, "every non-square size in parcel steps")
+	assert_eq(clashes.size(), 0, "%d clashes: %s" % [clashes.size(), clashes.slice(0, 6)])
+
+
 # E6-S26: the confirm keeps clear of every visible Build HUD control, found from the HUD
 # itself rather than a hand list, so a control added later is avoided too.
 func test_confirm_avoids_every_visible_build_hud_control() -> void:

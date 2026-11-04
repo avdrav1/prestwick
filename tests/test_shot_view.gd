@@ -309,6 +309,25 @@ func test_the_ob_slash_at_2x_is_as_long_on_screen_as_at_1x() -> void:
 			"2x reaches further past the ring")
 
 
+func test_the_aim_markers_ob_slash_at_2x_is_as_long_on_screen_as_at_1x() -> void:
+	# E6-S32: the aim marker's OB preview keeps the plain ob_slash_reach (E6-S27 lengthened
+	# only the struck ball's slash). It needs no more: it is unbroken (no ball under it), and
+	# the marker holds its 1x size on screen below 1x and grows with the map above it, so at
+	# 2x the slash is twice its 1x length on screen and at 0.5x the same.
+	var aim := AimView.new()
+	add_child_autofree(aim)
+	var on_screen: Dictionary = {}
+	for s: float in [0.5, 1.0, 2.0]:
+		var slash := aim.ob_preview_slash(s)
+		assert_eq(slash.size(), 2, "one unbroken slash at %.1fx" % s)
+		on_screen[s] = (slash[1] - slash[0]).length() * s
+	var ring_1x := aim.marker_radius * 2.0 * 0.5  # the 2:1 ring's height on screen at 1x
+	assert_gt(on_screen[1.0], ring_1x, "the 1x slash runs past the ring")
+	assert_gte(on_screen[2.0], on_screen[1.0] - EPS, "2x at least as long as 1x")
+	assert_almost_eq(on_screen[2.0], on_screen[1.0] * 2.0, EPS, "2x grows with the map")
+	assert_almost_eq(on_screen[0.5], on_screen[1.0], EPS, "0.5x holds the 1x length")
+
+
 func test_ob_water_and_blocked_differ_by_shape() -> void:
 	var at := Vector2.ZERO
 	var r := 10.0

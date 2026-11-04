@@ -193,7 +193,8 @@ func confirm_anchor(cell: Vector2i) -> Vector2:
 ## toward NE" and "..., toward E" (any between, on a large map, count clockwise: "2 of 4";
 ## the middle one of three keeps the plain name). Leans in a group never tie: equal bearings
 ## mean parcel centres on one ray from the centre, at least 40 yd apart, so a different rounded
-## distance. tests/test_land_hud.gd checks every square map from 16 x 16 to 256 x 256 (E6-S26).
+## distance. tests/test_land_hud.gd checks every map from 16 x 16 to 256 x 256 in parcel steps,
+## square (E6-S26) and not (E6-S32).
 static func parcel_name(c: CourseData, parcel: Vector2i) -> String:
 	var mine: Vector3 = _compass(c, parcel)
 	if mine.x < 0.0:

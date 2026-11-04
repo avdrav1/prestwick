@@ -504,7 +504,8 @@ Done when: a new course opens on generated natural land, the player owns a start
     - At 0.5x, does the ball's 3 px minimum size read (E6-S27)? Pillar 2.
   - Test: none. Review the playtest notes.
   - Touches: `docs/`
-- [ ] E6-S32 Close the test gaps E6-S26 and E6-S27 left. Parcel names on every map shape, the aim marker's OB preview at 2x.
+- [x] E6-S32 Close the test gaps E6-S26 and E6-S27 left. Parcel names on every map shape, the aim marker's OB preview at 2x.
+  - Done 2026-11-04: `tests/test_land_hud.gd` sweeps every non-square map, each side 16 to 256 in parcel steps (240 maps, 256 x 16 and 16 x 256 among them), with no clash. The aim marker's OB slash keeps the plain `ob_slash_reach`: it has no gap round a ball, and the marker grows with the map above 1x (`AimView.marker_k`), so at 2x it is twice its 1x length on screen and at 0.5x the same; `tests/test_shot_view.gd` checks it through `AimView.ob_preview_slash`. No bug found.
   - Note: (found in E6 review) unique parcel names are swept over every square size from 16 x 16 to 256 x 256, but non-square maps only at the sizes E6-S17's test uses (200 x 120 and the square sizes); the comment's reasoning covers them, but no test does (E6-S26). The aim marker's OB preview (`scenes/aim_view.gd`) still uses the plain `ob_slash_reach`; it draws the slash unbroken because no ball sits under it, but its on-screen length at 2x was never checked against 1x (E6-S27).
   - Accept: a test sweeps unique names over non-square maps in parcel steps (each side 16 to 256), or over a stated sample that covers the widest and tallest ratios. The aim marker's OB slash is at least as long on screen at 2x as at 1x, or the commit says why it need not be.
   - Test: `tests/test_land_hud.gd` (non-square sweep); `tests/test_shot_view.gd` or an aim view test (preview slash length at 0.5x, 1x and 2x).
