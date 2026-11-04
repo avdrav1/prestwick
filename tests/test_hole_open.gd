@@ -116,6 +116,34 @@ func test_a_course_brought_in_with_a_passing_open_hole_keeps_it_open() -> void:
 	assert_true(b.hole(1).open)
 
 
+## D33: a course saved before D33 (0.2.0's version 1, par 4 from 250 yd) with an open par 4
+## of 250 to 319 yd loads, and the builder then closes it with a rule-4 issue. No migration
+## re-pars it; the player sets it to par 3 and opens it again.
+func test_a_pre_d33_open_short_par4_loads_closed_until_set_to_par3() -> void:
+	var c := _course()
+	var cup := Vector2i(61, 20) # 56 tiles from TEE: 280 yd
+	c.set_tile(cup.x, cup.y, 2, Surface.Type.GREEN)
+	var hs: Array[HoleData] = [HoleData.new(1, 4, TEE, cup, true)]
+	c.set_holes(hs)
+	var v1 := c.to_dict()
+	v1["version"] = 1
+	v1.erase("owned")
+	v1.erase("land_budget")
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_json(JSON.stringify(v1), errors)
+	assert_not_null(loaded, "a version 1 file with a 280 yd par 4 loads: %s" % [errors])
+	if loaded == null:
+		return
+	assert_eq(errors, [] as Array[String], "without errors")
+	assert_true(loaded.holes[0].open, "it loads open")
+	assert_eq(loaded.holes[0].par, 4, "and keeps its par")
+	var b := CourseBuilder.new(loaded)
+	assert_false(b.hole(1).open, "the builder closes it")
+	assert_eq(_rules(b.issues_for(1)), [4] as Array[int], "280 yd is a par 3 since D33")
+	assert_true(b.set_par(1, 3))
+	assert_true(b.open_hole(1), "set to par 3 it opens")
+
+
 # --- an edit inside the footprint closes the hole ---
 
 func test_an_edit_inside_the_footprint_closes_a_passing_hole() -> void:
@@ -190,8 +218,9 @@ func test_water_on_a_rule3_path_outside_the_footprint_closes_it() -> void:
 func test_another_holes_tee_moved_into_its_zone_closes_it() -> void:
 	var c := _course()
 	var b := CourseBuilder.new(c)
-	# Hole 1: a 300 yd par 4 along y = 20, zone centre 240 yd out at (53, 20).
-	var cup1 := Vector2i(65, 20)
+	# Hole 1: a 330 yd par 4 along y = 20 (320 yd is the shortest, D33), zone centre 240 yd
+	# out at (53, 20).
+	var cup1 := Vector2i(71, 20)
 	b.paint(cup1, Surface.Type.GREEN, 3)
 	b.place_tee(1, TEE, 4)
 	b.place_cup(1, cup1)

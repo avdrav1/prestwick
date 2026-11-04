@@ -8,7 +8,7 @@ extends RefCounted
 ##   2. Cup sits on a green tile.
 ##   3. A path of non-water, non-OB tiles connects tee to cup (4 neighbours, heights ignored).
 ##      A tile on an unowned parcel counts as OB (D30, E6-S4).
-##   4. Tee-to-cup yardage matches par (rounded straight line, par 3 < 250, par 5 > 470).
+##   4. Tee-to-cup yardage matches par (rounded straight line, par 3 < 320, par 5 > 470).
 ##   5. No tee inside another hole's landing zone (a disc on each par 4 and par 5's line).
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
 ##

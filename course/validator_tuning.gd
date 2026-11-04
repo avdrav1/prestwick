@@ -7,8 +7,10 @@ extends Resource
 const PATH: String = "res://course/validator_tuning.tres"
 
 ## Rule 4: the shortest par 4 and the shortest par 5, in whole yards on the rounded yardage.
-## Anything shorter than par4_min_yd is a par 3.
-@export var par4_min_yd: int = 250
+## Anything shorter than par4_min_yd is a par 3. 320 since D33 (E6-S19): a perfect drive
+## rolls 297 yd on flat fairway, so it stops short of a 30 yd green round a 320 yd cup.
+## Change it with the driver's carry and roll (golf/clubs.tres), not alone.
+@export var par4_min_yd: int = 320
 @export var par5_min_yd: int = 471
 ## Rule 5: a par 4 or par 5's landing zone is a disc centred
 ## min(landing_distance_yd, yardage - cup_clearance_yd) from the tee along the tee-to-cup line.

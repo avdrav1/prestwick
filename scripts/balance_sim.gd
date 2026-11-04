@@ -28,6 +28,20 @@ const SIDEHILL_BREAK := Vector2(0.1, 1.0)
 const LAND_PAR3_YD := 160.0
 const NINE_HOLES_YD: Array[float] = [160.0, 160.0, 160.0, 380.0, 380.0, 380.0, 380.0, 520.0, 520.0]
 const LAND_EVERY_SEED := Vector2(1.0, 1.0)
+## docs/design.md Balance targets, clubs (E6-S19, D33): a perfect drive stops short of the
+## green of the shortest par 4 (rule 4's par4_min_yd). The green is D4's 30 yd green round
+## the cup, so its front is GREEN_FRONT_YD short of the cup.
+const GREEN_FRONT_YD := 15.0
+const SHORT_OF_GREEN := Vector2(0.0, INF)
+## The generated-land sample for the drive (D33): lanes off the starting block on this many
+## seeds at most (fewer when --runs is smaller), LANE_OFFSETS tiles across the block on each
+## of its four sides, the tee LANE_TEE_IN tiles in from the block's back edge, the fairway
+## LANE_TILES long and 5 wide.
+const DRIVE_LAND_SEEDS: int = 20
+const LANE_OFFSETS: Array[int] = [4, 12, 20, 28]
+const LANE_TEE_IN: int = 2
+const LANE_TILES: int = 90
+const LANE_SIDES: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]
 const LAND_NO_SEED := Vector2(0.0, 0.0)
 ## Test strip size; the strips themselves are tests/fixtures/balance_strips.gd.
 const STRIP_W: int = BalanceStrips.STRIP_W
@@ -58,11 +72,14 @@ static func row(row_name: String, measured: float, target: Vector2, note: String
 func measure_clubs(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	var carries := {}
+	var drive_total := 0.0
 	for c in model.clubs.clubs:
 		if c.is_putter():
 			continue
 		var r := _full(_strip(Surface.Type.FAIRWAY), c, 1.0, _tee(), 0.0, null, runs, rng_seed)
 		carries[c.id] = r.carry
+		if c.kind == Club.Kind.DRIVER:
+			drive_total = r.total
 		var info := row("%s carry" % c.id, r.carry, Vector2(-INF, INF),
 				"total %.1f yd, launch %.1f yd/s at %.0f deg, roll x%.2f" % [
 					r.total, model.launch_speed(c, 1.0, 1.0), c.launch_deg, c.roll_factor])
@@ -78,6 +95,7 @@ func measure_clubs(runs: int, rng_seed: int) -> Array[Dictionary]:
 	for s in Surface.COUNT:
 		if ClubSet.is_legal(putter, s as Surface.Type, true) != (s == Surface.Type.GREEN):
 			green_only = 0.0
+	rows.append_array(_drive_rows(drive_total, runs, rng_seed))
 	rows.append(row("putter legal on green only (1 = yes)", green_only, Vector2(1.0, 1.0)))
 	var flat := CourseData.create(STRIP_W, STRIP_H, Surface.Type.GREEN, 0)
 	var putt := _putt(flat, putter.putt_max_speed, _tee(), 0.0, rng_seed)
@@ -86,6 +104,81 @@ func measure_clubs(runs: int, rng_seed: int) -> Array[Dictionary]:
 			"%.1f yd/s, range %.1f to %.1f" % [putter.putt_max_speed, putter.putt_min_speed,
 				putter.putt_max_speed]))
 	return rows
+
+
+## The shortest par 4 against a perfect drive (E6-S19, D33): on flat fairway the drive's
+## total stops short of the green's front (the target), and on generated land the share of
+## drives that reach it (measured, no target: D33 accepts the downhill tail).
+func _drive_rows(flat_total: float, runs: int, rng_seed: int) -> Array[Dictionary]:
+	var vt := ValidatorTuning.load_default()
+	var front := par4_green_front_yd(vt)
+	var rows: Array[Dictionary] = []
+	rows.append(row("driver: perfect drive short of the shortest par 4's green (yd)", front - flat_total,
+			SHORT_OF_GREEN, "total %.1f yd on flat fairway; par 4 from %d yd, green front %.0f yd" % [
+				flat_total, vt.par4_min_yd, front]))
+	var land := drives_on_land(rng_seed, mini(runs, DRIVE_LAND_SEEDS))
+	var totals: Array[float] = land.totals
+	var past := totals.filter(func(t: float) -> bool: return t >= front).size()
+	rows.append(row("driver: perfect drives on generated land onto that green (share)",
+			past / float(maxi(totals.size(), 1)), Vector2(-INF, INF),
+			"%d of %d lanes, seeds %d to %d; total median %.1f, 90th percentile %.1f, max %.1f yd (D33)" % [
+				past, totals.size(), rng_seed, rng_seed + int(land.seeds) - 1, totals[totals.size() / 2],
+				totals[totals.size() * 9 / 10], totals[-1]]))
+	return rows
+
+
+## How far from the tee the green of the shortest par 4 begins: rule 4's par4_min_yd less
+## GREEN_FRONT_YD.
+static func par4_green_front_yd(vt: ValidatorTuning = null) -> float:
+	var t: ValidatorTuning = vt if vt != null else ValidatorTuning.load_default()
+	return t.par4_min_yd - GREEN_FRONT_YD
+
+
+## A perfect driver (100%, accuracy at centre, the lie read on the ground) from the tee of
+## each lane (lane_tees) on `seeds` generated seeds from `from_seed`, over a painted fairway
+## (BalanceStrips.fairway_lane): {totals: rest distances from the tee in yards, sorted;
+## seeds}. Generated land is fully owned, so no drive is OB.
+func drives_on_land(from_seed: int, seeds: int) -> Dictionary:
+	var driver: Club = null
+	for c in model.clubs.clubs:
+		if c.kind == Club.Kind.DRIVER:
+			driver = c
+	var totals: Array[float] = []
+	var drives: Array[Dictionary] = []
+	var n := maxi(seeds, 1)
+	for i in n:
+		var land := LandGenerator.generate(from_seed + i)
+		for lane: Dictionary in lane_tees(land):
+			var tee: Vector2i = lane.tee
+			var dir: Vector2i = lane.dir
+			var c := BalanceStrips.fairway_lane(land, tee, dir, LANE_TILES)
+			var field := HeightField.new(c, model.params)
+			var at := field.tile_center(tee)
+			var shot := model.full(field, driver, 1.0, at, rad_to_deg(Vector2(dir).angle()))
+			var p := ShotPrediction.run_launch(c, from_seed + i, shot, model.params, surfaces)
+			var total := Vector2(p.rest.x, p.rest.y).distance_to(at)
+			totals.append(total)
+			drives.append({"total": total, "drop": shot.start.z - p.rest.z})
+	totals.sort()
+	return {"totals": totals, "drives": drives, "seeds": n}
+
+
+## The sample's lanes on `c`: {tee, dir} for each side of the starting block and each of
+## LANE_OFFSETS, the tee LANE_TEE_IN tiles in from the block's edge opposite `dir`.
+static func lane_tees(c: CourseData) -> Array[Dictionary]:
+	var block := LandGenerator.start_block(c.width, c.height)
+	var out: Array[Dictionary] = []
+	for dir: Vector2i in LANE_SIDES:
+		for off: int in LANE_OFFSETS:
+			var tee: Vector2i
+			if dir.x != 0:
+				tee = Vector2i(block.position.x + LANE_TEE_IN if dir.x > 0 else block.end.x - 1 - LANE_TEE_IN,
+						block.position.y + off)
+			else:
+				tee = Vector2i(block.position.x + off,
+						block.position.y + LANE_TEE_IN if dir.y > 0 else block.end.y - 1 - LANE_TEE_IN)
+			out.append({"tee": tee, "dir": dir})
+	return out
 
 
 # --- lies ---
@@ -436,6 +529,8 @@ static func format(rows: Array[Dictionary]) -> PackedStringArray:
 			target = "%.3f to %.3f" % [t.x, t.y]
 		elif is_finite(t.y):
 			target = "at most %.3f" % t.y
+		elif is_finite(t.x):
+			target = "at least %.3f" % t.x
 		var verdict := "ok" if r.ok else "MISS"
 		if target == "-":
 			verdict = ""

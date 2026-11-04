@@ -48,7 +48,7 @@ func test_tuning_holds_the_d11_numbers() -> void:
 	assert_eq(t.cup_clearance_yd, 60.0)
 	assert_eq(t.zone_radius_yd, 30.0)
 	assert_eq(t.footprint_half_width_yd, 30.0)
-	assert_eq(t.par4_min_yd, 250)
+	assert_eq(t.par4_min_yd, 320, "past a perfect drive's 297 yd on flat fairway (D33, E6-S19)")
 	assert_eq(t.par5_min_yd, 471)
 
 
@@ -217,33 +217,37 @@ func _par_check(d: Vector2i, par: int) -> CourseValidator.Issue:
 
 
 func test_rule4_yardage_is_rounded_straight_line() -> void:
-	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(50, 0)), 250)
+	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(64, 0)), 320)
+	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(58, 27)), 320, "319.88 rounds up")
+	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(61, 19)), 319, "319.45 rounds down")
 	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(30, 40)), 250)
-	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(47, 17)), 250, "249.90 rounds up")
-	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(49, 9)), 249, "249.10 rounds down")
 	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(94, 0)), 470)
 	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(94, 4)), 470, "470.43")
 	assert_eq(CourseValidator.yardage(Vector2i(0, 0), Vector2i(94, 5)), 471, "470.66")
 
 
 func test_rule4_par_for_yardage_at_the_boundaries() -> void:
-	assert_eq(_v.par_for_yardage(249), 3)
-	assert_eq(_v.par_for_yardage(250), 4)
+	assert_eq(_v.par_for_yardage(319), 3)
+	assert_eq(_v.par_for_yardage(320), 4)
 	assert_eq(_v.par_for_yardage(470), 4)
 	assert_eq(_v.par_for_yardage(471), 5)
 
 
-func test_rule4_at_exactly_250_yd() -> void:
-	for d: Vector2i in [Vector2i(50, 0), Vector2i(30, 40), Vector2i(47, 17)]:
+func test_rule4_at_exactly_320_yd() -> void:
+	# D33 (E6-S19): the shortest par 4 is 320 yd, so a perfect drive (297 yd on flat fairway)
+	# stops short of a 30 yd green round its cup.
+	for d: Vector2i in [Vector2i(64, 0), Vector2i(58, 27)]:
 		assert_null(_par_check(d, 4), "%s is a par 4" % d)
 		var issue := _par_check(d, 3)
 		assert_not_null(issue, "%s is not a par 3" % d)
 		if issue:
 			assert_eq(issue.tile, Vector2i(2, 2) + d, "points at the cup")
-			assert_string_contains(issue.reason, "250")
+			assert_string_contains(issue.reason, "320")
 			_assert_one_line(issue)
-	assert_null(_par_check(Vector2i(49, 9), 3), "249 yd is a par 3")
-	assert_not_null(_par_check(Vector2i(49, 9), 4), "249 yd is not a par 4")
+	assert_null(_par_check(Vector2i(61, 19), 3), "319 yd is a par 3")
+	assert_not_null(_par_check(Vector2i(61, 19), 4), "319 yd is not a par 4")
+	assert_null(_par_check(Vector2i(30, 40), 3), "250 yd, a par 4 before D33, is a par 3")
+	assert_not_null(_par_check(Vector2i(30, 40), 4), "and no longer a par 4")
 
 
 func test_rule4_at_exactly_470_yd() -> void:
@@ -319,17 +323,35 @@ func test_rule5_par3_next_tee_beside_the_green_passes() -> void:
 
 
 func test_rule5_short_par4_next_tee_beside_the_green_passes() -> void:
-	# A 260 yd par 4 (zone centre 200 yd out) with another tee 25 yd beside its cup.
-	var a := HoleData.new(1, 4, Vector2i(10, 10), Vector2i(62, 10))
-	var b := HoleData.new(2, 3, Vector2i(62, 15), Vector2i(62, 45))
-	var c := _course(80, 50, [a, b])
-	assert_eq(CourseValidator.yardage(a.tee, a.cup), 260)
+	# The shortest par 4 (320 yd since D33) with another tee 25 yd beside its cup: the zone
+	# centre is 240 yd out, since 320 - 60 is past the landing distance.
+	var a := HoleData.new(1, 4, Vector2i(10, 10), Vector2i(74, 10))
+	var b := HoleData.new(2, 3, Vector2i(74, 15), Vector2i(74, 45))
+	var c := _course(90, 50, [a, b])
+	assert_eq(CourseValidator.yardage(a.tee, a.cup), 320)
 	var zone: Vector2 = _v.landing_zone(c.holes[0])
-	assert_almost_eq(zone.x, 50.0, 0.001, "200 yd out")
+	assert_almost_eq(zone.x, 58.0, 0.001, "240 yd out")
 	var all := _v.check_course(c)
 	assert_eq(all[1], [] as Array[CourseValidator.Issue])
 	assert_eq(all[2], [] as Array[CourseValidator.Issue])
 
+
+func test_rule5_cup_clearance_moves_the_zone_on_a_short_par4() -> void:
+	# With a shortest par 4 under landing distance + clearance (250 yd, before D33), the zone
+	# sits 60 yd short of the cup: a 260 yd par 4's centre is 200 yd out, and a tee 25 yd
+	# beside its cup passes.
+	var t: ValidatorTuning = ValidatorTuning.load_default().duplicate()
+	t.par4_min_yd = 250
+	var v := CourseValidator.new(t)
+	var a := HoleData.new(1, 4, Vector2i(10, 10), Vector2i(62, 10))
+	var b := HoleData.new(2, 3, Vector2i(62, 15), Vector2i(62, 45))
+	var c := _course(80, 50, [a, b])
+	assert_eq(CourseValidator.yardage(a.tee, a.cup), 260)
+	var zone: Vector2 = v.landing_zone(c.holes[0])
+	assert_almost_eq(zone.x, 50.0, 0.001, "200 yd out")
+	var all := v.check_course(c)
+	assert_eq(all[1], [] as Array[CourseValidator.Issue])
+	assert_eq(all[2], [] as Array[CourseValidator.Issue])
 
 
 func test_rule5_fails_for_a_placed_tee_whose_cup_is_not_placed() -> void:

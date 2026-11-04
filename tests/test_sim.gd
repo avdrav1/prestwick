@@ -39,6 +39,26 @@ func test_clubs_rows_hit_their_targets() -> void:
 	assert_false(_named(rows, "full putt on flat green").is_empty())
 
 
+func test_a_perfect_drive_stops_short_of_the_shortest_par4_green() -> void:
+	# E6-S19, D33: on flat fairway the driver's total stops short of a 30 yd green round a cup
+	# at rule 4's shortest par 4.
+	var rows := sim.measure_clubs(RUNS, SEED)
+	var short := _named(rows, "driver: perfect drive short of the shortest par 4's green")
+	assert_false(short.is_empty(), "a row for the drive against the shortest par 4")
+	assert_true(short.ok, "measured %.1f yd short" % float(short.measured))
+	assert_gt(float(short.measured), 0.0, "stops before the green's front")
+	assert_false(_named(rows, "driver: perfect drives on generated land onto that green").is_empty(),
+			"and the generated-land share is printed")
+
+
+func test_drives_on_land_sample_every_lane_off_the_block() -> void:
+	var land := sim.drives_on_land(SEED, 1)
+	var totals: Array[float] = land.totals
+	assert_eq(totals.size(), BalanceSim.LANE_SIDES.size() * BalanceSim.LANE_OFFSETS.size(), "one drive a lane")
+	assert_lt(totals[totals.size() / 2], BalanceSim.par4_green_front_yd(), "the median perfect drive on seed 1 stops short of the green")
+	assert_gt(totals[0], 200.0, "every drive gets away")
+
+
 func test_lies_rows_hit_their_targets() -> void:
 	var rows := sim.measure_lies(RUNS, SEED)
 	_assert_all_hit(rows, "lies")

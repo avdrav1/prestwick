@@ -1,9 +1,12 @@
 extends SceneTree
 ## The E6-S8 scripted /playtest session: a start on land. Drives the real main scene the way a
 ## player would: a New course on seed `--seed` (default 1), the Buy land tool and its confirm
-## for two parcels in a line off the starting block (the cheapest such line), a par 4 built
-## with the palette's tools from the block across both parcels, Open, then Play with the
-## scripted player (scripts/scripted_round.gd) until it holes out. Then it measures D29's
+## for two parcels in a line off the starting block (the cheapest such line), the shortest
+## legal par 4 (rule 4's par4_min_yd, 320 yd since D33) built with the palette's tools
+## corner to corner from the block across both parcels (two parcels in a line are only 315 yd
+## long straight), Open, a check that a perfect drive (the driver at 100%, accuracy at centre)
+## stops short of the green (E6-S19), then Play with the scripted player
+## (scripts/scripted_round.gd) until it holes out. Then it measures D29's
 ## reading from that tee: every full-club stroke aimed toward the land line is predicted on
 ## the course and on a fully owned copy, to count shots that are OB because they rolled onto
 ## unowned land although they would have rolled back. Findings: docs/playtests/.
@@ -18,9 +21,15 @@ const MAX_FRAMES: int = 4000
 const MAX_STROKES: int = 10
 ## The two bought parcels' sides of the block: +x, -x, +y, -y.
 const SIDES: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]
-## Tiles from the block's far edge to the tee, and into the far parcel to the cup.
+## Tiles from the block's back edge to the tee along the lane, and in from the side edges
+## across it: the tee on the block's side away from the lane, the cup on the lane's far side.
 const TEE_IN: int = 2
-const CUP_IN: int = 10
+const TEE_SIDE_IN: int = 3
+const CUP_SIDE_IN: int = 3
+## The cup stays at least this many tiles inside the far parcel along the lane.
+const CUP_EDGE_MIN: int = 2
+## 100% power at bar speed 1.0 (ScriptedRound.FULL_TICKS).
+const PERFECT_TICKS: int = 72
 ## The D29 sweep: aim offsets from the cup line, degrees, either side.
 const SWEEP_DEG: int = 60
 const SWEEP_STEP: int = 3
@@ -83,7 +92,7 @@ func _build() -> bool:
 	var block := LandGenerator.start_block(c.width, c.height)
 	var lane := _cheapest_lane(b, block)
 	if lane.is_empty():
-		_fail("two parcels in a line off the block fit the budget")
+		_fail("two parcels in a line off the block fit the budget and the shortest par 4")
 		return false
 	var parcels: Array[Vector2i] = lane.parcels
 	print("  lane: %s, parcels %s at %s and %s" % [lane.side, parcels,
@@ -135,8 +144,36 @@ func _build() -> bool:
 	_check(_main.mode == Main.Mode.PLAY, "one click to Play")
 	var sc := _main.swing_control
 	_check(sc.ball_at == sc.field.tile_center(tee), "the ball is on the tee")
+	_check_perfect_drive(sc, yd)
 	_d29_sweep(sc)
 	return _failures == 0
+
+
+## E6-S19, D33: the driver at 100%, accuracy at centre, aimed at the cup from the tee of the
+## shortest legal par 4, comes to rest short of the green, so the hole does not play as a par 3.
+func _check_perfect_drive(sc: SwingControl, yd: int) -> void:
+	var driver: Club = null
+	for club: Club in sc.legal:
+		if club.kind == Club.Kind.DRIVER:
+			driver = club
+	_check(driver != null, "the driver is legal on the tee")
+	if driver == null:
+		return
+	var cup := sc.cup_tile()
+	var aim := rad_to_deg((sc.field.tile_center(cup) - sc.ball_at).angle())
+	var shot := _launch(sc, driver, aim, PERFECT_TICKS)
+	var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), shot, null, null, cup)
+	var rest := Vector2(p.rest.x, p.rest.y)
+	var gone := rest.distance_to(sc.ball_at)
+	var on := sc.course.get_surface(p.rest_tile.x, p.rest_tile.y)
+	var short := not p.holed and on != Surface.Type.GREEN and gone < yd
+	print("  perfect drive: carry %.1f yd, rests %.1f yd out on %s, %.1f yd from the cup, %.1f yd below the tee" % [
+			p.carry_yd, gone, Surface.Type.keys()[on], rest.distance_to(sc.field.tile_center(cup)),
+			shot.start.z - p.rest.z])
+	# Not a check: D33 accepts that ground falling away from the tee carries a perfect drive
+	# onto the green of the shortest par 4 on some land (about 14% of the /balance clubs lanes).
+	print("    %s" % ("short of the green" if short else
+			"reaches the green: ground falling from the tee lengthens it, which D33 accepts"))
 
 
 ## The cheapest two parcels in a line off the block that the budget buys, nearest first:
@@ -162,20 +199,27 @@ func _cheapest_lane(b: CourseBuilder, block: Rect2i) -> Dictionary:
 				best = {"side": side, "parcels": pair, "tee": Vector2i.ZERO, "cup": Vector2i.ZERO}
 	if best.is_empty():
 		return best
+	# The shortest legal par 4 corner to corner (E6-S19): the tee in the block's back corner
+	# away from the lane, the cup on the lane's far side, as near the block as rule 4 allows.
 	var side: Vector2i = best.side
 	var far: Rect2i = c.parcel_rect((best.parcels as Array[Vector2i])[1])
-	var mid := Vector2i(far.position + far.size / 2)
+	var along := 0 if side.x != 0 else 1
+	var across := 1 - along
+	var ahead: int = side[along]
+	var lane_low: bool = far.position[across] == block.position[across]
 	var tee := Vector2i.ZERO
+	tee[along] = block.position[along] + TEE_IN if ahead > 0 else block.end[along] - 1 - TEE_IN
+	tee[across] = block.end[across] - 1 - TEE_SIDE_IN if lane_low else block.position[across] + TEE_SIDE_IN
 	var cup := Vector2i.ZERO
-	if side.x != 0:
-		tee = Vector2i(block.position.x + TEE_IN if side.x > 0 else block.end.x - 1 - TEE_IN, mid.y)
-		cup = Vector2i(far.position.x + CUP_IN if side.x > 0 else far.end.x - 1 - CUP_IN, mid.y)
-	else:
-		tee = Vector2i(mid.x, block.position.y + TEE_IN if side.y > 0 else block.end.y - 1 - TEE_IN)
-		cup = Vector2i(mid.x, far.position.y + CUP_IN if side.y > 0 else far.end.y - 1 - CUP_IN)
-	best.tee = tee
-	best.cup = cup
-	return best
+	cup[across] = far.position[across] + CUP_SIDE_IN if lane_low else far.end[across] - 1 - CUP_SIDE_IN
+	var par4_min: int = ValidatorTuning.load_default().par4_min_yd
+	for k: int in range(CUP_EDGE_MIN, far.size[along] - CUP_EDGE_MIN):
+		cup[along] = far.position[along] + k if ahead > 0 else far.end[along] - 1 - k
+		if CourseValidator.yardage(tee, cup) >= par4_min:
+			best.tee = tee
+			best.cup = cup
+			return best
+	return {}
 
 
 func _print_neighbours(b: CourseBuilder, block: Rect2i) -> void:

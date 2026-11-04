@@ -7,7 +7,7 @@
 script = ExtResource("1_club")
 id = "driver"
 kind = 1
-carry_yd = 245.0
+carry_yd = 235.0
 launch_deg = 14.0
 roll_factor = 1.0
 

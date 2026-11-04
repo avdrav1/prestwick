@@ -139,6 +139,41 @@ func test_slopes_rise_one_step_at_most_once_every_two_tiles() -> void:
 		assert_eq(crowded, 0, "seed %d: risers on two neighbouring edges" % (s + 1))
 
 
+func test_no_valley_floor_so_floor_keep_never_acts_on_generated_land() -> void:
+	# E6-S19 checks E6-S10's floor_keep_speed (20 yd/s) on generated land. A floor thud needs
+	# a tile centre where the ground falls toward it and rises past it along one axis. The
+	# 2 x 2 terrace cells put every riser on a cell edge, so no centre has one on both sides,
+	# and a valley floor is two tiles wide at least: rolls across generated land settle the
+	# same with floor_keep 1.0 (no thud), whatever floor_keep_speed is.
+	var plain := SurfaceTable.load_default()
+	var no_thud := SurfaceTable.new()
+	for r0: SurfaceRow in plain.rows:
+		var r: SurfaceRow = r0.duplicate()
+		r.floor_keep = 1.0
+		no_thud.rows.append(r)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 19
+	var rolled := 0
+	for s: int in 2:
+		var c := _maps[s]
+		for k: int in 100:
+			var at := Vector2(rng.randf_range(40.0, 600.0), rng.randf_range(40.0, 600.0))
+			var v := Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * rng.randf_range(0.0, 25.0)
+			var a := Ball.new(c, k, null, plain)
+			if not a.may_place_on(a.field.tile_at(at.x, at.y)):
+				continue
+			var b := Ball.new(c, k, null, no_thud)
+			a.start_roll(at, v)
+			b.start_roll(at, v)
+			var ta := a.run_to_rest()
+			var tb := b.run_to_rest()
+			rolled += 1
+			assert_eq(ta, tb, "seed %d roll %d settles in the same ticks" % [s + 1, k])
+			assert_eq(a.position, b.position, "seed %d roll %d rests in the same place" % [s + 1, k])
+			assert_lt(ta, 600, "seed %d roll %d settles under D16's 10 s" % [s + 1, k])
+	assert_gt(rolled, 150, "most starts are on open ground")
+
+
 # --- rates ---
 
 func test_tree_water_and_high_ground_shares_within_tolerance() -> void:

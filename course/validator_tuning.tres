@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_tuning")
-par4_min_yd = 250
+par4_min_yd = 320
 par5_min_yd = 471
 landing_distance_yd = 240.0
 cup_clearance_yd = 60.0

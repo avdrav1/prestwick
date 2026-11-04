@@ -50,3 +50,20 @@ static func sidehill() -> CourseData:
 		for x in STRIP_W:
 			c.set_tile(x, y, 1, Surface.Type.FAIRWAY)
 	return c
+
+
+## A copy of `land` with a fairway lane painted on it, heights kept (E6-S19): from `tee` (a tee
+## tile) `length` tiles along `dir`, `half_width` tiles either side, as a player paints a
+## hole over generated land. Every surface on the lane, trees and water included, becomes
+## fairway, so a pond is a pit.
+static func fairway_lane(land: CourseData, tee: Vector2i, dir: Vector2i, length: int,
+		half_width: int = 2) -> CourseData:
+	var c := CourseData.from_dict(land.to_dict())
+	var across := Vector2i(dir.y, dir.x)
+	for k in length:
+		for w in range(-half_width, half_width + 1):
+			var t := tee + dir * k + across * w
+			if c.in_bounds(t.x, t.y):
+				c.set_tile(t.x, t.y, c.get_height(t.x, t.y),
+						Surface.Type.TEE if k == 0 else Surface.Type.FAIRWAY)
+	return c
