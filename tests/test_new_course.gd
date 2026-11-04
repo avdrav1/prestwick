@@ -157,3 +157,50 @@ func test_play_on_a_sandbox_with_no_hole_keeps_the_debug_tile() -> void:
 	var m := _main(7)
 	m.new_sandbox()
 	assert_eq(m.no_hole_tile(), m.debug_shot.start_tile, "owned there, so unchanged")
+
+
+# --- E6-S21: the debug shot starts on owned land ---
+
+func test_debug_shot_on_a_new_course_fires_from_owned_land_and_stays_in_bounds() -> void:
+	for seed_value: int in [7, 11, 123]:
+		var m := _main(seed_value)
+		m.set_mode(Main.Mode.PLAY)
+		var start_tile := m.debug_shot_tile()
+		assert_false(m.course.is_owned(m.debug_shot.start_tile.x, m.debug_shot.start_tile.y),
+				"seed %d: the resource's tile is unowned on a New course" % seed_value)
+		assert_true(m.course.is_owned(start_tile.x, start_tile.y),
+				"seed %d: the debug shot starts on the player's land" % seed_value)
+		assert_eq(start_tile, m.no_hole_tile(), "seed %d: the no-hole tile" % seed_value)
+		m.fire_debug_shot()
+		assert_true(m.shot_view.playing, "seed %d: it flies" % seed_value)
+		var field := m.shot_view.ball.field
+		var launched := m.shot_view.ball.path[0] if not m.shot_view.ball.path.is_empty() \
+				else m.shot_view.ball.position
+		assert_eq(field.tile_at(launched.x, launched.y), start_tile,
+				"seed %d: struck from that tile" % seed_value)
+		m.shot_view.advance(60.0)
+		assert_false(m.shot_view.playing, "seed %d: and rests" % seed_value)
+		assert_ne(m.shot_view.ball.hazard, Ball.Hazard.OB, "seed %d: not out of bounds" % seed_value)
+		var rest := m.shot_view.ball.position
+		var rest_tile := field.tile_at(rest.x, rest.y)
+		assert_true(m.course.is_owned(rest_tile.x, rest_tile.y),
+				"seed %d: it rests on owned land" % seed_value)
+
+
+func test_debug_shot_on_a_sandbox_and_a_fixture_keeps_its_own_tile() -> void:
+	var m := _main(7)
+	m.new_sandbox()
+	assert_eq(m.debug_shot_tile(), m.debug_shot.start_tile, "New sandbox owns it")
+	var heights := CourseSave.load_file("res://courses/heights_20x20.json")
+	m.show_course(heights)
+	assert_eq(m.debug_shot_tile(), m.debug_shot.start_tile, "a v1 fixture owns it")
+	m.set_mode(Main.Mode.PLAY)
+	m.fire_debug_shot()
+	var field := HeightField.new(heights, BallParams.load_default())
+	var expected := Ball.new(heights, m.debug_shot.rng_seed)
+	expected.launch(m.debug_shot.start_position(field), m.debug_shot.velocity())
+	m.shot_view.advance(60.0)
+	while not expected.is_at_rest():
+		expected.step()
+	assert_eq(m.shot_view.ball.steps, expected.steps, "tick for tick as before")
+	assert_eq(m.shot_view.ball.position, expected.position, "the same rest")

@@ -23,9 +23,10 @@ static func load_default() -> DebugShot:
 	return load(DEFAULT_PATH) as DebugShot
 
 
-## Launch point in yards: the start tile's centre, on the ground.
-func start_position(field: HeightField) -> Vector3:
-	var c := field.tile_center(start_tile)
+## Launch point in yards: the centre of `tile` (start_tile when left at -1, -1), on the ground.
+## Main passes owned land on a New course, where start_tile is unowned (E6-S21).
+func start_position(field: HeightField, tile: Vector2i = Vector2i(-1, -1)) -> Vector3:
+	var c := field.tile_center(start_tile if tile == Vector2i(-1, -1) else tile)
 	return Vector3(c.x, c.y, field.height_at(c.x, c.y))
 
 

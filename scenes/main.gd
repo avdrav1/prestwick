@@ -241,7 +241,14 @@ func can_fire_debug_shot() -> bool:
 			and not swing_control.is_ball_moving())
 
 
-## Fires the debug shot at its fixed power and angle, predicting the landing first (the
+## The tile the debug shot is struck from (E6-S21): no_hole_tile, so its own tile where the
+## player owns it (New sandbox, the fixture courses, which play it tick for tick as before) and
+## owned land on a New course, where (15, 4) is unowned and the shot would go out of bounds.
+func debug_shot_tile() -> Vector2i:
+	return no_hole_tile()
+
+
+## Fires the debug shot at its fixed power and angle, from debug_shot_tile, predicting the landing first (the
 ## debug key, E2-S8). Only when can_fire_debug_shot, so it never replaces the player's ball
 ## in flight; and it never moves the swing ball or counts a stroke (SwingControl rests only
 ## its own strokes).
@@ -250,7 +257,8 @@ func fire_debug_shot() -> void:
 		return
 	var field := HeightField.new(course, BallParams.load_default())
 	aim_view.clear()
-	shot_view.fire(course, debug_shot.start_position(field), debug_shot.velocity(), debug_shot.rng_seed)
+	shot_view.fire(course, debug_shot.start_position(field, debug_shot_tile()), debug_shot.velocity(),
+			debug_shot.rng_seed)
 	_refresh_label()
 
 

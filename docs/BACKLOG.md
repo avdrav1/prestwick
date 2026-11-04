@@ -428,7 +428,8 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: `inspect` prints the owned parcel grid and the land budget (or "unlimited"). `generate hilly` lays its hole over `LandGenerator` heights with the tee box, green and pond flat, and the result passes all six rules.
   - Test: `tests/test_course_file.gd` (inspect output, a hilly generate that validates).
   - Touches: `course/`, `tests/`
-- [ ] E6-S21 Fire the debug shot from owned land. F3 should not go OB on a New course.
+- [x] E6-S21 Fire the debug shot from owned land. F3 should not go OB on a New course.
+  - Done 2026-11-04: `Main.debug_shot_tile` (the `no_hole_tile` logic) feeds `DebugShot.start_position`'s new tile argument; tests in `tests/test_new_course.gd` (seeds 7, 11, 123 start and rest on owned land, never OB; New sandbox and heights fixture keep (15, 4) and match a bare Ball tick for tick).
   - Note: (found in E6 review) `Main.fire_debug_shot` (debug builds only) still fires from `debug_shot.start_tile` (15, 4), which is unowned on a New course, so the shot lands out of bounds. It is a dev tool and changes no stroke count.
   - Accept: on a New course the debug shot starts from an owned tile (the `no_hole_tile()` logic, or the swing ball), and on the sandbox and the fixture courses it plays tick for tick as before, so the playtest smoke's expectation holds.
   - Test: a case in `tests/test_main_states.gd` or `tests/test_new_course.gd`; `bash scripts/playtest.sh`.
