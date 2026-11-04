@@ -450,6 +450,55 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: the design doc matches `docs/design.md` on each item above. The user has confirmed or reopened D29's strict reading (a ball that lands on unowned ground is OB even if it would have bounced back onto owned land; reopening means the drop walk handles unowned water and trees) and D30 (a hole owns its tee, cup and a rule-3 path, not its whole footprint; reopening it reopens D26). A new D entry restates D15's last-resort drop with the cup rule.
   - Test: none. Review the design doc and `docs/DECISIONS.md` diffs.
   - Touches: `docs/`
+- [ ] E6-S24 Mirror E6-S16 to E6-S22 into the design doc and `docs/DECISIONS.md`. One source of truth again after the second swarm.
+  - Note: (found in E6 review) D20 still describes the blocked marker as "a flag_red ring struck through by a slash", but E6-S16 made it an upright filled octagon with a chalk bar (`docs/design.md` has the new look). D30's Benefit line and D26's Why still say one purchase holds a par 4 and "2 x 3 parcels", which D33 overrides. `docs/DECISIONS.md` is append-only, so these were left. The Claude Docs design doc lacks D33 (Hole rules: par 3 up to 319 yd, par 4 320 to 470; Golf play: Clubs, driver carry 235 and the clubs table totals; Balance targets for clubs and land), the two-purchase second hole (Course building: Land), the note that courses saved before D33 load an open 250 to 319 yd par 4 closed, and the long par 3 note (E6-S19).
+  - Accept: a new D entry records E6-S16's blocked marker shape against D20 and D33's two-purchase par 4 against D26 and D30. The design doc matches `docs/design.md` on every item above.
+  - Test: none. Review the design doc and `docs/DECISIONS.md` diffs.
+  - Touches: `docs/`
+- [ ] E6-S25 Settle the par questions D33 left. A spike: decide them before E3 rates par.
+  - Note: (found in E6 review) E6-S19 (D33) moved the shortest par 4 to 320 yd and the driver carry to 235 and left these open.
+  - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice. Any rule change becomes its own story with a GUT test.
+  - Test: none. Review the design.md diff; `scripts/sim.gd --table clubs` output for any number quoted.
+  - Touches: `docs/`
+  - Settles:
+    - Par 5 in two. Perfect driver (282 yd) plus 3-wood (261) is 543 yd on flat ground, against `par5_min_yd` 471.
+    - Long par 3s. Holes of about 285 to 319 yd are par 3s a perfect driver cannot reach on flat ground, and rule 5 gives them no landing zone. Options: a `par3_max_yd` with a "no par" or warning gap below `par4_min_yd`, or a landing zone for long par 3s.
+    - Elevation. On generated land 14% of perfect drives (seeds 1 to 20) reach the shortest par 4's green down falling ground (`/balance clubs` prints the share). Should rule 4 adjust yardage for the tee-to-cup height difference? That is a new rule.
+    - Loaded short par 4s. A course saved before D33 with an open 250 to 319 yd par 4 loads with it closed (rule 4). What the player is told beyond the per-hole issue highlight, for E4-S7's load and E5-S5's import.
+- [ ] E6-S26 Give every parcel a unique name and keep the buy confirm clear of the whole HUD. Finish what E6-S17 left.
+  - Note: (found in E6 review) compass names collide far from the block: two parcels mirrored across the screen's E-W or N-S axis, in the same 1/16 sector and at the same distance, share a name (parcels (7, 1) and (6, 0) are both "E parcel, 210 yd out"). Unique names are tested only on the 6 named sizes; a group whose middle parcels are numbered ("2 of 4") shows up only on large maps such as 256 x 256 and has not been playtested. The confirm avoids only the controls listed in `confirm_avoid` in `scenes/main.tscn`, so a HUD control added later can be covered.
+  - Accept: `LandPanel.parcel_name` adds a tie-breaker so no two parcels on any map size from 16 x 16 to 256 x 256 share a name. The confirm stays clear of every visible Build HUD control, either found without a hand list or guarded by a test that fails when a Build HUD control is missing from `confirm_avoid`.
+  - Test: `tests/test_land_hud.gd` (unique names over every square map size in parcel steps up to 256 x 256; the HUD control guard).
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S27 Keep the ball readable at 0.5x and 2x. The OB cue keeps its size on screen, and the ball should too.
+  - Note: (found in E6 review) `ShotView`'s `ball_radius` scales with zoom, so at 0.5x the ball is about 2 px across. At 2x the ball (10 screen px) fills more of the 16 px fixed-size OB ring, leaving each slash piece about 12 screen px (E6-S16).
+  - Accept: the ball draws at a minimum screen size (a tunable in the shot view tuning resource) at 0.5x, and at 2x the OB cue's slash stays at least as long on screen as at 1x. OB, water and the blocked marker still differ by shape.
+  - Test: `tests/test_shot_view.gd` (ball screen size at each zoom, slash length at 2x); screenshots through `scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn` at 0.5x, 1x and 2x.
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S28 Keep shaded land apart from course surfaces by value. E6-S18's ramp meets fairway at the top.
+  - Note: (found in E6 review) rough at height 7 (brightness about 143 of 255) is close to fairway at height 2 (about 144), told apart only by rough's speckle, which loses pixels at 0.5x. Bunker sand at the highest heights tints close to white. Frame time with shaded tiles was not measured (D10: 1.0 ms at 0.5x, 0.7 ms at 1x); only the headless whole-map draw (216 to 235 ms, +9%). Spreading the placeholder sheet's close values (fairway 139 and tee 137.5; rough, water and oob 111, 117 and 103) is final art and stays with E5-S2.
+  - Accept: the top of `height_shade` comes down, or the test asserts a minimum value gap, so rough at every height stays at least 5% from fairway, tee and green at plot height. Bunker sand at height 7 does not clip to white. Frame time at 0.5x and 1x on a generated seed is measured and stays inside D10, or the commit says why not.
+  - Test: `tests/test_course_view.gd` (the cross-surface value gap; bunker at height 7); frame time by hand in the commit body.
+  - Touches: `course/`, `tests/`
+- [ ] E6-S29 Settle balls on generated hilly holes inside D16. `generate hilly` no longer keeps the land generator's riser spacing.
+  - Note: (found in E6 review) hilly holes keep one step per neighbour, but the slope pass and the original land can put a riser on every tile next to the levelled parts, so the generator's one riser every 2 tiles (needed for D16 settle times) does not hold there. No settle-time test ran on hilly fixtures. Hilly output depends on `course/land_tuning.tres`, so retuning land changes every generated hilly course and any saved `gen_par*_hilly_*.json` would need regenerating (none is checked in) (E6-S20).
+  - Accept: every full club at 100% and 110% along the hole's lanes on each hilly variant settles inside D16, or the slope pass keeps the one-riser-every-2-tiles spacing, or a D31-style case is filed. `/course-file` documents that hilly output follows `land_tuning.tres`.
+  - Test: `tests/test_course_file.gd` or `tests/test_settle.gd` (settle times on the six hilly variants).
+  - Touches: `course/`, `tests/`
+- [ ] E6-S30 Make the test run steady under load. Timed tests flake when the machine is busy.
+  - Note: (found in E6 review) `test_a_sweep_of_the_aim_on_a_steep_bank_keeps_the_marker_up` (`tests/test_swing.gd`) fails when another Godot process loads the CPU; its 12 degree lag limit depends on the frame budget. The validator speed tests, the issue-marker timing, the test_swing frame-budget mean and the shot-prediction cost all check wall-clock speed, and parallel jobs make them load-sensitive; BestTime does not help when the load lasts the whole test. Tests write to the shared `user://` folder, so parallel worktrees on one machine can collide. `--full` took 580 s in E6-S19 against 146 s in E6-S22 and is bounded by `test_putts_hole_only_holds_for_noisy_chips_too` (about 100 s); `tests/test_ball.gd` (about 34 s) is the slowest default script.
+  - Accept: wall-clock tests are tagged and run one at a time after the parallel batch (or their limits stop depending on the frame budget), so the default run passes with a playtest running beside it. Each run uses its own `user://` folder. `--full` time is re-measured and stated in the godot-check skill; the slowest `--full` test is split or its grid trimmed if it is over a third of the run.
+  - Test: `bash scripts/run_tests.sh` green twice, once beside `bash scripts/playtest.sh`; `--full` green; wall times in the commit body.
+  - Touches: `scripts/`, `tests/`
+- [ ] E6-S31 Put the E6 swarm's feel questions to the hand playtest. Questions E6-S16 to E6-S18 left for a person.
+  - Note: (found in E6 review) each item needs a person at the screen.
+  - Accept: the user has answered each item below in `docs/playtests/`, and each "no" is filed as a story or at the top of the Icebox with its pillar.
+    - Is the land line, drawn over the terrain and faded where a hill covers it (`docs/decisions/e6-s7-land-line-hill.png`), misleading? If so, move it into `CourseView` as Y-sorted pieces per tile edge (E6-S16). Pillar 2.
+    - At 2x, does the ring-and-slash OB cue still read as OB and not water (E6-S16)? Pillar 2.
+    - On a large map, does the "2 of 4" parcel wording read (E6-S17)? Pillar 2.
+    - Are fairways on hills readable now that course surfaces show height only through edge cues and risers? If not, consider a pattern step (a contour hatch per 2 heights), not a value swing (E6-S18). Pillar 2.
+  - Test: none. Review the playtest notes.
+  - Touches: `docs/`
 
 ## E3: Nine holes and guests — planned
 
