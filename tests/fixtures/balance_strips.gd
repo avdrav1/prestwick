@@ -67,3 +67,17 @@ static func fairway_lane(land: CourseData, tee: Vector2i, dir: Vector2i, length:
 				c.set_tile(t.x, t.y, c.get_height(t.x, t.y),
 						Surface.Type.TEE if k == 0 else Surface.Type.FAIRWAY)
 	return c
+
+
+## `surface` at height 0 up to tile RISE_TILE - 1, then 1 step up (E6-S34): a one-step rise
+## between the centres of tiles RISE_TILE - 1 and RISE_TILE (x 302.5 to 307.5 yd), for a full
+## club to come down on.
+const RISE_TILE: int = 61
+
+
+static func one_step_rise(surface: Surface.Type) -> CourseData:
+	var c := CourseData.create(STRIP_W, STRIP_H, surface, 0)
+	for y in STRIP_H:
+		for x in range(RISE_TILE, STRIP_W):
+			c.set_tile(x, y, 1, surface)
+	return c

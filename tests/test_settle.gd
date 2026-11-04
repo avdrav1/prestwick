@@ -20,26 +20,30 @@ const SWEEP_STRIDE := 2
 
 ## Known limits (E6-S29), guarded as D31's cases are, a little above the sweep's measured worst
 ## ([off-green guard, green guard] ticks; the D16 target where a case has none). In each the
-## time on the ground after touchdown meets D16 and the overrun is in the air: the ball comes
-## down on a one-step rise and bounces for up to about 4 s (par 4 water, par 5 dry), or runs a
-## long way down the fairway and only then onto the green (par 4 dry). See
-## test_the_guarded_cases_meet_d16_on_the_ground.
+## time on the ground after touchdown meets D16: a full club runs a long way down the fairway
+## and only then onto the green, so the settle counts the fairway roll (E6-S33 asks whether
+## D16 should). See test_the_guarded_cases_meet_d16_on_the_ground. Until E6-S34 the par 4
+## water green case (596 ticks) and the par 5 dry off-green case (637) were over D16 in the
+## air: a full club came down on a one-step rise and bounced for up to about 4 s. The bounce
+## budget (golf/ball_params.tres max_bounce_s) holds that bounce to about 1 s, so par 5 dry
+## now meets D16 (593 off the green) and par 4 water's worst is the same fairway roll as par
+## 4 dry's (535).
 const GUARDS := {
 	"par 4 dry": [OFF_GREEN_SETTLE, 560],
-	"par 4 water": [OFF_GREEN_SETTLE, 620],
-	"par 5 dry": [660, GREEN_SETTLE],
+	"par 4 water": [OFF_GREEN_SETTLE, 560],
 }
 
 ## The worst strikes the sweep found, per variant: [club, power (1.0 or "top"), start x, row].
-## "off" rests off the green, "green" on it. Sweep worsts (E6-S29): off the green 575, 575,
-## 580, 580, 637 and 532 ticks; on it 392, 388, 535, 596, 347 and 347.
+## "off" rests off the green, "green" on it. Sweep worsts (E6-S34, with the bounce budget): off
+## the green 575, 575, 580, 580, 593 and 491 ticks; on it 392, 388, 535, 535, 347 and 347
+## (E6-S29, before it: off 575, 575, 580, 580, 637 and 532; on 392, 388, 535, 596, 347 and 347).
 const WORST := {
 	"par 3 dry": {"off": ["7i", "top", 8, 7], "green": ["7i", 1.0, 12, 17]},
 	"par 3 water": {"off": ["7i", "top", 8, 7], "green": ["5i", "top", 8, 13]},
 	"par 4 dry": {"off": ["7i", "top", 34, 9], "green": ["3w", "top", 22, 13]},
-	"par 4 water": {"off": ["7i", "top", 34, 9], "green": ["3w", "top", 14, 13]},
-	"par 5 dry": {"off": ["driver", 1.0, 20, 10], "green": ["driver", "top", 48, 11]},
-	"par 5 water": {"off": ["driver", "top", 20, 14], "green": ["driver", "top", 48, 11]},
+	"par 4 water": {"off": ["7i", "top", 34, 9], "green": ["3w", "top", 22, 13]},
+	"par 5 dry": {"off": ["7i", "top", 48, 9], "green": ["driver", "top", 48, 11]},
+	"par 5 water": {"off": ["3w", "top", 36, 13], "green": ["driver", "top", 48, 11]},
 }
 
 

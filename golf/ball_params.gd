@@ -24,6 +24,11 @@ const DEFAULT_PATH := "res://golf/ball_params.tres"
 @export var low_point_speed: float = 0.25
 ## A touchdown that would bounce up slower than this (yd/s) rolls instead.
 @export var min_bounce_speed: float = 1.0
+## The bounce budget (E6-S34), seconds: the bounce's upward speed is capped at
+## gravity × max_bounce_s / 2, so over level ground it is back down within this long. Off a
+## one-step rise the tilted normal and the slope's tangent sent a full club up at over 20 yd/s
+## (about 4 s and 100 yd in the air) though the rise ends a tile on. 0 turns the cap off.
+@export var max_bounce_s: float = 1.1
 ## Safety cap: a ball still moving after this many ticks is put at rest (60 s at 60 Hz).
 @export var max_steps: int = 3600
 

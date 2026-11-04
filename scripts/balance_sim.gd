@@ -43,6 +43,8 @@ const LANE_TEE_IN: int = 2
 const LANE_TILES: int = 90
 const LANE_SIDES: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]
 const LAND_NO_SEED := Vector2(0.0, 0.0)
+## E6-S34: yards between full-club starts that come down on the one-step rise.
+const RISE_STRIDE := 1.0
 ## Test strip size; the strips themselves are tests/fixtures/balance_strips.gd.
 const STRIP_W: int = BalanceStrips.STRIP_W
 const STRIP_H: int = BalanceStrips.STRIP_H
@@ -243,7 +245,65 @@ func measure_surfaces(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var bunker := _full(_from(Surface.Type.BUNKER), sw, BUNKER_POWER, _tee(), 0.0, null, runs, rng_seed)
 	rows.append(row("bunker %s at 50%% carry (yd)" % sw.id, bunker.carry, BUNKER_CARRY))
 	rows.append_array(_green_rows(rng_seed))
+	rows.append_array(_rise_rows())
 	return rows
+
+
+## E6-S34: every full club at 100% and max_power coming down on a one-step rise
+## (BalanceStrips.one_step_rise), from starts every RISE_STRIDE yd that land on it: the longest
+## bounce against the bounce budget (golf/ball_params.tres max_bounce_s, one tick of rounding)
+## and the longest settle against D16, per rolling surface.
+func _rise_rows() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var top := SwingTuning.load_default().max_power
+	var budget := model.params.max_bounce_s + 1.0 / Ball.TICK_HZ
+	var size := model.params.yards_per_tile
+	var foot := (BalanceStrips.RISE_TILE - 0.5) * size
+	var crest := (BalanceStrips.RISE_TILE + 0.5) * size
+	for s: Surface.Type in [Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.CART_PATH,
+			Surface.Type.GREEN]:
+		var rise := BalanceStrips.one_step_rise(s)
+		var flat := CourseData.create(STRIP_W, STRIP_H, s, 0)
+		var air := [0, ""]
+		var settle := [0, ""]
+		for c in model.clubs.clubs:
+			if c.is_putter():
+				continue
+			for power: float in [1.0, top]:
+				var carry: float = _rise_strike(flat, c, power, _tee().x)[2] - _tee().x
+				var x := foot - carry - 1.0
+				while x <= crest - carry + 1.0:
+					var r := _rise_strike(rise, c, power, x)
+					x += RISE_STRIDE
+					if r[2] < foot or r[2] > crest:
+						continue
+					var label := "%s at %.0f%%, landing x %.1f" % [c.id, power * 100.0, r[2]]
+					if r[0] > air[0]:
+						air = [r[0], label]
+					if r[1] > settle[0]:
+						settle = [r[1], label]
+		var target := 480.0 if s == Surface.Type.GREEN else 600.0
+		rows.append(row("one-step rise, %s: longest bounce (s)" % Surface.NAMES[s], air[0] / float(Ball.TICK_HZ),
+				Vector2(0.0, budget), "%s; budget max_bounce_s %.2f s" % [air[1], model.params.max_bounce_s]))
+		rows.append(row("one-step rise, %s: longest settle (ticks)" % Surface.NAMES[s], settle[0],
+				Vector2(0.0, target - 1.0), "%s (D16)" % settle[1]))
+	return rows
+
+
+## [ticks in the air after the first touchdown, ticks from it to rest, landing x] for `club`
+## at `power` from (x, the strip's middle), aim +x, seed 1.
+func _rise_strike(course: CourseData, club: Club, power: float, x: float) -> Array:
+	var ball := Ball.new(course, 1, model.params, surfaces)
+	model.full(ball.field, club, power, Vector2(x, _tee().y), 0.0).apply(ball)
+	while not ball.has_landed and not ball.is_at_rest():
+		ball.step()
+	var landed := ball.steps
+	var air := 0
+	while ball.state == Ball.State.FLYING or ball.state == Ball.State.ROLLING:
+		ball.step()
+		if ball.state == Ball.State.FLYING:
+			air += 1
+	return [air, ball.steps - landed, ball.landing_position.x]
 
 
 func _green_rows(rng_seed: int) -> Array[Dictionary]:

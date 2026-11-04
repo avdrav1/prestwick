@@ -6,9 +6,10 @@ extends RefCounted
 ## z up (HeightField has the yard <-> tile conversions).
 ##
 ## A shot: launch() -> FLYING under gravity -> first touchdown sets landing_position ->
-## at most one bounce, by surface -> ROLLING along the ground with slope and surface
-## friction -> AT_REST. Randomness (bounce scatter) comes only from this ball's own
-## generator, so the same seed and inputs give the same result bit for bit.
+## at most one bounce, by surface, its rise held to the bounce budget (E6-S34) -> ROLLING
+## along the ground with slope and surface friction -> AT_REST. Randomness (bounce scatter)
+## comes only from this ball's own generator, so the same seed and inputs give the same
+## result bit for bit.
 ##
 ## Cup and hazards (D15, E2-S6; docs/design.md Ball, Cup and hazards): the cup (set_cup)
 ## captures a slow ball at the end of a rolling tick. A ball that stops on water or OB
@@ -397,10 +398,17 @@ func _touch_down(at: Vector3, v: Vector3) -> void:
 		bounces += 1
 		var flat := Vector2(along.x, along.y).rotated(turn)
 		velocity = Vector3(flat.x, flat.y, along.z) + n * out
+		velocity.z = minf(velocity.z, max_bounce_lift(params))
 		state = State.FLYING
 	else:
 		velocity = Vector3(along.x, along.y, 0.0)
 		state = State.ROLLING
+
+
+## The fastest a bounce may leave the ground upward, yd/s (E6-S34): the speed that comes back
+## to the touchdown height after `max_bounce_s`, the bounce budget. INF with no budget.
+static func max_bounce_lift(p: BallParams) -> float:
+	return p.gravity * p.max_bounce_s * 0.5 if p.max_bounce_s > 0.0 else INF
 
 
 func _step_roll() -> void:

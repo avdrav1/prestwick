@@ -915,6 +915,110 @@ func test_clubs_down_a_long_slope_settle_under_the_target() -> void:
 		assert_lt(worst, OFF_GREEN_SETTLE, "%s: longest %d ticks on the ground (%s)" % [key, worst, label])
 
 
+## Flat at height 0 to tile 60, one step up from tile 61: the rise runs between the tile
+## centres at x 302.5 and 307.5 (E6-S34).
+const RISE_FOOT := 302.5
+const RISE_TOP := 307.5
+
+
+func _one_step_rise(surface: Surface.Type) -> CourseData:
+	var course := CourseData.create(160, 8, surface, 0)
+	for y: int in 8:
+		for x: int in range(61, 160):
+			course.set_tile(x, y, 1, surface)
+	return course
+
+
+## [ticks in the air after the first touchdown, ticks from it to rest, landing x] for `club`
+## at `power` from (x, 20).
+func _bounce_off(course: CourseData, model: ShotModel, club: Club, power: float, x: float) -> Array:
+	var ball := Ball.new(course, 1)
+	model.full(ball.field, club, power, Vector2(x, 20.0), 0.0).apply(ball)
+	while not ball.has_landed and not ball.is_at_rest():
+		ball.step()
+	var landed := ball.steps
+	var air := 0
+	while ball.state == Ball.State.FLYING or ball.state == Ball.State.ROLLING:
+		ball.step()
+		if ball.state == Ball.State.FLYING:
+			air += 1
+	return [air, ball.steps - landed, ball.landing_position.x]
+
+
+func test_max_bounce_lift_is_the_budget_s_hang_time() -> void:
+	var p := BallParams.load_default()
+	assert_gt(p.max_bounce_s, 0.0, "golf/ball_params.tres sets a bounce budget")
+	assert_almost_eq(Ball.max_bounce_lift(p), p.gravity * p.max_bounce_s / 2.0, EPS)
+	var off: BallParams = p.duplicate()
+	off.max_bounce_s = 0.0
+	assert_eq(Ball.max_bounce_lift(off), INF, "0 turns the cap off")
+
+
+func test_a_full_club_onto_a_one_step_rise_rolls_inside_the_bounce_budget() -> void:
+	# E6-S34: a full club that came down on a one-step rise bounced up at over 20 yd/s off the
+	# tilted normal and the slope's tangent: the 110% driver onto fairway 243 ticks (4 s) and
+	# 100 yd in the air, onto cart path 426 ticks and 788 to rest. Every full club at 100% and
+	# max_power, landing anywhere on the rise, now starts rolling inside max_bounce_s (one tick
+	# of rounding) and settles inside D16. By default every 2 yd onto fairway, rough and cart path;
+	# Sweep.full() every 0.25 yd, and tee and green too.
+	var model := ShotModel.new()
+	var params := BallParams.load_default()
+	var budget := ceili(params.max_bounce_s * Ball.TICK_HZ) + 1
+	var top := SwingTuning.load_default().max_power
+	var stride: float = Sweep.pick([2.0], [0.25])[0]
+	var surfaces: Array = Sweep.pick([Surface.Type.FAIRWAY, Surface.Type.ROUGH, Surface.Type.CART_PATH],
+			[Surface.Type.FAIRWAY, Surface.Type.TEE, Surface.Type.ROUGH, Surface.Type.CART_PATH,
+				Surface.Type.GREEN])
+	for s: Surface.Type in surfaces:
+		var course := _one_step_rise(s)
+		# The same surface flat, for the carry from its lie.
+		var flat := CourseData.create(160, 8, s, 0)
+		var target := GREEN_SETTLE if s == Surface.Type.GREEN else OFF_GREEN_SETTLE
+		var worst_air := [0, ""]
+		var worst_settle := [0, ""]
+		var on_rise := 0
+		for c: Club in model.clubs.clubs:
+			if c.is_putter():
+				continue
+			for power: float in [1.0, top]:
+				var carry: float = _bounce_off(flat, model, c, power, 10.0)[2] - 10.0
+				var x := RISE_FOOT - carry - 1.0
+				while x <= RISE_TOP - carry + 1.0:
+					var r := _bounce_off(course, model, c, power, x)
+					x += stride
+					if r[2] < RISE_FOOT or r[2] > RISE_TOP:
+						continue
+					on_rise += 1
+					var label := "%s at %.0f%% landing at x %.1f" % [c.id, power * 100.0, r[2]]
+					if r[0] > worst_air[0]:
+						worst_air = [r[0], label]
+					if r[1] > worst_settle[0]:
+						worst_settle = [r[1], label]
+		gut.p("%s: longest bounce %d ticks (%s), longest settle %d (%s), %d strikes" % [
+				Surface.NAMES[s], worst_air[0], worst_air[1], worst_settle[0], worst_settle[1], on_rise])
+		assert_gt(on_rise, 30, "%s: strikes landed on the rise" % Surface.NAMES[s])
+		assert_lte(worst_air[0], budget, "%s: longest bounce %d ticks (%s)" % [
+				Surface.NAMES[s], worst_air[0], worst_air[1]])
+		assert_lt(worst_settle[0], target, "%s: longest settle %d ticks (%s)" % [
+				Surface.NAMES[s], worst_settle[0], worst_settle[1]])
+
+
+func test_a_bounce_under_the_budget_is_unchanged() -> void:
+	# E6-S34: the budget only caps a bounce that would rise faster than it allows. On flat
+	# fairway a 100% driver (into the ground at about 17.7 yd/s, out at 4.4) is under it, so
+	# its bounce is the same with the cap off.
+	var off: BallParams = BallParams.load_default().duplicate()
+	off.max_bounce_s = 0.0
+	var v := Ball.launch_velocity(75.0, 14.0, 0.0)
+	var capped := Ball.new(_flat(Surface.Type.FAIRWAY, 120), 1)
+	var free := Ball.new(_flat(Surface.Type.FAIRWAY, 120), 1, off)
+	for b: Ball in [capped, free]:
+		b.launch(Vector3(10, 20, 0), v)
+		b.run_to_rest()
+	assert_eq(capped.position, free.position, "same rest point bit for bit")
+	assert_eq(capped.steps, free.steps)
+
+
 func test_downhill_share_is_the_pull_along_the_ball_over_the_constant_friction() -> void:
 	var full := 1.5
 	var down := Vector2(3.7, 0.0)
