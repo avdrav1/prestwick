@@ -568,12 +568,11 @@ func _walled_sandbox() -> CourseData:
 
 func test_check_course_on_a_walled_128_plot_is_fast() -> void:
 	var c := _walled_sandbox()
-	var start := Time.get_ticks_usec()
 	var all := _v.check_course(c)
-	var ms: float = (Time.get_ticks_usec() - start) / 1000.0
+	var ms: float = BestTime.ms(func() -> void: _v.check_course(c))
 	for n: int in range(1, 10):
 		assert_not_null(_issue(all[n], 3), "hole %d is walled off" % n)
-	gut.p("check_course, 9 walled holes on 128x128: %.1f ms" % ms)
+	gut.p("check_course, 9 walled holes on 128x128: %.1f ms (fastest of %d)" % [ms, BestTime.RUNS])
 	assert_lt(ms, 100.0, "one edit's rerun of nine holes stays under 100 ms (debug build)")
 
 
@@ -581,9 +580,8 @@ func test_check_hole_on_a_128_plot_is_fast() -> void:
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	c.set_tile(100, 64, 2, Surface.Type.GREEN)
 	c.set_holes([HoleData.new(1, 5, Vector2i(4, 64), Vector2i(100, 64))])
-	var start := Time.get_ticks_usec()
 	var issues := _v.check_hole(c, c.holes[0])
-	var ms: float = (Time.get_ticks_usec() - start) / 1000.0
+	var ms: float = BestTime.ms(func() -> void: _v.check_hole(c, c.holes[0]))
 	assert_eq(issues, [] as Array[CourseValidator.Issue])
-	gut.p("check_hole, one par 5 on 128x128: %.1f ms" % ms)
+	gut.p("check_hole, one par 5 on 128x128: %.1f ms (fastest of %d)" % [ms, BestTime.RUNS])
 	assert_lt(ms, 30.0, "one hole's check stays under 30 ms (debug build)")

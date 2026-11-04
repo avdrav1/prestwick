@@ -12,6 +12,9 @@ var _main: Main
 
 func _ready() -> void:
 	_main = MAIN_SCENE.instantiate() as Main
+	# A small startup course: with no course_path main would generate 128 x 128 land first,
+	# only for it to be replaced (E6-S22).
+	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(_main)
 	_main.new_sandbox()
 	var tool: BuildTool = _main.build_tool

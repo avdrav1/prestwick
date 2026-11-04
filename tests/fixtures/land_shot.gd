@@ -16,6 +16,9 @@ func _ready() -> void:
 	if not OS.get_environment("LAND_SEED").is_empty():
 		land_seed = OS.get_environment("LAND_SEED").to_int()
 	_main = MAIN_SCENE.instantiate() as Main
+	# A small startup course: with no course_path main would generate 128 x 128 land first,
+	# only for it to be replaced (E6-S22).
+	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(_main)
 	var c := LandGenerator.generate(land_seed)
 	_main.show_course(c)

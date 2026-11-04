@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Headless checks for Prestwick: parse every script, load the main scene, run GUT.
 #
-#   scripts/run_tests.sh          the default run, under a minute (E2-S16)
-#   scripts/run_tests.sh --full   the settle sweeps in tests/test_ball.gd at full density
-#                                 (tests/fixtures/sweep.gd; for /balance surfaces and before a ship)
+#   scripts/run_tests.sh          the default run, under a minute (E2-S16, E6-S22)
+#   scripts/run_tests.sh --full   the heavy sweeps at full density (tests/fixtures/sweep.gd): the
+#                                 settle sweeps in tests/test_ball.gd, the brute-force putts in
+#                                 tests/test_shot_prediction.gd and the noisy chips in
+#                                 tests/test_round_flow.gd; for /balance surfaces and before a ship
 #   scripts/run_tests.sh --leaks  show Godot's exit-time leak report unfiltered (below)
+#
+# E6-S22: GUT runs one Godot per test script, as many at once as there are physical cores (TEST_JOBS
+# overrides it; TEST_JOBS=1 runs them one at a time), so the wall time is about the slowest
+# script's (tests/test_ball.gd), not the sum of all of them. Each script prints one line; a
+# failing script prints its whole GUT log. Every script's log is kept in .godot/test_logs/
+# (the gut.p measurements are there).
 #
 # Known and harmless (E2-S16): Godot's exit-time leak report. Godot 4.7.2 leaks a few
 # compiled GDScript objects at exit when a script names a class as a member's type and then
@@ -17,9 +25,9 @@
 # leaks lie_table.gd, lie.gd, height_field.gd and surface.gd ("ObjectDB instances were leaked
 # at exit", "resources still in use at exit"). The same line without the member, or with a
 # ClubSet parameter in place of the ShotModel, does not. tests/test_lies.gd, test_ball.gd,
-# test_shot_view.gd and test_sim.gd match it, under --check-only and under GUT alike; under
-# GUT the leaked test script also holds GUT's own objects (its fonts, theme and text RIDs),
-# so the report grows. What leaks is only script objects the process holds until it ends, at
+# test_shot_view.gd and test_sim.gd match it under --check-only, and all but test_shot_view.gd
+# under GUT too; under GUT the leaked test script also holds GUT's own objects (its fonts,
+# theme and text RIDs), so the report grows. What leaks is only script objects the process holds until it ends, at
 # exit, with exit code 0; no game state, scene node or test result is involved (GUT reports
 # orphan nodes on its own, per test). So those report lines are filtered out of the output,
 # but only up to the counts recorded for each step in exit_leak_baseline below. A report above
@@ -35,7 +43,8 @@
 #      bug explains (lie_table.gd, lie.gd, height_field.gd, surface.gd, the test script, and
 #      under GUT its fonts, theme and RIDs). Anything else is a real leak: fix it, never raise
 #      a baseline for it.
-#   3. Set each step's "<objects> <resources>" in exit_leak_baseline to the counts printed. A
+#   3. Set each step's "<objects> <resources>" in exit_leak_baseline to the counts printed
+#      (a gut: step's report is in .godot/test_logs/<script>.log). A
 #      step whose report went away comes off the list; if every report is gone, Godot fixed
 #      the bug, so remove quiet_exit_leaks, the baselines and this note.
 #   4. Rerun without --leaks: it must pass, with a "filtered" line for each listed step.
@@ -59,19 +68,22 @@ if ! command -v "$GODOT" >/dev/null 2>&1; then
 fi
 
 # The known exit-leak report per step, as "<ObjectDB instances> <resources in use>" maximums
-# (measured on Godot 4.7.2, 2026-11-03). Anything not listed has a baseline of none.
+# (measured on Godot 4.7.2, 2026-11-03; the gut: steps, one GUT run per test script, on
+# 2026-11-04). Anything not listed has a baseline of none.
 exit_leak_baseline() {
   case "$1" in
     ./tests/test_lies.gd) echo "10 8" ;;
     ./tests/test_ball.gd) echo "9 7" ;;
     ./tests/test_shot_view.gd) echo "6 4" ;;
     ./tests/test_sim.gd) echo "108 37" ;;
-    gut) echo "253 72" ;;
+    gut:tests/test_lies.gd) echo "186 73" ;;
+    gut:tests/test_ball.gd) echo "185 72" ;;
+    gut:tests/test_sim.gd) echo "189 76" ;;
     *) echo "0 0" ;;
   esac
 }
 
-# Filters Godot's exit-time leak report for step $1 (a script path, or "gut") when it is within
+# Filters Godot's exit-time leak report for step $1 (a script path, or "gut:" and a test script) when it is within
 # that step's baseline, leaving one summary line, and exits 0. A report above the baseline, or
 # any leak line from a step with no baseline, is printed whole and exits 1 (E6-S14), so the
 # caller fails the run. With --leaks it prints everything unfiltered and exits 0.
@@ -147,13 +159,91 @@ if [ -f scenes/main.tscn ]; then
   fi
 fi
 
+# Runs one GUT job in its own Godot: $1 is a test script (tests/test_x.gd), or a script and one
+# of its tests (tests/test_x.gd:test_name, --full's split, below). Its filtered log goes to
+# $TEST_LOGS/<job>.log and one result line ("ok"/"FAIL", job, passing, tests, asserts,
+# seconds) to <job>.result, read back once every job is done.
+gut_one() {
+  local f="${1%%:*}" test="" job log rc=0 leak=0 start
+  case "$1" in *:*) test="${1#*:}" ;; esac
+  job="$(basename "$f" .gd)${test:+.$test}"
+  log="$TEST_LOGS/$job.log"
+  start="$(date +%s%N)"
+  "$GODOT" --headless --path . -s addons/gut/gut_cmdln.gd -gtest="res://$f" ${test:+-gunit_test_name="$test"} \
+    -gexit >"$log.raw" 2>&1 || rc=$?
+  quiet_exit_leaks "gut:$f" <"$log.raw" >"$log" || leak=1
+  rm -f "$log.raw"
+  awk -v name="$1" -v single="${test:+1}" -v rc="$rc" -v leak="$leak" -v ms="$(( ($(date +%s%N) - start) / 1000000 ))" '
+    { gsub(/\033\[[0-9;]*m/, "") }
+    /^Tests +[0-9]+/ { tests = $2 }
+    /^Passing Tests +[0-9]+/ { passing = $3 }
+    /^Asserts +[0-9]+/ { asserts = $2 }
+    END {
+      ok = (rc == 0 && leak == 0 && tests > 0 && passing == tests)
+      # A split job runs exactly one test: a name that is part of another would run both.
+      if (single && tests != 1) { ok = 0; print "split job " name " ran " tests " tests, not 1: rename one" > "/dev/stderr" }
+      printf "%s %s %d %d %d %.1f\n", ok ? "ok" : "FAIL", name, passing, tests, asserts, ms / 1000
+    }' "$log" >"$TEST_LOGS/$job.result"
+}
+
 echo "== tests${PRESTWICK_FULL_SWEEPS:+ (full sweeps)}"
-if [ -d addons/gut ]; then
-  # pipefail keeps GUT's exit code through the filter, and the filter's own (a new leak).
-  "$GODOT" --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit 2>&1 | quiet_exit_leaks gut \
-    || { echo "tests failed (a failing test, or a leak above the gut baseline)"; exit 1; }
-else
+if [ ! -d addons/gut ]; then
   echo "GUT not installed (addons/gut). Skipping tests." >&2
   exit 3
+fi
+TEST_LOGS=.godot/test_logs
+rm -rf "$TEST_LOGS"
+mkdir -p "$TEST_LOGS"
+export TEST_LOGS
+export -f gut_one
+# With --full, the scripts whose sweeps run for minutes run one Godot per test (GUT's
+# -gunit_test_name matches a substring; no test name in them is part of another), so the wall
+# time is about the slowest test's. Every other script runs in one Godot.
+FULL_SPLIT="tests/test_ball.gd tests/test_round_flow.gd tests/test_shot_prediction.gd"
+jobs_file="$TEST_LOGS/jobs"
+# Biggest scripts first, so the slowest start at once on a machine with few cores.
+for f in $(find tests -maxdepth 1 -name 'test_*.gd' -printf '%s %p\n' | sort -rn | cut -d' ' -f2-); do
+  if [ -n "${PRESTWICK_FULL_SWEEPS:-}" ] && [[ " $FULL_SPLIT " == *" $f "* ]]; then
+    grep -o '^func test_[A-Za-z0-9_]*' "$f" | cut -c6- | sed "s|^|$f:|"
+  else
+    echo "$f"
+  fi
+done >"$jobs_file"
+# One job per physical core, not per hardware thread: a few tests time themselves against a
+# frame budget or a speed target, and two jobs sharing a core run each at about half speed.
+# Those budget asserts also take the fastest of a few runs (tests/fixtures/best_time.gd), and
+# the aim-sweep lag test in tests/test_swing.gd lifts its frame cap, so a moment of load from
+# the other jobs or other work cannot fail them (one 30 ms check measured 62 ms once).
+GUT_JOBS="$( (lscpu -p=CORE,SOCKET 2>/dev/null || true) | grep -v '^#' | sort -u | grep -c . || true)"
+if [ "${GUT_JOBS:-0}" -lt 1 ]; then GUT_JOBS="$JOBS"; fi
+xargs -n 1 -P "${TEST_JOBS:-$GUT_JOBS}" bash -c 'gut_one "$1"' _ <"$jobs_file" || true
+results="$(cat "$TEST_LOGS"/*.result 2>/dev/null | sort -k2)" || true
+failed=0
+if [ "$(grep -c . <<<"$results")" -ne "$(grep -c . "$jobs_file")" ]; then
+  echo "only $(grep -c . <<<"$results") of $(grep -c . "$jobs_file") test jobs reported a result (see $TEST_LOGS)"
+  failed=1
+fi
+# One line per script (a split script's tests summed, its time its slowest test's).
+awk '{ split($2, j, ":"); f = j[1]
+       if (!(f in st)) { order[++n] = f; st[f] = "ok" }
+       if ($1 != "ok") st[f] = "FAIL"
+       p[f] += $3; t[f] += $4; a[f] += $5; if ($6 + 0 > sec[f] + 0) sec[f] = $6 }
+     END { for (i = 1; i <= n; i++) { f = order[i]
+             printf "%-4s %-34s %4d/%-4d passed %7d asserts %6.1f s\n", st[f], f, p[f], t[f], a[f], sec[f] } }' <<<"$results"
+while read -r status name rest; do
+  if [ "$status" != ok ]; then
+    failed=1
+    job="$(basename "${name%%:*}" .gd)"
+    case "$name" in *:*) job="$job.${name#*:}" ;; esac
+    echo "---- FAIL $name ($TEST_LOGS/$job.log)"
+    cat "$TEST_LOGS/$job.log"
+    echo "----"
+  fi
+done <<<"$results"
+grep -h '^exit leak report for gut:' "$TEST_LOGS"/*.log | sort -u || true
+awk '{ p += $3; t += $4; a += $5 } END { printf "%d jobs: %d/%d tests passed, %d asserts\n", NR, p, t, a }' <<<"$results"
+if [ "$failed" -ne 0 ]; then
+  echo "tests failed (a failing test, or a leak above that script's gut: baseline, above)"
+  exit 1
 fi
 echo "== done in ${SECONDS} s"

@@ -1,0 +1,22 @@
+class_name BestTime
+extends RefCounted
+## E6-S22 review: the wall-clock budget asserts (tests/test_validator.gd, test_issue_marker.gd)
+## time the fastest of a few runs, not one. scripts/run_tests.sh runs one Godot per physical
+## core, so a single sample can land on a moment when the machine is busy with other work (a
+## 30 ms check measured 62 ms once). The fastest run is what the code costs; a real slowdown
+## slows every run, so it still fails.
+
+const RUNS := 5
+
+
+## Calls `f` `runs` times and returns the fastest call in milliseconds. `f` must give the same
+## result each call (a pure check, an idempotent layout).
+static func ms(f: Callable, runs: int = RUNS) -> float:
+	var best: int = -1
+	for i: int in runs:
+		var t0: int = Time.get_ticks_usec()
+		f.call()
+		var took: int = Time.get_ticks_usec() - t0
+		if best < 0 or took < best:
+			best = took
+	return best / 1000.0

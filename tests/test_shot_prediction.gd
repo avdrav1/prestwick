@@ -576,16 +576,26 @@ func _diagonal_staircase() -> CourseData:
 	return course
 
 
-## The brute-force nearest putt: every 1% of the bar, yards from the cup (0 when holed). A
-## capture window on a bank can be 2% wide, so no coarse first pass.
-func _brute_nearest_every_percent(sc: SwingControl) -> float:
+## How far from the cup (yards, 0 when holed) the putt at `percent` of the bar rests.
+func _putt_miss(sc: SwingControl, percent: int) -> float:
 	var cup := sc.field.tile_center(sc.cup_tile())
+	var s := PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, percent / 100.0)
+	var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), s, null, null, sc.cup_tile())
+	return 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup)
+
+
+## The brute-force nearest putt: every 1% of the bar, as [yards from the cup (0 when holed),
+## the first percent that rests there]. A capture window on a bank can be 2% wide, so no
+## coarse first pass.
+func _brute_nearest_every_percent(sc: SwingControl) -> Array:
 	var best := INF
+	var at := 0
 	for i in 101:
-		var s := PuttAim.launch_at(sc.model, sc.tuning, sc.field, sc.ball_at, sc.aim_deg, i / 100.0)
-		var p := ShotPrediction.run_launch(sc.course, sc.next_seed(), s, null, null, sc.cup_tile())
-		best = minf(best, 0.0 if p.holed else Vector2(p.rest.x, p.rest.y).distance_to(cup))
-	return best
+		var d := _putt_miss(sc, i)
+		if d < best:
+			best = d
+			at = i
+	return [best, at]
 
 
 ## E6-S12 Accept: on a bank of two steps per tile the marker rests within 1 yd of the
@@ -597,27 +607,44 @@ func _brute_nearest_every_percent(sc: SwingControl) -> float:
 ## yd at 72%; the scan and golden search alone stopped at 6.6 yd), and a downhill putt whose
 ## reach jumps where it crests a riser (false position spent every run on the jump, 1.7 yd
 ## off).
+##
+## E6-S22: the brute force (101 putts a case) runs only under Sweep.full(). By default each
+## case strikes the one putt the full run found nearest, pinned as [percent, yards] below:
+## the marker must be within 1 yd of it, and that putt must still rest where it was measured,
+## so a physics change that moves it fails here and sends you to `--full` to re-pin. Only a
+## better putt somewhere else on the bar is left to `--full`.
 func test_putter_marker_on_a_steep_bank_is_near_the_nearest_putt() -> void:
+	# [cup, ball at, on the diagonal staircase, aim turned (deg), [nearest percent, yards]]
 	for case: Array in [
-			[Vector2i(11, 6), Vector2(42.5, 32.5)],
-			[Vector2i(11, 6), Vector2(45.0, 31.0)],
-			[Vector2i(12, 6), Vector2(42.5, 32.5)],
-			[Vector2i(13, 6), Vector2(35.0, 22.5)],
-			[Vector2i(15, 6), Vector2(47.5, 32.5)],
-			[Vector2i(13, 6), Vector2(80.0, 22.5)],
-			[Vector2i(9, 6), Vector2(92.5, 31.0)],
-			[Vector2i(11, 11), Vector2(41.0, 43.0), true],
-			[Vector2i(11, 11), Vector2(90.0, 70.0), true, 4.0]]:
+			[Vector2i(11, 6), Vector2(42.5, 32.5), false, 0.0, [83, 0.0]],
+			[Vector2i(11, 6), Vector2(45.0, 31.0), false, 0.0, [77, 0.0]],
+			[Vector2i(12, 6), Vector2(42.5, 32.5), false, 0.0, [42, 10.03]],
+			[Vector2i(13, 6), Vector2(35.0, 22.5), false, 0.0, [71, 15.81]],
+			[Vector2i(15, 6), Vector2(47.5, 32.5), false, 0.0, [23, 25.05]],
+			[Vector2i(13, 6), Vector2(80.0, 22.5), false, 0.0, [64, 0.0]],
+			[Vector2i(9, 6), Vector2(92.5, 31.0), false, 0.0, [93, 3.35]],
+			[Vector2i(11, 11), Vector2(41.0, 43.0), true, 0.0, [71, 3.88]],
+			[Vector2i(11, 11), Vector2(90.0, 70.0), true, 4.0, [95, 9.30]]]:
 		var cup: Vector2i = case[0]
 		var at: Vector2 = case[1]
-		var diagonal: bool = case.size() > 2 and case[2]
-		var off: float = case[3] if case.size() > 3 else 0.0
+		var diagonal: bool = case[2]
+		var off: float = case[3]
+		var pinned: Array = case[4]
 		var course := _diagonal_staircase() if diagonal else _steep_bank()
 		var main := _putt_main(course, Vector2i(1, 6), cup, at, off)
 		var sc := main.swing_control
 		var label := "%s, cup %s from %s, %+.0f deg" % [
 				"diagonal staircase" if diagonal else "steep bank", cup, at, off]
-		var nearest := _brute_nearest_every_percent(sc)
+		var pinned_miss := _putt_miss(sc, pinned[0])
+		assert_almost_eq(pinned_miss, float(pinned[1]), 0.01,
+				"%s: the pinned nearest putt (%d%%) still rests where it was measured; if the physics moved it, re-pin from scripts/run_tests.sh --full" % [label, pinned[0]])
+		var nearest := pinned_miss
+		if Sweep.full():
+			var brute := _brute_nearest_every_percent(sc)
+			gut.p("%s: brute nearest %.2f yd at %d%%" % [label, brute[0], brute[1]])
+			assert_almost_eq(float(brute[0]), float(pinned[1]), 0.01,
+					"%s: the pinned putt is the nearest the bar makes (brute %.2f yd at %d%%)" % [label, brute[0], brute[1]])
+			nearest = brute[0]
 		var marker := main.aim_view.marker_point
 		assert_eq(marker, sc.aim_putt.prediction.rest, "%s: the marker is the solve's rest" % label)
 		assert_true(sc.aim_putt.done, "%s: solved" % label)

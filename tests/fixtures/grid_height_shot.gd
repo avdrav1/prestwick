@@ -23,6 +23,9 @@ func _ready() -> void:
 	if case_name.is_empty():
 		case_name = "green"
 	_main = MAIN_SCENE.instantiate() as Main
+	# A small startup course: with no course_path main would generate 128 x 128 land first,
+	# only for it to be replaced (E6-S22).
+	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(_main)
 	_main.set_mode(Main.Mode.PLAY)
 	_overlay = _Overlay.new()

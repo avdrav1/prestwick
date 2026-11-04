@@ -57,6 +57,9 @@ class Plan:
 	## Extra bar ticks after the way back down before the accuracy click: positive is late
 	## (a hook), negative early (a slice). 0 is the centre.
 	var accuracy_offset: int = 0
+	## The noisy offset drawn and then passed over because it would hole under
+	## `putts_hole_only` (the plan fell back to the centre); 0 when none was (E6-S22).
+	var held_back_offset: int = 0
 	var prediction: ShotPrediction
 
 
@@ -83,6 +86,7 @@ static func plan(sc: SwingControl, putts_hole_only: bool = false, noise: ShortGa
 		var centred := best.prediction
 		best.prediction = predict(sc, best.club, best.aim_deg, best.ticks, best.accuracy_offset)
 		if putts_hole_only and best.prediction.holed:
+			best.held_back_offset = best.accuracy_offset
 			best.accuracy_offset = 0
 			best.prediction = centred
 	return best

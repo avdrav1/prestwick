@@ -664,10 +664,16 @@ func test_the_frame_a_ball_rests_spends_one_aim_budget() -> void:
 ## least every few frames and the putt it shows was aimed close to the current aim. (Before,
 ## each turn threw the first putt away mid-roll and the marker froze for the whole sweep,
 ## up to 30 degrees behind.)
+## E6-S22: each frame spends the tick budget alone (the time cap lifted on a copy of the
+## tuning), so the count does not hang on how busy the machine is: under parallel test jobs the
+## 6,000 us cap cut frames short and the lag reached 14 degrees. The time cap has its own test
+## above.
 func test_a_sweep_of_the_aim_on_a_steep_bank_keeps_the_marker_up() -> void:
 	for case: Array in [[Vector2i(9, 6), Vector2(92.5, 31.0)], [Vector2i(13, 6), Vector2(80.0, 22.5)]]:
 		var main := _steep_bank_main(case[0], case[1])
 		var sc := main.swing_control
+		sc.tuning = sc.tuning.duplicate() as SwingTuning
+		sc.tuning.putt_aim_frame_usec = 1000000000
 		sc._process(1.0 / 60.0)
 		sc.settle_aim()
 		var label := "cup %s from %s" % [case[0], case[1]]
