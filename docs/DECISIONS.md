@@ -308,3 +308,20 @@ Choice: a hole needs its tee tile and its cup tile on owned land (a new validato
 Why: pillar 1 and D26's intent: the starting block fits the first par 3 and one purchase the second hole. Pillar 2: the boundary is drawn and predicted (D29), so a hole beside it reads as a tight hole, not a broken one.
 Inconclusive: the user chose the 2 x 2 block expecting room for a par 3; this decision is what lets a 160 yd par 3 fit in it. If the whole footprint should be owned after all, the block or the parcel size has to grow to hold it, and that reopens D26.
 Affects: docs/design.md Land and Hole validation rules (rules 3 and 6), course/validator.gd and course/builder.gd (E6-S4), docs/BACKLOG.md E6-S4, the Claude Docs design doc (Course builder: Hole rules)
+
+## D31: What happens to the settle cases that tuning cannot bring inside D16? (2026-11-04)
+Question: E6-S9, E6-S10 and E6-S11 each ran out of knobs. Left over: fast downhill putts over a steep green bank (715 ticks, 11.9 s, on two steps per tile), long one-step cart path slopes (845 ticks, 14.1 s, stepping every tile; up to 16.6 s through ShotModel), fairway clubs down a slope stepping every tile (684 ticks), random greens of heights 0 to 4 and 0 to 7 (up to 589 ticks) and the two mixed green banks (up to 548 ticks).
+Options:
+- Accept them as known limits beside D16, with guard tests at their measured worsts. Cost: on these rare shapes a ball can roll for up to about 16 s. Benefit: no physics change, every other D16 case stays met.
+- A settle clock: extra friction on any ball still moving near the target. Cost: a ball visibly brakes on those shapes, against pillar 2. Benefit: every case is met.
+- More physics work on the untried logic changes. Cost: another round with no promise. Benefit: maybe a real fix.
+Choice: accept them as known limits (user, 2026-11-04). D16's targets do not move; these shapes are named exceptions, each guarded in `tests/test_ball.gd` a little above its measured worst, so a regression still fails. E6-S9, E6-S10 and E6-S11 close on this decision.
+Why: pillar 2: a ball that rolls a little long on a rare shape still reads true, and a ball that brakes for no reason does not. Pillar 4: no more tuning rounds for rare shapes.
+Affects: docs/design.md Ball (Known limits, Settle targets), tests/test_ball.gd (guards for the bank putts and the cart path slopes; the green guards from E6-S11)
+
+## D32: Do D29's strict reading and D30 stand? (2026-11-04)
+Question: E6-S23 put two implementer's calls to the user: D29 measures unowned land as an `oob` tile (a ball that touches down on or rolls onto it is OB, even if it would have come back), and D30 asks a hole to own only its tee, its cup and a rule-3 path, not its whole 30 yd footprint.
+Options: keep both; judge OB only where the ball comes to rest (the drop walk then handles unowned water and trees); require the whole footprint (the starting block then holds no 160 yd par 3, which reopens D26).
+Choice: keep D29's strict reading and keep D30 (user, 2026-11-04). D29's and D30's Inconclusive lines are answered by this entry. The last-resort drop is D25's rule, and E6-S13 extends the cup rule to tree scatter: a scatter target within `cup_radius` of the cup is rejected like one on trees or water (docs/design.md Ball, Tree scatter).
+Why: pillar 2: one OB rule with one visible line, already predicted by the aim marker. Pillar 1: the starting block holds a playable par 3 at once.
+Affects: docs/design.md Land, the Claude Docs design doc (Course building: Land)

@@ -843,6 +843,31 @@ func test_balls_down_a_long_one_step_slope_settle_under_the_target() -> void:
 					Surface.NAMES[s], every, worst, at.x, at.y])
 
 
+func test_fast_downhill_putts_over_a_steep_green_bank_stay_within_their_known_limit() -> void:
+	# E6-S9, accepted beside the 8 s target (D31): the putt slows on the one-step slope at the
+	# top of the bank, then runs from nearly still down the bank and out across the flat. The
+	# worst starts of a sweep (x 1 to 60 every 0.5 yd, 6 to 18 yd/s straight down), measured
+	# 2026-11-04: 715 ticks on two steps per tile, 659 on three, 558 on seven. This guards them.
+	for c: Array in [[2, 48.5, 14.0, 750], [3, 43.5, 14.0, 690], [7, 45.0, 18.0, 590]]:
+		var ball := Ball.new(_steep_green(c[0], 2), 1)
+		ball.start_roll(Vector2(c[1], 100.0), Vector2(-c[2], 0.0))
+		ball.run_to_rest()
+		assert_lt(ball.steps, c[3], "%d steps per tile from x %.1f at %.0f yd/s: %d ticks" % [
+				c[0], c[1], c[2], ball.steps])
+
+
+func test_balls_down_a_long_cart_path_slope_stay_within_their_known_limit() -> void:
+	# E6-S10, accepted beside the 10 s target (D31): cart path's own flat roll-out is too long
+	# for a one-step slope. Worst starts of a sweep (every 1 yd from 22.5 yd above the top to
+	# the foot, 0 to 12 yd/s), measured 2026-11-04: 845 ticks stepping every tile, 719 every 2.
+	for c: Array in [[1, 244.0, 12.0, 880], [2, 272.0, 12.0, 750]]:
+		var ball := Ball.new(_stepped(Surface.Type.CART_PATH, c[0]), 1)
+		ball.start_roll(Vector2(c[1], 20.0), Vector2(c[2], 0.0))
+		ball.run_to_rest()
+		assert_lt(ball.steps, c[3], "stepping every %d from x %.1f at %.0f yd/s: %d ticks" % [
+				c[0], c[1], c[2], ball.steps])
+
+
 func test_clubs_down_a_long_slope_settle_under_the_target() -> void:
 	# E6-S10: every full club through the shot model, at 100% and max_power, struck so it
 	# comes down above or on the slope of _stepped(): rough stepping every 1, 2 and 4 tiles
