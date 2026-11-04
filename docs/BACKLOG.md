@@ -395,6 +395,51 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: a leak above its baseline, or from a script not on the list, fails `bash scripts/run_tests.sh` with the report printed. `_set_down` records the path only for tests that read it. `scripts/run_tests.sh` says how to recheck the baselines after a Godot upgrade.
   - Test: `bash scripts/run_tests.sh` green, with its time in the commit body; by hand, a test script that leaks on purpose makes it fail.
   - Touches: `scripts/`, `tests/`
+- [ ] E6-S15 Tidy the land code the swarm left in two copies. One parcel size and one all-owned helper.
+  - Note: (found in E6 review) E6-S2 and E6-S3 were built on separate branches, so `course/land_generator.gd` still keeps its own `PARCEL_TILES` (16) and `_all_owned_rows` beside `CourseData.PARCEL_TILES` and `CourseData.all_owned_rows`, and its header says to swap once both are on one branch. Doc comments still say five rules after E6-S4 made it six: the `tests/test_hole_open.gd` header and line 78, `scenes/hole_panel.gd` line 7, `course/course_generator.gd` lines 5 and 86. E6-S2 could not test that generated land comes back fully owned with an unlimited budget until E6-S3's API was on its branch.
+  - Accept: `LandGenerator` uses `CourseData.PARCEL_TILES` and `CourseData.all_owned_rows`, with no local copy, and its header no longer speaks of branches; may share `LandGenerator.start_block` with the builder's New course. No comment or test message speaks of five rules. A test asserts that `LandGenerator.generate(seed)` is fully owned (`is_owned` on every parcel) with `has_unlimited_budget()`.
+  - Test: `tests/test_land_generator.gd` (the new ownership case); `bash scripts/run_tests.sh` green.
+  - Touches: `course/`, `tests/` (and the one comment in `scenes/hole_panel.gd`)
+- [ ] E6-S16 Keep the land line and the OB cue readable through the shot. The player sees the boundary the ball crossed.
+  - Note: (found in E6 review) In Play the land line draws only in `AimView._draw` while there is a prediction and is cleared at the strike, so in flight and during the OB hold nothing shows the boundary, against E6-S1's "drawn as a boundary" and pillar 2 (E6-S7, E6-S13). The OB cue reads as a red ring: at 1x the ball covers most of the slash, at 0.5x the slash cannot be seen, so OB and water differ mostly by hue (`docs/decisions/e6-s13-ob-cue.png`). The OB cue and the D20 blocked marker are both flag_red slashed circles told apart only by the slash direction. In the `tests/fixtures/hazard_shot_ob.tscn` capture at 2x the camera has not finished easing onto the ball. The land line is drawn over the terrain and faded where a hill covers it, not Y-sorted per tile edge; move it into `CourseView` as Y-sorted pieces only if a hand playtest finds the faded line over a hilltop (`docs/decisions/e6-s7-land-line-hill.png`) misleading.
+  - Accept: the land line, or at least its edges near `hazard_position`, stays drawn through flight and the hazard hold. The OB cue's slash runs past the ring or draws over the ball with an ink outline, at a fixed screen size (k = 1 / view_scale), and OB, water and the blocked marker differ by shape, not hue or slash direction alone (colourblind rule). `e6-s13-ob-cue.png` is retaken with the boundary in frame and the camera settled, with 0.5x and 1x captures beside the 2x one.
+  - Test: `tests/test_shot_view.gd` or an aim view test for the line during flight and the hold; screenshots through `scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn`.
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S17 Smooth the buy and refusal flow in Build. Small readability fixes from the E6-S5 review.
+  - Note: (found in E6 review) a drag across the land line emits `refused` once for every unowned dab, so the Build HUD repeats the message. The buy confirm works by mouse only. After a purchase the hovered parcel is outlined red because `buy_refusal` says "already yours", which reads as an error. The confirm sits top-left in the LandPanel, far from the clicked parcel, and names it by grid coordinates ("Buy parcel 2, 3").
+  - Accept: one drag shows one "not your land" message. Enter confirms and Esc cancels a pending purchase. An owned parcel under Buy land draws a neutral outline. The confirm, or at least the price, shows next to the clicked parcel, and the text names the parcel by a compass direction from the owned block or another player-facing name, not grid coordinates.
+  - Test: `tests/test_land_hud.gd` (one message per drag, Enter and Esc, the owned outline); a screenshot of the confirm by the parcel.
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S18 Make height readable on generated land. Tell which way the ground slopes at 0.5x.
+  - Note: (found in E6 review) on generated land, risers that face away from the camera draw as thin white lines and rough has no tint by height, so at 0.5x you cannot tell which way the ground slopes or tell a height-6 plateau from a height-2 lowland (E6-S2). Land prices are set by relief (E6-S8), so the player needs to read it to judge a parcel. Tree stands have no height either (already noted for E5-S3).
+  - Accept: a tint or pattern step per height on rough, or shaded edges on risers that face away, so a 0.5x screenshot of a generated seed shows the slope direction and tells high from low ground by value or pattern, not hue alone (colourblind rule). Run `/art-spec` first if the tile sheet changes.
+  - Test: `tests/test_course_view.gd` or `tests/test_tile_art.gd` for the per-height draw; screenshots at 0.5x and 1x through `tests/fixtures/land_shot.tscn`.
+  - Touches: `course/`, `art/`
+- [ ] E6-S19 Keep a perfect drive from turning a par 4 into a par 3. Settle it before E3 rates par.
+  - Note: (found in E6 review) in the E6-S8 playtest (`docs/playtests/2026-11-03-e6-land.md` Balance) a perfect driver swing (64 of 72 bar ticks) reaches the green of a 280 yd par 4 on 3 of 4 seeds, and seeds 1 and 42 holed it in 2. Rule 4's shortest par 4 (`par4_min_yd` 250, `course/validator_tuning.tres`) is shorter than a perfect drive's carry and roll, so a validator-legal par 4 can play as a par 3. Also from E6-S10: `floor_keep_speed` 20 yd/s is a starting value; generated land has many low points along an axis, so re-check it there.
+  - Accept: `/balance clubs` (driver carry and roll in `golf/clubs.tres`) or a raised `par4_min_yd` makes a perfect drive on the shortest legal par 4 stop short of the green on generated land, with every other clubs, lies and surfaces sim target still met, or a `/decision` says why it may. `floor_keep_speed` is checked on generated land and kept or retuned.
+  - Test: `scripts/sim.gd --table clubs` and `--table surfaces` output in the commit; the E6-S8 scripted land playtest still passes.
+  - Touches: `golf/`, `course/`
+- [ ] E6-S20 Teach `/course-file` about land. Inspect shows ownership, and hilly uses the land generator.
+  - Note: (found in E6 review) `/course-file inspect` prints no owned parcels or land budget (E6-S3). `generate hilly` still uses `CourseGenerator.ridge_rise`; replacing it with the land generator (D19, E2-S18) needs a hole laid over generated heights with the tee box, green and pond kept flat (E6-S2).
+  - Accept: `inspect` prints the owned parcel grid and the land budget (or "unlimited"). `generate hilly` lays its hole over `LandGenerator` heights with the tee box, green and pond flat, and the result passes all six rules.
+  - Test: `tests/test_course_file.gd` (inspect output, a hilly generate that validates).
+  - Touches: `course/`, `tests/`
+- [ ] E6-S21 Fire the debug shot from owned land. F3 should not go OB on a New course.
+  - Note: (found in E6 review) `Main.fire_debug_shot` (debug builds only) still fires from `debug_shot.start_tile` (15, 4), which is unowned on a New course, so the shot lands out of bounds. It is a dev tool and changes no stroke count.
+  - Accept: on a New course the debug shot starts from an owned tile (the `no_hole_tile()` logic, or the swing ball), and on the sandbox and the fixture courses it plays tick for tick as before, so the playtest smoke's expectation holds.
+  - Test: a case in `tests/test_main_states.gd` or `tests/test_new_course.gd`; `bash scripts/playtest.sh`.
+  - Touches: `scenes/`, `tests/`
+- [ ] E6-S22 Bring the test run back near its budget. E2-S16 set under a minute; E6 made it about three.
+  - Note: (found in E6 review) the default `bash scripts/run_tests.sh` went from 58 s after E6-S8 to about 166 s after E6-S12 (the full brute-force putt check, 7 cases x 101 putts, adds about 8 s), and `--full` now takes about 270 s while `.claude/skills/godot-check/SKILL.md` says about 2 minutes. Each Main instantiated with no `course_path` generates 128 x 128 land (about 0.5 s), so fixtures that load main and then call `show_course` (`land_shot`, `land_buy_shot`, `grid_height_shot`) build land twice. `export_presets.cfg` now ships `data/*.json` (E6-S3); nobody has checked an exported build reads `data/land.json` and `data/playtest_smoke.json`.
+  - Accept: the default run is back under a minute or `docs/design.md` and the skill state a new budget with the reason; heavy sweeps move behind `--full`; fixtures that call `show_course` set a small `course_path` first. The godot-check skill states the measured `--full` time. A Linux export loads `data/land.json` (checked at the next `/ship-it` or by hand).
+  - Test: `bash scripts/run_tests.sh` and `--full` green, both wall times in the commit body.
+  - Touches: `tests/`, `scripts/`
+- [ ] E6-S23 Mirror E6 into the design doc and put its open answers to the user. One source of truth again after the swarm.
+  - Note: (found in E6 review) the Claude Docs design doc (Course building: Land; Economy; Golf play: Flight and roll) needs E6's changes: the land budget left in format v2 (unlimited for sandbox and v1 files); `PARCEL_TILES` a format constant; the wooded-valley example and the $800 to $1,700 price range; D29's implementer's-reading note; green `steep_scale` 3.0 to 20 (E6-S11). D15's Choice in `docs/DECISIONS.md` names only the stroke's start as the last resort, and E6-S13's scatter-draw cup rule is in `docs/design.md` only.
+  - Accept: the design doc matches `docs/design.md` on each item above. The user has confirmed or reopened D29's strict reading (a ball that lands on unowned ground is OB even if it would have bounced back onto owned land; reopening means the drop walk handles unowned water and trees) and D30 (a hole owns its tee, cup and a rule-3 path, not its whole footprint; reopening it reopens D26). A new D entry restates D15's last-resort drop with the cup rule.
+  - Test: none. Review the design doc and `docs/DECISIONS.md` diffs.
+  - Touches: `docs/`
 
 ## E3: Nine holes and guests — planned
 
@@ -414,6 +459,7 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it r
 - E3's stories predate D19 and E6 (E2-S19 review). The `/next-epic` run that activates E3 checks them against land ownership, for example E3-S2's 9-hole fps check on the generated map, and guests walking over unowned land.
 - Dense issue clusters (E2-S17): with 25 or more faults close together, sideways boxes run off-screen at 1x and their leaders become long diagonals, and a collapsed box shows only its badge, so its reasons are read only in the hole panel. If nine-hole playtests find that hard to read, show text only for the hovered or selected hole, or add a '+N more' count.
 - Guest putting (E2-S20, E6-S12): a PuttAim solve costs about 10 to 36 ms on gentle greens and, since E6-S12 (up to 16 putts with the scan, the roll-back edge and the golden search), about 200 to 300 ms at once on a green rising two steps per tile. A guest must not call `PuttAim.solve` on a steep green in one go: run it through `PuttAim.begin` and `advance(max_ticks, max_usec)` with a tick or time budget per simulated second (as SwingControl does per frame), or with a lower `putt_aim_max_runs`. E3-S3 and E3-S4 inherit this. Green design: on the GridHeightEvidence contour a putt from the bottom terrace cannot reach a cup two terraces up and about 29 yd away (a full putt rolls 27.5 yd on flat); the marker then shows the 100% putt.
+- Routing on land (E6 review): the D28 budget buys 4 to 5 parcels and nine holes need about 34 (E6-S8), and D30 lets a hole run narrow beside the OB line; on the E6-S8 lanes a one-parcel (80 yd) par 4 corridor sent 29% of swept tee strokes within 60 degrees of the line OB. E3-S2 and E3-S3 should check how guests route and score on such holes.
 
 - [ ] E3-S1 Settle the numbers guests need. `docs/design.md` names the checks but not what they measure.
   - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice.
@@ -467,6 +513,7 @@ Ships as 0.5.0 (D19). Gives building a budget and reactions a consequence. Serve
 Done when: a player starts with $5,000, funds the course from green fees, and can save, quit and pick up where they left off.
 
 - [ ] E4-S1 Reconcile the economy on paper. The stated budgets do not fit the cost table.
+  - Note: (found in E6 review) once paint has a cost, set `tree_tile_price` and `water_tile_price` in `data/land.json` against what clearing a tree or filling a pond costs, then rerun `/balance land`. Today trees and water take $52 off a parcel on average and $204 at most, and relief sets the price (E6-S8).
   - Accept: each item below has a line in `docs/design.md`, and a `/decision` where it is a real choice.
   - Test: `scripts/sim.gd --table economy` runs and prints measured values against the target.
   - Touches: `docs/`, `scripts/`
@@ -553,6 +600,9 @@ Done when: 10 people outside the project have played a build with final art and 
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
 
+- Land corridor width and D29 (found in E6 review). Is a one-parcel (80 yd) wide corridor right for a par 4? On the E6-S8 lanes 29% of swept tee strokes within 60 degrees of the line ended OB at the land line. D29's strict reading (OB on a roll over the line even if the ball would have come back) changed 1 of 12,628 swept strokes; recheck if players raise steep ground beside the line. For the user's hand playtest. Pillar 2.
+- Off-green roll feel after E6-S10 (found in E6 review). Fairway and tee roll about 12% shorter on flat ground, balls run faster down off-green slopes, and a swing across a valley floor dies sooner. For the user's hand playtest. Pillar 2.
+- Putt marker while a solve runs (found in E6 review). After a new stroke or a switch to the putter no marker shows until the first putt rests (up to 2 to 3 frames on a steep bank), a cold steep solve spreads over about 1 s, and a marker that trails a sweep gives no sign it is for an older aim (a fade or dash could). Accuracy is measured only on straight two-steps-per-tile risers, not curved or mixed banks. Pillar 2.
 - Default club on short holes (found in playtest 2026-11-03). The tee defaults to the longest legal club, so on a 160 yd par 3 the driver's marker flies past the cup and out of bounds. Proposed: default to the longest club whose marker stays short of the cup. Pillar 2.
 - Camera and HUD in Play (found in playtest 2026-11-03). The user was bothered by the camera or the HUD; candidates from E2-S14: the ease (`centre_time` 0.15 s), the stepped zoom-out of the aim framing, and the swing panel or scorecard hiding the ball or marker near the edges (a per-edge HUD inset). Ask which before fixing. Pillar 2.
 - Pace mark on the swing bar for putts (found in playtest 2026-11-03). D21 shows the line at the cup's pace but not the power, so the player still judges the pace; D21's option (b), a mark on the bar at the solved power, is wanted. Pillar 2.
@@ -570,3 +620,6 @@ Things worth doing that are out of the MVP. Promote only through `/decision`, wh
 - Mobile
 - One-click power-then-release swing. The A/B prototype from the original E2-S9 was dropped at E2 planning. Promote it through `/decision` only if the E2-S9 playtest finds that the three-click bar, at its speed setting, fails checklist item 2. Pillar 2.
 - OB stakes as placed boundary objects, beyond painted `oob` ground. Needs a new CourseData field and course format version 2 with a `save.gd` migration. Pillar 4.
+- Seed on the HUD (found in E6 review). New course always picks a random seed; `Main.land_seed` holds it if the player should see it or type one in.
+- More varied generated maps (found in E6 review). With the bisected radius factor, high ground is exactly 15.0% on every seed; a jitter on the target would vary maps more (`/balance`).
+- No ball on a course with no hole (found in E6 review). Play could show only the "No hole" panel instead of placing a ball; changes the sandbox and the fixture-course tests.
