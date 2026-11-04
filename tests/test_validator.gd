@@ -41,6 +41,22 @@ func _assert_one_line(issue: CourseValidator.Issue) -> void:
 	assert_false(issue.reason.contains("\n"), "rule %d reason is one line" % issue.rule)
 
 
+func test_the_shipped_tuning_keeps_every_par_4_inside_the_zone_threshold() -> void:
+	var t := ValidatorTuning.load_default()
+	assert_eq(t.order_issue(), "", "course/validator_tuning.tres: %s" % t.order_issue())
+	assert_lte(t.zone_from_yd, t.par4_min_yd)
+
+
+func test_a_zone_threshold_above_the_shortest_par_4_is_caught() -> void:
+	var t := ValidatorTuning.load_default().duplicate() as ValidatorTuning
+	t.zone_from_yd = t.par4_min_yd
+	assert_eq(t.order_issue(), "", "equal is allowed")
+	t.zone_from_yd = t.par4_min_yd + 1
+	var issue := t.order_issue()
+	assert_string_contains(issue, "zone_from_yd")
+	assert_string_contains(issue, "par4_min_yd")
+
+
 func test_tuning_holds_the_d11_numbers() -> void:
 	var t := ValidatorTuning.load_default()
 	assert_not_null(t)

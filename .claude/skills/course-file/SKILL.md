@@ -41,7 +41,7 @@ godot --headless --path . -s res://course/course_file.gd -- generate 4 hilly dry
 godot --headless --path . -s res://course/course_file.gd -- inspect courses/example_par3.json
 ```
 
-Exit code 0 when every rule passes, 1 when a rule fails, 2 for bad arguments or a file that does not load. `inspect` only reports: it exits 0 whenever the file loads, failing rules included.
+Exit code 0 when every rule passes, 1 when a rule fails, 2 for bad arguments or a file that does not load. `inspect` only reports: it exits 0 whenever the file loads, failing rules included. A hole under `zone_from_yd` (300 yd) has no landing zone, and `inspect` does not say so: a par 4 that short already fails rule 4, and that issue is the one to fix (E6-S39).
 
 ## validate
 
