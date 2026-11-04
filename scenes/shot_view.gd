@@ -24,6 +24,11 @@ extends Node2D
 ## still reads; it breaks round the ball (ob_slash_gap), so it does not cover the ball either; OB, water and the blocked marker differ by shape (HazardCue). Both cue pieces
 ## draw over the terrain (z_index 1), as the aim marker does, so no tile in front cuts them.
 ##
+## E6-S27: the ball scales with the map but never draws under
+## ShotViewTuning.ball_min_screen_radius on screen (ball_draw_radius), so it reads at 0.5x;
+## at 2x, where it fills more of the fixed-size ring, the slash reaches further
+## (ob_slash_reach_at) so each piece stays at least its 1x length on screen.
+##
 ## Place it as a child of CourseView: it is Y-sorted, and each piece sits at y = its
 ## Iso.object_sort_key and draws itself offset back to its screen point, so hills nearer the
 ## camera hide the ball and farther ones do not.
@@ -36,7 +41,8 @@ signal came_to_rest(at: Vector3)
 @export var outline_color: Color = Color8(26, 28, 34)
 @export var shadow_color: Color = Color8(26, 28, 34, 150)
 @export var marker_color: Color = Color8(216, 58, 58)
-## Ball radius in screen px at 1x.
+## Ball radius in screen px at 1x (canvas units: it scales with the map, but never draws
+## under ShotViewTuning.ball_min_screen_radius on screen, E6-S27).
 @export var ball_radius: float = 4.0
 ## Shadow half-width in screen px at ground level; it shrinks to `shadow_min_scale` of that
 ## as the ball climbs to `shadow_fade_steps` height steps above the ground.
@@ -275,8 +281,22 @@ func _draw_ball(piece: Node2D) -> void:
 	piece.draw_set_transform(shadow, 0.0, Vector2(1.0, 0.5))
 	piece.draw_circle(Vector2.ZERO, shadow_radius * s, shadow_color)
 	piece.draw_set_transform(Vector2.ZERO)
-	piece.draw_circle(at, ball_radius + 1.0, outline_color)
-	piece.draw_circle(at, ball_radius, ball_color)
+	var k := cue_k()
+	var r := ball_draw_radius(k)
+	piece.draw_circle(at, r + ball_outline_width(k), outline_color)
+	piece.draw_circle(at, r, ball_color)
+
+
+## The ball's drawn radius, canvas units, at cue k `k` (1 / view scale): ball_radius, the
+## map's size, but never under ShotViewTuning.ball_min_screen_radius on screen (E6-S27), so
+## at 0.5x it stays readable.
+func ball_draw_radius(k: float) -> float:
+	return maxf(ball_radius, tuning.ball_min_screen_radius * k)
+
+
+## The ball's ink outline, canvas units: 1 at 1x and above, and never under 1 screen px.
+func ball_outline_width(k: float) -> float:
+	return maxf(1.0, k)
 
 
 func _draw_marker(piece: Node2D) -> void:
@@ -315,14 +335,35 @@ func _draw_hazard_slash(piece: Node2D) -> void:
 		return
 	var k := cue_k()
 	HazardCue.draw_ob_slash(piece, shadow_screen() - piece.position, hazard_cue_radius * k, k,
-			tuning.ob_slash_reach, ob_color, outline_color, ob_slash_gap(k))
+			ob_slash_reach_at(k), ob_color, outline_color, ob_slash_gap(k))
 
 
-## The OB slash's gap round the ball's centre, canvas units: the ball and its outline
-## (world size, ball_radius + 1) plus 1 px on screen (k), so the ball is never under the
-## slash at any zoom (E2-S13: the player sees where it stopped).
+## The OB slash's gap round the ball's centre, canvas units: the ball and its outline as
+## drawn (ball_draw_radius + ball_outline_width) plus 1 px on screen (k), so the ball is
+## never under the slash at any zoom (E2-S13: the player sees where it stopped).
 func ob_slash_gap(k: float) -> float:
-	return ball_radius + 1.0 + k
+	return ball_draw_radius(k) + ball_outline_width(k) + k
+
+
+## Screen length of one slash piece at cue k `k` with reach `reach`: its half length less
+## the gap round the ball.
+func _slash_piece_screen(k: float, reach: float) -> float:
+	var half := HazardCue.ob_slash(Vector2.ZERO, hazard_cue_radius, reach)[1].length()
+	return half - ob_slash_gap(k) / k
+
+
+## The OB slash's reach (times the ring's radius) at cue k `k` (E6-S27): the tuned
+## ob_slash_reach, or further where the ball (which grows with the map while the ring keeps
+## its screen size) would leave each slash piece shorter on screen than at 1x. At 2x the
+## slash runs further past the ring, so it still reads beside the larger ball.
+func ob_slash_reach_at(k: float) -> float:
+	var reach := tuning.ob_slash_reach
+	var want := _slash_piece_screen(1.0, reach)
+	var have := _slash_piece_screen(k, reach)
+	if have >= want:
+		return reach
+	var per_reach := HazardCue.ob_slash(Vector2.ZERO, hazard_cue_radius, 1.0)[1].length()
+	return reach + (want - have) / per_reach
 
 
 ## One Y-sorted piece of the shot, drawn by a callback on the view.

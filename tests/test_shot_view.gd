@@ -239,22 +239,23 @@ func test_the_ob_slash_runs_past_the_ring_and_over_the_ball() -> void:
 
 
 func test_the_ob_slash_leaves_the_ball_clear_at_every_zoom() -> void:
-	var tuning := ShotViewTuning.load_default()
 	var view := _view()
 	var at := Vector2(100, 50)
 	for s: float in [0.5, 1.0, 2.0]:
 		var k := HazardCue.screen_k(s)
 		var r := view.hazard_cue_radius * k
+		var reach := view.ob_slash_reach_at(k)
 		var gap := view.ob_slash_gap(k)
-		var whole := HazardCue.ob_slash(at, r, tuning.ob_slash_reach)
-		var pieces := HazardCue.ob_slash_pieces(at, r, tuning.ob_slash_reach, gap)
+		var whole := HazardCue.ob_slash(at, r, reach)
+		var pieces := HazardCue.ob_slash_pieces(at, r, reach, gap)
 		assert_eq(pieces.size(), 4)
 		assert_almost_eq(pieces[0], whole[0], Vector2(EPS, EPS), "outer end kept at %.1fx" % s)
 		assert_almost_eq(pieces[3], whole[1], Vector2(EPS, EPS), "outer end kept at %.1fx" % s)
-		# The ball and its outline span ball_radius + 1 canvas units; the slash's ink (its
-		# inner ends) stops at least 1 screen px (k) past that.
+		# The ball and its outline span ball_draw_radius + ball_outline_width canvas units;
+		# the slash's ink (its inner ends) stops at least 1 screen px (k) past that.
+		var ball_span := view.ball_draw_radius(k) + view.ball_outline_width(k)
 		for p: Vector2 in [pieces[1], pieces[2]]:
-			assert_gt((p - at).length() * s, (view.ball_radius + 1.0) * s + 0.99,
+			assert_gt((p - at).length() * s, ball_span * s + 0.99,
 					"the slash stops clear of the ball at %.1fx" % s)
 		# Each piece still has length, so the slash reads on both sides of the ball.
 		assert_gt((pieces[1] - pieces[0]).length() * s, 4.0, "lower piece at %.1fx" % s)
@@ -263,6 +264,49 @@ func test_the_ob_slash_leaves_the_ball_clear_at_every_zoom() -> void:
 	var one := HazardCue.ob_slash_pieces(at, 10.0, 1.8, 0.0)
 	assert_almost_eq(one[1], at, Vector2(EPS, EPS))
 	assert_almost_eq(one[2], at, Vector2(EPS, EPS))
+
+
+## Screen length of one OB slash piece (outer end to the gap round the ball) at view scale s.
+func _slash_piece_screen(view: ShotView, s: float) -> float:
+	var k := HazardCue.screen_k(s)
+	var pieces := HazardCue.ob_slash_pieces(Vector2.ZERO, view.hazard_cue_radius * k,
+			view.ob_slash_reach_at(k), view.ob_slash_gap(k))
+	return minf((pieces[1] - pieces[0]).length(), (pieces[3] - pieces[2]).length()) * s
+
+
+func test_the_ball_keeps_a_minimum_screen_size_when_zoomed_out() -> void:
+	# E6-S27: at 0.5x the ball no longer shrinks to about 2 px; it draws at least
+	# ShotViewTuning.ball_min_screen_radius on screen, and it still scales with the map above.
+	var tuning := ShotViewTuning.load_default()
+	assert_gt(tuning.ball_min_screen_radius, 2.0, "bigger than the 0.5x ball before E6-S27")
+	var view := _view()
+	var radius_1x := view.ball_draw_radius(1.0)
+	assert_almost_eq(radius_1x, view.ball_radius, EPS, "1x is unchanged")
+	for s: float in [0.5, 1.0, 2.0]:
+		var k := HazardCue.screen_k(s)
+		var on_screen := view.ball_draw_radius(k) * s
+		assert_gte(on_screen, tuning.ball_min_screen_radius - EPS, "ball at %.1fx" % s)
+		assert_gte(view.ball_outline_width(k) * s, 1.0 - EPS, "outline at %.1fx" % s)
+		assert_gte(on_screen, minf(view.ball_radius * s, view.ball_radius) - EPS,
+				"never smaller than the map would draw it at %.1fx" % s)
+	assert_almost_eq(view.ball_draw_radius(HazardCue.screen_k(0.5)) * 0.5,
+			tuning.ball_min_screen_radius, EPS, "0.5x is held at the minimum")
+	assert_almost_eq(view.ball_draw_radius(HazardCue.screen_k(2.0)) * 2.0,
+			view.ball_radius * 2.0, EPS, "2x still grows with the map")
+
+
+func test_the_ob_slash_at_2x_is_as_long_on_screen_as_at_1x() -> void:
+	# E6-S27: at 2x the ball fills more of the fixed-size ring, so the slash reaches further
+	# out and each piece stays at least its 1x length on screen; at 0.5x too.
+	var view := _view()
+	var at_1x := _slash_piece_screen(view, 1.0)
+	assert_gt(at_1x, 12.0, "the 1x piece is longer than E6-S16's 2x piece")
+	assert_gte(_slash_piece_screen(view, 2.0), at_1x - EPS, "2x piece")
+	assert_gte(_slash_piece_screen(view, 0.5), at_1x - EPS, "0.5x piece")
+	var tuning := ShotViewTuning.load_default()
+	assert_almost_eq(view.ob_slash_reach_at(1.0), tuning.ob_slash_reach, EPS, "1x reach kept")
+	assert_gt(view.ob_slash_reach_at(HazardCue.screen_k(2.0)), tuning.ob_slash_reach,
+			"2x reaches further past the ring")
 
 
 func test_ob_water_and_blocked_differ_by_shape() -> void:

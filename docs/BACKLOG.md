@@ -470,7 +470,7 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: `LandPanel.parcel_name` adds a tie-breaker so no two parcels on any map size from 16 x 16 to 256 x 256 share a name. The confirm stays clear of every visible Build HUD control, either found without a hand list or guarded by a test that fails when a Build HUD control is missing from `confirm_avoid`.
   - Test: `tests/test_land_hud.gd` (unique names over every square map size in parcel steps up to 256 x 256; the HUD control guard).
   - Touches: `scenes/`, `tests/`
-- [ ] E6-S27 Keep the ball readable at 0.5x and 2x. The OB cue keeps its size on screen, and the ball should too.
+- [x] E6-S27 Keep the ball readable at 0.5x and 2x. The OB cue keeps its size on screen, and the ball should too.
   - Note: (found in E6 review) `ShotView`'s `ball_radius` scales with zoom, so at 0.5x the ball is about 2 px across. At 2x the ball (10 screen px) fills more of the 16 px fixed-size OB ring, leaving each slash piece about 12 screen px (E6-S16).
   - Accept: the ball draws at a minimum screen size (a tunable in the shot view tuning resource) at 0.5x, and at 2x the OB cue's slash stays at least as long on screen as at 1x. OB, water and the blocked marker still differ by shape.
   - Test: `tests/test_shot_view.gd` (ball screen size at each zoom, slash length at 2x); screenshots through `scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn` at 0.5x, 1x and 2x.
