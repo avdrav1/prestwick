@@ -126,32 +126,67 @@ func play_hole(number: int) -> void:
 
 
 ## Frames hole 1 (or, without one placed, the lowest-numbered hole with a tee) when its tee and
-## cup are on the map: the camera centres between them, zoomed out until both show (E3-S2).
-## False, leaving the camera, when there is no such hole.
+## cup are on the map: frame_hole (E3-S2). False, leaving the camera, when there is no such hole.
 func frame_first_hole() -> bool:
 	var h: HoleData = SwingControl.hole_to_play(course, 1)
-	if h == null or not course.in_bounds(h.cup.x, h.cup.y):
+	return h != null and frame_hole(h.number)
+
+
+## Picks hole `number` in the hole list and frames it clear of the whole HUD (E3-S9; E3-S7's
+## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect, zoomed out until
+## both show; a hole too long for the farthest zoom keeps its tee inside the free view and runs
+## off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
+## course has no hole `number` with its tee and cup on the map.
+func frame_hole(number: int) -> bool:
+	var h: HoleData = null
+	for each: HoleData in course.holes:
+		if each.number == number:
+			h = each
+			break
+	if h == null or not course.in_bounds(h.tee.x, h.tee.y) or not course.in_bounds(h.cup.x, h.cup.y):
 		return false
-	camera.frame_points(_tile_world(h.tee), _tile_world(h.cup), free_view_rect())
+	build_tool.select_hole(number)
+	camera.frame_points(tile_world(h.tee), tile_world(h.cup), free_view_rect())
 	return true
 
 
-## The part of the view, in screen px, that the HUD leaves free: right of the left column
-## (mode label, buttons, land panel), left of the right panels (hole panel, score card) and
-## above the bottom panels (palette, swing panel), counting only those shown. Hole framing
-## (frame_first_hole) fits the hole inside it, so no panel covers the tee or the pin.
+## The HUD controls that sit over the view and are shown now, in three groups by the screen edge
+## they hold: the left column (mode label, buttons, land panel), the right panels (hole panel,
+## score card) and the bottom panels (build palette, swing panel).
+func hud_controls() -> Array[Control]:
+	var out: Array[Control] = []
+	for group: Array in _hud_groups():
+		for c: Control in group:
+			if c.visible:
+				out.append(c)
+	return out
+
+
+func _hud_groups() -> Array:
+	return [
+		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel],
+		[hole_panel, score_card],
+		[build_palette, swing_panel],
+	]
+
+
+## The part of the view, in screen px, that the HUD leaves free (E3-S9): right of the left
+## column, left of the right panels and above the bottom panels, counting only those shown
+## (hud_controls), so it overlaps none of them. Hole framing (frame_hole) fits the hole inside
+## it, so no control covers the tee or the pin.
 func free_view_rect() -> Rect2:
 	var r := Rect2(Vector2.ZERO, camera.view_size())
 	var left: float = r.position.x
 	var right: float = r.end.x
 	var bottom: float = r.end.y
-	for c: Control in [mode_label, mode_button, new_course_button, new_sandbox_button, land_panel]:
+	var groups: Array = _hud_groups()
+	for c: Control in groups[0]:
 		if c.visible:
 			left = maxf(left, _hud_rect(c).end.x)
-	for c: Control in [hole_panel, score_card]:
+	for c: Control in groups[1]:
 		if c.visible:
 			right = minf(right, _hud_rect(c).position.x)
-	for c: Control in [build_palette, swing_panel]:
+	for c: Control in groups[2]:
 		if c.visible:
 			bottom = minf(bottom, _hud_rect(c).position.y)
 	return Rect2(left, r.position.y, maxf(right - left, 0.0), maxf(bottom - r.position.y, 0.0))
@@ -178,7 +213,7 @@ func _hud_rect(c: Control) -> Rect2:
 
 
 ## The centre of tile `cell`'s top in the camera's space.
-func _tile_world(cell: Vector2i) -> Vector2:
+func tile_world(cell: Vector2i) -> Vector2:
 	var at: Vector2 = Iso.tile_to_screen(Vector2(cell), course.get_height(cell.x, cell.y))
 	return camera.get_parent().to_local(course_view.to_global(at))
 

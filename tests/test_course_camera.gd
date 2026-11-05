@@ -244,3 +244,76 @@ func test_a_panned_camera_does_not_zoom_for_the_lead() -> void:
 	_cam.pan(Vector2(10, 0))
 	_cam.set_lead(Vector2(1568, 784))
 	assert_eq(_cam.zoom, Vector2.ONE, "scouting: the player has the camera")
+
+
+# --- framing a hole clear of the whole HUD (E3-S9) ---
+
+const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+
+
+func test_a_long_hole_keeps_its_tee_inside_the_safe_area_in_every_direction() -> void:
+	_cam.view_size_override = Vector2(1280, 720)
+	_cam.frame(Rect2(-20000, -20000, 40000, 40000))
+	var safe := Rect2(196, 0, 735, 622)
+	var inner: Rect2 = safe.grow(-_cam.tuning.aim_frame_margin + 0.5)
+	for dir: Vector2 in [Vector2(2, 1), Vector2(-2, -1), Vector2(2, -1), Vector2(-2, 1)]:
+		var tee := Vector2(300, -200)
+		var cup: Vector2 = tee + dir * 1500.0
+		_cam.frame_points(tee, cup, safe)
+		assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "%s: the farthest zoom" % dir)
+		var t: Vector2 = _cam.screen_point(tee)
+		assert_true(inner.has_point(t), "%s: the tee %s shows inside %s" % [dir, t, safe])
+		var toward: Vector2 = _cam.screen_point(cup) - t
+		assert_gt(toward.dot(dir), 0.0, "%s: the view leans toward the cup" % dir)
+		var mid_on_screen: Vector2 = t + toward.normalized() * 100.0
+		assert_true(safe.has_point(mid_on_screen), "%s: the hole runs into the free view" % dir)
+
+
+## E3-S9 Accept: every nine_holes hole framed at 1280 x 720 (the hole list showing all nine
+## rows) puts its tee inside the free view, clear of every HUD control: the top-left column,
+## the hole panel and the build palette. A hole that fits at the farthest zoom has its cup
+## there too. One too long for any zoom (most par 4s and 5s at 0.5x: hole 1 is 1216 x 608 px
+## on screen against a free view of about 735 x 622) favours the tee and leaves its cup off
+## the screen past the free view, never under a control.
+func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	var c: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(c))
+	m.show_course(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	var cam: CourseCamera = m.camera
+	var screen := Rect2(Vector2.ZERO, cam.view_size())
+	var fitting: Array[int] = []
+	for h: HoleData in c.holes:
+		assert_true(m.frame_hole(h.number), "hole %d frames" % h.number)
+		assert_eq(m.build_tool.hole_number, h.number, "and is picked")
+		var free: Rect2 = m.free_view_rect()
+		var controls: Array[Control] = m.hud_controls()
+		var names: PackedStringArray = []
+		for ctl: Control in controls:
+			names.append(ctl.name)
+		for want: String in ["ModeButton", "NewSandboxButton", "HolePanel", "BuildPalette"]:
+			assert_has(names, want, "%s is counted" % want)
+		for ctl: Control in controls:
+			var r: Rect2 = m._hud_rect(ctl)
+			assert_false(free.intersects(r), "hole %d: the free view %s misses %s %s" % [h.number, free, ctl.name, r])
+		var tee: Vector2 = cam.screen_point(m.tile_world(h.tee))
+		var cup: Vector2 = cam.screen_point(m.tile_world(h.cup))
+		var inner: Rect2 = free.grow(-cam.tuning.aim_frame_margin + 0.5)
+		assert_true(inner.has_point(tee), "hole %d: its tee %s shows inside %s" % [h.number, tee, free])
+		var fits: bool = cam.fits(m.tile_world(h.tee), m.tile_world(h.cup), cam.tuning.zoom_levels[0], free.size)
+		if fits:
+			fitting.append(h.number)
+			assert_true(inner.has_point(cup), "hole %d fits: its cup %s shows inside %s" % [h.number, cup, free])
+		else:
+			assert_eq(cam.zoom.x, cam.tuning.zoom_levels[0], "hole %d: framed at the farthest zoom" % h.number)
+			assert_false(screen.has_point(cup), "hole %d: its cup %s is past the screen, not under the HUD" % [h.number, cup])
+		for ctl: Control in controls:
+			var r: Rect2 = m._hud_rect(ctl)
+			assert_false(r.has_point(tee), "hole %d: %s does not cover its tee" % [h.number, ctl.name])
+			assert_false(r.has_point(cup), "hole %d: %s does not cover its cup" % [h.number, ctl.name])
+	gut.p("E3-S9: holes whose tee and cup both fit at 0.5x: %s" % [fitting])
+	assert_eq(fitting, [2, 4, 7] as Array[int], "the three par 3s fit; the par 4s and 5s are longer than 0.5x shows")
