@@ -2,7 +2,8 @@ class_name GuestTuning
 extends RefCounted
 ## Every guest tunable (E3-S1, D38 to D43), read from res://data/guests.json. docs/design.md
 ## Guests and reactions has a line for each. Read-only: /balance reactions (E3-S8) tunes the
-## file. E3-S3 reads the swing, aim and Ball work numbers; the rest wait for E3-S4 to E3-S6.
+## file. E3-S3 reads the swing, aim and Ball work numbers, E3-S4 the day, arrivals, draws, walking
+## and stroke time; the checks' numbers wait for E3-S6.
 
 const PATH: String = "res://data/guests.json"
 
@@ -13,7 +14,14 @@ var group_size_max: int = 0
 var arrival_window: float = 0.0
 
 var walk_yd_per_s: float = 0.0
+## E3-S4: a walk follows a cart path when one has a tile within cart_path_reach_yd of both
+## ends and the route along it is at most cart_path_max_detour times the straight line.
+var cart_path_reach_yd: float = 0.0
+var cart_path_max_detour: float = 0.0
 var stroke_s: float = 0.0
+## E3-S4 review: the most simulated seconds GuestBrain.advance_real steps in one frame; a
+## longer frame's extra time is let go (the day runs late, never differently).
+var max_steps_per_frame: int = 0
 var flight_draw_speed: float = 0.0
 
 var skill_min: int = 1
@@ -92,7 +100,10 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
 	t.arrival_window = _float(d, "arrival_window", errors)
 	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
+	t.cart_path_reach_yd = _float(d, "cart_path_reach_yd", errors)
+	t.cart_path_max_detour = _float(d, "cart_path_max_detour", errors)
 	t.stroke_s = _float(d, "stroke_s", errors)
+	t.max_steps_per_frame = CourseData.read_int(d, "max_steps_per_frame", errors)
 	t.flight_draw_speed = _float(d, "flight_draw_speed", errors)
 	t.skill_min = CourseData.read_int(d, "skill_min", errors)
 	t.skill_max = CourseData.read_int(d, "skill_max", errors)
@@ -140,6 +151,16 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("skill_max must be above skill_min")
 	if t.guest_min_power <= 0.0 or t.guest_min_power > 1.0:
 		errors.append("guest_min_power must be above 0 and at most 1")
+	if t.walk_yd_per_s <= 0.0:
+		errors.append("walk_yd_per_s must be above 0")
+	if t.cart_path_max_detour < 1.0:
+		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
+	if t.sim_ticks_per_s < t.guest_ticks_per_s:
+		errors.append("sim_ticks_per_s must be at least guest_ticks_per_s")
+	if t.group_size_min < 1 or t.group_size_max < t.group_size_min:
+		errors.append("group sizes must run from at least 1 up")
+	if t.max_steps_per_frame < 1:
+		errors.append("max_steps_per_frame must be at least 1")
 	if t.guest_ticks_per_s < 1:
 		errors.append("guest_ticks_per_s must be at least 1")
 	if t.guest_putt_max_runs < 2:
