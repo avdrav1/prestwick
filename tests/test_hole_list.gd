@@ -853,3 +853,12 @@ func _rules(issues: Array[CourseValidator.Issue]) -> Array[int]:
 	for i: CourseValidator.Issue in issues:
 		out.append(i.rule)
 	return out
+
+
+## D47 (E3-S25): the list row and the panel's title quote the line of play.
+func test_a_doglegs_row_shows_its_line_of_play() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	assert_eq(HolePanel.row_text(c, c.holes[0]), "1  Par 4  450 yd  open")
+	var m := _main_with(c)
+	assert_string_contains(m.hole_panel.title_label.text, "450 yd")
+

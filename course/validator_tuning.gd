@@ -20,10 +20,17 @@ const PATH: String = "res://course/validator_tuning.tres"
 @export var zone_from_yd: int = 300
 ## Rule 5: the landing zone is a disc centred
 ## min(landing_distance_yd, yardage - cup_clearance_yd) from the tee along the tee-to-cup line.
+## Rule 4 (D47) reads the same disc on every hole of landing_distance_yd or more (not only
+## from zone_from_yd, E3-S25 review): a hole whose disc holds no fairway is a dogleg, turning
+## at its own fairway that far from the tee (CourseValidator.turn_point).
 @export var landing_distance_yd: float = 240.0
 @export var cup_clearance_yd: float = 60.0
 ## Rule 5: a tee whose tile centre is this close to the zone centre, or closer, is inside.
 @export var zone_radius_yd: float = 30.0
+## Rule 4 (D47, E3-S25 review): a dogleg turns only at fairway that runs on, 8 neighbours
+## through fairway, to a tile centre this close to its cup, so another hole's fairway never
+## bends it. 40 yd: a 5 x 5 green and an apron or a fringe bunker round it.
+@export var turn_cup_reach_yd: float = 40.0
 ## Footprint (CourseValidator.in_footprint, read by course/builder.gd): tiles whose centre is within this distance of the tee-to-cup segment.
 @export var footprint_half_width_yd: float = 30.0
 

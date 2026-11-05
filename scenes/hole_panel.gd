@@ -181,7 +181,7 @@ func refresh() -> void:
 	var c: CourseData = b.course if b != null else null
 	var line: String = "Hole %d" % number
 	if h != null and c.in_bounds(h.tee.x, h.tee.y) and c.in_bounds(h.cup.x, h.cup.y):
-		line += ", %d yd" % CourseValidator.yardage(h.tee, h.cup)
+		line += ", %d yd" % b.yardage_at(slot)
 	title_label.text = line
 	if h == null:
 		status_label.text = "Status: no tee or cup yet"
@@ -266,16 +266,17 @@ static func duplicate_text(b: CourseBuilder, slot: int) -> String:
 	return "Duplicate number. rule 1: hole %d has a second tee and cup" % b.hole_at(slot).number
 
 
-## One line for a hole in the list: number, par, yardage (once tee and cup are on the map) and
-## status.
-static func row_text(c: CourseData, h: HoleData) -> String:
+## One line for a hole in the list: number, par, yardage (once tee and cup are on the map; the
+## line of play, D47: `yards` as the builder's latest run measured it, or measured here by a
+## fresh CourseValidator when negative) and status.
+static func row_text(c: CourseData, h: HoleData, yards: int = -1) -> String:
 	var parts := PackedStringArray([str(h.number), "Par %d" % h.par])
 	if not c.in_bounds(h.tee.x, h.tee.y):
 		parts.append("no tee")
 	elif not c.in_bounds(h.cup.x, h.cup.y):
 		parts.append("no cup")
 	else:
-		parts.append("%d yd" % CourseValidator.yardage(h.tee, h.cup))
+		parts.append("%d yd" % (yards if yards >= 0 else CourseValidator.new().hole_yardage(c, h)))
 	parts.append("open" if h.open else "closed")
 	return "  ".join(parts)
 
@@ -301,7 +302,7 @@ func _refresh_list(b: CourseBuilder) -> void:
 			continue
 		r.number = h.number
 		r.slot = slots[i]
-		r.pick_button.text = row_text(b.course, h)
+		r.pick_button.text = row_text(b.course, h, b.yardage_at(slots[i]))
 		r.pick_button.tooltip_text = r.duplicate_label.text if r.duplicate \
 				else "Build this hole: the Tee and Cup tools place its tee and cup"
 		r.pick_button.set_pressed_no_signal(slots[i] == picked)

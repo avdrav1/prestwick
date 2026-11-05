@@ -58,7 +58,7 @@ static func validate(path: String, out: Array[String]) -> int:
 	var failed: bool = false
 	for hole: HoleData in course.holes:
 		var issues := validator.check_hole(course, hole)
-		out.append("hole %d, par %d, %d yd" % [hole.number, hole.par, CourseValidator.yardage(hole.tee, hole.cup)])
+		out.append("hole %d, par %d, %d yd" % [hole.number, hole.par, validator.hole_yardage(course, hole)])
 		for rule: int in range(1, CourseValidator.RULE_COUNT + 1):
 			var line := "  rule %d pass" % rule
 			for issue: CourseValidator.Issue in issues:
@@ -101,7 +101,7 @@ static func inspect(path: String, out: Array[String]) -> int:
 	for hole: HoleData in course.holes:
 		var issues := validator.check_hole(course, hole, reach)
 		out.append("hole %d: par %d, %d yd, %s, %s" % [hole.number, hole.par,
-				CourseValidator.yardage(hole.tee, hole.cup), "open" if hole.open else "closed",
+				validator.hole_yardage(course, hole), "open" if hole.open else "closed",
 				"FAIL" if not issues.is_empty() else "PASS"])
 		for issue: CourseValidator.Issue in issues:
 			out.append("  rule %d FAIL at (%d, %d): %s" % [issue.rule, issue.tile.x, issue.tile.y, issue.reason])

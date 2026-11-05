@@ -15,8 +15,8 @@ extends RefCounted
 ## - corridor_par4: a 380 yd par 4 on generated land (LandGenerator) in a corridor one parcel
 ##   (16 tiles, 80 yd) wide, every other parcel unowned (planning notes, Routing on land).
 ## - dogleg_par4: New sandbox, a fairway east 250 yd then south 220 yd round a pond filling
-##   the inside corner; the straight tee-to-cup line is 333 yd, so rule 4 makes it a par 4
-##   though its line of play is 470 yd (docs/design.md Rule 4 on doglegs).
+##   the inside corner; the straight tee-to-cup line is 333 yd and the fairway's centre line
+##   470 yd. Rule 4 measures its line of play round the corner, 450 yd, a par 4 (D47).
 
 const W: int = 90
 const H: int = 30

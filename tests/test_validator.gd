@@ -4,6 +4,7 @@ extends GutTest
 ## rule 3's unowned land are E6-S4's (D30).
 
 const EXAMPLE_PATH := "res://courses/example_par3.json"
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 
 var _v: CourseValidator
 
@@ -742,3 +743,240 @@ func test_reach_finds_a_long_way_round_past_its_search_budget() -> void:
 	assert_true(r.connected(Vector2i(10, 64), Vector2i(10, 0)), "same side")
 	assert_false(r.connected(Vector2i(10, 64), Vector2i(15, 64)), "onto the water")
 	assert_true(r.connected(Vector2i(3, 3), Vector2i(3, 3)), "a tile reaches itself")
+
+
+# --- rule 4 on doglegs: the line of play (D47, E3-S25) ---
+
+## A rough 100 x 70 course: a 5-wide fairway from `tee` to `corner` and from `corner` to `cup`,
+## a 5 x 5 green round the cup, hole 1 at `par`. Painted through the builder, as Build does.
+func _dogleg(tee: Vector2i, corner: Vector2i, cup: Vector2i, par: int) -> CourseData:
+	var c := CourseData.create(100, 70, Surface.Type.ROUGH, 1)
+	var b := CourseBuilder.new(c)
+	for leg: Array in [[tee, corner], [corner, cup]]:
+		b.begin_stroke()
+		for cell: Vector2i in BuildTool.grid_line(leg[0], leg[1]):
+			b.paint(cell, Surface.Type.FAIRWAY, 5)
+		b.end_stroke()
+	b.paint(cup, Surface.Type.GREEN, 5)
+	b.place_tee(1, tee, par)
+	b.place_cup(1, cup)
+	b.set_par(1, par)
+	return c
+
+
+func test_a_straight_hole_with_fairway_in_its_zone_keeps_its_straight_yardage() -> void:
+	var c := ReactionHoles.fair_par4()
+	var h: HoleData = c.holes[0]
+	assert_null(_v.turn_point(c, h), "the fairway runs through the landing zone")
+	assert_eq(_v.hole_yardage(c, h), CourseValidator.yardage(h.tee, h.cup))
+	assert_eq(_v.hole_yardage(c, h), 380)
+
+
+func test_a_hole_with_no_fairway_keeps_its_straight_yardage() -> void:
+	var c := _course(100, 50, [HoleData.new(1, 4, Vector2i(2, 2), Vector2i(96, 2))])
+	assert_null(_v.turn_point(c, c.holes[0]), "nothing to bend toward")
+	assert_eq(_v.hole_yardage(c, c.holes[0]), 470)
+	assert_null(_issue(_v.check_hole(c, c.holes[0]), 4), "every rule-4 boundary case keeps its yardage")
+
+
+func test_a_bunker_on_the_zone_centre_keeps_a_straight_hole_straight() -> void:
+	var c := ReactionHoles.fair_par4()
+	var h: HoleData = c.holes[0]
+	var z: Vector2 = _v.landing_zone(h)
+	var at := Vector2i(roundi(z.x), roundi(z.y))
+	for y: int in range(at.y - 2, at.y + 3):
+		for x: int in range(at.x - 1, at.x + 2):
+			c.set_tile(x, y, c.get_height(x, y), Surface.Type.BUNKER)
+	assert_null(_v.turn_point(c, h), "fairway round the bunker is still inside the 30 yd disc")
+	assert_eq(_v.hole_yardage(c, h), 380)
+
+
+func test_the_reaction_dogleg_is_measured_round_its_corner() -> void:
+	# ReactionHoles.dogleg_par4: tee (6, 6), fairway east to (56, 6), then south to the cup
+	# (56, 50), round a pond. 333 yd straight; the straight zone centre (240 yd out) is in the
+	# pond, 60 yd or more from any fairway. The fairway tiles 240 yd (48 tiles) from the tee,
+	# to half a tile, are (54, 4) to (54, 12): the end of the east leg and the inside edge of
+	# the south leg. Their centre (54, 8) is the turn: 5 x sqrt(48² + 2²) = 240.21 yd out,
+	# then 5 x sqrt(2² + 42²) = 210.24 yd to the cup, 450.45 in all.
+	var c := ReactionHoles.dogleg_par4()
+	var h: HoleData = c.holes[0]
+	assert_eq(CourseValidator.yardage(h.tee, h.cup), 333, "the straight line")
+	var turn: Variant = _v.turn_point(c, h)
+	assert_not_null(turn, "the zone holds no fairway: a dogleg")
+	if turn != null:
+		assert_almost_eq((turn as Vector2).x, 54.0, 0.001)
+		assert_almost_eq((turn as Vector2).y, 8.0, 0.001)
+	assert_eq(_v.hole_yardage(c, h), 450, "round the corner")
+	assert_null(_issue(_v.check_hole(c, h), 4), "450 yd is still a par 4")
+	assert_true(h.open, "the reaction field's dogleg still opens")
+	var five := HoleData.new(1, 5, h.tee, h.cup)
+	var issue := _issue(_v.check_hole(c, five), 4)
+	assert_not_null(issue, "and not a par 5")
+	if issue:
+		assert_string_contains(issue.reason, "450 yd round the dogleg is a par 4, not par 5")
+		_assert_one_line(issue)
+
+
+func test_a_long_dogleg_is_a_par_5_though_its_straight_line_is_a_par_4() -> void:
+	# East 270 yd to (60, 6), south 270 yd to (60, 60): 381.8 yd straight, a par 4. The
+	# fairway 48 tiles out is (54, 4) to (54, 8), the east leg only (the south leg is 52 tiles
+	# or more away); its centre (54, 6) is 240 yd out, and 5 x sqrt(6² + 54²) = 271.66 yd from
+	# the cup: 511.66, rounded 512, a par 5.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var h: HoleData = c.holes[0]
+	assert_eq(CourseValidator.yardage(h.tee, h.cup), 382)
+	assert_eq(_v.turn_point(c, h), Vector2(54, 6))
+	assert_eq(_v.hole_yardage(c, h), 512)
+	assert_null(_issue(_v.check_hole(c, h), 4), "a par 5 round its corner")
+	var four := HoleData.new(1, 4, h.tee, h.cup)
+	var issue := _issue(_v.check_hole(c, four), 4)
+	assert_not_null(issue, "not the par 4 its straight line gives")
+	if issue:
+		assert_eq(issue.tile, h.cup, "the cup is at fault, as before")
+		assert_string_contains(issue.reason, "512 yd round the dogleg is a par 5, not par 4")
+
+
+func test_painting_the_corner_rough_straightens_the_line_again() -> void:
+	# D11's cost of a line of play: the yardage follows the fairway. With the east leg's end
+	# painted over, no fairway is 240 yd out and the hole is measured straight.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	for y: int in range(0, 15):
+		for x: int in range(50, 58):
+			if c.get_surface(x, y) == Surface.Type.FAIRWAY:
+				c.set_tile(x, y, c.get_height(x, y), Surface.Type.ROUGH)
+	assert_null(_v.turn_point(c, c.holes[0]))
+	assert_eq(_v.hole_yardage(c, c.holes[0]), 382)
+
+
+func test_a_hole_shorter_than_a_tee_shot_has_no_turn() -> void:
+	# Under landing_distance_yd (240) on the straight line the cup is in reach of a tee shot:
+	# no disc, no turn, whatever the fairway does.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(30, 6), Vector2i(30, 30), 3)
+	var h: HoleData = c.holes[0]
+	assert_lt(CourseValidator.yardage(h.tee, h.cup), 240)
+	assert_null(_v.turn_point(c, h))
+	assert_eq(_v.hole_yardage(c, h), CourseValidator.yardage(h.tee, h.cup))
+
+
+func test_a_sharp_dogleg_under_300_yd_straight_is_measured_round_its_corner() -> void:
+	# E3-S25 review: east 210 yd to (48, 6), south 210 yd to the cup (48, 48). 297 yd straight
+	# (no rule 5 zone), 420 along the fairway. Rule 4's disc is min(240, 297 - 60) = 237 yd out,
+	# on the diagonal, 40 yd or more from either leg: a dogleg. The fairway 47.4 tiles out,
+	# ahead of the tee, is the south leg near (48, 28): about 237 + 100 = 337 yd, a par 4.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(48, 6), Vector2i(48, 48), 4)
+	var h: HoleData = c.holes[0]
+	assert_eq(CourseValidator.yardage(h.tee, h.cup), 297)
+	assert_null(_v.landing_zone(h), "under zone_from_yd: rule 5 has no zone")
+	var turn: Variant = _v.turn_point(c, h)
+	assert_not_null(turn, "but rule 4 still finds its corner")
+	if turn != null:
+		assert_almost_eq((turn as Vector2).x, 48.0, 0.25)
+		assert_almost_eq((turn as Vector2).y, 28.0, 0.5)
+	var yards: int = _v.hole_yardage(c, h)
+	assert_between(yards, 330, 345)
+	assert_null(_issue(_v.check_hole(c, h), 4), "%d yd round the corner is a par 4" % yards)
+	var three := HoleData.new(1, 3, h.tee, h.cup)
+	assert_not_null(_issue(_v.check_hole(c, three), 4), "and not the par 3 its straight line gives")
+
+
+## A rough 150 x 100 course with a 5-wide fairway strip from `a` to `b` (another hole's) and
+## hole 1 from `tee` to `cup` at `par`, with a green round its cup and no fairway of its own.
+func _beside(a: Vector2i, b: Vector2i, tee: Vector2i, cup: Vector2i, par: int) -> CourseData:
+	var c := CourseData.create(150, 100, Surface.Type.ROUGH, 1)
+	var bld := CourseBuilder.new(c)
+	bld.begin_stroke()
+	for cell: Vector2i in BuildTool.grid_line(a, b):
+		bld.paint(cell, Surface.Type.FAIRWAY, 5)
+	bld.end_stroke()
+	bld.paint(cup, Surface.Type.GREEN, 5)
+	bld.place_tee(1, tee, par)
+	bld.place_cup(1, cup)
+	bld.set_par(1, par)
+	return c
+
+
+func test_another_holes_fairway_beside_the_tee_never_turns_a_hole() -> void:
+	# E3-S25 review: hole 1 has no fairway; a fairway runs east 200 yd to its north, crossing
+	# the 240 yd ring at about (31, 10). It leads to someone else's green, not to this cup.
+	var c := _beside(Vector2i(5, 10), Vector2i(95, 10), Vector2i(5, 50), Vector2i(85, 50), 4)
+	var h: HoleData = c.holes[0]
+	assert_null(_v.turn_point(c, h), "the neighbour's fairway is not this hole's line")
+	assert_eq(_v.hole_yardage(c, h), 400)
+	assert_null(_issue(_v.check_hole(c, h), 4))
+
+
+func test_another_holes_fairway_ahead_and_to_the_side_never_turns_a_hole() -> void:
+	# A strip 48 tiles east of the tee, north of it: ahead of the tee but not this hole's.
+	var c := _beside(Vector2i(108, 5), Vector2i(108, 14), Vector2i(60, 10), Vector2i(60, 90), 4)
+	assert_null(_v.turn_point(c, c.holes[0]))
+	assert_eq(_v.hole_yardage(c, c.holes[0]), 400)
+
+
+func test_fairway_behind_the_tee_never_turns_a_hole() -> void:
+	# A strip north-south 48 tiles behind the tee: even if it ran to this cup's side, it lies
+	# behind the tee. Here it is someone else's, and behind.
+	var c := _beside(Vector2i(12, 5), Vector2i(12, 95), Vector2i(60, 30), Vector2i(136, 30), 4)
+	assert_null(_v.turn_point(c, c.holes[0]))
+	assert_eq(_v.hole_yardage(c, c.holes[0]), 380)
+
+
+func test_a_forced_carry_beside_a_parallel_hole_keeps_its_straight_yardage() -> void:
+	# A straight 460 yd par 4: fairway to 150 yd, water across its zone, fairway again to the
+	# cup. A parallel hole's fairway 100 yd to the side crosses the 240 yd ring; it does not run
+	# to this cup, so the hole stays straight.
+	var c := CourseData.create(150, 100, Surface.Type.ROUGH, 1)
+	var bld := CourseBuilder.new(c)
+	var tee := Vector2i(6, 30)
+	var cup := Vector2i(98, 30)
+	for leg: Array in [[tee, Vector2i(36, 30)], [Vector2i(66, 30), cup], [Vector2i(6, 50), Vector2i(98, 50)]]:
+		bld.begin_stroke()
+		for cell: Vector2i in BuildTool.grid_line(leg[0], leg[1]):
+			bld.paint(cell, Surface.Type.FAIRWAY, 5)
+		bld.end_stroke()
+	for y: int in range(20, 41):
+		for x: int in range(38, 64):
+			c.set_tile(x, y, 1, Surface.Type.WATER)
+	bld.paint(cup, Surface.Type.GREEN, 5)
+	bld.place_tee(1, tee, 4)
+	bld.place_cup(1, cup)
+	assert_null(_v.turn_point(c, c.holes[0]), "the parallel fairway is not this hole's")
+	assert_eq(_v.hole_yardage(c, c.holes[0]), 460)
+
+
+func test_painting_a_neighbours_fairway_does_not_close_an_open_hole() -> void:
+	# The rerun after every edit: hole 1 (no fairway of its own) stays open while a second
+	# hole's fairway is painted across its 240 yd ring.
+	var c := _beside(Vector2i(5, 10), Vector2i(6, 10), Vector2i(5, 50), Vector2i(85, 50), 4)
+	var bld := CourseBuilder.new(c)
+	assert_true(bld.open_hole(1))
+	bld.begin_stroke()
+	for cell: Vector2i in BuildTool.grid_line(Vector2i(5, 10), Vector2i(95, 10)):
+		bld.paint(cell, Surface.Type.FAIRWAY, 5)
+	bld.end_stroke()
+	assert_true(bld.hole(1).open, "hole 1 still open")
+	assert_eq(bld.yardage_at(0), 400, "and still 400 yd on its card")
+
+
+func test_the_nine_hole_fixture_and_generated_holes_stay_straight() -> void:
+	var nine: CourseData = NineHoles.land()
+	var opened: Array[int] = NineHoles.build(CourseBuilder.new(nine))
+	assert_eq(opened, [1, 2, 3, 4, 5, 6, 7, 8, 9] as Array[int], "all nine still open")
+	for h: HoleData in nine.holes:
+		assert_null(_v.turn_point(nine, h), "nine_holes hole %d is straight" % h.number)
+	for par: int in [3, 4, 5]:
+		for water: bool in [false, true]:
+			var c := CourseGenerator.generate(par, false, water)
+			assert_null(_v.turn_point(c, c.holes[0]), "generated par %d water %s is straight" % [par, water])
+
+
+func test_a_dogleg_costs_the_validator_little() -> void:
+	if BestTime.later(self):
+		return
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var straight := ReactionHoles.fair_par4()
+	var bent_ms: float = BestTime.ms(func() -> void: _v.hole_yardage(c, c.holes[0]))
+	var straight_ms: float = BestTime.ms(func() -> void: _v.hole_yardage(straight, straight.holes[0]))
+	gut.p("line of play: dogleg %.3f ms, straight hole %.3f ms (fastest of %d)" % [
+			bent_ms, straight_ms, BestTime.RUNS])
+	assert_lt(bent_ms, 2.0, "a dogleg's line of play stays under 2 ms (debug build)")
+	assert_lt(straight_ms, 1.0, "a straight hole's zone check stays under 1 ms")

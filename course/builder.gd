@@ -116,7 +116,15 @@ var prices: LandPrices:
 var issues: Dictionary:
 	get:
 		return _issues
+## One line per open hole the course brought in that the builder closed when it was made,
+## "Hole 3 closed: <its first failing rule's reason>", in course order: what the load (E4-S7)
+## and import (E5-S5) notice lists (D35), for example a dogleg saved as a straight-line par 4
+## before rule 4 measured the line of play (D47). Later edits never add to it. Read-only.
+var closed_on_load: Array[String]:
+	get:
+		return _closed_on_load.duplicate()
 
+var _closed_on_load: Array[String] = []
 var _course: CourseData
 var _tuning: BuilderTuning
 var _validator: CourseValidator
@@ -124,6 +132,8 @@ var _prices: LandPrices
 var _issues: Dictionary = {}
 ## The latest validator run per slot (CourseValidator.check_slots), in CourseData.holes order.
 var _slot_issues: Array = []
+## Each slot's rule 4 yardage from the same run (the line of play, D47), in the same order.
+var _slot_yards: Array[int] = []
 ## Undo steps, oldest first.
 var _undo: Array[Step] = []
 ## The open stroke's step, or null when no stroke is open.
@@ -148,8 +158,16 @@ func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: Co
 	_prices = p_prices if p_prices != null else LandPrices.load_default()
 	# A loaded course may bring in an open hole that fails a rule (a hand-edited or older
 	# file): close it now, before anyone reads the open flag. Not an undo step.
+	var was_open: Array[bool] = []
+	for h: HoleData in _course.holes:
+		was_open.append(h.open)
 	_rerun(Step.new())
 	_holes_dirty = false
+	for i: int in _course.holes.size():
+		var own: Array = _slot_issues[i]
+		if was_open[i] and not _course.holes[i].open and not own.is_empty():
+			_closed_on_load.append("Hole %d closed: %s" % [_course.holes[i].number,
+					(own[0] as CourseValidator.Issue).reason])
 
 
 ## A new course on the blank plot (D10): BuilderTuning's size, every tile its surface and
@@ -374,6 +392,17 @@ func issues_at(slot: int) -> Array[CourseValidator.Issue]:
 	if slot >= 0 and slot < _slot_issues.size():
 		out.assign(_slot_issues[slot])
 	return out
+
+
+## Slot `slot`'s yardage along its line of play (D47) as the latest validator run measured
+## it, what the card and the hole list show; 0 when its tee or cup is not placed. Measured
+## afresh for a slot the latest run did not see.
+func yardage_at(slot: int) -> int:
+	if slot >= 0 and slot < _slot_yards.size() and _slot_yards.size() == _course.holes.size():
+		return _slot_yards[slot]
+	if slot < 0 or slot >= _course.holes.size():
+		return 0
+	return _validator.hole_yardage(_course, _course.holes[slot])
 
 
 ## True when hole `number` exists, is closed and passes every rule.
@@ -676,7 +705,9 @@ func _finish(step: Step) -> void:
 ## Reruns the validator for every hole and closes each open one that now fails a rule,
 ## recording the holes in `step` first.
 func _rerun(step: Step) -> void:
-	_slot_issues = [] if _course.holes.is_empty() else _validator.check_slots(_course, _current_reach())
+	_slot_yards = []
+	_slot_issues = [] if _course.holes.is_empty() \
+			else _validator.check_slots(_course, _current_reach(), _slot_yards)
 	_issues = CourseValidator.by_number(_course, _slot_issues)
 	var hs: Array[HoleData] = _holes_copy()
 	var closed: bool = false

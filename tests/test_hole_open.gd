@@ -144,6 +144,48 @@ func test_a_pre_d33_open_short_par4_loads_closed_until_set_to_par3() -> void:
 	assert_true(b.open_hole(1), "set to par 3 it opens")
 
 
+## D47 (E3-S25): a course saved before rule 4 measured doglegs round their corner may hold
+## an open par 4 whose line of play is a par 5's. The builder closes it on load and says so in
+## one line per hole (closed_on_load), for the load notice (D35, E4-S7, E5-S5).
+func test_a_dogleg_saved_as_a_straight_par4_loads_closed_with_a_notice_line() -> void:
+	var c := CourseData.create(100, 70, Surface.Type.ROUGH, 1)
+	var tee := Vector2i(6, 6)
+	var corner := Vector2i(60, 6)
+	var cup := Vector2i(60, 60)
+	var painter := CourseBuilder.new(c)
+	for leg: Array in [[tee, corner], [corner, cup]]:
+		for cell: Vector2i in BuildTool.grid_line(leg[0], leg[1]):
+			painter.paint(cell, Surface.Type.FAIRWAY, 5)
+	painter.paint(cup, Surface.Type.GREEN, 5)
+	var hs: Array[HoleData] = [HoleData.new(1, 4, tee, cup, true)]
+	c.set_holes(hs)
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_json(JSON.stringify(c.to_dict()), errors)
+	assert_not_null(loaded, "it loads: %s" % [errors])
+	if loaded == null:
+		return
+	assert_true(loaded.holes[0].open, "the file has it open, a par 4 by its 382 yd straight line")
+	var b := CourseBuilder.new(loaded)
+	assert_false(b.hole(1).open, "the builder closes it")
+	assert_eq(_rules(b.issues_for(1)), [4] as Array[int])
+	assert_eq(b.closed_on_load.size(), 1, "one notice line")
+	if b.closed_on_load.size() == 1:
+		assert_string_starts_with(b.closed_on_load[0],
+				"Hole 1 closed: 512 yd round the dogleg is a par 5, not par 4")
+	assert_true(b.set_par(1, 5))
+	assert_true(b.open_hole(1), "set to par 5 it opens")
+	assert_eq(b.closed_on_load.size(), 1, "the notice is the load's, not later edits'")
+
+
+func test_a_course_that_loads_clean_has_no_notice_lines() -> void:
+	var c := _course()
+	c.set_tile(CUP.x, CUP.y, 2, Surface.Type.GREEN)
+	var hs: Array[HoleData] = [HoleData.new(1, 3, TEE, CUP, true), HoleData.new(2, 4, TEE + Vector2i(0, 10), CUP + Vector2i(0, 10), false)]
+	c.set_holes(hs)
+	var b := CourseBuilder.new(c)
+	assert_eq(b.closed_on_load, [] as Array[String], "hole 2 was closed already, hole 1 passes")
+
+
 # --- an edit inside the footprint closes the hole ---
 
 func test_an_edit_inside_the_footprint_closes_a_passing_hole() -> void:

@@ -8,7 +8,8 @@ extends RefCounted
 ##   2. Cup sits on a green tile.
 ##   3. A path of non-water, non-OB tiles connects tee to cup (4 neighbours, heights ignored).
 ##      A tile on an unowned parcel counts as OB (D30, E6-S4).
-##   4. Tee-to-cup yardage matches par (rounded straight line, par 3 < 320, par 5 > 470).
+##   4. Yardage matches par (par 3 < 320, par 5 > 470), on the rounded line of play (D47): the
+##      straight tee-to-cup line, or for a dogleg tee -> turn_point -> cup.
 ##   5. No tee inside another hole's landing zone (a disc on the line of each hole of
 ##      zone_from_yd or more, whatever its par: D35, E6-S37).
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
@@ -41,6 +42,12 @@ class Issue:
 
 
 var tuning: ValidatorTuning
+
+## _disc_offsets' cache: the radius it was built for and its offsets.
+var _disc_r: float = -1.0
+var _disc_cache: Array[Vector2i] = []
+## The yardage the latest check_hole's rule 4 measured, for check_slots' `yards`.
+var _rule4_yards: int = 0
 
 
 func _init(p_tuning: ValidatorTuning = null) -> void:
@@ -254,13 +261,17 @@ func check_course(course: CourseData) -> Dictionary:
 ## Every hole's failing rules, one array per entry of `course.holes`, in its order (E3-S11):
 ## two holes sharing a number each keep their own, rule 1 naming the other's tee. The passable
 ## graph is read once for all holes, or `reach` is used when given (the builder's, kept
-## between edits, E3-S12): it must describe `course` as it is now.
-func check_slots(course: CourseData, reach: Reach = null) -> Array:
+## between edits, E3-S12): it must describe `course` as it is now. When `yards` is given it is
+## filled with each slot's hole_yardage as rule 4 measured it (0 when not placed), so a caller
+## showing it need not measure a dogleg again (E3-S25 review).
+func check_slots(course: CourseData, reach: Reach = null, yards: Array[int] = []) -> Array:
 	var out: Array = []
+	yards.clear()
 	if reach == null:
 		reach = Reach.new(course)
 	for hole: HoleData in course.holes:
 		out.append(check_hole(course, hole, reach))
+		yards.append(_rule4_yards)
 	return out
 
 
@@ -288,6 +299,7 @@ static func by_number(course: CourseData, slots: Array) -> Dictionary:
 ## `reach` lets callers checking several holes on an unchanged course share rule 3's flood.
 func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Array[Issue]:
 	var issues: Array[Issue] = []
+	_rule4_yards = 0
 	var has_tee: bool = _placed(course, hole.tee)
 	var has_cup: bool = _placed(course, hole.cup)
 	if not has_tee or not has_cup:
@@ -302,16 +314,94 @@ func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Arra
 	_rule1(course, hole, own, issues)
 	_rule2(course, hole, issues)
 	_rule3(course, hole, reach if reach != null else Reach.new(course), issues)
-	_rule4(hole, issues)
+	_rule4(course, hole, issues)
 	_rule5(course, hole, own, issues)
 	_rule6(course, hole, issues)
 	return issues
 
 
-## Rule 4's yardage: the straight line between tile centres, rounded to the nearest yard.
-## The card shows this number and par is checked on it.
+## The straight tee-to-cup line between tile centres, rounded to the nearest yard. Rule 5's
+## zone threshold reads it; rule 4 and the card read hole_yardage, which is this number on
+## every hole but a dogleg (D47).
 static func yardage(tee: Vector2i, cup: Vector2i) -> int:
 	return roundi(Vector2(cup - tee).length() * YARDS_PER_TILE)
+
+
+## Rule 4's yardage (D47, E3-S25): the line of play, rounded to the nearest yard. A straight
+## hole's is yardage(tee, cup); a dogleg's runs tee -> turn_point -> cup. The card, the hole
+## list and /course-file show this number, and par is checked on it. 0 when not placed.
+func hole_yardage(course: CourseData, hole: HoleData) -> int:
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return 0
+	var turn: Variant = turn_point(course, hole)
+	if turn == null:
+		return yardage(hole.tee, hole.cup)
+	var b: Vector2 = turn
+	return roundi((b.distance_to(Vector2(hole.tee)) + b.distance_to(Vector2(hole.cup))) * YARDS_PER_TILE)
+
+
+## Where a dogleg's line of play turns (D47, E3-S25), in tile coordinates, or null for a hole
+## played on the straight line. A hole shorter on the straight line than a tee shot's landing
+## distance (landing_distance_yd, 240 yd) is played at its cup and never turns. A longer one
+## has rule 4's disc: zone_radius_yd round the point min(landing_distance_yd, yardage -
+## cup_clearance_yd) from the tee on the straight line (rule 5's zone on a hole of
+## zone_from_yd or more, but rule 4 does not need that threshold: E3-S25 review). It is
+## straight while any fairway tile's centre lies inside that disc. Otherwise its tee shot is
+## played to its own fairway: of the fairway tiles whose centres are the disc's distance from
+## the tee, to half a tile, and ahead of the tee (toward the cup's side of it), the runs of
+## neighbouring tiles (8 neighbours) whose fairway runs on, 8 neighbours through fairway, to
+## within turn_cup_reach_yd of the cup. Of those the run nearest the disc's centre is where
+## tee shots come down, and the turn is the mean of its tile centres. Another hole's fairway,
+## or fairway behind the tee, never turns a hole; with no such run the hole stays straight.
+## A reader only: what the course holds now, nothing stored, so painting the corner moves the
+## turn and the yardage with it.
+func turn_point(course: CourseData, hole: HoleData) -> Variant:
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return null
+	var line := Vector2(hole.cup - hole.tee)
+	var yards: int = yardage(hole.tee, hole.cup)
+	if line == Vector2.ZERO or yards < tuning.landing_distance_yd:
+		return null
+	var out_tiles: float = maxf(minf(tuning.landing_distance_yd, yards - tuning.cup_clearance_yd), 0.0) \
+			/ YARDS_PER_TILE
+	var tee := Vector2(hole.tee)
+	var z: Vector2 = tee + line.normalized() * out_tiles
+	if _fairway_in_disc(course, z, tuning.zone_radius_yd / YARDS_PER_TILE):
+		return null
+	var left := {}
+	for t: Vector2i in _fairway_ring(course, hole.tee, out_tiles):
+		if Vector2(t - hole.tee).dot(line) > 0.0:
+			left[t] = true
+	# Split the ring into runs (8-neighbour components), each with its nearest tile to z.
+	var runs: Array = []
+	while not left.is_empty():
+		var first: Vector2i = left.keys()[0]
+		left.erase(first)
+		var run: Array[Vector2i] = [first]
+		var i: int = 0
+		var near2: float = INF
+		while i < run.size():
+			var at: Vector2i = run[i]
+			i += 1
+			near2 = minf(near2, Vector2(at).distance_squared_to(z))
+			for dy: int in range(-1, 2):
+				for dx: int in range(-1, 2):
+					var n := at + Vector2i(dx, dy)
+					if left.has(n):
+						left.erase(n)
+						run.append(n)
+		runs.append([near2, run])
+	runs.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	var reach: float = tuning.turn_cup_reach_yd / YARDS_PER_TILE
+	for entry: Array in runs:
+		var run: Array[Vector2i] = entry[1]
+		if not _fairway_runs_to(course, run, hole.cup, reach):
+			continue
+		var sum := Vector2.ZERO
+		for t: Vector2i in run:
+			sum += Vector2(t)
+		return sum / run.size()
+	return null
 
 
 ## The par a rounded yardage calls for under rule 4.
@@ -393,14 +483,17 @@ func _rule3(course: CourseData, hole: HoleData, reach: Reach, issues: Array[Issu
 			% [what, _fmt(at)]))
 
 
-func _rule4(hole: HoleData, issues: Array[Issue]) -> void:
-	var yards: int = yardage(hole.tee, hole.cup)
+func _rule4(course: CourseData, hole: HoleData, issues: Array[Issue]) -> void:
+	var yards: int = hole_yardage(course, hole)
+	_rule4_yards = yards
 	var want: int = par_for_yardage(yards)
 	if hole.par == want:
 		return
 	var bands := "par 3 up to %d, par 4 %d to %d, par 5 %d and up" % [
 			tuning.par4_min_yd - 1, tuning.par4_min_yd, tuning.par5_min_yd - 1, tuning.par5_min_yd]
-	issues.append(Issue.new(4, hole.cup, "%d yd is a par %d, not par %d (%s)" % [yards, want, hole.par, bands]))
+	var played: String = " round the dogleg" if yards != yardage(hole.tee, hole.cup) else ""
+	issues.append(Issue.new(4, hole.cup, "%d yd%s is a par %d, not par %d (%s)" % [
+			yards, played, want, hole.par, bands]))
 
 
 func _rule5(course: CourseData, hole: HoleData, own: int, issues: Array[Issue]) -> void:
@@ -484,6 +577,106 @@ static func _first_blocked_on_line(course: CourseData, from: Vector2i, to: Vecto
 			var py := Vector2(p + Vector2i(0, sy) - from)
 			p = p + (Vector2i(sx, 0) if absf(line.cross(px)) <= absf(line.cross(py)) else Vector2i(0, sy))
 	return to
+
+
+## True when any fairway tile's centre is within `r` tiles of `centre`. Reads the disc's
+## tiles nearest the centre first, so a straight hole's fairway on its line answers at once.
+func _fairway_in_disc(course: CourseData, centre: Vector2, r: float) -> bool:
+	var at := Vector2i(roundi(centre.x), roundi(centre.y))
+	var r2: float = r * r
+	for d: Vector2i in _disc_offsets(r):
+		var x: int = at.x + d.x
+		var y: int = at.y + d.y
+		if x < 0 or y < 0 or x >= course.width or y >= course.height:
+			continue
+		if course.get_surface(x, y) == Surface.Type.FAIRWAY \
+				and Vector2(x, y).distance_squared_to(centre) <= r2:
+			return true
+	return false
+
+
+## Tile offsets that can hold a centre within `r` tiles of a point near the origin tile (a
+## point at most half a tile from it), nearest first; built once per radius.
+func _disc_offsets(r: float) -> Array[Vector2i]:
+	if _disc_r == r:
+		return _disc_cache
+	_disc_r = r
+	_disc_cache = []
+	var reach: int = ceili(r + 1.0)
+	var lim2: float = (r + 0.71) * (r + 0.71)
+	for dy: int in range(-reach, reach + 1):
+		for dx: int in range(-reach, reach + 1):
+			if dx * dx + dy * dy <= lim2:
+				_disc_cache.append(Vector2i(dx, dy))
+	_disc_cache.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.length_squared() < b.length_squared())
+	return _disc_cache
+
+
+## True when the fairway holding `run` (8 neighbours through fairway) has a tile centre within
+## `reach` tiles of `cup`: the run belongs to the fairway that leads to this hole's green. A
+## depth-first walk that tries the step toward the cup first, so a fairway that does lead
+## there answers after about its length in tiles; one that does not is read whole.
+static func _fairway_runs_to(course: CourseData, run: Array[Vector2i], cup: Vector2i, reach: float) -> bool:
+	var r2: float = reach * reach
+	var goal := Vector2(cup)
+	var seen := {}
+	var stack: Array[Vector2i] = []
+	for t: Vector2i in run:
+		seen[t] = true
+		stack.append(t)
+	while not stack.is_empty():
+		var at: Vector2i = stack.pop_back()
+		if Vector2(at).distance_squared_to(goal) <= r2:
+			return true
+		var toward := at + Vector2i(signi(cup.x - at.x), signi(cup.y - at.y))
+		for dy: int in range(-1, 2):
+			for dx: int in range(-1, 2):
+				var n := at + Vector2i(dx, dy)
+				if n != toward:
+					_walk(course, n, seen, stack)
+		_walk(course, toward, seen, stack)
+	return false
+
+
+static func _walk(course: CourseData, n: Vector2i, seen: Dictionary, stack: Array[Vector2i]) -> void:
+	if seen.has(n) or not course.in_bounds(n.x, n.y):
+		return
+	seen[n] = true
+	if course.get_surface(n.x, n.y) == Surface.Type.FAIRWAY:
+		stack.append(n)
+
+
+## The in-map fairway tiles whose centres are `r` tiles from `from`, to half a tile: a
+## one-tile ring, read row by row (two short spans a row), not its bounding box.
+static func _fairway_ring(course: CourseData, from: Vector2i, r: float) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var outer: float = r + 0.5
+	var inner: float = maxf(r - 0.5, 0.0)
+	var reach: int = floori(outer)
+	for dy: int in range(-reach, reach + 1):
+		var y: int = from.y + dy
+		if y < 0 or y >= course.height:
+			continue
+		var span: int = floori(sqrt(outer * outer - dy * dy))
+		var gap2: float = inner * inner - dy * dy
+		var near: int = ceili(sqrt(gap2)) if gap2 > 0.0 else 0
+		# Left span, then right span; with no gap they meet at dx = 0, read once.
+		for dx: int in range(-span, -near + 1):
+			_ring_tile(course, from, Vector2i(dx, dy), inner, outer, out)
+		for dx: int in range(maxi(near, 1), span + 1):
+			_ring_tile(course, from, Vector2i(dx, dy), inner, outer, out)
+	return out
+
+
+static func _ring_tile(course: CourseData, from: Vector2i, d: Vector2i, inner: float, outer: float,
+		out: Array[Vector2i]) -> void:
+	var x: int = from.x + d.x
+	if x < 0 or x >= course.width or course.get_surface(x, from.y + d.y) != Surface.Type.FAIRWAY:
+		return
+	var r: float = Vector2(d).length()
+	if r >= inner and r <= outer:
+		out.append(Vector2i(x, from.y + d.y))
 
 
 static func _yards_between(a: Vector2, b: Vector2) -> float:

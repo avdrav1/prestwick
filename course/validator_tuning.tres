@@ -10,4 +10,5 @@ zone_from_yd = 300
 landing_distance_yd = 240.0
 cup_clearance_yd = 60.0
 zone_radius_yd = 30.0
+turn_cup_reach_yd = 40.0
 footprint_half_width_yd = 30.0

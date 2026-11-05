@@ -185,6 +185,19 @@ func test_inspect_reports_a_closed_failing_hole() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
+## D47 (E3-S25): validate and inspect quote the line of play, round a dogleg's corner.
+func test_inspect_and_validate_quote_a_doglegs_line_of_play() -> void:
+	var path := "user://test_course_file_dogleg.json"
+	assert_eq(CourseSave.save_file(ReactionHoles.dogleg_par4(), path), OK)
+	var out: Array[String] = []
+	assert_eq(CourseFileTool.run(PackedStringArray(["inspect", path]), out), 0, "\n".join(out))
+	assert_string_contains("\n".join(out), "hole 1: par 4, 450 yd, open, PASS")
+	out.clear()
+	assert_eq(CourseFileTool.run(PackedStringArray(["validate", path]), out), 0, "\n".join(out))
+	assert_string_contains("\n".join(out), "hole 1, par 4, 450 yd")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func test_inspect_prints_the_land_of_a_sandbox_file() -> void:
 	var course := CourseSave.load_file(EXAMPLE_PATH)
 	assert_not_null(course)
