@@ -19,6 +19,7 @@
   "putt_aim_sigma_worst": 0.07,
   "putt_power_sigma_best": 0.045,
   "putt_power_sigma_worst": 0.12,
+  "guest_min_power": 0.05,
   "over_par_worst": 2.0,
 
   "aim_offsets_deg": [8.0, -8.0, 16.0, -16.0],

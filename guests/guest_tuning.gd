@@ -1,0 +1,187 @@
+class_name GuestTuning
+extends RefCounted
+## Every guest tunable (E3-S1, D38 to D43), read from res://data/guests.json. docs/design.md
+## Guests and reactions has a line for each. Read-only: /balance reactions (E3-S8) tunes the
+## file. E3-S3 reads the swing, aim and Ball work numbers; the rest wait for E3-S4 to E3-S6.
+
+const PATH: String = "res://data/guests.json"
+
+var day_s: float = 0.0
+var arrivals_per_day: int = 0
+var group_size_min: int = 0
+var group_size_max: int = 0
+var arrival_window: float = 0.0
+
+var walk_yd_per_s: float = 0.0
+var stroke_s: float = 0.0
+var flight_draw_speed: float = 0.0
+
+var skill_min: int = 1
+var skill_max: int = 10
+## D40: Gaussian click error, in bar units (Swing.set_result), at skill_max (best) and
+## skill_min (worst), linear between.
+var full_sigma_best: float = 0.0
+var full_sigma_worst: float = 0.0
+var putt_aim_sigma_best: float = 0.0
+var putt_aim_sigma_worst: float = 0.0
+var putt_power_sigma_best: float = 0.0
+var putt_power_sigma_worst: float = 0.0
+## D40: the least power a guest's full-club swing locks, noise included, so a short chip
+## always moves the ball (a planned chip of a few % plus a Gaussian error would often clamp
+## to 0 in Swing.set_result and whiff). Putts have no floor.
+var guest_min_power: float = 0.0
+## D40: strokes over par a skill_min guest expects a hole.
+var over_par_worst: float = 0.0
+
+## D41: aims tried either side of the cup, degrees, in order, when the straight plan is unsafe.
+var aim_offsets_deg: PackedFloat32Array = PackedFloat32Array()
+
+## Guest Ball work: Ball ticks a guest may spend per simulated second, and the whole sim.
+var guest_ticks_per_s: int = 0
+var sim_ticks_per_s: int = 0
+## PuttAim's putt_aim_max_runs for guests (the player keeps golf/swing_tuning.tres's).
+var guest_putt_max_runs: int = 0
+
+var patience_min: int = 1
+var patience_max: int = 10
+var wait_base_s: float = 0.0
+var wait_per_patience_s: float = 0.0
+var walk_base_yd: float = 0.0
+var walk_per_patience_yd: float = 0.0
+
+var challenge_within: float = 0.0
+var casual_challenge_within: float = 0.0
+var taste_weights: Dictionary = {}
+var doubled_check_weight: int = 0
+
+var praise_passes: int = 0
+var complaint_fails: int = 0
+var rating_window: int = 0
+
+var eye_height_yd: float = 0.0
+var mark_height_yd: float = 0.0
+var sight_step_yd: float = 0.0
+
+static var _default: GuestTuning
+
+
+## The numbers in data/guests.json, read once per run. Fails an assert when the file is
+## missing or a number is missing or of the wrong kind.
+static func load_default() -> GuestTuning:
+	if _default == null:
+		_default = from_file(PATH)
+	return _default
+
+
+static func from_file(path: String) -> GuestTuning:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert(typeof(parsed) == TYPE_DICTIONARY, "%s must be a JSON object" % path)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return GuestTuning.new()
+	var errors: Array[String] = []
+	var t := from_dict(parsed, errors)
+	assert(errors.is_empty(), "%s: %s" % [path, errors])
+	return t
+
+
+static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
+	var t := GuestTuning.new()
+	t.day_s = _float(d, "day_s", errors)
+	t.arrivals_per_day = CourseData.read_int(d, "arrivals_per_day", errors)
+	t.group_size_min = CourseData.read_int(d, "group_size_min", errors)
+	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
+	t.arrival_window = _float(d, "arrival_window", errors)
+	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
+	t.stroke_s = _float(d, "stroke_s", errors)
+	t.flight_draw_speed = _float(d, "flight_draw_speed", errors)
+	t.skill_min = CourseData.read_int(d, "skill_min", errors)
+	t.skill_max = CourseData.read_int(d, "skill_max", errors)
+	t.full_sigma_best = _float(d, "full_sigma_best", errors)
+	t.full_sigma_worst = _float(d, "full_sigma_worst", errors)
+	t.putt_aim_sigma_best = _float(d, "putt_aim_sigma_best", errors)
+	t.putt_aim_sigma_worst = _float(d, "putt_aim_sigma_worst", errors)
+	t.putt_power_sigma_best = _float(d, "putt_power_sigma_best", errors)
+	t.putt_power_sigma_worst = _float(d, "putt_power_sigma_worst", errors)
+	t.guest_min_power = _float(d, "guest_min_power", errors)
+	t.over_par_worst = _float(d, "over_par_worst", errors)
+	var offsets: Variant = d.get("aim_offsets_deg")
+	if typeof(offsets) == TYPE_ARRAY:
+		for v: Variant in offsets:
+			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+				t.aim_offsets_deg.append(float(v))
+			else:
+				errors.append("aim_offsets_deg must hold numbers")
+	else:
+		errors.append("aim_offsets_deg must be a list of degrees")
+	t.guest_ticks_per_s = CourseData.read_int(d, "guest_ticks_per_s", errors)
+	t.sim_ticks_per_s = CourseData.read_int(d, "sim_ticks_per_s", errors)
+	t.guest_putt_max_runs = CourseData.read_int(d, "guest_putt_max_runs", errors)
+	t.patience_min = CourseData.read_int(d, "patience_min", errors)
+	t.patience_max = CourseData.read_int(d, "patience_max", errors)
+	t.wait_base_s = _float(d, "wait_base_s", errors)
+	t.wait_per_patience_s = _float(d, "wait_per_patience_s", errors)
+	t.walk_base_yd = _float(d, "walk_base_yd", errors)
+	t.walk_per_patience_yd = _float(d, "walk_per_patience_yd", errors)
+	t.challenge_within = _float(d, "challenge_within", errors)
+	t.casual_challenge_within = _float(d, "casual_challenge_within", errors)
+	var weights: Variant = d.get("taste_weights")
+	if typeof(weights) == TYPE_DICTIONARY:
+		t.taste_weights = weights
+	else:
+		errors.append("taste_weights must be an object")
+	t.doubled_check_weight = CourseData.read_int(d, "doubled_check_weight", errors)
+	t.praise_passes = CourseData.read_int(d, "praise_passes", errors)
+	t.complaint_fails = CourseData.read_int(d, "complaint_fails", errors)
+	t.rating_window = CourseData.read_int(d, "rating_window", errors)
+	t.eye_height_yd = _float(d, "eye_height_yd", errors)
+	t.mark_height_yd = _float(d, "mark_height_yd", errors)
+	t.sight_step_yd = _float(d, "sight_step_yd", errors)
+	if t.skill_max <= t.skill_min:
+		errors.append("skill_max must be above skill_min")
+	if t.guest_min_power <= 0.0 or t.guest_min_power > 1.0:
+		errors.append("guest_min_power must be above 0 and at most 1")
+	if t.guest_ticks_per_s < 1:
+		errors.append("guest_ticks_per_s must be at least 1")
+	if t.guest_putt_max_runs < 2:
+		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
+	return t
+
+
+## How far `skill` sits from the best guest: 0 at skill_max, 1 at skill_min (D40).
+func skill_share(skill: int) -> float:
+	var s := clampi(skill, skill_min, skill_max)
+	return float(skill_max - s) / float(skill_max - skill_min)
+
+
+## D40: a full club's click error (power and accuracy), bar units.
+func full_sigma(skill: int) -> float:
+	return lerpf(full_sigma_best, full_sigma_worst, skill_share(skill))
+
+
+func putt_aim_sigma(skill: int) -> float:
+	return lerpf(putt_aim_sigma_best, putt_aim_sigma_worst, skill_share(skill))
+
+
+func putt_power_sigma(skill: int) -> float:
+	return lerpf(putt_power_sigma_best, putt_power_sigma_worst, skill_share(skill))
+
+
+## D40: the score a guest of `skill` expects on a hole of `par`.
+func expected_score(par: int, skill: int) -> float:
+	return par + over_par_worst * skill_share(skill)
+
+
+## The swing tuning a guest's putt solve uses: `base` with putt_aim_max_runs set to
+## guest_putt_max_runs (a copy; `base` is not changed).
+func guest_swing_tuning(base: SwingTuning) -> SwingTuning:
+	var t := base.duplicate() as SwingTuning
+	t.putt_aim_max_runs = guest_putt_max_runs
+	return t
+
+
+static func _float(d: Dictionary, key: String, errors: Array[String]) -> float:
+	var v: Variant = d.get(key)
+	if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+		return float(v)
+	errors.append("%s is missing or not a number" % key)
+	return 0.0
