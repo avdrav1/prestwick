@@ -6,6 +6,8 @@ extends GutTest
 ## and a guest day giving one reaction per finished hole.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
 
 var tuning: GuestTuning
 var checks: HoleChecks
@@ -357,6 +359,46 @@ func test_the_risk_reward_par_5() -> void:
 			_record(8, 5, 6, 2, 80.0), dull, tuning)
 	assert_eq(adv.kind, GuestReaction.Kind.COMPLAINT)
 	assert_string_starts_with(adv.text, "Hole 8:")
+
+
+# --- the nine-hole fixtures (E3-S23) ---
+
+## nine_holes.gd as built: its fairways paint over any pond, so every line is bare (interesting
+## fails), and hole 1 is blind behind its crest (D43); the other eight are seen from the tee.
+func test_nine_holes_is_bare_with_hole_1_blind() -> void:
+	var c: CourseData = NineHoles.land(7)
+	var opened: Array[int] = NineHoles.build(CourseBuilder.new(c))
+	assert_eq(opened.size(), 9)
+	for h: HoleData in c.holes:
+		var s := checks.statics(c, h)
+		assert_eq(s.fair(), h.number != 1, "hole %d fair" % h.number)
+		assert_false(s.hazard_on_line, "hole %d bare" % h.number)
+		assert_false(s.interesting(), "hole %d not interesting" % h.number)
+
+
+## nine_holes_hazards.gd: the same nine holes, all open, each seen from the tee (hole 1's crest
+## cut) and interesting: its bunker on the line, the fairway's outer rows round it.
+func test_nine_holes_hazards_holes_are_fair_and_interesting() -> void:
+	var c: CourseData = NineHolesHazards.land(7)
+	var b := CourseBuilder.new(c)
+	var opened: Array[int] = NineHolesHazards.build(b)
+	assert_eq(opened, [1, 2, 3, 4, 5, 6, 7, 8, 9] as Array[int])
+	assert_eq(c.holes.size(), NineHoles.HOLES.size())
+	for k: int in NineHoles.HOLES.size():
+		var spec: Array = NineHoles.HOLES[k]
+		var h: HoleData = b.hole(spec[0])
+		assert_eq([h.par, h.tee, h.cup], [spec[1], spec[2], spec[3]], "hole %d as nine_holes'" % h.number)
+		var s := checks.statics(c, h)
+		assert_true(s.fair(), "hole %d seen from the tee (blind at %s)" % [h.number, s.blind_at])
+		assert_true(s.hazard_on_line, "hole %d has a hazard on its line" % h.number)
+		assert_true(s.safe_route, "hole %d has a way round" % h.number)
+		assert_true(s.interesting(), "hole %d interesting" % h.number)
+		for cell: Vector2i in NineHolesHazards.bunker_cells(b.validator, h.number, h.par, h.tee, h.cup):
+			assert_eq(c.get_surface(cell.x, cell.y), Surface.Type.BUNKER, "hole %d bunker" % h.number)
+			for side: int in [-1, 1]:
+				assert_eq(c.get_surface(cell.x, cell.y + side), Surface.Type.FAIRWAY,
+						"hole %d fairway round its bunker" % h.number)
+	assert_eq(b.issues_for(1).size(), 0, "hole 1 legal with its crest cut")
 
 
 # --- the static checks' cache ---

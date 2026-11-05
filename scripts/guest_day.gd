@@ -7,11 +7,14 @@ extends SceneTree
 ## figures go in docs/design.md Guests and reactions (Guest day). E3-S6: each hole's static
 ## checks (blind, interesting) and their cost, and each day's reactions (praise, neutral,
 ## complaint, and how often each check failed). E3-S8: the holes reached each day (teed off by a
-## group, GuestBrain.teed_off) and finished by someone, with the records a hole.
+## group, GuestBrain.teed_off) and finished by someone, with the records a hole. E3-S23:
+## `fixture=hazards` plays tests/fixtures/nine_holes_hazards.gd instead (the same holes with a
+## bunker on each line and hole 1's crest cut), and each day prints the holes praised.
 ##
-##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3]
+##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
 
 
 func _initialize() -> void:
@@ -21,9 +24,13 @@ func _initialize() -> void:
 			seeds.clear()
 			for s in arg.substr(6).split(","):
 				seeds.append(int(s))
-	var course := NineHoles.land(7)
-	var opened := NineHoles.build(CourseBuilder.new(course))
-	print("nine holes: %d open" % opened.size())
+	var fixture: GDScript = NineHoles
+	for arg in OS.get_cmdline_user_args():
+		if arg == "fixture=hazards":
+			fixture = NineHolesHazards
+	var course: CourseData = fixture.land(7)
+	var opened: Array[int] = fixture.build(CourseBuilder.new(course))
+	print("nine holes (%s): %d open" % [fixture.resource_path.get_file(), opened.size()])
 	var model := ShotModel.new()
 	var tuning := GuestTuning.load_default()
 	GuestClubTable.warm(model)
@@ -127,6 +134,16 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		day_seed, kinds[0], kinds[1], kinds[2], holes, roundi(100.0 * fails[0] / n),
 		roundi(100.0 * fails[1] / n), roundi(100.0 * fails[2] / n), roundi(100.0 * fails[3] / n),
 		brain.checks.measured])
+	var praised := {}
+	for g: Guest in brain.guests:
+		for r: Guest.HoleRecord in g.records:
+			if r.reaction.is_praise():
+				praised[r.number] = int(praised.get(r.number, 0)) + 1
+	var praise_by_hole := PackedStringArray()
+	for number: int in range(1, 10):
+		praise_by_hole.append("%d:%d" % [number, int(praised.get(number, 0))])
+	print("day %d holes praised: %d of 9 (praise a hole %s)" % [
+			day_seed, praised.size(), " ".join(praise_by_hole)])
 
 
 ## The day of `day_seed` in 60 fps frames at `speed` (GuestBrain.advance_real, as Play runs it):
