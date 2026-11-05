@@ -16,15 +16,19 @@ extends PanelContainer
 ## The list collapses in one click (E3-S10, collapse_button): collapsed, it shows only the
 ## picked hole's row (its status and buttons with it), which stands in for the title and status
 ## lines. Collapsed, the panel stays under HolePanelTuning.max_height whatever the hole fails:
-## its issue text is cut to the room left and scrolls (issues_scroll). Main.free_view_rects
-## follows the panel's height, so framing can use the map under it. Collapsing never moves the
-## pick.
+## its issue text is one line, a summary (issues_summary: the one rule and its reason, or "Fails
+## rules 2 and 4"), cut with an ellipsis at text_width and in full on hover (E3-S27), so with
+## two failing rules the panel is short enough for the strip under it to win, and a long text
+## never widens it. Main.free_view_rects follows the panel's height, so framing can use the map
+## under it. Collapsing never moves the pick.
 ##
 ## Duplicate numbers (E3-S11): the list has one row per hole (per slot of CourseData.holes,
 ## CourseBuilder.hole_slots), so two holes sharing a number from a loaded file each get a row,
 ## marked as a duplicate with validator rule 1's text under it (duplicate_label). Each row's
 ## pick, Play, up and down act on its own hole through its slot; a duplicate's up and down move
 ## it to the nearest free number that way (CourseBuilder.free_number), which parts the pair.
+## A duplicate is named as the map names it (CourseData.hole_label, E3-S27): "4a" and "4b", in
+## its row, the details' title, its tee marker and its issue boxes.
 ##
 ## Why guests complained (E3-S18): under the status, the picked hole's latest complaint among
 ## the feed's counted reactions, or its latest praise when the window holds no complaint about it
@@ -32,7 +36,7 @@ extends PanelContainer
 ## is quiet, D39), led by the check that failed ("Complaint: blind from the tee, could not see
 ## the flag."). Expanded, the whole line; collapsed, its lead sentence alone, the rest and every
 ## failed check (in the player's words, CHECK_LABELS) on hover, so it stays inside max_height
-## with the issue text cut to the room left.
+## beside the one-line issue summary.
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
 signal play_requested(number: int, slot: int)
@@ -85,10 +89,10 @@ var par_buttons: Array[Button] = []
 var open_button: Button
 var title_label: Label
 var status_label: Label
+## The picked hole's failing rules: one per line expanded; collapsed, one line (issues_summary)
+## cut at text_width with an ellipsis, every rule on hover (E3-S27). Its width is text_width
+## either way, so no text widens the panel.
 var issues_label: Label
-## Holds issues_label: as tall as its text, except with the list collapsed, when it is cut to
-## what keeps the panel under HolePanelTuning.max_height and scrolls the rest (E3-S10).
-var issues_scroll: ScrollContainer
 ## Picks the next hole in build order (BuildTool.new_hole); disabled when the course is full.
 var new_hole_button: Button
 ## The list's rows, in number order; the first shown_rows().size() hold a hole, and of those
@@ -125,6 +129,8 @@ func _ready() -> void:
 		tuning = HolePanelTuning.load_default()
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
+	# One width whatever the hole fails or whether it fails anything (E3-S27).
+	box.custom_minimum_size.x = text_width
 	add_child(box)
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 2)
@@ -174,15 +180,12 @@ func _ready() -> void:
 	open_button.focus_mode = Control.FOCUS_NONE
 	open_button.pressed.connect(func() -> void: _tool.open_hole())
 	row.add_child(open_button)
-	issues_scroll = ScrollContainer.new()
-	issues_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(issues_scroll)
 	issues_label = Label.new()
 	issues_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	issues_label.custom_minimum_size = Vector2(text_width, 0)
-	issues_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	issues_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	issues_label.add_theme_color_override("font_color", Color8(240, 160, 150))
-	issues_scroll.add_child(issues_label)
+	box.add_child(issues_label)
 
 
 ## Follows `tool` from now on.
@@ -210,7 +213,7 @@ func refresh() -> void:
 	var slot: int = _tool.picked_slot()
 	var h: HoleData = _tool.picked_hole()
 	var c: CourseData = b.course if b != null else null
-	var line: String = "Hole %d" % number
+	var line: String = "Hole %s" % (c.hole_label(slot) if c != null and slot >= 0 else str(number))
 	if h != null and c.in_bounds(h.tee.x, h.tee.y) and c.in_bounds(h.cup.x, h.cup.y):
 		line += ", %d yd" % b.yardage_at(slot)
 	title_label.text = line
@@ -225,15 +228,22 @@ func refresh() -> void:
 		par_buttons[i].set_pressed_no_signal(CourseBuilder.PARS[i] == shown)
 	open_button.disabled = b == null or not b.can_open(number)
 	var text := PackedStringArray()
+	var own: Array[CourseValidator.Issue] = []
 	if b != null:
-		var own: Array[CourseValidator.Issue] = b.issues_at(slot) if slot >= 0 else b.issues_for(number)
+		own = b.issues_at(slot) if slot >= 0 else b.issues_for(number)
 		for issue: CourseValidator.Issue in own:
 			var at: String = "" if not c.in_bounds(issue.tile.x, issue.tile.y) \
 					else " at (%d, %d)" % [issue.tile.x, issue.tile.y]
 			text.append("rule %d%s: %s" % [issue.rule, at, issue.reason])
-	issues_label.text = "\n".join(text)
+	var full: String = "\n".join(text)
+	# Collapsed, one line that never wraps and never widens the panel (E3-S27).
+	issues_label.autowrap_mode = TextServer.AUTOWRAP_OFF if collapsed else TextServer.AUTOWRAP_WORD_SMART
+	issues_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if collapsed \
+			else TextServer.OVERRUN_NO_TRIMMING
+	issues_label.text = issues_summary(own) if collapsed else full
+	issues_label.tooltip_text = full if collapsed else ""
+	issues_label.visible = not text.is_empty()
 	_refresh_reaction(c, slot)
-	issues_scroll.visible = not text.is_empty()
 	_refresh_list(b)
 	new_hole_button.disabled = b == null or b.next_hole_number() == 0
 	# Collapsed, the picked hole's row is its one-line summary: the title and status would
@@ -241,7 +251,24 @@ func refresh() -> void:
 	var summarised: bool = collapsed and not listed_rows().is_empty()
 	title_label.visible = not summarised
 	status_label.visible = not summarised
-	_fit_issues()
+
+
+## The collapsed panel's one line for `own` (a hole's failing rules, E3-S27): the rule and its
+## reason when it fails one, else the rules it fails ("Fails rules 2, 4 and 6: hover for why").
+## The label cuts it at text_width; the whole list is its tooltip.
+static func issues_summary(own: Array[CourseValidator.Issue]) -> String:
+	if own.is_empty():
+		return ""
+	if own.size() == 1:
+		return "rule %d: %s" % [own[0].rule, own[0].reason]
+	var numbers := PackedStringArray()
+	for issue: CourseValidator.Issue in own:
+		if not numbers.has(str(issue.rule)):
+			numbers.append(str(issue.rule))
+	var said: String = numbers[0]
+	if numbers.size() > 1:
+		said = ", ".join(numbers.slice(0, numbers.size() - 1)) + " and " + numbers[numbers.size() - 1]
+	return "Fails %s %s: hover for why" % ["rule" if numbers.size() == 1 else "rules", said]
 
 
 ## Shows the latest verdict on slot `slot` of `c` (E3-S18), or hides the line.
@@ -318,20 +345,6 @@ static func reaction_tip(r: GuestReaction) -> String:
 	return tip
 
 
-## Sizes issues_scroll: its text's full height, or with the list collapsed no more than the
-## room max_height leaves beside the rest of the panel, the rest scrolling. However many rules
-## the hole fails, and however their text wraps, a collapsed panel stays under max_height.
-func _fit_issues() -> void:
-	issues_scroll.custom_minimum_size = Vector2.ZERO
-	var full: float = issues_label.get_combined_minimum_size().y
-	var room: float = full
-	if collapsed and issues_scroll.visible:
-		room = maxf(tuning.max_height - get_combined_minimum_size().y, 0.0)
-	issues_scroll.custom_minimum_size = Vector2(0, minf(full, room))
-	if room >= full:
-		issues_scroll.scroll_vertical = 0
-
-
 ## The rows showing a hole now, in number order, whether or not the list is collapsed.
 func shown_rows() -> Array[HoleRow]:
 	return rows.slice(0, _shown)
@@ -374,9 +387,11 @@ static func duplicate_text(b: CourseBuilder, slot: int) -> String:
 
 ## One line for a hole in the list: number, par, yardage (once tee and cup are on the map; the
 ## line of play, D47: `yards` as the builder's latest run measured it, or measured here by a
-## fresh CourseValidator when negative) and status.
-static func row_text(c: CourseData, h: HoleData, yards: int = -1) -> String:
-	var parts := PackedStringArray([str(h.number), "Par %d" % h.par])
+## fresh CourseValidator when negative) and status. Given its `slot`, a hole sharing its number
+## is named "4a" or "4b" (CourseData.hole_label, E3-S27).
+static func row_text(c: CourseData, h: HoleData, yards: int = -1, slot: int = -1) -> String:
+	var label: String = c.hole_label(slot) if slot >= 0 else str(h.number)
+	var parts := PackedStringArray([label, "Par %d" % h.par])
 	if not c.in_bounds(h.tee.x, h.tee.y):
 		parts.append("no tee")
 	elif not c.in_bounds(h.cup.x, h.cup.y):
@@ -408,7 +423,7 @@ func _refresh_list(b: CourseBuilder) -> void:
 			continue
 		r.number = h.number
 		r.slot = slots[i]
-		r.pick_button.text = row_text(b.course, h, b.yardage_at(slots[i]))
+		r.pick_button.text = row_text(b.course, h, b.yardage_at(slots[i]), slots[i])
 		r.pick_button.tooltip_text = r.duplicate_label.text if r.duplicate \
 				else "Build this hole: the Tee and Cup tools place its tee and cup"
 		r.pick_button.set_pressed_no_signal(slots[i] == picked)

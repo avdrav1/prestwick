@@ -53,6 +53,9 @@ var rules: PackedInt32Array = PackedInt32Array()
 var reasons: PackedStringArray = PackedStringArray()
 ## The hole each rule belongs to (0 when not given), so with nine holes a box says which.
 var holes: PackedInt32Array = PackedInt32Array()
+## The name each rule's hole goes by on the map (CourseData.hole_label, E3-S27): "4a" and "4b"
+## for two holes sharing number 4; empty gives the number.
+var names: PackedStringArray = PackedStringArray()
 ## The badge, leader line and text box, drawn over the terrain (z_index 2).
 var label: Node2D
 ## The wrapped lines and the box size, measured once per set of rules (add clears them): the
@@ -96,18 +99,24 @@ func _init(p_cell: Vector2i = Vector2i.ZERO) -> void:
 	add_child(label)
 
 
-## Adds one failing rule and its one-line reason, of hole `hole` (0: not named, E3-S2).
-func add(rule: int, reason: String, hole: int = 0) -> void:
+## Adds one failing rule and its one-line reason, of hole `hole` (0: not named, E3-S2), named
+## `hole_name` on the map ("4a" for a duplicate, E3-S27; empty names it by its number).
+func add(rule: int, reason: String, hole: int = 0, hole_name: String = "") -> void:
 	rules.append(rule)
 	reasons.append(reason)
 	holes.append(hole)
+	names.append(hole_name)
 	_box_size = Vector2(-1.0, -1.0)
 	label.queue_redraw()
 
 
-## True when it shows exactly `p_rules`, `p_reasons` and `p_holes` (CourseView keeps it then).
-func shows(p_rules: PackedInt32Array, p_reasons: PackedStringArray, p_holes: PackedInt32Array) -> bool:
-	return rules == p_rules and reasons == p_reasons and holes == p_holes
+## True when it shows exactly `p_rules`, `p_reasons`, `p_holes` and `p_names` (CourseView keeps
+## it then).
+func shows(p_rules: PackedInt32Array, p_reasons: PackedStringArray, p_holes: PackedInt32Array,
+		p_names: PackedStringArray = PackedStringArray()) -> bool:
+	if p_names.is_empty():
+		p_names.resize(p_rules.size())
+	return rules == p_rules and reasons == p_reasons and holes == p_holes and names == p_names
 
 
 ## Stands the marker on its tile's top in `course`.
@@ -146,11 +155,16 @@ func sort_key() -> float:
 	return position.y
 
 
-## The lines it shows, one per failing rule: "hole 3, rule 2: ..." when the hole is named.
+## The lines it shows, one per failing rule: "hole 3, rule 2: ..." when the hole is named,
+## "hole 4b, rule 2: ..." for the second of two holes numbered 4 (E3-S27).
 func lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	for i: int in rules.size():
-		var hole: String = "hole %d, " % holes[i] if holes[i] > 0 else ""
+		var hole: String = ""
+		if i < names.size() and not names[i].is_empty():
+			hole = "hole %s, " % names[i]
+		elif holes[i] > 0:
+			hole = "hole %d, " % holes[i]
 		out.append("%srule %d: %s" % [hole, rules[i], reasons[i]])
 	return out
 

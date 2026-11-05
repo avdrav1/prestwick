@@ -4,7 +4,9 @@ extends Node2D
 ## (tests/fixtures/nine_holes.gd), loaded so the camera frames hole 1, then hole 3 picked and
 ## a fault on hole 7's green (closing it) so its issue box names the hole.
 ## hole_list_collapsed_shot.tscn (E3-S10) then collapses the list and frames hole 3 again, in the
-## free view that follows the panel's height.
+## free view that follows the panel's height; since E3-S27 hole 3 fails two rules there (its cup
+## on rough, par 4), so the collapsed panel shows its one-line issue summary and the strip under
+## it wins.
 ## hole_list_duplicate_shot.tscn (E3-S11) loads the course with hole 5 renumbered 4 through
 ## course/save.gd, so two rows share number 4, each marked with rule 1's text, and picks the
 ## second.
@@ -19,6 +21,8 @@ extends Node2D
 @export var duplicate: bool = false
 ## Give hole 3 a guest's complaint (E3-S18).
 @export var complaint: bool = false
+## Make hole 3 fail rules 2 and 4: its cup on rough, par 4 (E3-S27).
+@export var picked_faults: bool = false
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
@@ -43,6 +47,9 @@ func _ready() -> void:
 	main.hole_panel.row_for(3).pick_button.pressed.emit()
 	main.build_tool.builder.paint(Vector2i(4, 44), Surface.Type.WATER, 1)
 	main.build_tool.builder.paint(Vector2i(6, 44), Surface.Type.ROUGH, 1)
+	if picked_faults:
+		main.build_tool.builder.paint(NineHoles.HOLES[2][3], Surface.Type.ROUGH, 1)
+		main.build_tool.builder.set_par(3, 4)
 	if complaint:
 		main.guest_sim.feed.push(_complaint(3, 5), 1, 40, GuestSim.hole_slot(c, 3))
 	if collapse:

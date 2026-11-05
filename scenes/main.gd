@@ -467,7 +467,8 @@ func _apply_mode() -> void:
 	guest_view.visible = not building
 	sim_speed_panel.visible = not building
 	# The feed is read in Play, where the day runs; its tags stay on the map in Build (E3-S7).
-	feed_panel.visible = not building
+	# It shows once its first line comes in (E3-S27).
+	feed_panel.set_in_play(not building)
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
 
@@ -479,7 +480,7 @@ func _on_tiles_changed(cells: Array[Vector2i]) -> void:
 
 ## After every builder check: highlight each failing rule and update the hole panel.
 func _on_checked(issues: Dictionary) -> void:
-	course_view.show_issues(issues)
+	course_view.show_issues(issues, build_tool.builder.slot_issues() if build_tool.builder != null else [])
 	hole_panel.refresh()
 	# A tag stands on its hole's cup, which an edit can move.
 	reaction_tags.queue_redraw()

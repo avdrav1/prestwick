@@ -385,6 +385,13 @@ func issues_for(number: int) -> Array[CourseValidator.Issue]:
 	return out
 
 
+## Every slot's own failing rules from the latest validator run, in CourseData.holes order: an
+## Array of Arrays of CourseValidator.Issue, the same objects `issues` holds (CourseView names a
+## duplicate's lines by slot from it, E3-S27). A fresh outer array; read-only.
+func slot_issues() -> Array:
+	return _slot_issues.duplicate()
+
+
 ## Slot `slot`'s own failing rules from the latest validator run (E3-S11): for a hole sharing
 ## its number, rule 1 names the other's tee. Empty when it passes or there is no such slot.
 func issues_at(slot: int) -> Array[CourseValidator.Issue]:

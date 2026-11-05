@@ -574,7 +574,6 @@ func test_a_collapsed_panel_stays_under_its_limit_whatever_the_hole_fails() -> v
 	var panel: HolePanel = m.hole_panel
 	var limit: float = panel.tuning.max_height
 	panel.collapse_button.pressed.emit()
-	var cut: int = 0
 	for n: int in range(1, 10):
 		m.build_tool.select_hole(n)
 		var rules: Array[int] = []
@@ -585,23 +584,76 @@ func test_a_collapsed_panel_stays_under_its_limit_whatever_the_hole_fails() -> v
 		assert_eq(rules.count(6), 2, "hole %d: both rule 6 lines" % n)
 		var shut_h: float = m._hud_rect(panel).size.y
 		assert_lte(shut_h, limit, "hole %d: collapsed, %.0f px is under %.0f" % [n, shut_h, limit])
-		var full: float = panel.issues_label.get_combined_minimum_size().y
-		if full > panel.issues_scroll.custom_minimum_size.y + 0.5:
-			cut += 1
-		assert_eq(panel.issues_label.text.count("\n") + 1, rules.size(),
-				"hole %d: every issue is still in the text, the rest scrolls" % n)
-		gut.p("E3-S10: hole %d fails %s: issues %.0f px, shown %.0f, panel %.0f px collapsed"
-				% [n, rules, full, panel.issues_scroll.custom_minimum_size.y, shut_h])
-	assert_gt(cut, 0, "the worst case needs the issue text cut to stay under the limit")
+		assert_false(panel.issues_label.text.contains("\n"), "hole %d: one summary line (E3-S27)" % n)
+		assert_string_starts_with(panel.issues_label.text, "Fails rules 2, 3, 4 and 6")
+		assert_eq(panel.issues_label.tooltip_text.count("\n") + 1, rules.size(),
+				"hole %d: every issue is still on hover" % n)
+		gut.p("E3-S27: hole %d fails %s: issue line %.0f px, panel %.0f px collapsed"
+				% [n, rules, panel.issues_label.get_combined_minimum_size().y, shut_h])
 	panel.collapse_button.pressed.emit()
-	assert_almost_eq(panel.issues_scroll.custom_minimum_size.y,
-			panel.issues_label.get_combined_minimum_size().y, 0.5, "expanded, the issues show in full")
+	assert_eq(panel.issues_label.text.count("\n") + 1, 5, "expanded, the issues show in full")
+	assert_eq(panel.issues_label.tooltip_text, "")
+
+
+## E3-S27: collapsed, the issue text is one summary line at text_width, cut with an ellipsis,
+## so a long text and a short one give the panel one width (no wrap, no scrollbar), and with
+## two failing rules the panel is short enough (under 185 px) for the strip under it to win.
+func test_a_collapsed_panels_width_is_the_same_with_long_and_short_issue_text() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	var b: CourseBuilder = m.build_tool.builder
+	panel.collapse_button.pressed.emit()
+	m.build_tool.select_hole(2)
+	var none_w: float = m._hud_rect(panel).size.x
+	b.set_par(2, 5)  # one short rule 4 line
+	assert_eq(b.issues_for(2).size(), 1)
+	var short_w: float = m._hud_rect(panel).size.x
+	var short_text: String = panel.issues_label.text
+	assert_string_starts_with(short_text, "rule 4: ", "one rule: its reason")
+	# The most a hole fails (rules 2, 3 with its long reason, 4 and both 6 lines).
+	var worst := _main_with(_nine_failing_worst())
+	worst.camera.view_size_override = Vector2(1280, 720)
+	worst.hole_panel.collapse_button.pressed.emit()
+	worst.build_tool.select_hole(2)
+	assert_eq(worst.build_tool.builder.issues_for(2).size(), 5)
+	var long_w: float = worst._hud_rect(worst.hole_panel).size.x
+	panel = worst.hole_panel
+	assert_gt(panel.issues_label.tooltip_text.length(), short_text.length() * 3, "a far longer text")
+	assert_false(panel.issues_label.text.contains("\n"))
+	assert_almost_eq(long_w, short_w, 0.5, "a long text does not widen the panel")
+	assert_almost_eq(short_w, none_w, 0.5, "nor a short one")
+	# A single long reason is cut at text_width, not wrapped or widened.
+	var lone: Array[CourseValidator.Issue] = [CourseValidator.Issue.new(3, Vector2i.ZERO,
+			"no way from the tee to the green over playable ground, ".repeat(4))]
+	panel.issues_label.text = HolePanel.issues_summary(lone)
+	assert_almost_eq(panel.issues_label.get_combined_minimum_size().x, panel.text_width, 0.5,
+			"a cut line keeps text_width")
+	gut.p("E3-S27: collapsed panel %.0f px wide with no, short and long issue text" % long_w)
+
+
+func test_a_collapsed_panel_with_two_failing_rules_frees_the_strip_under_it() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	_nine_failing(m)
+	panel.collapse_button.pressed.emit()
+	for n: int in range(1, 10):
+		m.build_tool.select_hole(n)
+		assert_eq(m.build_tool.builder.issues_for(n).size(), 2, "hole %d fails two rules" % n)
+		var h: float = m._hud_rect(panel).size.y
+		assert_lt(h, 185.0, "hole %d: collapsed with two rules, %.0f px is under 185" % [n, h])
+		var strips: Array[Rect2] = m.free_view_rects()
+		assert_gt(strips[1].get_area(), strips[0].get_area(),
+				"hole %d: the strip under the panel is the larger" % n)
+		assert_eq(m.free_view_rect(), strips[1])
+		gut.p("E3-S27: hole %d collapsed with two rules: %.0f px" % [n, h])
 
 
 func test_a_collapsed_list_frames_a_hole_under_the_panel_when_it_fits_nearer() -> void:
 	# Nine par 3s on the plot, each failing rule 4 (issue text), and hole 9 turned to run across
 	# the screen: 13 tiles each way, about 830 px wide at 1x, too wide for the strip beside the
-	# panel but not for the strip under the collapsed one.
+	# panel but not for the strip under the collapsed one. (Before E3-S27's one-line summary
+	# the issue text kept the strip beside the panel the larger; free_view_rect_for still picks
+	# the strip that frames nearer whichever is larger.)
 	var c := _plot()
 	var b := CourseBuilder.new(c)
 	_build(b, 9, false)
@@ -630,8 +682,8 @@ func test_a_collapsed_list_frames_a_hole_under_the_panel_when_it_fits_nearer() -
 		var free: Rect2 = m.free_view_rect_for(tee_w, cup_w)
 		assert_true(free == strips[0] or free == strips[1], "hole %d frames in one of the strips" % n)
 		if n == 9:
-			assert_gt(strips[0].get_area(), strips[1].get_area(),
-					"hole 9's issue text keeps the strip beside the collapsed panel the larger")
+			assert_gt(strips[1].get_area(), strips[0].get_area(),
+					"hole 9's one-line issue summary leaves the strip under the panel the larger (E3-S27)")
 			assert_eq(free, strips[1], "yet hole 9 frames in the strip under the panel")
 			assert_eq(cam.zoom.x, 1.0, "nearer than expanded")
 		assert_gte(cam.zoom.x, open_zoom[n - 1], "hole %d: collapsing never frames it farther out" % n)
@@ -811,6 +863,56 @@ func test_a_loaded_duplicate_number_lists_both_holes() -> void:
 	assert_string_contains(rows[2].duplicate_label.text, "(%d, %d)" % [_tee(1).x, _tee(1).y])
 	assert_eq(panel.collapse_button.text, "Hide the list (3 holes)")
 
+
+## E3-S27: two holes sharing a number are told apart by a letter in course order, on their tee
+## markers, their issue boxes, their rows and the details' title.
+func test_duplicates_are_told_apart_on_the_map_and_in_the_list() -> void:
+	var m := _main_with_duplicate()
+	var c: CourseData = m.course
+	assert_eq([c.hole_label(0), c.hole_label(1), c.hole_label(2)], ["1", "2a", "2b"])
+	var tees := PackedStringArray()
+	for marker: HoleMarker in m.course_view.hole_markers():
+		if marker.kind == HoleMarker.Kind.TEE:
+			tees.append(marker.label_text())
+	assert_eq(tees, PackedStringArray(["1", "2a", "2b"]), "two tees marked 2 read 2a and 2b")
+	var named := PackedStringArray()
+	for box: IssueMarker in m.course_view.issue_markers():
+		for line: String in box.lines():
+			named.append(line.get_slice(",", 0))
+	assert_has(named, "hole 2a", "the first duplicate's issue box")
+	assert_has(named, "hole 2b", "the second's")
+	assert_false(named.has("hole 2"), "no box names a bare 2")
+	var rows: Array[HolePanel.HoleRow] = m.hole_panel.shown_rows()
+	assert_string_starts_with(rows[0].pick_button.text, "1  ")
+	assert_string_starts_with(rows[1].pick_button.text, "2a  ")
+	assert_string_starts_with(rows[2].pick_button.text, "2b  ")
+	rows[2].pick_button.pressed.emit()
+	assert_string_starts_with(m.hole_panel.title_label.text, "Hole 2b")
+	m.hole_panel.rows_for(2)[1].down_button.pressed.emit()
+	assert_eq([c.hole_label(1), c.hole_label(2)], ["2", "3"], "parted, plain numbers again")
+	assert_eq(m.course_view.hole_marker(3, HoleMarker.Kind.TEE).label_text(), "3")
+
+
+## E3-S27 review: rule 1 puts each duplicate's issue on its twin's tee, so the box there names
+## the hole whose tee it stands on and the twin it shares the number with: never "hole 2b" on
+## the tee marked 2a.
+func test_each_duplicate_box_names_the_tee_under_it() -> void:
+	var m := _main_with_duplicate()
+	var tee_label := {}
+	for marker: HoleMarker in m.course_view.hole_markers():
+		if marker.kind == HoleMarker.Kind.TEE:
+			tee_label[marker.cell] = marker.label_text()
+	var checked: int = 0
+	for box: IssueMarker in m.course_view.issue_markers():
+		for i: int in box.rules.size():
+			if box.rules[i] != 1:
+				continue
+			assert_true(tee_label.has(box.cell), "a rule-1 box stands on a tee")
+			var own: String = tee_label.get(box.cell, "?")
+			var twin: String = "2b" if own == "2a" else "2a"
+			assert_eq(box.lines()[i], "hole %s, rule 1: shares number 2 with hole %s" % [own, twin])
+			checked += 1
+	assert_eq(checked, 2, "one rule-1 box per duplicate")
 
 func test_renumbering_one_duplicate_leaves_the_other_in_place() -> void:
 	var m := _main_with_duplicate()
@@ -1043,7 +1145,8 @@ func test_a_collapsed_panel_with_a_complaint_stays_under_its_limit() -> void:
 		assert_lte(shut.size.y, limit, "hole %d (par %d): collapsed, %.0f px is under %.0f"
 				% [n, h.par, shut.size.y, limit])
 		assert_lte(shut.end.x, 1280.0, "on screen")
-		assert_gt(panel.issues_scroll.custom_minimum_size.y, 20.0,
-				"hole %d: the issue text keeps room beside the complaint" % n)
+		assert_true(panel.issues_label.visible and panel.issues_label.size.y >= 0.0
+				and panel.issues_label.get_combined_minimum_size().y > 10.0,
+				"hole %d: the issue line keeps its room beside the complaint" % n)
 		gut.p("E3-S18: hole %d collapsed with its complaint: %.0f x %.0f px, reaction %.0f px"
 				% [n, shut.size.x, shut.size.y, panel.reaction_label.get_combined_minimum_size().y])

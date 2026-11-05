@@ -32,6 +32,9 @@ enum Kind { TEE, PIN }
 
 var kind: Kind = Kind.TEE
 var hole_number: int = 0
+## The name its tee shows (CourseData.hole_label): the number, or "4a" and "4b" when two holes
+## share it (E3-S27). Empty shows hole_number.
+var hole_label: String = ""
 var cell: Vector2i = Vector2i.ZERO
 ## The whole height of the tile it stands on.
 var ground: int = 0
@@ -78,9 +81,12 @@ func draw_point() -> Vector2:
 	return Iso.tile_to_screen(Vector2(cell), ground)
 
 
-## The text it shows: its hole number on a tee marker, nothing on a pin.
+## The text it shows: its hole's name (hole_label, else its number) on a tee marker, nothing
+## on a pin.
 func label_text() -> String:
-	return str(hole_number) if kind == Kind.TEE and hole_number > 0 else ""
+	if kind != Kind.TEE or hole_number <= 0:
+		return ""
+	return hole_label if not hole_label.is_empty() else str(hole_number)
 
 
 ## The hole number's height on screen at a zoom of `zoom` screen px per local unit, in px.

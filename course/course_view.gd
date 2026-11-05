@@ -184,12 +184,14 @@ func refresh_holes() -> void:
 	_markers.clear()
 	if _course == null:
 		return
-	for hole: HoleData in _course.holes:
+	for slot: int in _course.holes.size():
+		var hole: HoleData = _course.holes[slot]
 		for pair: Array in [[HoleMarker.Kind.TEE, hole.tee], [HoleMarker.Kind.PIN, hole.cup]]:
 			var at: Vector2i = pair[1]
 			if not _course.in_bounds(at.x, at.y):
 				continue
 			var m := HoleMarker.new(pair[0], hole.number, at)
+			m.hole_label = _course.hole_label(slot)
 			m.place(_course)
 			m.text_scale = 1.0 / _view_scale()
 			m.shape_scale = marker_shape_scale(_view_scale())
@@ -215,31 +217,52 @@ func hole_marker(number: int, kind: HoleMarker.Kind) -> HoleMarker:
 ## with no tile on the map (a hole with no tee and no cup) has no highlight. A marker whose
 ## tile shows the same rules as before is kept, not rebuilt (E3-S2 review: with nine holes
 ## failing, rebuilding every box on every check cost a frame), and the boxes are laid out again.
-func show_issues(issues: Dictionary) -> void:
-	# Each tile's lines, in the validator's order: [rules, reasons, holes].
+##
+## `slot_issues` (CourseBuilder.slot_issues: each slot's own issues, in CourseData.holes order),
+## when given, names each line's hole as the map does (CourseData.hole_label), so two holes
+## sharing a number read "hole 4a" and "hole 4b" (E3-S27).
+func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
+	# Each tile's lines, in the validator's order: [rules, reasons, holes, names].
 	var wanted := {}
 	var order: Array[Vector2i] = []
+	var name_of := {}
+	var reason_of := {}
+	if _course != null and slot_issues.size() == _course.holes.size():
+		for slot: int in slot_issues.size():
+			for issue: CourseValidator.Issue in slot_issues[slot]:
+				name_of[issue] = _course.hole_label(slot)
+				# Rule 1 puts a duplicate's issue on its twin's tee (CourseValidator._rule1). The
+				# box stands on that tee, so it is named by the hole whose tee it is, and says
+				# which hole it shares the number with (E3-S27 review: "hole 4b" on 4a's tee).
+				var twin: int = _tee_slot(issue, slot)
+				if twin >= 0:
+					name_of[issue] = _course.hole_label(twin)
+					reason_of[issue] = "shares number %d with hole %s" % [
+							_course.holes[twin].number, _course.hole_label(slot)]
 	if _course != null:
 		for number: int in issues:
 			for issue: CourseValidator.Issue in issues[number]:
 				if not _course.in_bounds(issue.tile.x, issue.tile.y):
 					continue
 				if not wanted.has(issue.tile):
-					wanted[issue.tile] = [PackedInt32Array(), PackedStringArray(), PackedInt32Array()]
+					wanted[issue.tile] = [PackedInt32Array(), PackedStringArray(), PackedInt32Array(),
+							PackedStringArray()]
 					order.append(issue.tile)
 				# Packed arrays are values: append to a copy and store it back.
 				var w: Array = wanted[issue.tile]
 				var rules: PackedInt32Array = w[0]
 				var reasons: PackedStringArray = w[1]
 				var holes: PackedInt32Array = w[2]
+				var names: PackedStringArray = w[3]
 				rules.append(issue.rule)
-				reasons.append(issue.reason)
+				reasons.append(reason_of.get(issue, issue.reason))
 				holes.append(number)
-				wanted[issue.tile] = [rules, reasons, holes]
+				names.append(name_of.get(issue, ""))
+				wanted[issue.tile] = [rules, reasons, holes, names]
 	var kept := {}
 	for m: IssueMarker in _issue_markers:
 		var w: Array = wanted.get(m.cell, [])
-		if not w.is_empty() and not kept.has(m.cell) and m.shows(w[0], w[1], w[2]):
+		if not w.is_empty() and not kept.has(m.cell) and m.shows(w[0], w[1], w[2], w[3]):
 			kept[m.cell] = m
 		else:
 			_issues_root.remove_child(m)
@@ -252,10 +275,22 @@ func show_issues(issues: Dictionary) -> void:
 			m.place(_course)
 			var w: Array = wanted[cell]
 			for i: int in (w[0] as PackedInt32Array).size():
-				m.add(w[0][i], w[1][i], w[2][i])
+				m.add(w[0][i], w[1][i], w[2][i], w[3][i])
 			_issues_root.add_child(m)
 		_issue_markers.append(m)
 	layout_issue_labels(_view_scale())
+
+
+## The slot other than `own` whose tee a rule-1 `issue` of slot `own` stands on, or -1 for any
+## other issue (a tee-on-cup rule 1 stands on its own tee).
+func _tee_slot(issue: CourseValidator.Issue, own: int) -> int:
+	if issue.rule != 1:
+		return -1
+	var number: int = _course.holes[own].number
+	for i: int in _course.holes.size():
+		if i != own and _course.holes[i].number == number and _course.holes[i].tee == issue.tile:
+			return i
+	return -1
 
 
 ## Lays the issue text boxes out in screen space at a zoom of `scale` screen px per local unit:

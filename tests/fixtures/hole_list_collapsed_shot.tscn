@@ -5,3 +5,4 @@
 [node name="HoleListShot" type="Node2D"]
 script = ExtResource("1_shot")
 collapse = true
+picked_faults = true

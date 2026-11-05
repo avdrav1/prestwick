@@ -172,6 +172,25 @@ func has_unlimited_budget() -> bool:
 	return _land_budget == UNLIMITED_BUDGET
 
 
+## The name the map and the hole list give the hole in slot `slot` (E3-S27): its number, or
+## when other holes share it (a loaded file; validator rule 1 fails them) its number and a
+## letter by course order, "4a", "4b", so two tees marked 4 are told apart. "" for no slot.
+func hole_label(slot: int) -> String:
+	if slot < 0 or slot >= _holes.size():
+		return ""
+	var number: int = _holes[slot].number
+	var before: int = 0
+	var shared: bool = false
+	for i: int in _holes.size():
+		if i != slot and _holes[i].number == number:
+			shared = true
+			if i < slot:
+				before += 1
+	if not shared:
+		return str(number)
+	return "%d%s" % [number, char("a".unicode_at(0) + mini(before, 25))]
+
+
 ## Every tile's Surface.Type value, row-major (index = y * width + x), as a fresh copy.
 ## For whole-map readers (the validator's rule 3 flood) that would otherwise call
 ## get_surface once per tile.

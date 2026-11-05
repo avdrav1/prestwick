@@ -5,8 +5,9 @@ extends Resource
 const PATH: String = "res://scenes/hole_panel_tuning.tres"
 
 ## The tallest the Build hole panel may be with its list collapsed, screen px at 1280 x 720:
-## the picked hole's row, New hole, the details and its issue text, which is cut to fit and
-## scrolls (HolePanel._fit_issues). tests/test_hole_list.gd holds it with every rule failing.
+## the picked hole's row, New hole, the details and its issue text, which collapses to a one-line
+## summary (HolePanel.issues_summary, E3-S27). tests/test_hole_list.gd holds it with every rule
+## failing.
 @export var max_height: float = 280.0
 
 

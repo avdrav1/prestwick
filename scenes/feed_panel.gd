@@ -10,7 +10,10 @@ extends PanelContainer
 ## under way or the ball is moving, so a line never ends a shot.
 ##
 ## The panel keeps one height in Play, the full list's (`row_lines` lines a row), so a line
-## coming in never grows it over the map under a cursor that has not moved.
+## coming in never grows it over the map under a cursor that has not moved. It hides until its
+## first line comes in (E3-S27), so Play opens on no empty box, and again when a new course
+## empties the feed; Main says when it is Play's (set_in_play), and the free view counts it only
+## while it shows.
 ##
 ## Readable when several guests finish at once: a burst comes in one line at a time, at most
 ## one every `reveal_interval_s` real seconds (tick), so the list moves one row at a time; a
@@ -38,8 +41,8 @@ const COMPLAINT_MARK: String = "!"
 var tuning: FeedTuning
 var sim: GuestSim
 var title_label: Label
-## Shown while the feed has no line yet.
-var empty_label: Label
+## True while Main shows the Play HUD (set_in_play): the panel shows then, once it has a line.
+var in_play: bool = false
 ## One button per visible row, top (newest) first; the first shown_entries().size() are shown.
 var rows: Array[Button] = []
 ## The newest line shown so far (ReactionFeed.Entry.id); lines after it wait to come in.
@@ -63,13 +66,6 @@ func _ready() -> void:
 	title_label.name = "Title"
 	title_label.text = "Guests say"
 	box.add_child(title_label)
-	empty_label = Label.new()
-	empty_label.name = "Empty"
-	empty_label.text = "Nothing yet: guests react as they finish each hole."
-	empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	empty_label.custom_minimum_size = Vector2(tuning.width, 0)
-	empty_label.add_theme_font_size_override("font_size", tuning.font_size)
-	box.add_child(empty_label)
 	_highlight_box = StyleBoxFlat.new()
 	_highlight_box.bg_color = Color(0.2, 0.2, 0.24)
 	_highlight_box.border_color = highlight_color
@@ -88,9 +84,7 @@ func _ready() -> void:
 		box.add_child(b)
 		rows.append(b)
 	box.custom_minimum_size.y = full_height()
-	visibility_changed.connect(_refresh)
-	if sim != null:
-		_refresh()
+	_refresh()
 
 
 ## The list's height with every row shown at `row_lines` lines, px: the height the panel keeps.
@@ -104,6 +98,13 @@ func full_height() -> float:
 	row = maxf(row, line * tuning.row_lines + _highlight_box.get_minimum_size().y)
 	var sep: float = (get_child(0) as VBoxContainer).get_theme_constant("separation")
 	return title_label.get_combined_minimum_size().y + (row + sep) * tuning.visible_rows
+
+
+## Main shows (true, Play) or hides (false, Build) the feed. In Play it shows once it has a
+## line; until then, and in Build, it is hidden.
+func set_in_play(value: bool) -> void:
+	in_play = value
+	_refresh()
 
 
 func bind(p_sim: GuestSim) -> void:
@@ -121,7 +122,7 @@ func _process(delta: float) -> void:
 
 ## `delta` real seconds: brings in the next waiting line once `reveal_interval_s` has gone by
 ## since the last, or every waiting line when more wait than the list shows, and runs down the
-## highlight. Hidden (Build), every line comes in at once, so Play never replays old ones.
+## highlight. Out of Play (Build), every line comes in at once, so Play never replays old ones.
 func tick(delta: float) -> void:
 	if sim == null:
 		return
@@ -131,7 +132,7 @@ func tick(delta: float) -> void:
 	var newest := sim.feed.newest_id()
 	var changed := was_highlighted and highlight_left <= 0.0
 	if newest > shown_id:
-		if not is_visible_in_tree():
+		if not in_play:
 			shown_id = newest
 			highlight_left = 0.0
 			changed = true
@@ -208,7 +209,7 @@ func _refresh() -> void:
 	if rows.is_empty():
 		return
 	_row_entries = shown_entries()
-	empty_label.visible = _row_entries.is_empty()
+	visible = in_play and not _row_entries.is_empty()
 	for i: int in rows.size():
 		var b: Button = rows[i]
 		if i >= _row_entries.size():

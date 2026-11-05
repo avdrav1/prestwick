@@ -167,8 +167,8 @@ func test_a_burst_comes_in_one_line_at_a_time_newest_on_top() -> void:
 	var m := _main_in_play()
 	var panel: FeedPanel = m.feed_panel
 	var feed: ReactionFeed = m.guest_sim.feed
-	assert_true(panel.visible, "the feed is on the Play HUD")
-	assert_true(panel.empty_label.visible, "says it is empty")
+	assert_true(panel.in_play, "the feed is on the Play HUD")
+	assert_false(panel.visible, "hidden until its first line (E3-S27)")
 	var step: float = panel.tuning.reveal_interval_s
 	panel.tick(step)
 	# A group of three finishes hole 2 in one step.
@@ -178,7 +178,7 @@ func test_a_burst_comes_in_one_line_at_a_time_newest_on_top() -> void:
 	panel.tick(0.0)
 	assert_eq(_texts(panel.shown_entries()), PackedStringArray(["Hole 2: a."]), "the first line comes in at once")
 	assert_eq(panel.waiting(), 2)
-	assert_false(panel.empty_label.visible)
+	assert_true(panel.visible, "shown with its first line")
 	panel.tick(step * 0.5)
 	assert_eq(panel.shown_entries().size(), 1, "the next waits its turn")
 	panel.tick(step * 0.5)
@@ -346,9 +346,12 @@ func test_a_feed_line_clicked_during_a_swing_keeps_the_shot() -> void:
 
 func test_the_feed_keeps_one_height_as_lines_come_in() -> void:
 	var m := _main_in_play()
-	await get_tree().process_frame
-	var empty_h: float = m._hud_rect(m.feed_panel).size.y
 	var feed: ReactionFeed = m.guest_sim.feed
+	feed.push(_praise(2, "Hole 2: loved it."), 1, 40)
+	m.feed_panel.tick(m.feed_panel.tuning.reveal_interval_s)
+	await get_tree().process_frame
+	assert_true(m.feed_panel.visible)
+	var empty_h: float = m._hud_rect(m.feed_panel).size.y
 	var long := "Hole 7: blind from the tee, could not see the flag. I hate blind shots. Also slow (47 s wait) and too hard (6 on a par 3)."
 	for i: int in 8:
 		feed.push(_complaint(7, long + " %d" % i), 1, 50)
@@ -356,7 +359,28 @@ func test_the_feed_keeps_one_height_as_lines_come_in() -> void:
 	await get_tree().process_frame
 	assert_eq(m.feed_panel.shown_entries().size(), m.feed_panel.tuning.visible_rows)
 	assert_almost_eq(m._hud_rect(m.feed_panel).size.y, empty_h, 0.5,
-			"the full list takes the room the empty panel kept, so no row grows under the cursor")
+			"the full list takes the room the one-line panel kept, so no row grows under the cursor")
+
+
+## E3-S27: Play opens with no empty feed box over the map; the first line shows it, the free
+## view counts it only then, Build hides it and a new course's empty feed hides it again.
+func test_the_feed_hides_until_its_first_line() -> void:
+	var m := _main_in_play()
+	var panel: FeedPanel = m.feed_panel
+	panel.tick(1.0)
+	assert_false(panel.visible, "no line yet: no box")
+	assert_false(panel in m.hud_controls(), "and the free view does not count it")
+	var feed: ReactionFeed = m.guest_sim.feed
+	feed.push(_complaint(3, "Hole 3: too hard, 6 on a par 3."), 1, 30)
+	panel.tick(0.0)
+	assert_true(panel.visible, "the first line shows it")
+	assert_true(panel in m.hud_controls())
+	m.set_mode(Main.Mode.BUILD)
+	assert_false(panel.visible, "Build hides it")
+	m.set_mode(Main.Mode.PLAY)
+	assert_true(panel.visible, "back in Play with its lines")
+	feed.clear()
+	assert_false(panel.visible, "an emptied feed hides it again")
 
 
 # --- E3-S17: reactions stay on the hole that earned them ---
