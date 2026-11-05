@@ -25,6 +25,14 @@ extends PanelContainer
 ## marked as a duplicate with validator rule 1's text under it (duplicate_label). Each row's
 ## pick, Play, up and down act on its own hole through its slot; a duplicate's up and down move
 ## it to the nearest free number that way (CourseBuilder.free_number), which parts the pair.
+##
+## Why guests complained (E3-S18): under the status, the picked hole's latest complaint among
+## the feed's counted reactions, or its latest praise when the window holds no complaint about it
+## (latest_reaction: the window the map tag counts, less what an edit cleared, E3-S17; a neutral
+## is quiet, D39), led by the check that failed ("Complaint: blind from the tee, could not see
+## the flag."). Expanded, the whole line; collapsed, its lead sentence alone, the rest and every
+## failed check (in the player's words, CHECK_LABELS) on hover, so it stays inside max_height
+## with the issue text cut to the room left.
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
 signal play_requested(number: int, slot: int)
@@ -90,6 +98,11 @@ var rows: Array[HoleRow] = []
 var collapse_button: Button
 ## True while the list shows only the picked hole's row.
 var collapsed: bool = false
+## The picked hole's latest praise or complaint, led by its failed check (E3-S18); hidden when
+## guests have given it none since its last edit.
+var reaction_label: Label
+## The guests' reactions (bind_feed); null shows none.
+var feed: ReactionFeed
 ## Null loads scenes/hole_panel_tuning.tres.
 @export var tuning: HolePanelTuning
 
@@ -97,6 +110,9 @@ var collapsed: bool = false
 @export var text_width: float = 340.0
 ## Width of a list row's number, par, yardage and status button, screen px.
 @export var pick_width: float = 196.0
+## The reaction line's colours, as the feed draws praise and complaints (FeedPanel).
+@export var praise_color: Color = Color8(240, 200, 58)
+@export var complaint_color: Color = Color8(240, 160, 150)
 
 var _tool: BuildTool
 var _par_group := ButtonGroup.new()
@@ -130,6 +146,12 @@ func _ready() -> void:
 	box.add_child(title_label)
 	status_label = Label.new()
 	box.add_child(status_label)
+	reaction_label = Label.new()
+	reaction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reaction_label.custom_minimum_size = Vector2(text_width, 0)
+	reaction_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	reaction_label.visible = false
+	box.add_child(reaction_label)
 	var row := HBoxContainer.new()
 	box.add_child(row)
 	var par_label := Label.new()
@@ -170,6 +192,15 @@ func bind(tool: BuildTool) -> void:
 	refresh()
 
 
+## Shows the picked hole's latest guest verdict from `p_feed` from now on (E3-S18).
+func bind_feed(p_feed: ReactionFeed) -> void:
+	feed = p_feed
+	feed.added.connect(func(_e: ReactionFeed.Entry) -> void: refresh())
+	feed.cleared.connect(refresh)
+	feed.slot_cleared.connect(func(_slot: int) -> void: refresh())
+	refresh()
+
+
 ## Shows the hole as the builder has it now.
 func refresh() -> void:
 	if _tool == null or title_label == null:
@@ -201,6 +232,7 @@ func refresh() -> void:
 					else " at (%d, %d)" % [issue.tile.x, issue.tile.y]
 			text.append("rule %d%s: %s" % [issue.rule, at, issue.reason])
 	issues_label.text = "\n".join(text)
+	_refresh_reaction(c, slot)
 	issues_scroll.visible = not text.is_empty()
 	_refresh_list(b)
 	new_hole_button.disabled = b == null or b.next_hole_number() == 0
@@ -210,6 +242,80 @@ func refresh() -> void:
 	title_label.visible = not summarised
 	status_label.visible = not summarised
 	_fit_issues()
+
+
+## Shows the latest verdict on slot `slot` of `c` (E3-S18), or hides the line.
+func _refresh_reaction(c: CourseData, slot: int) -> void:
+	var r: GuestReaction = latest_reaction(feed, c, slot)
+	reaction_label.visible = r != null
+	if r == null:
+		reaction_label.text = ""
+		reaction_label.tooltip_text = ""
+		return
+	reaction_label.text = reaction_text(r, collapsed)
+	reaction_label.tooltip_text = reaction_tip(r)
+	reaction_label.add_theme_color_override("font_color",
+			praise_color if r.is_praise() else complaint_color)
+
+
+## The newest complaint in `p_feed`'s window about the hole in slot `slot` of `c`, as the map
+## tag counts it (ReactionFeed.resolve_slot; a reaction cleared by an edit counts for no hole),
+## else its newest praise, else null. A complaint wins over a newer praise: while the tag shows
+## a "!n" the panel says what to fix (E3-S18 review).
+static func latest_reaction(p_feed: ReactionFeed, c: CourseData, slot: int) -> GuestReaction:
+	if p_feed == null or c == null or slot < 0:
+		return null
+	var praise: GuestReaction = null
+	for i: int in range(p_feed.recent.size() - 1, -1, -1):
+		var r: GuestReaction = p_feed.recent[i]
+		if r.kind == GuestReaction.Kind.NEUTRAL:
+			continue
+		if ReactionFeed.resolve_slot(c, p_feed.recent_slots[i], r.hole_number) != slot:
+			continue
+		if r.is_complaint():
+			return r
+		if praise == null:
+			praise = r
+	return praise
+
+
+## `r`'s line without its "Hole N: " (the panel names the hole).
+static func reaction_body(r: GuestReaction) -> String:
+	var head := r.text.find(": ")
+	return r.text.substr(head + 2) if r.text.begins_with("Hole ") and head >= 0 else r.text
+
+
+## `r`'s lead sentence: its body up to the first full stop (a praise is one sentence).
+static func reaction_lead(r: GuestReaction) -> String:
+	var body := reaction_body(r)
+	var stop := body.find(". ")
+	return body if stop < 0 else body.substr(0, stop + 1)
+
+
+## The panel's line for `r`: "Praise: ..." or "Complaint: ...", the whole body, or with
+## `lead_only` its lead sentence. A complaint's body leads with the check that failed, in the
+## guest's words, so no check name is put in front of it (E3-S18 review).
+static func reaction_text(r: GuestReaction, lead_only: bool) -> String:
+	var said := reaction_lead(r) if lead_only else reaction_body(r)
+	return ("Praise: " if r.is_praise() else "Complaint: ") + said
+
+
+## The four checks as the player reads them, in GuestReaction.Check order.
+const CHECK_LABELS: PackedStringArray = ["sight line", "risk and reward", "pace", "difficulty"]
+
+
+## The hover text for `r`: its whole line and every check it failed, in CHECK_LABELS' words.
+static func reaction_tip(r: GuestReaction) -> String:
+	var tip := r.text
+	if r.is_praise():
+		return tip
+	var fails := PackedStringArray()
+	for c: int in GuestReaction.Check.size():
+		if not r.passed[c]:
+			fails.append(CHECK_LABELS[c])
+	if not fails.is_empty():
+		tip += "\nFailed: %s." % GuestReaction._and_list(fails)
+	return tip
 
 
 ## Sizes issues_scroll: its text's full height, or with the list collapsed no more than the

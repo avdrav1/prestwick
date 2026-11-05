@@ -862,3 +862,137 @@ func test_a_doglegs_row_shows_its_line_of_play() -> void:
 	var m := _main_with(c)
 	assert_string_contains(m.hole_panel.title_label.text, "450 yd")
 
+
+# --- why guests complained (E3-S18) ---
+
+## A guest's reaction to hole `number` of par `par`, judged as the brain judges it: a purist
+## on a blind tee shot who waited 60 s and scored 9 (fair leads, pace and challenge follow),
+## or with `praise` a casual guest's par.
+func _verdict(number: int, par: int, praise: bool = false) -> GuestReaction:
+	var t := GuestTuning.load_default()
+	var g := Guest.new()
+	g.skill = 10
+	g.patience = 5
+	g.taste = Guest.Taste.CASUAL if praise else Guest.Taste.PURIST
+	var rec := Guest.HoleRecord.new()
+	rec.number = number
+	rec.par = par
+	rec.score = par if praise else par + 5
+	rec.wait_s = 0 if praise else 60
+	var s := HoleChecks.Statics.new()
+	s.blind = not praise
+	s.hazard_on_line = true
+	s.safe_route = true
+	return GuestReaction.judge(g, rec, s, t)
+
+
+## The longest complaint a hole can draw: an adventurer failing all four checks, its doubled
+## interesting check leading with its taste's sentence.
+func _worst_verdict(number: int, par: int) -> GuestReaction:
+	var t := GuestTuning.load_default()
+	var g := Guest.new()
+	g.skill = 1
+	g.patience = 0
+	g.taste = Guest.Taste.ADVENTURER
+	var rec := Guest.HoleRecord.new()
+	rec.number = number
+	rec.par = par
+	rec.score = par + 9
+	rec.wait_s = 99
+	rec.walk_yd = 400.0
+	var s := HoleChecks.Statics.new()
+	s.blind = true
+	s.target_is_zone = true
+	s.hazard_on_line = true
+	s.safe_route = false
+	return GuestReaction.judge(g, rec, s, t)
+
+
+func _nine_main() -> Main:
+	var c: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(c))
+	var m := _main_with(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	return m
+
+
+func _give(m: Main, r: GuestReaction, second: int) -> void:
+	m.guest_sim.feed.push(r, 1, second, GuestSim.hole_slot(m.course, r.hole_number))
+
+
+func test_a_picked_hole_with_a_complaint_shows_its_lead_check() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(3)
+	assert_false(panel.reaction_label.visible, "no guest has played hole 3: nothing to show")
+	var r := _verdict(3, 5)
+	assert_true(r.is_complaint())
+	assert_eq(r.lead_check(), GuestReaction.Check.FAIR, "a purist's blind tee shot leads")
+	assert_eq(r.failed().size(), 3)
+	_give(m, r, 10)
+	assert_true(panel.reaction_label.visible, "the picked hole shows its complaint at once")
+	var shown: String = panel.reaction_label.text
+	assert_string_starts_with(shown, "Complaint: blind from the tee",
+			"led by the check that failed, in the guest's words")
+	assert_string_contains(shown, "Also slow", "expanded, the whole line")
+	assert_false(shown.begins_with("Hole"), "the panel already names the hole")
+	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: sight line, pace and difficulty.",
+			"the tooltip names every failed check in the player's words")
+	panel.set_collapsed(true)
+	assert_eq(panel.reaction_label.text, "Complaint: blind from the tee, could not see the flag.",
+			"collapsed, the lead sentence alone")
+	assert_string_contains(panel.reaction_label.tooltip_text, "Also slow", "the rest on hover")
+	m.build_tool.select_hole(4)
+	assert_false(panel.reaction_label.visible, "another hole shows its own verdicts, here none")
+	_give(m, _verdict(4, 3), 11)
+	m.build_tool.select_hole(3)
+	assert_string_contains(panel.reaction_label.text, "blind", "hole 3 keeps its own")
+	# A neutral is quiet (D39); a newer praise does not hide a complaint still in the window
+	# (E3-S18 review): the tag reads "+1 !1", and the panel says what to fix.
+	var neutral := _verdict(3, 5, true)
+	neutral.passed[GuestReaction.Check.PACE] = false
+	neutral.kind = GuestReaction.Kind.NEUTRAL
+	_give(m, neutral, 12)
+	assert_string_contains(panel.reaction_label.text, "blind", "a neutral does not replace it")
+	var praise := _verdict(3, 5, true)
+	assert_true(praise.is_praise())
+	_give(m, praise, 13)
+	assert_string_starts_with(panel.reaction_label.text, "Complaint: blind",
+			"a praise after a complaint leaves the complaint showing")
+	# An edit clears the hole's verdicts (E3-S17): the panel no longer shows them.
+	m.build_tool.builder.set_par(3, 4)
+	assert_false(panel.reaction_label.visible, "an edited hole shows no stale verdict")
+	# With no complaint in the window, its newest praise shows.
+	_give(m, _verdict(3, 4, true), 14)
+	assert_eq(panel.reaction_label.text, "Praise: loved it, 4 on a par 4.",
+			"a hole guests only praised shows its praise")
+	assert_false(panel.reaction_label.tooltip_text.contains("Failed"), "a praise failed nothing")
+
+
+func test_a_collapsed_panel_with_a_complaint_stays_under_its_limit() -> void:
+	var m := _main_with(_nine_failing_worst())
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	var limit: float = panel.tuning.max_height
+	var second: int = 0
+	for spec: Array in NineHoles.HOLES:
+		second += 1
+		_give(m, _worst_verdict(spec[0], spec[1]), second)
+	panel.collapse_button.pressed.emit()
+	for n: int in range(1, 10):
+		m.build_tool.select_hole(n)
+		var h: HoleData = m.build_tool.picked_hole()
+		var r: GuestReaction = HolePanel.latest_reaction(m.guest_sim.feed, m.course, m.build_tool.picked_slot())
+		assert_not_null(r, "hole %d has its complaint" % n)
+		assert_eq(r.failed().size(), 4, "hole %d: all four checks failed" % n)
+		assert_true(panel.reaction_label.visible)
+		assert_string_starts_with(panel.reaction_label.text, "Complaint: no way round the trouble.",
+				"hole %d: led by the adventurer's doubled check" % n)
+		var shut: Rect2 = m._hud_rect(panel)
+		assert_lte(shut.size.y, limit, "hole %d (par %d): collapsed, %.0f px is under %.0f"
+				% [n, h.par, shut.size.y, limit])
+		assert_lte(shut.end.x, 1280.0, "on screen")
+		assert_gt(panel.issues_scroll.custom_minimum_size.y, 20.0,
+				"hole %d: the issue text keeps room beside the complaint" % n)
+		gut.p("E3-S18: hole %d collapsed with its complaint: %.0f x %.0f px, reaction %.0f px"
+				% [n, shut.size.x, shut.size.y, panel.reaction_label.get_combined_minimum_size().y])

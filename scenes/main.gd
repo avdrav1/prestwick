@@ -70,6 +70,7 @@ func _ready() -> void:
 	feed_panel.bind(guest_sim)
 	feed_panel.hole_requested.connect(_on_feed_hole_requested)
 	reaction_tags.bind(guest_sim.feed)
+	hole_panel.bind_feed(guest_sim.feed)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null

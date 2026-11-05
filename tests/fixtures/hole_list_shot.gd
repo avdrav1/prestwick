@@ -8,12 +8,17 @@ extends Node2D
 ## hole_list_duplicate_shot.tscn (E3-S11) loads the course with hole 5 renumbered 4 through
 ## course/save.gd, so two rows share number 4, each marked with rule 1's text, and picks the
 ## second.
+## hole_list_reaction_shot.tscn and hole_list_reaction_collapsed_shot.tscn (E3-S18) give hole 3
+## a purist's complaint (a blind tee shot, a 60 s wait, 10 on the par 5), so the panel shows
+## why, expanded in full and collapsed to its lead sentence.
 ## Run: scripts/screenshot.sh tests/fixtures/hole_list_shot.tscn
 
 ## Collapse the list to the picked hole and frame it (E3-S10).
 @export var collapse: bool = false
 ## Load hole 5 as a second hole 4 (E3-S11).
 @export var duplicate: bool = false
+## Give hole 3 a guest's complaint (E3-S18).
+@export var complaint: bool = false
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
@@ -38,6 +43,26 @@ func _ready() -> void:
 	main.hole_panel.row_for(3).pick_button.pressed.emit()
 	main.build_tool.builder.paint(Vector2i(4, 44), Surface.Type.WATER, 1)
 	main.build_tool.builder.paint(Vector2i(6, 44), Surface.Type.ROUGH, 1)
+	if complaint:
+		main.guest_sim.feed.push(_complaint(3, 5), 1, 40, GuestSim.hole_slot(c, 3))
 	if collapse:
 		main.hole_panel.collapse_button.pressed.emit()
 		main.frame_hole(3)
+
+
+## A purist's verdict on hole `number` (par `par`): blind from the tee, a 60 s wait, par + 5.
+static func _complaint(number: int, par: int) -> GuestReaction:
+	var g := Guest.new()
+	g.skill = 10
+	g.patience = 5
+	g.taste = Guest.Taste.PURIST
+	var rec := Guest.HoleRecord.new()
+	rec.number = number
+	rec.par = par
+	rec.score = par + 5
+	rec.wait_s = 60
+	var s := HoleChecks.Statics.new()
+	s.blind = true
+	s.hazard_on_line = true
+	s.safe_route = true
+	return GuestReaction.judge(g, rec, s, GuestTuning.load_default())
