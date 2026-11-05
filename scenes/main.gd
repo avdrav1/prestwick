@@ -472,9 +472,9 @@ func _apply_mode() -> void:
 	course_view.issues_visible = building
 
 
+## One batch per builder tiles_changed: each issue box is tested once per batch (E3-S16).
 func _on_tiles_changed(cells: Array[Vector2i]) -> void:
-	for cell: Vector2i in cells:
-		course_view.refresh_cell(cell)
+	course_view.refresh_cells(cells)
 
 
 ## After every builder check: highlight each failing rule and update the hole panel.

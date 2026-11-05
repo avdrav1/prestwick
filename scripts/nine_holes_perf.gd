@@ -25,7 +25,10 @@ extends SceneTree
 ## nine cups, then undone) through the builder, timed RUNS times. With a display the same drag
 ## goes through the build tool (press on cup 1, then one drag_to a frame through cups 2 to 9,
 ## release in the frame after the last), building nine new issue boxes at once, and the frame holding the release and
-## the frame holding its undo are timed.
+## the frame holding its undo are timed. E3-S16 review: then a drag of fairway off every line
+## (brush 5, about 570 tiles below the nine rows) and its undo, so holes stay open and guests
+## stay on the course through the undo; the frames holding its drag_to calls and its undo, the
+## calls alone, and the guest CPU in those frames.
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
@@ -36,6 +39,11 @@ const GUEST_START_S: int = 45
 ## that is not timed: the release closes every hole and sends every guest home, so without it
 ## the next release would be timed on an empty course (E3-S12 review); 14 to 16 guests are out.
 const GUEST_REFRESH_S: int = 80
+## E3-S16 review: the off-line drag runs along this row, below hole 9 (row 72) and every
+## footprint, from x OFF_LINE_X0 to OFF_LINE_X1 with brush 5, so every hole stays open.
+const OFF_LINE_ROW: int = 100
+const OFF_LINE_X0: int = 8
+const OFF_LINE_X1: int = 120
 ## Frames one breaking-drag cycle takes: press, 8 drag frames, release, undo, settle.
 const DRAG_CYCLE: int = 16
 const WARMUP_FRAMES: int = 60
@@ -62,6 +70,12 @@ var _undo_samples: Array[float] = []
 var _release_samples: Array[float] = []
 var _release_guests: Array[int] = []
 var _shown: Array[int] = []
+## E3-S16: the drag_to and undo calls alone (tool, builder, view), and the guest CPU in the
+## frames holding them.
+var _drag_calls: Array[float] = []
+var _undo_calls: Array[float] = []
+var _drag_guest_ms: Array[float] = []
+var _undo_guest_ms: Array[float] = []
 
 
 func _initialize() -> void:
@@ -163,6 +177,27 @@ func _break_cells() -> Dictionary:
 		for cell: Vector2i in BuildTool.grid_line(NineHoles.HOLES[k - 1][3], NineHoles.HOLES[k][3]):
 			out[cell] = true
 	return out
+
+
+## Point k (0 to 8) of the off-line drag: along OFF_LINE_ROW from OFF_LINE_X0 to OFF_LINE_X1.
+func _off_line_cell(k: int) -> Vector2i:
+	var steps: int = NineHoles.HOLES.size() - 1
+	return Vector2i(OFF_LINE_X0 + (OFF_LINE_X1 - OFF_LINE_X0) * k / steps, OFF_LINE_ROW)
+
+
+## Tiles the off-line drag paints (brush 5 along its row).
+func _off_line_cells() -> int:
+	return (OFF_LINE_X1 - OFF_LINE_X0 + 5) * 5
+
+
+## A screen point the tile picker resolves to `cell` (searching up its top, as _cup_point).
+func _tile_point(cell: Vector2i) -> Vector2:
+	var top: Vector2 = Iso.tile_to_screen(Vector2(cell), _course.get_height(cell.x, cell.y))
+	for dy: float in [0.5, -4.0, -8.0, -12.0, -14.0]:
+		if TilePicker.pick(_course, top + Vector2(0.5, dy)) == cell:
+			return top + Vector2(0.5, dy)
+	push_error("no point picks %s" % cell)
+	return top
 
 
 ## A screen point the tile picker resolves to hole k's cup (a cup half behind higher ground
@@ -298,7 +333,10 @@ func _process(_delta: float) -> bool:
 				_main.build_tool.brush_size = 1
 				_main.build_tool.press_at(_cup_point(0))
 			elif f < n:
+				var t0 := Time.get_ticks_usec()
 				_main.build_tool.drag_to(_cup_point(f))
+				_drag_calls.append((Time.get_ticks_usec() - t0) / 1000.0)
+				_drag_guest_ms.append(_guest_ms[-1])
 			elif f == n:
 				_release_guests.append(_brain.on_course().size())
 				var t0 := Time.get_ticks_usec()
@@ -308,7 +346,10 @@ func _process(_delta: float) -> bool:
 					print("drag breaking every hole: %d issue boxes after release, %d holes open" % [
 						_main.course_view.issue_markers().size(), _open_count()])
 			elif f == n + 3:
+				var t0 := Time.get_ticks_usec()
 				_main.build_tool.undo()
+				_undo_calls.append((Time.get_ticks_usec() - t0) / 1000.0)
+				_undo_guest_ms.append(_guest_ms[-1])
 				_edits += 1
 			elif f == n + 5:
 				_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
@@ -322,12 +363,71 @@ func _process(_delta: float) -> bool:
 					_stats(_edit_samples), _release_guests[0], _release_guests[-1]])
 				print("drag breaking every hole: frame holding its undo, 1x: %s; %d holes open after" % [
 					_stats(_undo_samples), _open_count()])
+				print("drag breaking every hole: drag_to call (tool, builder, view) %s; guest CPU in its frame %s" % [
+					_stats(_drag_calls), _stats(_drag_guest_ms)])
+				print("drag breaking every hole: undo call (tool, builder, view, 528 tiles) %s; guest CPU in its frame %s" % [
+					_stats(_undo_calls), _stats(_undo_guest_ms)])
 				_print_guests("breaking drags")
+				for a: Array in [_drag_calls, _undo_calls, _drag_guest_ms, _undo_guest_ms, _undo_samples]:
+					a.clear()
+				_release_guests.clear()
+				_next_phase()
+				_edits = 0
+				_edit_samples.clear()
+		8:  # E3-S16 review: a large drag off every line (fairway, brush 5, along OFF_LINE_ROW,
+			# every DRAG_CYCLE frames: press (0), one drag_to a frame (1 to 8), release (9),
+			# undo (12)), so every hole stays open and guests stay out through the undo; a fresh
+			# guest day is stepped to GUEST_REFRESH_S in the phase's first frame (untimed), since
+			# phase 7's last release sent every guest home
+			var f: int = _frames % DRAG_CYCLE
+			var n: int = NineHoles.HOLES.size()
+			if _frames == 1:
+				_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
+				for i: int in GUEST_REFRESH_S:
+					_brain.step()
+			if _frames > DRAG_CYCLE:
+				if f == n + 4:
+					_undo_samples.append(frame_ms)
+				elif f >= 1 and f < n:
+					_samples.append(frame_ms)
+			if _frames < DRAG_CYCLE:
+				pass
+			elif f == 0:
+				_main.build_tool.select_surface(Surface.Type.FAIRWAY)
+				_main.build_tool.brush_size = 5
+				_main.build_tool.press_at(_tile_point(_off_line_cell(0)))
+			elif f < n:
+				var t0 := Time.get_ticks_usec()
+				_main.build_tool.drag_to(_tile_point(_off_line_cell(f)))
+				_drag_calls.append((Time.get_ticks_usec() - t0) / 1000.0)
+				_drag_guest_ms.append(_guest_ms[-1])
+			elif f == n:
+				_main.build_tool.release()
+				if _edits == 0:
+					print("drag off every line: %d holes open after release, %d guests on the course" % [
+						_open_count(), _brain.on_course().size()])
+			elif f == n + 3:
+				_release_guests.append(_brain.on_course().size())
+				var t0 := Time.get_ticks_usec()
+				_main.build_tool.undo()
+				_undo_calls.append((Time.get_ticks_usec() - t0) / 1000.0)
+				_undo_guest_ms.append(_guest_ms[-1])
+				_edits += 1
+			if _edits >= RUNS and f == n + 4:
+				_release_guests.sort()
+				print("drag off every line: frames holding a drag_to (brush 5, about 70 tiles each), 1x: %s" % _stats(_samples))
+				print("drag off every line: frame holding its undo, 1x: %s; %d to %d guests on the course at undo, %d holes open after" % [
+					_stats(_undo_samples), _release_guests[0], _release_guests[-1], _open_count()])
+				print("drag off every line: drag_to call %s; guest CPU in its frame %s" % [
+					_stats(_drag_calls), _stats(_drag_guest_ms)])
+				print("drag off every line: undo call (tool, builder, view, %d tiles) %s; guest CPU in its frame %s" % [
+					_off_line_cells(), _stats(_undo_calls), _stats(_undo_guest_ms)])
+				_print_guests("off-line drags")
 				_fail_every_hole()
 				_next_phase()
 				_edits = 0
 				_edit_samples.clear()
-		8:  # the same with every hole failing two rules (cup on rough, wrong par): 9 issue
+		9:  # the same with every hole failing two rules (cup on rough, wrong par): 9 issue
 			# boxes of 2 lines each, the camera on the map's centre
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)

@@ -77,6 +77,8 @@ const LAND_EDGE_S: int = 8
 const EDGE_MAX_STEPS: int = 2
 ## Screen px left between two issue text boxes when one is pushed up past the other.
 const ISSUE_BOX_GAP: float = 4.0
+## _drawn's value for a tile not drawn since the layers were cleared.
+const NOT_DRAWN: int = 255
 
 var course: CourseData:
 	get:
@@ -90,6 +92,13 @@ var _risers: Array[TileMapLayer] = []
 var _edges: Array[TileMapLayer] = []
 var _lands: Array[TileMapLayer] = []
 var _riser_atlas: Dictionary = {}
+## The height each tile was last drawn at (NOT_DRAWN after a clear), so a redraw erases only
+## the layers that hold it (E3-S16).
+var _drawn: PackedByteArray = PackedByteArray()
+## The height each tile had when its four neighbours were last drawn for it (show_course or
+## refresh_cells on that tile), so a surface-only change skips them (E3-S16). Drawing a tile
+## as another's neighbour leaves its entry, so its own refresh still reaches its neighbours.
+var _neighbours_saw: PackedByteArray = PackedByteArray()
 var _edge_atlas: Dictionary = {}
 var _holes_root: Node2D
 var _markers: Array[HoleMarker] = []
@@ -153,10 +162,15 @@ func show_course(c: CourseData) -> void:
 	_course = c
 	for layer: TileMapLayer in _tops + _risers + _edges + _lands:
 		layer.clear()
+	_drawn = PackedByteArray()
+	_neighbours_saw = PackedByteArray()
 	if c != null:
+		_drawn.resize(c.width * c.height)
+		_drawn.fill(NOT_DRAWN)
 		for y: int in c.height:
 			for x: int in c.width:
 				_draw_cell(Vector2i(x, y))
+		_neighbours_saw = _drawn.duplicate()
 	refresh_holes()
 	show_issues({})
 
@@ -379,25 +393,60 @@ func issue_markers() -> Array[IssueMarker]:
 	return _issue_markers.duplicate()
 
 
-## Redraws one tile after an edit, plus the two back neighbors whose walls it may now hide
-## or reveal, and the two front neighbors whose edge cues depend on its height. Call from
+## Redraws one tile after an edit, plus, when its height changed, the two back neighbors whose
+## walls it may now hide or reveal and the two front neighbors whose edge cues depend on its
+## height. Call from
 ## the builder after it writes a tile (E1-S5). A hole marker on the tile moves to its new top.
 func refresh_cell(cell: Vector2i) -> void:
-	if _course == null:
+	refresh_cells([cell])
+
+
+## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16):
+## each tile is drawn once however many changed tiles share it, its neighbours only when its
+## height changed, a surface-only change sets just its top, and each hole marker and issue box
+## is tested once per batch, not once per tile, so an undo of a big drag costs in proportion to
+## its tiles. Leaves the view as
+## refresh_cell on each tile would. Main calls it with each tiles_changed.
+func refresh_cells(cells: Array[Vector2i]) -> void:
+	if _course == null or cells.is_empty():
 		return
-	for c: Vector2i in [cell, cell + Vector2i(-1, 0), cell + Vector2i(0, -1),
-			cell + Vector2i(1, 0), cell + Vector2i(0, 1)]:
-		if _course.in_bounds(c.x, c.y):
-			_draw_cell(c)
+	# A neighbour's walls and cues read only this tile's height, so a tile whose height its
+	# neighbours were last drawn with (a surface-only change) redraws alone.
+	var changed := {}
+	var draw := {}
+	var moved: bool = false
+	for cell: Vector2i in cells:
+		changed[cell] = true
+		if not _course.in_bounds(cell.x, cell.y):
+			continue
+		var i: int = cell.y * _course.width + cell.x
+		var h: int = _course.get_height(cell.x, cell.y)
+		if _drawn[i] != h:
+			draw[cell] = true
+		if _neighbours_saw[i] != h:
+			_neighbours_saw[i] = h
+			moved = true
+			for c: Vector2i in [cell + Vector2i(-1, 0), cell + Vector2i(0, -1),
+					cell + Vector2i(1, 0), cell + Vector2i(0, 1)]:
+				if _course.in_bounds(c.x, c.y):
+					draw[c] = true
+	for c: Vector2i in draw:
+		_draw_cell(c)
+	# A changed tile still at the height it was drawn at, with no neighbour's height moved in
+	# this batch, has risers, edge cue and land frame as drawn (they read only heights and
+	# parcels, and refresh_parcel redraws a parcel): only its surface top is set (E3-S16 review).
+	for cell: Vector2i in changed:
+		if not draw.has(cell) and _course.in_bounds(cell.x, cell.y):
+			_draw_top(cell)
 	for m: HoleMarker in _markers:
-		if m.cell == cell:
+		if changed.has(m.cell):
 			m.place(_course)
 	# An edit in front of a fault may cover or uncover its leader's foot.
 	for m: IssueMarker in _issue_markers:
-		if m.cell == cell:
+		if changed.has(m.cell):
 			m.place(_course)
 			_issue_layout_scale = 0.0
-		else:
+		elif moved:
 			m.foot_hidden = IssueMarker.covered(_course, m.cell)
 
 
@@ -510,33 +559,51 @@ static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
 	return clampi(h - c.get_height(x, y), 0, EDGE_MAX_STEPS)
 
 
+## Sets only the surface top of `cell`, drawn at its current height (refresh_cells).
+func _draw_top(cell: Vector2i) -> void:
+	var h: int = _course.get_height(cell.x, cell.y)
+	_tops[h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
+			top_alt(h, _course.is_owned(cell.x, cell.y)))
+
+
 func _draw_cell(cell: Vector2i) -> void:
 	var h: int = _course.get_height(cell.x, cell.y)
 	var land: int = land_frame(_course, cell.x, cell.y)
 	var alt: int = 0 if land < 0 else DIM_ALT
-	for layer_h: int in _tops.size():
-		if layer_h == h:
-			_tops[layer_h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
-					top_alt(h, land < 0))
-		else:
-			_tops[layer_h].erase_cell(cell)
-	for k: int in _risers.size():
-		var frame: StringName = riser_frame(_course, cell.x, cell.y, k)
+	# Only the layers this cell was last drawn on can hold it (E3-S16): its old height's top,
+	# cue and land layers, and its risers below the old height.
+	var i: int = cell.y * _course.width + cell.x
+	var old: int = _drawn[i]
+	_drawn[i] = h
+	if old != NOT_DRAWN and old != h:
+		_tops[old].erase_cell(cell)
+		_edges[old].erase_cell(cell)
+		_lands[old].erase_cell(cell)
+	_tops[h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
+			top_alt(h, land < 0))
+	# riser_frame for every step below h, from the two front neighbours read once.
+	var left_h: int = _course.get_height(cell.x, cell.y + 1)
+	var right_h: int = _course.get_height(cell.x + 1, cell.y)
+	for k: int in h:
+		var frame: StringName = (&"both" if left_h <= k and right_h <= k else &"left" if left_h <= k
+				else &"right" if right_h <= k else &"")
 		if frame.is_empty():
-			_risers[k].erase_cell(cell)
+			if old != NOT_DRAWN:
+				_risers[k].erase_cell(cell)
 		else:
 			_risers[k].set_cell(cell, RISER_SOURCE, _riser_atlas[frame], alt)
+	if old != NOT_DRAWN:
+		for k: int in range(h, mini(old, _risers.size())):
+			_risers[k].erase_cell(cell)
 	var cue: StringName = edge_cue_frame(_course, cell.x, cell.y)
-	for layer_h: int in _edges.size():
-		if layer_h == h and not cue.is_empty():
-			_edges[layer_h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue], alt)
-		else:
-			_edges[layer_h].erase_cell(cell)
-	for layer_h: int in _lands.size():
-		if layer_h == h and land >= 0:
-			_lands[layer_h].set_cell(cell, LAND_SOURCE, Vector2i(land, 0))
-		else:
-			_lands[layer_h].erase_cell(cell)
+	if not cue.is_empty():
+		_edges[h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue], alt)
+	elif old != NOT_DRAWN:
+		_edges[h].erase_cell(cell)
+	if land >= 0:
+		_lands[h].set_cell(cell, LAND_SOURCE, Vector2i(land, 0))
+	elif old != NOT_DRAWN:
+		_lands[h].erase_cell(cell)
 
 
 ## `shift` moves the layer up by that many pixels and its sort origin down by as many, for a
