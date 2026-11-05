@@ -3,7 +3,7 @@ extends RefCounted
 ## Every guest tunable (E3-S1, D38 to D43), read from res://data/guests.json. docs/design.md
 ## Guests and reactions has a line for each. Read-only: /balance reactions (E3-S8) tunes the
 ## file. E3-S3 reads the swing, aim and Ball work numbers, E3-S4 the day, arrivals, draws, walking
-## and stroke time; the checks' numbers wait for E3-S6.
+## and stroke time; E3-S6 the checks' numbers (GuestReaction, HoleChecks).
 
 const PATH: String = "res://data/guests.json"
 
@@ -163,6 +163,14 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("max_steps_per_frame must be at least 1")
 	if t.guest_ticks_per_s < 1:
 		errors.append("guest_ticks_per_s must be at least 1")
+	if t.praise_passes < 1 or t.praise_passes > 4:
+		errors.append("praise_passes must be 1 to 4 (the four checks)")
+	if t.complaint_fails < 1:
+		errors.append("complaint_fails must be at least 1")
+	if t.doubled_check_weight < 1:
+		errors.append("doubled_check_weight must be at least 1")
+	if t.sight_step_yd <= 0.0:
+		errors.append("sight_step_yd must be above 0")
 	if t.guest_putt_max_runs < 2:
 		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
 	return t

@@ -4,7 +4,9 @@ extends SceneTree
 ## simulated second. Prints, per day seed, how many guests finished nine, round and hole
 ## times, pace waits, Ball work (ticks a second, seconds at the sim's cap, the costliest plans)
 ## and the CPU per simulated second; then a pair and a foursome alone on the course. The
-## figures go in docs/design.md Guests and reactions (Guest day).
+## figures go in docs/design.md Guests and reactions (Guest day). E3-S6: each hole's static
+## checks (blind, interesting) and their cost, and each day's reactions (praise, neutral,
+## complaint, and how often each check failed).
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3]
 
@@ -24,6 +26,7 @@ func _initialize() -> void:
 	var model := ShotModel.new()
 	var tuning := GuestTuning.load_default()
 	GuestClubTable.warm(model)
+	_statics(course, tuning, model)
 	var all_plans: Array[int] = []
 	for s in seeds:
 		_day(course, s, tuning, model, all_plans)
@@ -101,6 +104,19 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		brain.max_second_ticks, brain.max_guest_second_ticks, brain.capped_seconds,
 		mean_cpu, cpu[cpu.size() / 2], cpu[int(cpu.size() * 0.95)], cpu[-1],
 		moves[moves.size() / 2], moves[-1]])
+	var kinds := [0, 0, 0]
+	var fails := [0, 0, 0, 0]
+	for g: Guest in brain.guests:
+		for r: Guest.HoleRecord in g.records:
+			kinds[r.reaction.kind] += 1
+			for c: int in GuestReaction.Check.size():
+				if not r.reaction.passed[c]:
+					fails[c] += 1
+	var n := maxi(holes, 1)
+	print("day %d reactions: praise %d, neutral %d, complaint %d of %d; fails fair %d%%, interesting %d%%, pace %d%%, challenge %d%%; statics measured %d times" % [
+		day_seed, kinds[0], kinds[1], kinds[2], holes, roundi(100.0 * fails[0] / n),
+		roundi(100.0 * fails[1] / n), roundi(100.0 * fails[2] / n), roundi(100.0 * fails[3] / n),
+		brain.checks.measured])
 
 
 ## The day of `day_seed` in 60 fps frames at `speed` (GuestBrain.advance_real, as Play runs it):
@@ -125,6 +141,23 @@ func _frames(course: CourseData, day_seed: int, tuning: GuestTuning, model: Shot
 	print("day %d at %.0fx in 60 fps frames: CPU a frame mean %.2f ms, median %.2f, p95 %.2f, p99 %.2f, worst %.2f; %d of %d frames over 8 ms" % [
 		day_seed, speed, mean, cpu[cpu.size() / 2], cpu[int(cpu.size() * 0.95)],
 		cpu[int(cpu.size() * 0.99)], cpu[-1], over, cpu.size()])
+
+
+## Each hole's static checks (HoleChecks) and their cost headless.
+func _statics(course: CourseData, tuning: GuestTuning, model: ShotModel) -> void:
+	var checks := HoleChecks.new(tuning, model.params)
+	var t0 := Time.get_ticks_usec()
+	var key := HoleChecks.terrain_key(course)
+	var key_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var parts := PackedStringArray()
+	var worst := 0.0
+	for h: HoleData in course.holes:
+		var t1 := Time.get_ticks_usec()
+		var s := checks.statics(course, h, key)
+		worst = maxf(worst, (Time.get_ticks_usec() - t1) / 1000.0)
+		parts.append("%d %s%s" % [h.number, "blind" if s.blind else "seen",
+				", interesting" if s.interesting() else (", hazard, no way round" if s.hazard_on_line else ", bare")])
+	print("statics: %s; terrain key %.2f ms, a hole's measure worst %.2f ms" % ["; ".join(parts), key_ms, worst])
 
 
 func _at(a: Array[int], q: float) -> int:

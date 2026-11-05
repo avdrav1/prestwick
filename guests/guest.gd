@@ -75,7 +75,8 @@ var left_s: int = -1
 var left_at_dusk: bool = false
 
 
-## One hole a guest finished (holed or picked up, D12): what E3-S6's checks read.
+## One hole a guest finished (holed or picked up, D12): what E3-S6's checks read, and the
+## reaction they gave.
 class HoleRecord:
 	var number: int = 0
 	var par: int = 0
@@ -92,6 +93,8 @@ class HoleRecord:
 	var end_s: int = 0
 	## The play itself: strokes, clubs, rests.
 	var play: GuestHole
+	## The guest's reaction to the hole (E3-S6, D39): the four checks and the verdict.
+	var reaction: GuestReaction
 
 
 func taste_name() -> String:

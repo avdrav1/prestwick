@@ -37,11 +37,15 @@ extends RefCounted
 ##
 ## Dusk (D38): at `day_s` every guest still on the course leaves; the hole it was playing
 ## gives no record. Each finished hole gave its record (`hole_finished`) when the guest holed
-## out or picked up, for E3-S6's checks.
+## out or picked up, with the guest's reaction to it (E3-S6, D39: `reacted`, the four checks,
+## GuestReaction). The hole's static checks (blind, interesting) are measured once per hole
+## and kept while its tee, cup and the course's terrain stay the same (HoleChecks).
 
 signal guest_arrived(guest: Guest)
 signal hole_finished(guest: Guest, record: Guest.HoleRecord)
 signal guest_left(guest: Guest)
+## A guest's reaction to the hole it just finished (D39), right after its `hole_finished`.
+signal reacted(guest: Guest, reaction: GuestReaction)
 
 ## A step is due when the clock is this close to a whole second (float sums of frame deltas).
 const CLOCK_EPS: float = 1e-6
@@ -66,6 +70,8 @@ var max_second_ticks: int = 0
 var max_guest_second_ticks: int = 0
 var capped_seconds: int = 0
 var ticks: int = 0
+## The holes' static checks (blind, interesting), kept per hole until it or the terrain changes.
+var checks: HoleChecks
 
 var _swing_tuning: SwingTuning
 ## {hole number: [GuestGroup]}: the groups heading for or playing each hole, in order.
@@ -79,6 +85,9 @@ var _clock: float = 0.0
 ## course cannot change inside a step, so a search is shared by every walk of the step (a
 ## group setting off from one cup, its pace walk) and the cache is dropped before the next.
 var _route_cache: Dictionary = {}
+## HoleChecks.terrain_key of the course this step ("" until a reaction needs it); dropped
+## before the next step, as the route cache is.
+var _terrain_key: String = ""
 
 
 ## The day of `day_seed` on `course`. `p_groups` replaces the drawn arrivals (tests, scripts).
@@ -92,6 +101,7 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 	model = p_model if p_model != null else ShotModel.new()
 	_swing_tuning = p_swing_tuning if p_swing_tuning != null else SwingTuning.load_default()
 	field = HeightField.new(course, model.params)
+	checks = HoleChecks.new(tuning, model.params)
 	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed)
 	GuestClubTable.warm(model)
 
@@ -136,6 +146,7 @@ func step() -> void:
 	_cursor = 0
 	_sim_used = 0
 	_route_cache.clear()
+	_terrain_key = ""
 	_update(second)
 	second += 1
 
@@ -397,8 +408,13 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.start_s = g.start_s
 	r.end_s = t
 	r.play = guest.hole
+	if _terrain_key == "":
+		_terrain_key = HoleChecks.terrain_key(course)
+	r.reaction = GuestReaction.judge(guest, r, checks.statics(course, guest.hole.hole, _terrain_key),
+			tuning)
 	guest.records.append(r)
 	hole_finished.emit(guest, r)
+	reacted.emit(guest, r.reaction)
 
 
 ## Group `g` is done with its hole (finished, or the hole was taken away): it leaves the
