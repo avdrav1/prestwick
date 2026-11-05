@@ -32,6 +32,8 @@
 
   "guest_ticks_per_s": 480,
   "sim_ticks_per_s": 4800,
+  "frame_ticks_max": 200,
+  "frame_guest_ms_max": 10.0,
   "guest_putt_max_runs": 6,
 
   "patience_min": 1,

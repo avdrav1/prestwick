@@ -29,6 +29,17 @@ extends SceneTree
 ## (brush 5, about 570 tiles below the nine rows) and its undo, so holes stay open and guests
 ## stay on the course through the undo; the frames holding its drag_to calls and its undo, the
 ## calls alone, and the guest CPU in those frames.
+##
+## E3-S14: headless adds a whole guest day (seeds 1 and 2) in frames of 1/60 and 1/30 s at 3x
+## with no scene: each frame's guest work in ms and ticks, the frames over
+## `frame_guest_ms_max` (data/guests.json) and how late the day ran (frames a due step waited
+## for its Ball work, GuestBrain.held_frames). With a display, after the off-line drags, the
+## main scene goes to Play with a fresh guest day (GuestSim) stepped until all 16 guests are
+## out, then runs 3x in frames of 1/60 s (GuestSim.advance, timed alone) with the guests
+## drawn (GuestView), at 1x and 0.5x; then back in Build every hole but hole 1 fails two
+## rules and the click edits run with a fresh day of guests playing hole 1 (the script's own
+## GuestBrain, as in the other Build phases). The run fails (exit 1) when a 3x frame's guest
+## work at 60 fps passes `frame_guest_ms_max`.
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
@@ -44,6 +55,10 @@ const GUEST_REFRESH_S: int = 80
 const OFF_LINE_ROW: int = 100
 const OFF_LINE_X0: int = 8
 const OFF_LINE_X1: int = 120
+## E3-S14: frames of Play at 3x at each zoom, and the simulated second the main scene's day is
+## stepped to first (every group has arrived by 90 s).
+const PLAY_FRAMES: int = 600
+const PLAY_START_S: int = 92
 ## Frames one breaking-drag cycle takes: press, 8 drag frames, release, undo, settle.
 const DRAG_CYCLE: int = 16
 const WARMUP_FRAMES: int = 60
@@ -76,6 +91,10 @@ var _drag_calls: Array[float] = []
 var _undo_calls: Array[float] = []
 var _drag_guest_ms: Array[float] = []
 var _undo_guest_ms: Array[float] = []
+## E3-S14: Play frames (3x, 60 fps) whose guest work passed frame_guest_ms_max; and, beside
+## _guest_ms in Play, whether each frame ran a step.
+var _play_over: int = 0
+var _guest_stepped: Array[bool] = []
 
 
 func _initialize() -> void:
@@ -88,7 +107,8 @@ func _initialize() -> void:
 	_model = ShotModel.new()
 	_guest_tuning = GuestTuning.load_default()
 	if DisplayServer.get_name() == "headless":
-		quit(0 if opened.size() == 9 else 1)
+		var over := _time_guest_frames()
+		quit(0 if opened.size() == 9 and over == 0 else 1)
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -170,6 +190,40 @@ func _time_break_drag(b: CourseBuilder) -> void:
 	print("undo of that drag, validator rerun: %s; %d holes open after" % [_stats(undo), still_open])
 
 
+## E3-S14: whole guest days in frames at 3x, no scene. Returns the 60 fps frames whose guest
+## work passed frame_guest_ms_max.
+func _time_guest_frames() -> int:
+	var over_60 := 0
+	var budget := _guest_tuning.frame_guest_ms_max
+	for fps: float in [60.0, 30.0]:
+		for day: int in [1, 2]:
+			var brain := GuestBrain.new(_course, day, _guest_tuning, _model)
+			var ms: Array[float] = []
+			var ticks: Array[float] = []
+			var over := 0
+			while not brain.day_over:
+				var t0 := Time.get_ticks_usec()
+				brain.advance_real(1.0 / fps, 3.0)
+				var d: float = (Time.get_ticks_usec() - t0) / 1000.0
+				ms.append(d)
+				ticks.append(float(brain.frame_ticks))
+				over += 1 if d > budget else 0
+			if fps == 60.0:
+				over_60 += over
+			var on_time: int = ceili((_guest_tuning.day_s + 1.0) * fps / 3.0)
+			print("guest day %d at 3x, %d fps: guest work a frame %s; ticks a frame median %d, p95 %d, worst %d (frame_ticks_max %d); %d frames over %.1f ms; %d frames, %d on time (%d a step waited, %.1f%% late)" % [
+				day, fps, _stats(ms), _q(ticks, 0.5), _q(ticks, 0.95), _q(ticks, 1.0),
+				_guest_tuning.frame_ticks_max, over, budget, ms.size(), on_time, brain.held_frames,
+				100.0 * (ms.size() - on_time) / on_time])
+	return over_60
+
+
+func _q(a: Array[float], q: float) -> int:
+	var s: Array[float] = a.duplicate()
+	s.sort()
+	return int(s[mini(int(s.size() * q), s.size() - 1)])
+
+
 ## The tiles the breaking drag paints: the grid lines from cup to cup, in hole order.
 func _break_cells() -> Dictionary:
 	var out := {}
@@ -246,6 +300,8 @@ func _process(_delta: float) -> bool:
 		return false
 	if _phase == 4 or _phase == 5:
 		_advance_main_guests()
+	elif _phase == 9:
+		_advance_budget_guests()
 	else:
 		_advance_guests()
 	var now := Time.get_ticks_usec()
@@ -423,12 +479,37 @@ func _process(_delta: float) -> bool:
 				print("drag off every line: undo call (tool, builder, view, %d tiles) %s; guest CPU in its frame %s" % [
 					_off_line_cells(), _stats(_undo_calls), _stats(_undo_guest_ms)])
 				_print_guests("off-line drags")
-				_fail_every_hole()
+				_begin_budget_play()
 				_next_phase()
 				_edits = 0
 				_edit_samples.clear()
-		9:  # the same with every hole failing two rules (cup on rough, wrong par): 9 issue
-			# boxes of 2 lines each, the camera on the map's centre
+		9:  # E3-S14: Play at 3x with the main scene's fresh day, all 16 guests out and drawn:
+			# PLAY_FRAMES frames at 1x, then as many at 0.5x
+			if _frames > 2:
+				_samples.append(frame_ms)
+			if _frames == PLAY_FRAMES or _frames == 2 * PLAY_FRAMES:
+				var zoom: String = str(snappedf(_main.camera.zoom.x, 0.001))
+				var steps: Array[float] = []
+				for i: int in _guest_ms.size():
+					if _guest_stepped[i]:
+						steps.append(_guest_ms[i])
+				print("Play at 3x, %sx zoom, all guests drawn: frame %s; guest work a frame (GuestSim.advance) %s; %d frames over %.1f ms (%d of them ran a step); frames that ran a step %s; day %d at %d s, %d on the course, %d drawn, %d on screen" % [
+					zoom, _stats(_samples), _stats(_guest_ms), _over(_guest_ms),
+					_guest_tuning.frame_guest_ms_max, _over(steps), _stats(steps),
+					_main.guest_sim.day, _main.guest_sim.brain.second,
+					_main.guest_sim.guests_on_course(), _main.guest_view.figures().size(),
+					_on_screen()])
+				_play_over += _over(_guest_ms)
+				_samples.clear()
+				_guest_ms.clear()
+				_guest_stepped.clear()
+				if _frames == PLAY_FRAMES:
+					_set_play_zoom(0.5)
+				else:
+					_end_budget_play()
+					_next_phase()
+		10:  # every hole but hole 1 failing two rules (cup on rough, wrong par): 8 issue boxes
+			# of 2 lines each, the camera on the map's centre, a fresh day of guests on hole 1
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)
 			if _frames % 10 == 0:
@@ -441,24 +522,100 @@ func _process(_delta: float) -> bool:
 				_samples.append((Time.get_ticks_usec() - t0) / 1000.0)
 				_edits += 1
 			if _edits >= RUNS and _frames % 10 == 1:
-				print("every hole failing (%d issue boxes): click edit in the main scene: %s" % [
-					_main.course_view.issue_markers().size(), _stats(_samples)])
-				print("every hole failing: frame holding a click edit, 1x: %s" % _stats(_edit_samples))
-				_print_guests("every hole failing")
-				quit(0)
+				print("every hole but hole 1 failing (%d issue boxes, %d open): click edit in the main scene: %s" % [
+					_main.course_view.issue_markers().size(), _open_count(), _stats(_samples)])
+				print("every hole but hole 1 failing: frame holding a click edit, 1x: %s" % _stats(_edit_samples))
+				_print_guests("every hole but hole 1 failing")
+				print("3x guest frames over %.1f ms in Play: %d" % [_guest_tuning.frame_guest_ms_max, _play_over])
+				quit(0 if _play_over == 0 else 1)
+	return false
+
 	return false
 
 
-## Paints every hole's cup rough and gives it a par its yardage does not match, through the
-## main scene's builder, so every hole fails rules 2 and 4 (and closes), and centres the camera
-## on the map.
-func _fail_every_hole() -> void:
+## E3-S14: the main scene to Play, its own guest day (GuestSim) stepped until every guest of
+## the day is out, run at 3x by this script (GuestSim.advance at 1/60 s a frame, timed alone)
+## rather than by its own _process; the script's GuestBrain rests meanwhile.
+func _begin_budget_play() -> void:
+	_brain = null
+	_guest_ms.clear()
+	_main.set_mode(Main.Mode.PLAY)
+	var sim: GuestSim = _main.guest_sim
+	sim.set_process(false)
+	sim.set_speed(3.0)
+	sim.start(sim.course, sim.base_seed)  # E3-S9's Play phases ran day 1 on: start afresh
+	sim.advance(0.0)  # builds day 1
+	var all: int = _guest_tuning.arrivals_per_day
+	while sim.brain.second < PLAY_START_S or (sim.guests_on_course() < all
+			and sim.brain.second < _guest_tuning.day_s / 2.0 + 10.0):
+		sim.brain.step()
+	_set_play_zoom(1.0)
+
+
+## Sets the camera to the zoom level `level` by value, not by index, so the Play phase measures
+## the zoom it prints whatever steps camera.tres holds (E3-S14 review); quits 1 if it has none.
+## It goes there as the player's own zoom key does (step_zoom), since in Play the aim fit
+## (CourseCamera.set_lead) steps a set_zoom_index level out again until the tee and aim fit:
+## before the review the "1x" pass was measured at 0.5x.
+func _set_play_zoom(level: float) -> void:
+	var i: int = -1
+	for j: int in _main.camera.tuning.zoom_levels.size():
+		if is_equal_approx(_main.camera.tuning.zoom_levels[j], level):
+			i = j
+	if i < 0:
+		push_error("no %sx zoom step in camera tuning" % str(level))
+		quit(1)
+		return
+	var d: int = 1 if i > 0 else -1
+	_main.camera.set_zoom_index(i - d)
+	_main.camera.step_zoom(d)
+
+
+## Back to Build with every hole but hole 1 failing, and a fresh day of the script's own
+## guests out on hole 1.
+func _end_budget_play() -> void:
+	_main.guest_sim.set_process(true)
+	_main.set_mode(Main.Mode.BUILD)
+	_fail_all_but_first_hole()
+	_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
+	for i: int in GUEST_START_S:
+		_brain.step()
+
+
+func _over(ms: Array[float]) -> int:
+	return ms.filter(func(v: float) -> bool: return v > _guest_tuning.frame_guest_ms_max).size()
+
+
+## The main scene's guest figures whose feet are in the view.
+func _on_screen() -> int:
+	var n: int = 0
+	for f: GuestView.Figure in _main.guest_view.figures().values():
+		n += 1 if _main.guest_view.on_screen(_main.guest_view.figure_screen(f)) else 0
+	return n
+
+
+## Paints the cup of every hole but hole 1 rough and gives it a par its yardage does not
+## match, through the main scene's builder, so each fails rules 2 and 4 (and closes) while
+## hole 1 stays open for guests, and centres the camera on the map.
+func _fail_all_but_first_hole() -> void:
 	var b: CourseBuilder = _main.build_tool.builder
 	for spec: Array in NineHoles.HOLES:
+		if spec[0] == 1:
+			continue
 		b.paint(spec[3], Surface.Type.ROUGH, 1)
 		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
 	_main.camera.frame(_main.course_view.screen_bounds())
 	_main.camera.set_zoom_level(1.0)
+
+
+
+## E3-S14: the main scene's guest day by one frame of 1/60 s at 3x, timed alone, and whether
+## the frame ran a step.
+func _advance_budget_guests() -> void:
+	var t1 := Time.get_ticks_usec()
+	var stepped: int = _main.guest_sim.advance(1.0 / 60.0)
+	_guest_ms.append((Time.get_ticks_usec() - t1) / 1000.0)
+	_guest_stepped.append(stepped > 0)
 
 
 ## E3-S9 (D45): Play on the nine holes with the main scene's own guest day (GuestSim), stepped

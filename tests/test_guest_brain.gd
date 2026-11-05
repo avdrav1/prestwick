@@ -441,6 +441,50 @@ func test_the_same_seed_gives_the_same_day() -> void:
 	assert_ne(other, a, "another seed, another day")
 
 
+func test_a_day_run_in_sliced_frames_gives_the_same_records_as_one_run_a_step_at_a_time() -> void:
+	# E3-S14: Ball work is sliced over a second's frames by need, at most frame_ticks_max a frame;
+	# a step whose second's work is not done waits for it. Only the day's lateness changes.
+	var direct := _day_log(9, -1.0)
+	var brains: Array = []
+	assert_eq(_day_log(9, 3.0, 1.0 / 30.0, null, brains), direct, "3x at 30 fps")
+	assert_lte((brains[0] as GuestBrain).max_frame_ticks, tuning.frame_ticks_max)
+	var tight := _tuning({"frame_ticks_max": 40})
+	brains.clear()
+	assert_eq(_day_log(9, 3.0, 1.0 / 60.0, tight, brains), direct,
+			"a frame budget so tight that steps wait for their work")
+	var held: GuestBrain = brains[0]
+	assert_lte(held.max_frame_ticks, 40, "never past the frame budget")
+	assert_gt(held.held_frames, 0, "steps waited: the day ran late, not differently")
+	brains.clear()
+	assert_eq(_day_log(9, 1.0, 1.0 / 60.0, tight, brains), direct, "1x under the tight budget")
+
+
+func test_ball_work_is_paced_by_need_not_spent_up_to_the_cap_at_once() -> void:
+	# A lone guest needs at most guest_ticks_per_s a second: at 3x and 60 fps a frame spends
+	# about a twentieth of that, not 240 (a twentieth of the sim's cap) until it runs out.
+	var brain := GuestBrain.new(GuestCourse.course(), 3, tuning, model, [
+		GuestSpawner.group(0, 0.0, [[5, 5, Guest.Taste.CASUAL, 71]]),
+	])
+	var share := ceili(tuning.guest_ticks_per_s / 20.0) + 1
+	var busy := 0
+	for i in 20 * 60:
+		var before := brain.ticks
+		brain.advance_real(1.0 / 60.0, 3.0)
+		assert_lte(brain.ticks - before, share, "a lone guest's share a frame")
+		busy += 1 if brain.ticks > before else 0
+		if brain.day_over:
+			break
+	assert_gt(busy, 100, "its work spread over many frames")
+	# A full field: at most the cap's share a frame (80 at 1x, 240 at 3x) and the frame budget.
+	for speed: float in [1.0, 3.0]:
+		var brains: Array = []
+		_day_log(9, speed, 1.0 / 60.0, null, brains)
+		var b: GuestBrain = brains[0]
+		assert_lte(b.max_frame_ticks, mini(ceili(tuning.sim_ticks_per_s * speed / 60.0) + 1,
+				tuning.frame_ticks_max), "%sx" % speed)
+		assert_eq(b.held_frames, 0, "%sx at 60 fps keeps time" % speed)
+
+
 # --- dusk and edits ---
 
 func test_dusk_sends_everyone_home_and_an_unfinished_hole_gives_no_record() -> void:
@@ -488,6 +532,7 @@ func test_a_hole_edited_under_a_group_ends_with_no_record() -> void:
 func test_a_long_frame_runs_at_most_max_steps_per_frame() -> void:
 	var brain := GuestBrain.new(GuestCourse.course(), 3, tuning, model)
 	assert_eq(brain.advance_real(2.0, 3.0), tuning.max_steps_per_frame, "a 2 s hitch at 3x")
+	assert_lte(brain.max_frame_ticks, tuning.frame_ticks_max, "its catch-up inside the frame budget")
 	assert_eq(brain.second, tuning.max_steps_per_frame)
 	var frame := 1.0 / 60.0
 	var steps := 0
@@ -539,9 +584,12 @@ func _snapshot(brain: GuestBrain, work: bool = true) -> String:
 
 
 ## The day of `day_seed` on the fixture: one snapshot a step and every record. `speed` below
-## 0 steps directly; else it runs 60 fps frames at that speed.
-func _day_log(day_seed: int, speed: float) -> PackedStringArray:
-	var brain := GuestBrain.new(GuestCourse.course(), day_seed, tuning, model)
+## 0 steps directly; else it runs frames of `frame` real seconds at that speed, with `t`'s
+## numbers (null: data/guests.json's). `out_brain` gets the brain, for its frame figures.
+func _day_log(day_seed: int, speed: float, frame: float = 1.0 / 60.0, t: GuestTuning = null,
+		out_brain: Array = []) -> PackedStringArray:
+	var brain := GuestBrain.new(GuestCourse.course(), day_seed, t if t != null else tuning, model)
+	out_brain.append(brain)
 	var out := PackedStringArray()
 	brain.hole_finished.connect(func(g: Guest, r: Guest.HoleRecord) -> void:
 		out.append("record %d hole %d score %d wait %d walk %.2f %d-%d" % [g.id, r.number, r.score,
@@ -549,7 +597,7 @@ func _day_log(day_seed: int, speed: float) -> PackedStringArray:
 	while not brain.day_over:
 		if speed < 0.0:
 			brain.step()
-		elif brain.advance_real(1.0 / 60.0, speed) == 0:
+		elif brain.advance_real(frame, speed) == 0:
 			continue
 		out.append("%d %s" % [brain.second, _snapshot(brain)])
 	return out

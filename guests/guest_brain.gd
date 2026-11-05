@@ -13,12 +13,16 @@ extends RefCounted
 ## `guest_ticks_per_s` Ball ticks, and the whole sim `sim_ticks_per_s`, guests served in a
 ## fixed order (arrival order, which is group then place) on whatever work they have: the plan
 ## of their next stroke, the putt solve, their own ball. Work left over carries to the next
-## second. `advance_real` spreads a second's ticks over that second's frames (the share of the
-## second gone by, times the sim's cap) and `step` first finishes whatever that second still
-## owes, so a day plays the same however it is sliced into frames: the same seed gives the
-## same day. No clock is read and every random number comes from the day's seed. A long frame
-## (a hitch) runs at most `max_steps_per_frame` steps and lets the rest of its time go: the
-## day runs late, never differently.
+## second. `advance_real` slices a second's ticks over that second's frames in proportion to
+## its need (E3-S14): the share of the second gone by, times the most the second can spend
+## (`guest_ticks_per_s` for each guest with work when it began, at most the sim's cap; work
+## only starts in a step, so no second spends more), and never more than `frame_ticks_max` in
+## one frame. A step that is due waits, frame by frame, until its second's work is served
+## (`held_frames`), and `step` itself first finishes whatever that second still owes, so a day
+## plays the same however it is sliced into frames: the same seed gives the same day. No clock
+## is read and every random number comes from the day's seed. A long frame (a hitch) runs at
+## most `max_steps_per_frame` steps and lets the rest of its time go: the day runs late, never
+## differently.
 ##
 ## A hole (E3-S4): the group stands on the tee until all of it is there and the tee is clear
 ## (groups queue in the order they head for the hole): it is first in the queue, or the group
@@ -74,6 +78,11 @@ var max_second_ticks: int = 0
 var max_guest_second_ticks: int = 0
 var capped_seconds: int = 0
 var ticks: int = 0
+## E3-S14: Ball ticks the last `advance_real` frame served, the most any frame served, and the
+## frames in which a due step waited for its second's work (the day running late).
+var frame_ticks: int = 0
+var max_frame_ticks: int = 0
+var held_frames: int = 0
 ## The holes' static checks (blind, interesting), kept per hole until it or the terrain changes.
 var checks: HoleChecks
 ## {hole number: groups that teed off it today} (E3-S8: a day reaches every hole).
@@ -85,6 +94,8 @@ var _queues: Dictionary = {}
 ## Ball work this second: the guest being served, and the sim's ticks spent.
 var _cursor: int = 0
 var _sim_used: int = 0
+## The most Ball ticks this second can spend (E3-S14, `_measure_need`): what advance_real paces by.
+var _need: int = 0
 ## Share of the current simulated second gone by in real time (advance_real).
 var _clock: float = 0.0
 ## Cart path searches this step ({Vector4i(from tile, to tile): tiles}, GuestWalk.route). The
@@ -114,22 +125,37 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 
 ## Real time passing in Play: `delta` real seconds at `speed` (0 paused, 1, 3). Runs a step
 ## for every whole simulated second gone by, at most `max_steps_per_frame` (a hitch's extra
-## time is let go), and spends the current second's Ball work in proportion. Returns the steps
-## it ran.
+## time is let go), and spends the current second's Ball work in proportion to its need, all
+## inside `frame_ticks_max` (E3-S14). A due step whose second's work is not yet served waits
+## for later frames. Returns the steps it ran.
 func advance_real(delta: float, speed: float) -> int:
+	frame_ticks = 0
 	if day_over or speed <= 0.0 or delta <= 0.0:
 		return 0
 	_clock = minf(_clock + delta * speed, float(tuning.max_steps_per_frame))
+	var left := tuning.frame_ticks_max
 	var stepped := 0
 	while _clock >= 1.0 - CLOCK_EPS and not day_over:
+		left -= serve(left)
+		if not second_served():
+			held_frames += 1  # the step waits for its work: the day runs late
+			break
 		_clock = maxf(_clock - 1.0, 0.0)
 		step()
 		stepped += 1
-	if not day_over:
-		var due := ceili(minf(_clock, 1.0) * tuning.sim_ticks_per_s)
+	if not day_over and left > 0:
+		var due := ceili(minf(_clock, 1.0) * _need)
 		if due > _sim_used:
-			serve(due - _sim_used)
+			left -= serve(mini(due - _sim_used, left))
+	frame_ticks = tuning.frame_ticks_max - left
+	max_frame_ticks = maxi(max_frame_ticks, frame_ticks)
 	return stepped
+
+
+## True when this second's Ball work is all served: every guest has had what it needs, or the
+## sim's cap is spent.
+func second_served() -> bool:
+	return _cursor >= guests.size()
 
 
 ## How much of the current simulated second has gone by in real time (0 to 1): what a view
@@ -161,13 +187,29 @@ func step() -> void:
 	_terrain_key = ""
 	_update(second)
 	second += 1
+	_measure_need()
+
+
+## The most this second can spend (E3-S14): `guest_ticks_per_s` for every guest with Ball work
+## now (a plan, a putt solve or a ball in flight), at most the sim's cap. Work only starts in
+## a step (a strike, a new hole), and a resting ball's next plan is the same guest's work, so
+## no second spends more; a guest waiting to strike, holed out or gone needs none.
+func _measure_need() -> void:
+	var n := 0
+	for g: Guest in guests:
+		if not g.is_done() and g.hole != null and (g.hole.state == GuestHole.State.PLANNING
+				or g.hole.state == GuestHole.State.FLYING):
+			n += 1
+	_need = mini(n * tuning.guest_ticks_per_s, tuning.sim_ticks_per_s)
 
 
 ## Spends up to `max_ticks` (below 0: all that is owed) of this second's Ball work, guests in
 ## fixed order, each up to its own budget and all within the sim's. Returns the ticks spent.
+## Guests with nothing to do are passed over even with no ticks left to give, so a second
+## whose work is done reads as served (second_served).
 func serve(max_ticks: int) -> int:
 	var used := 0
-	while _cursor < guests.size() and (max_ticks < 0 or used < max_ticks):
+	while _cursor < guests.size():
 		var sim_left := tuning.sim_ticks_per_s - _sim_used
 		if sim_left <= 0:
 			_cursor = guests.size()
@@ -181,6 +223,8 @@ func serve(max_ticks: int) -> int:
 			_cursor += 1
 			continue
 		if max_ticks >= 0:
+			if used >= max_ticks:
+				break
 			give = mini(give, max_ticks - used)
 		var n := g.hole.advance(give)
 		g.second_ticks += n

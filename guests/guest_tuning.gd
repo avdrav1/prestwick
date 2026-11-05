@@ -57,6 +57,13 @@ var aim_offsets_deg: PackedFloat32Array = PackedFloat32Array()
 ## Guest Ball work: Ball ticks a guest may spend per simulated second, and the whole sim.
 var guest_ticks_per_s: int = 0
 var sim_ticks_per_s: int = 0
+## E3-S14: the most Ball ticks GuestBrain.advance_real serves in one frame, all guests together
+## (the frame's share of its second's need is smaller; a step whose second's work is not yet
+## served waits for later frames: the day runs late, never differently).
+var frame_ticks_max: int = 0
+## E3-S14: the guest work one 3x frame at 60 fps may take, ms: a target that
+## scripts/nine_holes_perf.gd measures against. The sim never reads a clock.
+var frame_guest_ms_max: float = 0.0
 ## PuttAim's putt_aim_max_runs for guests (the player keeps golf/swing_tuning.tres's).
 var guest_putt_max_runs: int = 0
 
@@ -146,6 +153,8 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("aim_offsets_deg must be a list of degrees")
 	t.guest_ticks_per_s = CourseData.read_int(d, "guest_ticks_per_s", errors)
 	t.sim_ticks_per_s = CourseData.read_int(d, "sim_ticks_per_s", errors)
+	t.frame_ticks_max = CourseData.read_int(d, "frame_ticks_max", errors)
+	t.frame_guest_ms_max = _float(d, "frame_guest_ms_max", errors)
 	t.guest_putt_max_runs = CourseData.read_int(d, "guest_putt_max_runs", errors)
 	t.patience_min = CourseData.read_int(d, "patience_min", errors)
 	t.patience_max = CourseData.read_int(d, "patience_max", errors)
@@ -252,6 +261,10 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
 	if t.max_steps_per_frame < 1:
 		errors.append("max_steps_per_frame must be at least 1")
+	if t.frame_ticks_max < 1:
+		errors.append("frame_ticks_max must be at least 1")
+	if t.frame_guest_ms_max <= 0.0:
+		errors.append("frame_guest_ms_max must be above 0")
 	if t.praise_passes < 1 or t.praise_passes > 4:
 		errors.append("praise_passes must be 1 to 4 (the four checks)")
 	if t.complaint_fails < 1:
