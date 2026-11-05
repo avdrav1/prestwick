@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="GolferArt" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://art/sprites/golfer_art.gd" id="1_art"]
+[ext_resource type="Script" path="res://art/tiles/tile_sheet.gd" id="2_sheet"]
+[ext_resource type="Texture2D" path="res://art/sprites/golfer_idle_placeholder.png" id="3_idle"]
+[ext_resource type="Texture2D" path="res://art/sprites/golfer_walk_placeholder.png" id="4_walk"]
+[ext_resource type="Texture2D" path="res://art/sprites/golfer_swing_placeholder.png" id="5_swing"]
+
+[sub_resource type="Resource" id="Resource_idle"]
+script = ExtResource("2_sheet")
+texture = ExtResource("3_idle")
+frame_size = Vector2i(24, 24)
+gutter = 1
+frames = PackedStringArray("s_0", "s_1", "sw_0", "sw_1", "w_0", "w_1", "nw_0", "nw_1", "n_0", "n_1", "ne_0", "ne_1", "e_0", "e_1", "se_0", "se_1")
+anchor = Vector2i(12, 23)
+
+[sub_resource type="Resource" id="Resource_walk"]
+script = ExtResource("2_sheet")
+texture = ExtResource("4_walk")
+frame_size = Vector2i(24, 24)
+gutter = 1
+frames = PackedStringArray("s_0", "s_1", "s_2", "s_3", "sw_0", "sw_1", "sw_2", "sw_3", "w_0", "w_1", "w_2", "w_3", "nw_0", "nw_1", "nw_2", "nw_3", "n_0", "n_1", "n_2", "n_3", "ne_0", "ne_1", "ne_2", "ne_3", "e_0", "e_1", "e_2", "e_3", "se_0", "se_1", "se_2", "se_3")
+anchor = Vector2i(12, 23)
+
+[sub_resource type="Resource" id="Resource_swing"]
+script = ExtResource("2_sheet")
+texture = ExtResource("5_swing")
+frame_size = Vector2i(24, 24)
+gutter = 1
+frames = PackedStringArray("s_0", "s_1", "s_2", "s_3", "s_4", "s_5", "sw_0", "sw_1", "sw_2", "sw_3", "sw_4", "sw_5", "w_0", "w_1", "w_2", "w_3", "w_4", "w_5", "nw_0", "nw_1", "nw_2", "nw_3", "nw_4", "nw_5", "n_0", "n_1", "n_2", "n_3", "n_4", "n_5", "ne_0", "ne_1", "ne_2", "ne_3", "ne_4", "ne_5", "e_0", "e_1", "e_2", "e_3", "e_4", "e_5", "se_0", "se_1", "se_2", "se_3", "se_4", "se_5")
+anchor = Vector2i(12, 23)
+
+[resource]
+script = ExtResource("1_art")
+idle = SubResource("Resource_idle")
+walk = SubResource("Resource_walk")
+swing = SubResource("Resource_swing")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -13,6 +13,9 @@
 [ext_resource type="Script" path="res://scenes/swing_panel.gd" id="11_swing_panel"]
 [ext_resource type="Script" path="res://scenes/score_card.gd" id="12_score_card"]
 [ext_resource type="Script" path="res://scenes/land_panel.gd" id="13_land_panel"]
+[ext_resource type="Script" path="res://scenes/guest_view.gd" id="14_guest_view"]
+[ext_resource type="Script" path="res://scenes/guest_sim.gd" id="15_guest_sim"]
+[ext_resource type="Script" path="res://scenes/sim_speed_panel.gd" id="16_sim_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -25,6 +28,14 @@ script = ExtResource("2_view")
 [node name="ShotView" type="Node2D" parent="CourseView"]
 y_sort_enabled = true
 script = ExtResource("6_shot")
+
+[node name="GuestView" type="Node2D" parent="CourseView"]
+visible = false
+y_sort_enabled = true
+script = ExtResource("14_guest_view")
+
+[node name="GuestSim" type="Node" parent="."]
+script = ExtResource("15_guest_sim")
 
 [node name="BuildTool" type="Node2D" parent="."]
 script = ExtResource("4_tool")
@@ -128,3 +139,11 @@ offset_right = -16.0
 offset_bottom = 16.0
 grow_horizontal = 0
 script = ExtResource("12_score_card")
+
+[node name="SimSpeedPanel" type="PanelContainer" parent="HUD"]
+visible = false
+offset_left = 16.0
+offset_top = 88.0
+offset_right = 196.0
+offset_bottom = 88.0
+script = ExtResource("16_sim_panel")

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GuestViewTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/guest_view_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+idle_fps = 2.0
+walk_fps = 8.0
+group_spread_yd = 1.5
+on_screen_margin_px = 32.0
+spread_ease_s = 0.5
+figure_min_screen_scale = 1.0
+ball_scale = 0.7

@@ -6,7 +6,8 @@ Usage:
   scripts/placeholder.py risers              -> art/tiles/risers_placeholder.png
   scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
   scripts/placeholder.py land                -> art/tiles/land_placeholder.png
-  scripts/placeholder.py all                 -> all four of the above
+  scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
+  scripts/placeholder.py all                 -> all of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
 
@@ -373,6 +374,76 @@ def build_land(p: dict[str, Color]) -> Image:
     return sheet([land_frame(m, p) for m in range(len(LAND))])
 
 
+# --- golfer (E3-S5) --------------------------------------------------------
+
+# art/specs/golfer.md. Three sheets, one per state, each one row: 8 directions in GOLFER_DIRS
+# order, and for each direction that state's frames in order. Frame names "<dir>_<n>".
+GOLFER_W = 24
+GOLFER_H = 24
+# The feet: the pixel that sits on the ground point the projection returns.
+GOLFER_ANCHOR = (12, 23)
+# Screen directions, clockwise from straight down the screen (toward the camera).
+GOLFER_DIRS = ["s", "sw", "w", "nw", "n", "ne", "e", "se"]
+# Screen step of each direction, x right and y down, for the cap's brim.
+GOLFER_DIR_STEP = {
+    "s": (0, 1), "sw": (-1, 1), "w": (-1, 0), "nw": (-1, -1),
+    "n": (0, -1), "ne": (1, -1), "e": (1, 0), "se": (1, 1),
+}
+GOLFER_STATES = [("idle", 2), ("walk", 4), ("swing", 6)]
+# Club angle per swing frame, degrees from straight down, toward the facing side: address,
+# takeaway, top, down, impact, finish.
+GOLFER_SWING_DEG = [10, -60, -150, -60, 10, 150]
+
+
+def golfer_frame(state: str, d: str, n: int, p: dict[str, Color]) -> Image:
+    import math
+    img = Image(GOLFER_W, GOLFER_H)
+    sx, sy = GOLFER_DIR_STEP[d]
+    side = sx if sx else 1
+    back = sy < 0
+    cx = GOLFER_ANCHOR[0]
+    bob = 1 if state == "idle" and n == 1 else 0
+    # Legs: slate_dark trousers from y 16 to the feet; a walk swings them in a 4-frame stride.
+    stride = [0, 2, 0, -2][n] if state == "walk" else 0
+    for y in range(16, 24):
+        t = (y - 16) / 7
+        for lx, sgn in ((cx - 2, 1), (cx + 1, -1)):
+            off = round(stride * sgn * t)
+            for x in (lx + off, lx + off + 1):
+                img.set(x, y, p["slate_dark"])
+    # Body: a chalk shirt on an ink outline, y 9 to 16.
+    for y in range(9 + bob, 17):
+        for x in range(cx - 4, cx + 4):
+            edge = x in (cx - 4, cx + 3) or y == 9 + bob
+            img.set(x, y, p["ink"] if edge else p["chalk"])
+    # Head: skin, or the back of the head (earth_dark hair) facing away, under a flag_red cap.
+    for y in range(4 + bob, 9 + bob):
+        for x in range(cx - 2, cx + 2):
+            img.set(x, y, p["earth_dark"] if back else p["skin"])
+    for x in range(cx - 3, cx + 3):
+        img.set(x, 3 + bob, p["flag_red"])
+    # The cap's brim points where the golfer faces, so the direction reads in grayscale too.
+    bx, by = cx - 1 + sx * 3, 4 + bob + max(sy, 0)
+    for x in (bx, bx + 1):
+        img.set(x, by, p["flag_red"])
+    if not back:
+        img.set(cx - 1 + sx, 6 + bob, p["ink"])  # an eye on the facing side
+    # The club: slate_light, from the hands; a swing turns it through GOLFER_SWING_DEG.
+    hx, hy = cx + side * 2, 14
+    deg = GOLFER_SWING_DEG[n] if state == "swing" else 15
+    a = math.radians(deg)
+    for i in range(1, 10):
+        x = hx + round(side * math.sin(a) * i)
+        y = hy + round(math.cos(a) * i)
+        img.set(x, y, p["slate_light"])
+    draw_label(img, d, 0, 0, p["ink"])
+    return img
+
+
+def build_golfer(state: str, frames: int, p: dict[str, Color]) -> Image:
+    return sheet([golfer_frame(state, d, n, p) for d in GOLFER_DIRS for n in range(frames)])
+
+
 # --- generic ---------------------------------------------------------------
 
 def build_generic(thing: str, size: tuple[int, int], frames: int, color: str, p: dict[str, Color]) -> Image:
@@ -416,6 +487,9 @@ def main(argv: list[str]) -> int:
         jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
     if args.thing in ("land", "all"):
         jobs.append((ROOT / "art/tiles/land_placeholder.png", build_land(p)))
+    if args.thing in ("golfer", "all"):
+        for state, frames in GOLFER_STATES:
+            jobs.append((ROOT / f"art/sprites/golfer_{state}_placeholder.png", build_golfer(state, frames, p)))
     if not jobs:
         if not args.size:
             ap.error(f"no built-in generator for {args.thing!r}; pass --size WxH and --frames N")

@@ -40,6 +40,9 @@ var land_seed: int = -1
 @onready var swing_control: SwingControl = $SwingControl
 @onready var aim_view: AimView = $AimView
 @onready var swing_panel: SwingPanel = $HUD/SwingPanel
+@onready var guest_sim: GuestSim = $GuestSim
+@onready var guest_view: GuestView = $CourseView/GuestView
+@onready var sim_speed_panel: SimSpeedPanel = $HUD/SimSpeedPanel
 
 
 func _ready() -> void:
@@ -60,6 +63,8 @@ func _ready() -> void:
 	swing_control.hole_finished.connect(_on_hole_finished)
 	shot_view.came_to_rest.connect(_on_came_to_rest)
 	score_card.bind(swing_control)
+	guest_view.bind(guest_sim)
+	sim_speed_panel.bind(guest_sim)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -79,6 +84,8 @@ func _ready() -> void:
 func show_course(c: CourseData) -> void:
 	course = c
 	shot_view.clear()
+	# The guests' day of this course (E3-S5): day 1 starts when Play first runs it.
+	guest_sim.start(c, maxi(land_seed, 0))
 	# The builder first: it closes any open hole the course brought in failing a rule, and the
 	# view then draws the holes as they are.
 	var builder := CourseBuilder.new(c)
@@ -167,7 +174,7 @@ func hud_controls() -> Array[Control]:
 
 func _hud_groups() -> Array:
 	return [
-		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel],
+		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, sim_speed_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
 	]
@@ -361,7 +368,7 @@ func _on_came_to_rest(_at: Vector3) -> void:
 
 
 ## The build tool, its palette, the hole and land panels, New course, New sandbox and the issue highlights exist
-## only in Build mode. Play never waits for the validator (pillar 1): a hole that fails a rule
+## only in Build mode; the guests' day (GuestSim, GuestView, its speed panel) only in Play. Play never waits for the validator (pillar 1): a hole that fails a rule
 ## is still played; the rules only decide whether guests may play it (Open).
 func _apply_mode() -> void:
 	var building: bool = mode == Mode.BUILD
@@ -374,6 +381,10 @@ func _apply_mode() -> void:
 	new_sandbox_button.visible = building
 	new_course_button.visible = building
 	score_card.visible = not building
+	# The guests' day runs, shows and has its speed controls in Play (E3-S5); Build holds it.
+	guest_sim.running = not building
+	guest_view.visible = not building
+	sim_speed_panel.visible = not building
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
 

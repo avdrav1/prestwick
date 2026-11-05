@@ -126,6 +126,12 @@ func advance_real(delta: float, speed: float) -> int:
 	return stepped
 
 
+## How much of the current simulated second has gone by in real time (0 to 1): what a view
+## interpolates walks and swings by between steps (E3-S5). Reads only.
+func step_fraction() -> float:
+	return clampf(_clock, 0.0, 1.0)
+
+
 ## Steps simulated seconds until dusk.
 func run_day() -> void:
 	while not day_over:

@@ -32,9 +32,12 @@ extends RefCounted
 ## Play, E3-S4 slices each second's budget over that second's frames with `advance`.
 ##
 ## Off-screen shortcut: a ball nobody watches runs to rest in as few calls as the budget
-## allows, skipping the drawn flight and jumping to where it rests; a ball on screen is
-## stepped `flight_ticks` at a time for the view to draw (E3-S5). The Ball is the same in both,
-## so the result is the same for the same seed (tests/test_guest_shot.gd).
+## allows, skipping the drawn flight and jumping to where it rests; `flight_ticks` steps it a
+## few ticks a call instead. The Ball is the same in both, so the result is the same for the
+## same seed (tests/test_guest_shot.gd). The view (E3-S5, scenes/guest_view.gd) never steps a
+## guest's ball: the sim runs every ball the same way whether it is watched or not, and the
+## view replays the stroke's recorded path (`stroke_path`) when the guest is on screen, so
+## what the camera looks at never changes the day.
 
 enum State { PLANNING, READY, FLYING, FINISHED }
 
@@ -52,6 +55,9 @@ var ball_at: Vector3 = Vector3.ZERO
 var plan: GuestPlan
 ## The ball in flight (null at rest).
 var ball: Ball
+## The path of the last stroke that came to rest (Ball.path: one point a tick, ending where
+## it stopped, or where it went into a hazard), for the view's replay (E3-S5).
+var last_path: PackedVector3Array = PackedVector3Array()
 ## One entry per stroke struck (StrokeRecord).
 var strokes: Array[StrokeRecord] = []
 ## Ball ticks stepped: in all, on plans, on the guest's own balls.
@@ -248,8 +254,15 @@ func play_out(ticks_per_s: int = 0, flight_ticks: int = -1) -> int:
 	return seconds
 
 
+## The recorded path of the latest stroke so far: the ball in flight's (growing) path, or the
+## path of the last one at rest. Empty before the first stroke.
+func stroke_path() -> PackedVector3Array:
+	return ball.path if ball != null else last_path
+
+
 func _ball_rested() -> void:
 	var r := strokes[-1]
+	last_path = ball.path
 	r.rest = ball.position
 	r.penalty_strokes = ball.penalty_strokes
 	r.hazard = ball.hazard
