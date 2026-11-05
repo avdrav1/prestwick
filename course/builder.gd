@@ -31,6 +31,12 @@ extends RefCounted
 ## are undo steps, keep the course's hole order (course/save.gd writes it as it is) and leave
 ## every other hole's open flag alone.
 ##
+## Duplicate numbers (E3-S11): a loaded file may hold two holes sharing a number (validator rule
+## 1 fails them). Each entry of CourseData.holes is a slot, its index there; the hole list shows
+## one row per slot. hole(number) is the first slot with that number; place_tee, place_cup,
+## set_par and renumber_hole take an optional `slot` that points them at one entry, so each
+## duplicate is built and renumbered on its own. issues_at(slot) is that entry's own rules.
+##
 ## Land (E6-S3, D26 to D28, docs/design.md Land): buy_parcel is the only way a parcel becomes
 ## owned in play. A parcel may be bought when it is not owned yet, shares an edge with an owned
 ## parcel, and its price (LandPrices, data/land.json) is no more than the land budget left
@@ -110,6 +116,8 @@ var _tuning: BuilderTuning
 var _validator: CourseValidator
 var _prices: LandPrices
 var _issues: Dictionary = {}
+## The latest validator run per slot (CourseValidator.check_slots), in CourseData.holes order.
+var _slot_issues: Array = []
 ## Undo steps, oldest first.
 var _undo: Array[Step] = []
 ## The open stroke's step, or null when no stroke is open.
@@ -255,6 +263,57 @@ func hole(number: int) -> HoleData:
 	return null
 
 
+## The hole in slot `slot` (its index in CourseData.holes; read it, do not change it), or null.
+func hole_at(slot: int) -> HoleData:
+	if slot < 0 or slot >= _course.holes.size():
+		return null
+	return _course.holes[slot]
+
+
+## The slot of hole `number`: `slot` itself when it holds that number, else the first slot that
+## does, else -1. A stale slot (the holes changed under it) falls back to the number.
+func slot_of(number: int, slot: int = -1) -> int:
+	var h: HoleData = hole_at(slot)
+	if h != null and h.number == number:
+		return slot
+	return _find(_course.holes, number)
+
+
+## Every slot, by hole number, then course order for holes sharing a number (the hole list).
+func hole_slots() -> Array[int]:
+	var out: Array[int] = []
+	out.assign(range(_course.holes.size()))
+	out.sort_custom(func(a: int, b: int) -> bool:
+		var na: int = _course.holes[a].number
+		var nb: int = _course.holes[b].number
+		return na < nb or (na == nb and a < b))
+	return out
+
+
+## True when another hole shares slot `slot`'s number (E3-S11; rule 1 fails both).
+func is_duplicate(slot: int) -> bool:
+	var h: HoleData = hole_at(slot)
+	if h == null:
+		return false
+	for i: int in _course.holes.size():
+		if i != slot and _course.holes[i].number == h.number:
+			return true
+	return false
+
+
+## The nearest number to `number` in direction `dir` (-1 up, +1 down), within 1 to max_holes,
+## that no hole has, or 0 when there is none. A duplicate's up and down move it there, so a
+## renumber parts it from its twin instead of swapping a third hole onto its old number.
+func free_number(number: int, dir: int) -> int:
+	var used: Array[int] = hole_numbers()
+	var n: int = number + signi(dir)
+	while dir != 0 and n >= 1 and n <= _tuning.max_holes:
+		if not n in used:
+			return n
+		n += signi(dir)
+	return 0
+
+
 ## Every hole number on the course, lowest first, each once.
 func hole_numbers() -> Array[int]:
 	var out: Array[int] = []
@@ -296,6 +355,15 @@ func issues_for(number: int) -> Array[CourseValidator.Issue]:
 	return out
 
 
+## Slot `slot`'s own failing rules from the latest validator run (E3-S11): for a hole sharing
+## its number, rule 1 names the other's tee. Empty when it passes or there is no such slot.
+func issues_at(slot: int) -> Array[CourseValidator.Issue]:
+	var out: Array[CourseValidator.Issue] = []
+	if slot >= 0 and slot < _slot_issues.size():
+		out.assign(_slot_issues[slot])
+	return out
+
+
 ## True when hole `number` exists, is closed and passes every rule.
 func can_open(number: int) -> bool:
 	var h: HoleData = hole(number)
@@ -306,23 +374,24 @@ func can_open(number: int) -> bool:
 ## default par when `par` is not 3, 4 or 5) when there is none. Moving the tee closes it.
 ## False when `cell` is off the map or the tee is already there, and false, emitting
 ## `refused`, when `cell` is not owned (place_refusal) or a new hole `number` is not allowed
-## (new_hole_refusal).
-func place_tee(number: int, cell: Vector2i, par: int = 0) -> bool:
-	return _place(number, cell, true, par)
+## (new_hole_refusal). `slot` picks one of several holes sharing `number` (slot_of, E3-S11).
+func place_tee(number: int, cell: Vector2i, par: int = 0, slot: int = -1) -> bool:
+	return _place(number, cell, true, par, slot)
 
 
 ## Puts hole `number`'s cup on `cell`, as place_tee does for the tee.
-func place_cup(number: int, cell: Vector2i, par: int = 0) -> bool:
-	return _place(number, cell, false, par)
+func place_cup(number: int, cell: Vector2i, par: int = 0, slot: int = -1) -> bool:
+	return _place(number, cell, false, par, slot)
 
 
 ## Sets hole `number`'s par to 3, 4 or 5. False when there is no such hole, the par is not
 ## one of those, or it is already that par. The rerun closes the hole if rule 4 now fails.
-func set_par(number: int, par: int) -> bool:
+## `slot` picks one of several holes sharing `number` (slot_of).
+func set_par(number: int, par: int, slot: int = -1) -> bool:
 	if not par in PARS:
 		return false
 	var hs: Array[HoleData] = _holes_copy()
-	var i: int = _find(hs, number)
+	var i: int = slot_of(number, slot)
 	if i < 0 or hs[i].par == par:
 		return false
 	end_stroke()
@@ -365,13 +434,14 @@ func close_hole(number: int) -> bool:
 ## Gives hole `number` the number `to` (1 to max_holes), and any hole that had `to` the number
 ## `number`, as one undo step (E3-S2). Open flags, tees and cups stay; guests play open holes
 ## in number order (E3-S4). False when there is no hole `number`, `to` is the same or out of
-## range.
-func renumber_hole(number: int, to: int) -> bool:
-	if to == number or to < 1 or to > _tuning.max_holes or hole(number) == null:
+## range. `slot` picks one of several holes sharing `number` (slot_of, E3-S11): only that
+## one moves, and its twin keeps `number`.
+func renumber_hole(number: int, to: int, slot: int = -1) -> bool:
+	var moved: int = slot_of(number, slot)
+	if to == number or to < 1 or to > _tuning.max_holes or moved < 0:
 		return false
 	end_stroke()
 	var hs: Array[HoleData] = _holes_copy()
-	var moved: int = _find(hs, number)
 	for i: int in hs.size():
 		if hs[i].number == to:
 			hs[i].number = number
@@ -547,13 +617,13 @@ func _refuse(reason: String) -> bool:
 	return true
 
 
-func _place(number: int, cell: Vector2i, is_tee: bool, par: int) -> bool:
+func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1) -> bool:
 	if not _course.in_bounds(cell.x, cell.y):
 		return false
 	if _refuse(place_refusal(cell)) or _refuse(new_hole_refusal(number)):
 		return false
 	var hs: Array[HoleData] = _holes_copy()
-	var i: int = _find(hs, number)
+	var i: int = slot_of(number, slot)
 	if i < 0:
 		var p: int = par if par in PARS else _tuning.default_par
 		var tee: Vector2i = cell if is_tee else HoleData.UNPLACED
@@ -585,7 +655,8 @@ func _finish(step: Step) -> void:
 ## Reruns the validator for every hole and closes each open one that now fails a rule,
 ## recording the holes in `step` first.
 func _rerun(step: Step) -> void:
-	_issues = _check()
+	_slot_issues = [] if _course.holes.is_empty() else _validator.check_slots(_course)
+	_issues = CourseValidator.by_number(_course, _slot_issues)
 	var hs: Array[HoleData] = _holes_copy()
 	var closed: bool = false
 	for h: HoleData in hs:
@@ -594,12 +665,6 @@ func _rerun(step: Step) -> void:
 			closed = true
 	if closed:
 		_write_holes(step, hs)
-
-
-func _check() -> Dictionary:
-	if _course.holes.is_empty():
-		return {}
-	return _validator.check_course(_course)
 
 
 func _announce() -> void:

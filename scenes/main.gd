@@ -116,9 +116,10 @@ func new_course(seed_value: int = -1) -> void:
 
 
 ## Plays hole `number` (a hole list row's Play, E3-S2): picks it in the list and starts Play
-## on its tee, from Build or from Play.
-func play_hole(number: int) -> void:
-	build_tool.select_hole(number)
+## on its tee, from Build or from Play. `slot` picks one of several holes sharing `number`
+## (E3-S11, a duplicate's row).
+func play_hole(number: int, slot: int = -1) -> void:
+	build_tool.select_hole(number, slot)
 	if mode == Mode.PLAY:
 		_begin_play()
 	else:
@@ -306,7 +307,8 @@ func set_mode(new_mode: Mode) -> void:
 ## no tee yet, on no_hole_tile) for the swing (E2-S7), with a fresh score, and centres the
 ## camera on it (E2-S8).
 func _begin_play() -> void:
-	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg, build_tool.hole_number)
+	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg, build_tool.hole_number,
+			build_tool.picked_slot())
 	camera.centre_on(_ball_world(), true)
 
 

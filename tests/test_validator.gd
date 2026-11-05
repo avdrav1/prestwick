@@ -117,6 +117,21 @@ func test_rule1_fails_both_holes_sharing_a_number() -> void:
 	_assert_one_line(ia)
 
 
+func test_check_slots_keeps_each_duplicates_own_issues() -> void:
+	# E3-S11: one array per entry of course.holes, so the hole list can show each duplicate's.
+	var a := HoleData.new(1, 3, Vector2i(2, 2), Vector2i(30, 2))
+	var b := HoleData.new(1, 3, Vector2i(2, 8), Vector2i(30, 8))
+	var other := HoleData.new(2, 3, Vector2i(2, 11), Vector2i(20, 11))
+	var c := _course(40, 12, [a, b, other])
+	var slots: Array = _v.check_slots(c)
+	assert_eq(slots.size(), 3)
+	assert_eq((_issue(slots[0], 1) as CourseValidator.Issue).tile, Vector2i(2, 8), "slot 0 names slot 1's tee")
+	assert_eq((_issue(slots[1], 1) as CourseValidator.Issue).tile, Vector2i(2, 2), "slot 1 names slot 0's tee")
+	assert_eq(slots[2], [] as Array[CourseValidator.Issue], "hole 2 passes")
+	var by_number: Dictionary = _v.check_course(c)
+	assert_eq(_rules(by_number[1]), [1, 1] as Array[int], "check_course still merges a shared number")
+	assert_eq(by_number[2], [] as Array[CourseValidator.Issue])
+
 
 func test_rule1_passes_a_hole_that_is_not_the_courses_own_copy() -> void:
 	# set_holes stores copies; a caller may validate the HoleData it still holds.

@@ -52,6 +52,9 @@ var tool: Tool = Tool.PAINT
 var surface: Surface.Type = Surface.Type.FAIRWAY
 ## The hole the tee and cup tools build, picked in the hole list (select_hole, E3-S2).
 var hole_number: int = 1
+## Which of several holes sharing hole_number is picked: its slot in CourseData.holes (E3-S11,
+## CourseBuilder.slot_of), or -1 for the first. A stale slot falls back to the first.
+var hole_slot: int = -1
 ## The par a new hole gets, and the one the par buttons last picked.
 var par: int = 3
 var brush_size: int = 1:
@@ -108,7 +111,7 @@ func select_par(p: int) -> void:
 		return
 	par = p
 	if builder != null and active:
-		builder.set_par(hole_number, p)
+		builder.set_par(hole_number, p, hole_slot)
 	settings_changed.emit()
 
 
@@ -118,9 +121,11 @@ func open_hole() -> bool:
 
 
 ## Points the tee and cup tools at hole `number` (the hole list's pick). It need not exist yet:
-## the first tee or cup creates it.
-func select_hole(number: int) -> void:
+## the first tee or cup creates it. `slot` picks one of several holes sharing `number`
+## (E3-S11, a duplicate's row); -1 picks the first.
+func select_hole(number: int, slot: int = -1) -> void:
 	hole_number = number
+	hole_slot = slot
 	queue_redraw()
 	settings_changed.emit()
 
@@ -135,6 +140,7 @@ func new_hole() -> int:
 	if n == 0:
 		return 0
 	hole_number = n
+	hole_slot = -1
 	select_tool(Tool.TEE)
 	return n
 
@@ -149,23 +155,37 @@ func set_hole_open(number: int, open: bool) -> bool:
 
 ## Gives hole `number` the number `to` through the builder (CourseBuilder.renumber_hole). The
 ## pick stays on the same hole: it follows the hole that moved, or, when the picked hole is the
-## one swapped out of `to`, goes with it to `number`. False when nothing changed.
-func renumber_hole(number: int, to: int) -> bool:
+## one swapped out of `to`, goes with it to `number`. `slot` picks one of several holes
+## sharing `number` (E3-S11): only it moves, and the pick stays on whichever slot it was on.
+## False when nothing changed.
+func renumber_hole(number: int, to: int, slot: int = -1) -> bool:
 	if builder == null or not active:
 		return false
-	var picked: int = hole_number
-	if not builder.renumber_hole(number, to):
+	var picked: int = picked_slot()
+	var picked_number: int = hole_number
+	if not builder.renumber_hole(number, to, slot):
 		return false
-	if picked == number:
-		select_hole(to)
-	elif picked == to:
+	if picked >= 0:
+		# Renumbering keeps the course's hole order, so the picked slot holds the same hole.
+		select_hole(builder.hole_at(picked).number, picked)
+	elif picked_number == to:
 		select_hole(number)
 	return true
 
 
+## The slot of the picked hole (CourseBuilder.slot_of), or -1 when it has none yet.
+func picked_slot() -> int:
+	return builder.slot_of(hole_number, hole_slot) if builder != null else -1
+
+
+## The picked hole (read it, do not change it), or null when it has no tee or cup yet.
+func picked_hole() -> HoleData:
+	return builder.hole_at(picked_slot()) if builder != null else null
+
+
 ## The par to show: the hole's own when it exists, else the one picked for a new hole.
 func shown_par() -> int:
-	var h: HoleData = builder.hole(hole_number) if builder != null else null
+	var h: HoleData = picked_hole()
 	return h.par if h != null else par
 
 
@@ -218,7 +238,7 @@ func undo() -> bool:
 	if builder == null or not active:
 		return false
 	_dragging = false
-	var h: HoleData = builder.hole(hole_number)
+	var h: HoleData = picked_hole()
 	var tee: Vector2i = h.tee if h != null else HoleData.UNPLACED
 	var cup: Vector2i = h.cup if h != null else HoleData.UNPLACED
 	var ok: bool = builder.undo()
@@ -231,12 +251,13 @@ func undo() -> bool:
 ## After an undo: when hole `hole_number` no longer has tee `tee` and cup `cup` and another
 ## hole has both, picks that hole. A hole whose tee or cup the undo moved keeps its number.
 func _follow_hole(tee: Vector2i, cup: Vector2i) -> void:
-	var now: HoleData = builder.hole(hole_number)
+	var now: HoleData = picked_hole()
 	if now != null and now.tee == tee and now.cup == cup:
 		return
-	for other: HoleData in builder.course.holes:
-		if other.tee == tee and other.cup == cup:
-			select_hole(other.number)
+	var hs: Array[HoleData] = builder.course.holes
+	for i: int in hs.size():
+		if hs[i].tee == tee and hs[i].cup == cup:
+			select_hole(hs[i].number, i)
 			return
 
 
@@ -394,9 +415,9 @@ func _apply(cell: Vector2i) -> void:
 		Tool.LOWER:
 			builder.lower(cell, brush_size)
 		Tool.TEE:
-			builder.place_tee(hole_number, cell, par)
+			builder.place_tee(hole_number, cell, par, hole_slot)
 		Tool.CUP:
-			builder.place_cup(hole_number, cell, par)
+			builder.place_cup(hole_number, cell, par, hole_slot)
 		Tool.BUY:
 			buy_requested.emit(builder.course.parcel_of(cell.x, cell.y))
 	queue_redraw()

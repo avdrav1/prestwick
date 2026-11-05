@@ -723,3 +723,133 @@ func test_a_file_must_hold_at_most_nine_holes_numbered_1_to_9() -> void:
 	var issues: Dictionary = CourseValidator.new().check_course(dup)
 	assert_true((issues[1] as Array).any(func(i: CourseValidator.Issue) -> bool: return i.rule == 1),
 		"and fails rule 1")
+
+
+# --- duplicate numbers (E3-S11) ---
+
+## A loaded course (through course/save.gd) with three par 3s on rows 0, 1 and 2, numbered 1,
+## 2 and 2: the second and third share number 2, in slots 1 and 2, every cup on a green.
+func _main_with_duplicate() -> Main:
+	var c := _course_with(3)
+	var data: Dictionary = c.to_dict()
+	(data["holes"] as Array)[2]["number"] = 2
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_json(JSON.stringify(data), errors)
+	assert_not_null(loaded, "a shared number loads: %s" % [errors])
+	return _main_with(loaded)
+
+
+func test_a_loaded_duplicate_number_lists_both_holes() -> void:
+	var m := _main_with_duplicate()
+	var panel: HolePanel = m.hole_panel
+	var rows: Array[HolePanel.HoleRow] = panel.shown_rows()
+	assert_eq(rows.size(), 3, "one row per hole, not per number")
+	assert_eq([rows[0].number, rows[1].number, rows[2].number], [1, 2, 2])
+	assert_eq(panel.rows_for(2).size(), 2)
+	assert_false(rows[0].duplicate)
+	assert_false(rows[0].duplicate_label.visible)
+	for k: int in [1, 2]:
+		var r: HolePanel.HoleRow = rows[k]
+		assert_eq(r.slot, k, "row %d shows its own hole" % k)
+		assert_true(r.duplicate, "row %d is marked a duplicate" % k)
+		assert_string_contains(r.pick_button.tooltip_text, "rule 1", "its pick says why too")
+		assert_true(r.duplicate_label.visible)
+		assert_string_contains(r.duplicate_label.text, "rule 1: hole 2 has a second tee and cup")
+	assert_string_contains(rows[1].duplicate_label.text, "(%d, %d)" % [_tee(2).x, _tee(2).y],
+			"each names the other's tee")
+	assert_string_contains(rows[2].duplicate_label.text, "(%d, %d)" % [_tee(1).x, _tee(1).y])
+	assert_eq(panel.collapse_button.text, "Hide the list (3 holes)")
+
+
+func test_renumbering_one_duplicate_leaves_the_other_in_place() -> void:
+	var m := _main_with_duplicate()
+	var panel: HolePanel = m.hole_panel
+	var b: CourseBuilder = m.build_tool.builder
+	assert_false(panel.rows_for(2)[1].down_button.disabled, "3 is free below")
+	assert_true(panel.rows_for(2)[1].up_button.disabled, "nothing is free above: 1 is taken")
+	panel.rows_for(2)[1].down_button.pressed.emit()
+	assert_eq(b.hole_at(1).number, 2, "the other duplicate keeps number 2")
+	assert_eq(b.hole_at(1).tee, _tee(1))
+	assert_eq(b.hole_at(2).number, 3, "the renumbered one parts")
+	assert_eq(b.hole_at(2).tee, _tee(2))
+	assert_eq(b.hole_at(0).number, 1, "hole 1 is untouched")
+	var rows: Array[HolePanel.HoleRow] = panel.shown_rows()
+	assert_eq([rows[0].number, rows[1].number, rows[2].number], [1, 2, 3])
+	for r: HolePanel.HoleRow in rows:
+		assert_false(r.duplicate, "hole %d is no longer a duplicate" % r.number)
+		assert_false(r.duplicate_label.visible)
+	assert_false(1 in _rules(b.issues_for(2)), "rule 1 passes for both")
+	assert_false(1 in _rules(b.issues_for(3)))
+	m.build_tool.undo()
+	assert_eq(b.hole_at(2).number, 2, "undo brings the duplicate back")
+	assert_true(panel.rows_for(2)[1].duplicate)
+
+
+func test_renumbering_the_first_duplicate_moves_only_it() -> void:
+	var m := _main_with_duplicate()
+	var b: CourseBuilder = m.build_tool.builder
+	m.hole_panel.rows_for(2)[0].down_button.pressed.emit()
+	assert_eq(b.hole_at(1).number, 3, "the first duplicate moved to the free 3")
+	assert_eq(b.hole_at(2).number, 2, "the second stays at 2")
+
+
+func test_builder_renumbers_one_slot_of_a_shared_number() -> void:
+	var m := _main_with_duplicate()
+	var b: CourseBuilder = m.build_tool.builder
+	assert_true(b.renumber_hole(2, 1, 2), "slot 2 to number 1, swapping hole 1 onto 2")
+	assert_eq([b.hole_at(0).number, b.hole_at(1).number, b.hole_at(2).number], [2, 2, 1],
+			"slot 1 kept its number; only slot 2 and hole 1 swapped")
+	assert_eq(b.slot_of(2), 0, "a stale or missing slot falls back to the first with the number")
+	assert_eq(b.slot_of(2, 1), 1)
+	assert_eq(b.slot_of(2, 2), 0, "slot 2 holds hole 1 now")
+
+
+func test_picking_a_duplicate_row_builds_its_own_hole() -> void:
+	var m := _main_with_duplicate()
+	var panel: HolePanel = m.hole_panel
+	var b: CourseBuilder = m.build_tool.builder
+	panel.rows_for(2)[1].pick_button.pressed.emit()
+	assert_eq(m.build_tool.hole_number, 2)
+	assert_eq(m.build_tool.picked_slot(), 2, "the second hole numbered 2")
+	assert_true(panel.rows_for(2)[1].pick_button.button_pressed, "its row shows the pick")
+	assert_false(panel.rows_for(2)[0].pick_button.button_pressed, "its twin's does not")
+	assert_string_contains(panel.issues_label.text, "(%d, %d)" % [_tee(1).x, _tee(1).y],
+			"the details show its own rule 1, naming its twin's tee")
+	m.build_tool.select_tool(BuildTool.Tool.TEE)
+	_click(m, Vector2i(4, 17))
+	assert_eq(b.hole_at(2).tee, Vector2i(4, 17), "the tee tool moved the picked duplicate's tee")
+	assert_eq(b.hole_at(1).tee, _tee(1), "and left its twin's")
+	m.build_tool.select_par(4)
+	assert_eq(b.hole_at(2).par, 4, "par goes to the picked duplicate")
+	assert_eq(b.hole_at(1).par, 3)
+	panel.rows_for(2)[1].down_button.pressed.emit()
+	assert_eq(m.build_tool.hole_number, 3, "the pick follows the duplicate it renumbered")
+	assert_eq(m.build_tool.picked_hole().tee, Vector2i(4, 17))
+
+
+func test_a_collapsed_list_shows_the_picked_duplicate() -> void:
+	var m := _main_with_duplicate()
+	var panel: HolePanel = m.hole_panel
+	panel.rows_for(2)[1].pick_button.pressed.emit()
+	panel.set_collapsed(true)
+	var listed: Array[HolePanel.HoleRow] = panel.listed_rows()
+	assert_eq(listed.size(), 1)
+	assert_eq(listed[0].slot, 2, "the picked duplicate's row, not its twin's")
+	assert_true(listed[0].duplicate_label.visible)
+	assert_false(panel.rows_for(2)[0].duplicate_label.visible, "the hidden twin's text hides too")
+
+
+func test_a_duplicate_row_plays_its_own_hole() -> void:
+	var m := _main_with_duplicate()
+	m.hole_panel.rows_for(2)[1].play_button.pressed.emit()
+	assert_eq(m.mode, Main.Mode.PLAY)
+	var ypt: float = m.swing_control.field.yards_per_tile
+	assert_almost_eq(m.swing_control.ball_at, (Vector2(_tee(2)) + Vector2(0.5, 0.5)) * ypt,
+			Vector2(0.01, 0.01), "the ball sits on the second duplicate's tee")
+
+
+func _rules(issues: Array[CourseValidator.Issue]) -> Array[int]:
+	var out: Array[int] = []
+	for i: CourseValidator.Issue in issues:
+		out.append(i.rule)
+	return out

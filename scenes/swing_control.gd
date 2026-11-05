@@ -110,8 +110,11 @@ func bind(shot_view: ShotView, aim_view: AimView) -> void:
 
 
 ## Sets the ball for a new hole on `c`: on hole `number`'s tee (hole_to_play), aimed at its
-## cup, when the course has them; else on `fallback_tile` aimed `fallback_aim_deg`.
-func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float, number: int = 1) -> void:
+## cup, when the course has them; else on `fallback_tile` aimed `fallback_aim_deg`. `slot`
+## picks one of several holes sharing `number` (E3-S11): the entry of `c.holes` at that index,
+## when it has that number and its tee is on the map.
+func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float, number: int = 1,
+		slot: int = -1) -> void:
 	course = c
 	field = HeightField.new(c, model.params)
 	strokes = 0
@@ -120,6 +123,9 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float, numb
 	if _aim_view != null:
 		_aim_view.clear()  # a new course: no land line of the last one lingers (E6-S16)
 	hole = hole_to_play(c, number)
+	if slot >= 0 and slot < c.holes.size() and c.holes[slot].number == number \
+			and c.in_bounds(c.holes[slot].tee.x, c.holes[slot].tee.y):
+		hole = c.holes[slot]
 	score = HoleScore.new(hole.par) if hole != null else null
 	if hole != null:
 		place_ball(field.tile_center(hole.tee), true)

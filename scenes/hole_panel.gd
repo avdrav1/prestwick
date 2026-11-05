@@ -19,16 +19,28 @@ extends PanelContainer
 ## its issue text is cut to the room left and scrolls (issues_scroll). Main.free_view_rects
 ## follows the panel's height, so framing can use the map under it. Collapsing never moves the
 ## pick.
+##
+## Duplicate numbers (E3-S11): the list has one row per hole (per slot of CourseData.holes,
+## CourseBuilder.hole_slots), so two holes sharing a number from a loaded file each get a row,
+## marked as a duplicate with validator rule 1's text under it (duplicate_label). Each row's
+## pick, Play, up and down act on its own hole through its slot; a duplicate's up and down move
+## it to the nearest free number that way (CourseBuilder.free_number), which parts the pair.
 
-## Emitted when a row's Play is pressed: Main plays hole `number`.
-signal play_requested(number: int)
+## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
+signal play_requested(number: int, slot: int)
 
 
 ## One hole's row in the list. Display only; its buttons go through the panel's BuildTool.
 class HoleRow:
 	extends HBoxContainer
-	## The hole this row shows.
+	## The hole this row shows: its number and its slot in CourseData.holes.
 	var number: int = 0
+	var slot: int = -1
+	## True when another hole shares this row's number (rule 1 fails both).
+	var duplicate: bool = false
+	## Under the row, shown for a duplicate: "Duplicate number. rule 1: <reason>". Added to the
+	## list by the panel.
+	var duplicate_label: Label
 	var up_button: Button
 	var down_button: Button
 	var pick_button: Button
@@ -46,6 +58,10 @@ class HoleRow:
 		open_button = _button("Open", "")
 		open_button.custom_minimum_size = Vector2(56, 0)
 		play_button = _button("Play", "Play this hole")
+		duplicate_label = Label.new()
+		duplicate_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		duplicate_label.add_theme_color_override("font_color", Color8(240, 160, 150))
+		duplicate_label.visible = false
 
 	func _button(text: String, tip: String) -> Button:
 		var b := Button.new()
@@ -160,7 +176,8 @@ func refresh() -> void:
 		return
 	var b: CourseBuilder = _tool.builder
 	var number: int = _tool.hole_number
-	var h: HoleData = b.hole(number) if b != null else null
+	var slot: int = _tool.picked_slot()
+	var h: HoleData = _tool.picked_hole()
 	var c: CourseData = b.course if b != null else null
 	var line: String = "Hole %d" % number
 	if h != null and c.in_bounds(h.tee.x, h.tee.y) and c.in_bounds(h.cup.x, h.cup.y):
@@ -178,7 +195,8 @@ func refresh() -> void:
 	open_button.disabled = b == null or not b.can_open(number)
 	var text := PackedStringArray()
 	if b != null:
-		for issue: CourseValidator.Issue in b.issues_for(number):
+		var own: Array[CourseValidator.Issue] = b.issues_at(slot) if slot >= 0 else b.issues_for(number)
+		for issue: CourseValidator.Issue in own:
 			var at: String = "" if not c.in_bounds(issue.tile.x, issue.tile.y) \
 					else " at (%d, %d)" % [issue.tile.x, issue.tile.y]
 			text.append("rule %d%s: %s" % [issue.rule, at, issue.reason])
@@ -226,12 +244,26 @@ func set_collapsed(value: bool) -> void:
 	refresh()
 
 
-## The row showing hole `number`, or null.
+## The row showing hole `number` (the first, when holes share it), or null.
 func row_for(number: int) -> HoleRow:
 	for r: HoleRow in shown_rows():
 		if r.number == number:
 			return r
 	return null
+
+
+## Every row showing hole `number`, in course order: two or more when holes share it (E3-S11).
+func rows_for(number: int) -> Array[HoleRow]:
+	return shown_rows().filter(func(r: HoleRow) -> bool: return r.number == number)
+
+
+## The text under a duplicate's row: rule 1's reason for slot `slot`, from the builder's latest
+## run (it names the other hole's tee).
+static func duplicate_text(b: CourseBuilder, slot: int) -> String:
+	for issue: CourseValidator.Issue in b.issues_at(slot):
+		if issue.rule == 1:
+			return "Duplicate number. rule 1: %s" % issue.reason
+	return "Duplicate number. rule 1: hole %d has a second tee and cup" % b.hole_at(slot).number
 
 
 ## One line for a hole in the list: number, par, yardage (once tee and cup are on the map) and
@@ -248,29 +280,41 @@ static func row_text(c: CourseData, h: HoleData) -> String:
 	return "  ".join(parts)
 
 
-## Shows one row per hole, reusing rows (a row's own button may be what changed the holes).
+## Shows one row per hole (per slot, so holes sharing a number each have one), reusing rows (a
+## row's own button may be what changed the holes).
 func _refresh_list(b: CourseBuilder) -> void:
-	var numbers: Array[int] = []
+	var slots: Array[int] = []
 	if b != null:
-		numbers = b.hole_numbers()
-	while rows.size() < numbers.size():
+		slots = b.hole_slots()
+	while rows.size() < slots.size():
 		rows.append(_make_row())
-	_shown = numbers.size()
+	_shown = slots.size()
+	var picked: int = _tool.picked_slot()
 	for i: int in rows.size():
 		var r: HoleRow = rows[i]
-		var h: HoleData = b.hole(numbers[i]) if i < _shown else null
-		r.visible = h != null and (not collapsed or h.number == _tool.hole_number)
+		var h: HoleData = b.hole_at(slots[i]) if i < _shown else null
+		r.visible = h != null and (not collapsed or slots[i] == picked)
+		r.duplicate = h != null and b.is_duplicate(slots[i])
+		r.duplicate_label.visible = r.visible and r.duplicate
+		r.duplicate_label.text = duplicate_text(b, slots[i]) if r.duplicate else ""
 		if h == null:
 			continue
 		r.number = h.number
+		r.slot = slots[i]
 		r.pick_button.text = row_text(b.course, h)
-		r.pick_button.set_pressed_no_signal(h.number == _tool.hole_number)
+		r.pick_button.tooltip_text = r.duplicate_label.text if r.duplicate \
+				else "Build this hole: the Tee and Cup tools place its tee and cup"
+		r.pick_button.set_pressed_no_signal(slots[i] == picked)
 		r.open_button.text = "Close" if h.open else "Open"
 		r.open_button.disabled = not h.open and not b.can_open(h.number)
 		r.open_button.tooltip_text = "Close the hole to guests" if h.open \
 				else "Open the hole to guests (every rule must pass)"
-		r.up_button.disabled = h.number <= 1
-		r.down_button.disabled = i == _shown - 1
+		if r.duplicate:
+			r.up_button.disabled = b.free_number(h.number, -1) == 0
+			r.down_button.disabled = b.free_number(h.number, 1) == 0
+		else:
+			r.up_button.disabled = h.number <= 1
+			r.down_button.disabled = i == _shown - 1
 	collapse_button.text = ("Show all %d holes" if collapsed else "Hide the list (%d holes)") % _shown
 	collapse_button.tooltip_text = "Show every hole in the list" if collapsed \
 			else "Show only the picked hole, to free the map"
@@ -279,13 +323,26 @@ func _refresh_list(b: CourseBuilder) -> void:
 
 func _make_row() -> HoleRow:
 	var r := HoleRow.new(pick_width)
-	r.pick_button.pressed.connect(func() -> void: _tool.select_hole(r.number))
+	r.pick_button.pressed.connect(func() -> void: _tool.select_hole(r.number, r.slot))
 	r.open_button.pressed.connect(func() -> void:
-		var h: HoleData = _tool.builder.hole(r.number) if _tool.builder != null else null
+		var h: HoleData = _tool.builder.hole_at(r.slot) if _tool.builder != null else null
 		if h != null:
 			_tool.set_hole_open(r.number, not h.open))
-	r.play_button.pressed.connect(func() -> void: play_requested.emit(r.number))
-	r.up_button.pressed.connect(func() -> void: _tool.renumber_hole(r.number, r.number - 1))
-	r.down_button.pressed.connect(func() -> void: _tool.renumber_hole(r.number, r.number + 1))
+	r.play_button.pressed.connect(func() -> void: play_requested.emit(r.number, r.slot))
+	r.up_button.pressed.connect(func() -> void: _renumber(r, -1))
+	r.down_button.pressed.connect(func() -> void: _renumber(r, 1))
 	_list.add_child(r)
+	r.duplicate_label.custom_minimum_size = Vector2(text_width, 0)
+	_list.add_child(r.duplicate_label)
 	return r
+
+
+## Row `r`'s up (dir -1) or down (+1): the number above or below, swapping with the hole there;
+## for a duplicate, the nearest free number that way, so it parts from its twin (E3-S11).
+func _renumber(r: HoleRow, dir: int) -> void:
+	var b: CourseBuilder = _tool.builder
+	if b == null:
+		return
+	var to: int = b.free_number(r.number, dir) if r.duplicate else r.number + dir
+	if to != 0:
+		_tool.renumber_hole(r.number, to, r.slot)

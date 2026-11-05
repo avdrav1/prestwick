@@ -129,15 +129,33 @@ class Reach:
 ## Every hole's failing rules, keyed by hole number (empty array when it passes).
 ## Holes sharing a number share a key. The passable graph is read once for all holes.
 func check_course(course: CourseData) -> Dictionary:
-	var out := {}
+	return by_number(course, check_slots(course))
+
+
+## Every hole's failing rules, one array per entry of `course.holes`, in its order (E3-S11):
+## two holes sharing a number each keep their own, rule 1 naming the other's tee. The passable
+## graph is read once for all holes.
+func check_slots(course: CourseData) -> Array:
+	var out: Array = []
 	var reach := Reach.new(course)
 	for hole: HoleData in course.holes:
-		var issues := check_hole(course, hole, reach)
-		if out.has(hole.number):
-			var existing: Array[Issue] = out[hole.number]
+		out.append(check_hole(course, hole, reach))
+	return out
+
+
+## check_slots' result `slots` for `course`, keyed by hole number as check_course gives it:
+## holes sharing a number share a key, their issues in course order.
+static func by_number(course: CourseData, slots: Array) -> Dictionary:
+	var out := {}
+	for i: int in course.holes.size():
+		var number: int = course.holes[i].number
+		var issues: Array[Issue] = []
+		issues.assign(slots[i])
+		if out.has(number):
+			var existing: Array[Issue] = out[number]
 			existing.append_array(issues)
 		else:
-			out[hole.number] = issues
+			out[number] = issues
 	return out
 
 
