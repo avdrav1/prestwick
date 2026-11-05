@@ -134,10 +134,10 @@ func centre_on(p: Vector2, restore_zoom: bool = false) -> void:
 
 
 ## True when world points `a` and `b` both fit on screen at zoom `z`, each at least
-## aim_frame_margin screen px inside the edge.
-func fits(a: Vector2, b: Vector2, z: float) -> bool:
+## aim_frame_margin screen px inside the edge: of the view, or of an area `area` px in size.
+func fits(a: Vector2, b: Vector2, z: float, area: Vector2 = Vector2.ZERO) -> bool:
 	var d := (b - a).abs() * z + Vector2.ONE * 2.0 * _frame_margin()
-	var v := view_size()
+	var v := area if area != Vector2.ZERO else view_size()
 	return d.x <= v.x and d.y <= v.y
 
 
@@ -177,6 +177,42 @@ func set_zoom_index(index: int) -> void:
 	_zoom_index = clampi(index, 0, tuning.zoom_levels.size() - 1)
 	var z: float = tuning.zoom_levels[_zoom_index]
 	zoom = Vector2(z, z)
+
+
+## Frames world points `a` and `b` (a hole's tee and cup, E3-S2) inside `safe`, the part of
+## the view the HUD leaves free (screen px; an empty rect is the whole view): from the player's
+## own zoom, steps the zoom out until both fit inside it, never past the farthest level, and
+## puts their midpoint at its centre. When they do not fit even then, `a` (the tee) is held at
+## least aim_frame_margin inside it, so a long hole still shows where it starts. The bounds
+## stay; the camera is not tracking. The player's zoom level is kept, so Play's next centre_on
+## comes back to it.
+func frame_points(a: Vector2, b: Vector2, safe: Rect2 = Rect2()) -> void:
+	tracking = false
+	has_focus = false
+	has_lead = false
+	var v: Vector2 = view_size()
+	if not safe.has_area():
+		safe = Rect2(Vector2.ZERO, v)
+	set_zoom_index(_player_zoom_index)
+	while _zoom_index > 0 and not fits(a, b, tuning.zoom_levels[_zoom_index], safe.size):
+		set_zoom_index(_zoom_index - 1)
+	var z: float = zoom.x
+	# A world point w shows at (w - position) * z + v / 2: put the midpoint at safe's centre.
+	var p: Vector2 = (a + b) * 0.5 - (safe.get_center() - v * 0.5) / z
+	var m: Vector2 = Vector2.ONE * _frame_margin()
+	var lo: Vector2 = a - (safe.end - m - v * 0.5) / z
+	var hi: Vector2 = a - (safe.position + m - v * 0.5) / z
+	position = _clamped(p.clamp(lo.min(hi), hi.max(lo)))
+
+
+## Where world point `w` shows on screen, in px, at the camera's position and zoom.
+func screen_point(w: Vector2) -> Vector2:
+	return (w - position) * zoom.x + view_size() * 0.5
+
+
+## Back to the player's own zoom level (a new course is framed at it).
+func restore_zoom() -> void:
+	set_zoom_index(_player_zoom_index)
 
 
 ## Centers on `rect` and clamps to it from now on.

@@ -9,7 +9,8 @@ extends Node2D
 ##
 ## Shape and colour both say what it is (colorblind rule): the tee marker is two
 ## square blocks either side of the tile centre, the pin a dark cup with a pole and a pennant.
-## Colours are art/palette.gpl entries.
+## Colours are art/palette.gpl entries. With nine holes (E3-S2) the tee marker shows its hole
+## number between its blocks, chalk on an ink outline, so the map says which tee is which.
 
 enum Kind { TEE, PIN }
 
@@ -26,12 +27,21 @@ enum Kind { TEE, PIN }
 @export var pole_height: float = 30.0
 @export var flag_width: float = 13.0
 @export var flag_height: float = 8.0
+## The tee marker's hole number: font size, screen px at every zoom (text_scale).
+@export var number_font_size: int = 13
 
 var kind: Kind = Kind.TEE
 var hole_number: int = 0
 var cell: Vector2i = Vector2i.ZERO
 ## The whole height of the tile it stands on.
 var ground: int = 0
+## Local units per screen pixel (1 / zoom) for the hole number, set by CourseView when the zoom
+## changes, so the number keeps number_font_size screen px at 0.5x and 2x alike (E3-S2 review).
+var text_scale: float = 1.0:
+	set(v):
+		if not is_equal_approx(v, text_scale):
+			text_scale = v
+			queue_redraw()
 
 
 func _init(p_kind: Kind = Kind.TEE, p_hole_number: int = 0, p_cell: Vector2i = Vector2i.ZERO) -> void:
@@ -54,6 +64,16 @@ func draw_point() -> Vector2:
 	return Iso.tile_to_screen(Vector2(cell), ground)
 
 
+## The text it shows: its hole number on a tee marker, nothing on a pin.
+func label_text() -> String:
+	return str(hole_number) if kind == Kind.TEE and hole_number > 0 else ""
+
+
+## The hole number's height on screen at a zoom of `zoom` screen px per local unit, in px.
+func label_screen_height(zoom: float) -> float:
+	return ThemeDB.fallback_font.get_height(number_font_size) * text_scale * zoom
+
+
 ## Its Y-sort key, in the CourseView's space (Iso.object_sort_key on its tile).
 func sort_key() -> float:
 	return position.y
@@ -67,6 +87,15 @@ func _draw() -> void:
 			var r := Vector2(tee_block_radius, tee_block_radius)
 			draw_rect(Rect2(c - r - Vector2.ONE, (r + Vector2.ONE) * 2.0), ink_color)
 			draw_rect(Rect2(c - r, r * 2.0), tee_color)
+		var text: String = label_text()
+		if not text.is_empty():
+			var font: Font = ThemeDB.fallback_font
+			var size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size)
+			var base := Vector2(-size.x * 0.5, font.get_ascent(number_font_size) * 0.5)
+			draw_set_transform(at + Vector2(0.0, -tee_block_radius), 0.0, Vector2.ONE * text_scale)
+			draw_string_outline(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, 3, ink_color)
+			draw_string(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, pole_color)
+			draw_set_transform(Vector2.ZERO)
 		return
 	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
 	draw_circle(Vector2.ZERO, cup_radius, ink_color)

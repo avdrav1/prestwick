@@ -23,6 +23,14 @@ extends RefCounted
 ## The same check runs when the builder is made, so a course that comes in with a failing open
 ## hole has it closed at once (no undo step, no signal: nothing is connected yet).
 ##
+## The hole list (E3-S2): a course holds at most BuilderTuning.max_holes holes (9), numbered 1
+## to that. A tee or cup for a number with no hole creates it; next_hole_number gives the
+## lowest free number, so holes are numbered in build order. A number outside 1 to max_holes,
+## or a new hole past max_holes, is refused (TOO_MANY_HOLES). renumber_hole moves a hole to
+## another number, swapping with the hole that had it; close_hole closes an open hole. Both
+## are undo steps, keep the course's hole order (course/save.gd writes it as it is) and leave
+## every other hole's open flag alone.
+##
 ## Land (E6-S3, D26 to D28, docs/design.md Land): buy_parcel is the only way a parcel becomes
 ## owned in play. A parcel may be bought when it is not owned yet, shares an edge with an owned
 ## parcel, and its price (LandPrices, data/land.json) is no more than the land budget left
@@ -60,6 +68,8 @@ const PALETTE: Array[Surface.Type] = [
 const PARS: PackedInt32Array = [3, 4, 5]
 ## The reason an edit or placement on land the player does not own is refused (E6-S4).
 const NOT_YOUR_LAND: String = "not your land"
+## The reason a new hole past BuilderTuning.max_holes is refused (E3-S2), with that number.
+const TOO_MANY_HOLES: String = "a course has at most %d holes"
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
@@ -245,6 +255,38 @@ func hole(number: int) -> HoleData:
 	return null
 
 
+## Every hole number on the course, lowest first, each once.
+func hole_numbers() -> Array[int]:
+	var out: Array[int] = []
+	for h: HoleData in _course.holes:
+		if not h.number in out:
+			out.append(h.number)
+	out.sort()
+	return out
+
+
+## The number a new hole gets (E3-S2, build order): the lowest of 1 to max_holes with no hole,
+## or 0 when the course already holds max_holes holes.
+func next_hole_number() -> int:
+	if _course.holes.size() >= _tuning.max_holes:
+		return 0
+	var used: Array[int] = hole_numbers()
+	for n: int in range(1, _tuning.max_holes + 1):
+		if not n in used:
+			return n
+	return 0
+
+
+## Why a tee or cup for hole `number` would not create it, or "" when it may (or the hole
+## exists): TOO_MANY_HOLES when `number` is outside 1 to max_holes or the course is full.
+func new_hole_refusal(number: int) -> String:
+	if hole(number) != null:
+		return ""
+	if number < 1 or number > _tuning.max_holes or _course.holes.size() >= _tuning.max_holes:
+		return TOO_MANY_HOLES % _tuning.max_holes
+	return ""
+
+
 ## Hole `number`'s failing rules from the latest validator run; empty when it passes or
 ## does not exist.
 func issues_for(number: int) -> Array[CourseValidator.Issue]:
@@ -263,7 +305,8 @@ func can_open(number: int) -> bool:
 ## Puts hole `number`'s tee on `cell`, creating the hole (closed, with `par`, or the tuning's
 ## default par when `par` is not 3, 4 or 5) when there is none. Moving the tee closes it.
 ## False when `cell` is off the map or the tee is already there, and false, emitting
-## `refused`, when `cell` is not owned (place_refusal).
+## `refused`, when `cell` is not owned (place_refusal) or a new hole `number` is not allowed
+## (new_hole_refusal).
 func place_tee(number: int, cell: Vector2i, par: int = 0) -> bool:
 	return _place(number, cell, true, par)
 
@@ -298,6 +341,41 @@ func open_hole(number: int) -> bool:
 	end_stroke()
 	var hs: Array[HoleData] = _holes_copy()
 	hs[_find(hs, number)].open = true
+	var step := Step.new()
+	_write_holes(step, hs)
+	_finish(step)
+	return true
+
+
+## Closes open hole `number` (the hole list's Close), an undo step. False when there is no
+## such hole or it is closed already.
+func close_hole(number: int) -> bool:
+	var h: HoleData = hole(number)
+	if h == null or not h.open:
+		return false
+	end_stroke()
+	var hs: Array[HoleData] = _holes_copy()
+	hs[_find(hs, number)].open = false
+	var step := Step.new()
+	_write_holes(step, hs)
+	_finish(step)
+	return true
+
+
+## Gives hole `number` the number `to` (1 to max_holes), and any hole that had `to` the number
+## `number`, as one undo step (E3-S2). Open flags, tees and cups stay; guests play open holes
+## in number order (E3-S4). False when there is no hole `number`, `to` is the same or out of
+## range.
+func renumber_hole(number: int, to: int) -> bool:
+	if to == number or to < 1 or to > _tuning.max_holes or hole(number) == null:
+		return false
+	end_stroke()
+	var hs: Array[HoleData] = _holes_copy()
+	var moved: int = _find(hs, number)
+	for i: int in hs.size():
+		if hs[i].number == to:
+			hs[i].number = number
+	hs[moved].number = to
 	var step := Step.new()
 	_write_holes(step, hs)
 	_finish(step)
@@ -472,7 +550,7 @@ func _refuse(reason: String) -> bool:
 func _place(number: int, cell: Vector2i, is_tee: bool, par: int) -> bool:
 	if not _course.in_bounds(cell.x, cell.y):
 		return false
-	if _refuse(place_refusal(cell)):
+	if _refuse(place_refusal(cell)) or _refuse(new_hole_refusal(number)):
 		return false
 	var hs: Array[HoleData] = _holes_copy()
 	var i: int = _find(hs, number)

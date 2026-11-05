@@ -45,34 +45,45 @@ var ground: int = 0
 ## Whether a tile in front covers this tile's centre, so the leader's foot is hidden (E2-S17).
 var foot_hidden: bool = false:
 	set(value):
-		foot_hidden = value
-		label.queue_redraw()
+		if value != foot_hidden:
+			foot_hidden = value
+			label.queue_redraw()
 ## The failing rules on this tile, one per reason, in the validator's order.
 var rules: PackedInt32Array = PackedInt32Array()
 var reasons: PackedStringArray = PackedStringArray()
+## The hole each rule belongs to (0 when not given), so with nine holes a box says which.
+var holes: PackedInt32Array = PackedInt32Array()
 ## The badge, leader line and text box, drawn over the terrain (z_index 2).
 var label: Node2D
+## The wrapped lines and the box size, measured once per set of rules (add clears them): the
+## layout asks for box_size many times per check, and measuring text is the costly part.
+var _wrapped_lines: PackedStringArray = PackedStringArray()
+var _box_size: Vector2 = Vector2(-1.0, -1.0)
 ## Local units per screen pixel (1 / zoom), set by CourseView's layout.
 var text_scale: float = 1.0:
 	set(value):
-		text_scale = value
-		label.queue_redraw()
+		if value != text_scale:
+			text_scale = value
+			label.queue_redraw()
 ## How far the text box is pushed up past text_lift, screen px, set by CourseView's layout.
 var stack: float = 0.0:
 	set(value):
-		stack = value
-		label.queue_redraw()
+		if value != stack:
+			stack = value
+			label.queue_redraw()
 ## How far the text box is moved sideways off centre, screen px, set by CourseView's layout.
 var shift: float = 0.0:
 	set(value):
-		shift = value
-		label.queue_redraw()
+		if value != shift:
+			shift = value
+			label.queue_redraw()
 ## Whether the layout found no room for the text box near the tile, so only the diamond and
 ## badge draw (the hole panel still lists the reasons), set by CourseView's layout.
 var collapsed: bool = false:
 	set(value):
-		collapsed = value
-		label.queue_redraw()
+		if value != collapsed:
+			collapsed = value
+			label.queue_redraw()
 
 
 func _init(p_cell: Vector2i = Vector2i.ZERO) -> void:
@@ -85,11 +96,18 @@ func _init(p_cell: Vector2i = Vector2i.ZERO) -> void:
 	add_child(label)
 
 
-## Adds one failing rule and its one-line reason.
-func add(rule: int, reason: String) -> void:
+## Adds one failing rule and its one-line reason, of hole `hole` (0: not named, E3-S2).
+func add(rule: int, reason: String, hole: int = 0) -> void:
 	rules.append(rule)
 	reasons.append(reason)
+	holes.append(hole)
+	_box_size = Vector2(-1.0, -1.0)
 	label.queue_redraw()
+
+
+## True when it shows exactly `p_rules`, `p_reasons` and `p_holes` (CourseView keeps it then).
+func shows(p_rules: PackedInt32Array, p_reasons: PackedStringArray, p_holes: PackedInt32Array) -> bool:
+	return rules == p_rules and reasons == p_reasons and holes == p_holes
 
 
 ## Stands the marker on its tile's top in `course`.
@@ -128,11 +146,12 @@ func sort_key() -> float:
 	return position.y
 
 
-## The lines it shows, one per failing rule.
+## The lines it shows, one per failing rule: "hole 3, rule 2: ..." when the hole is named.
 func lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	for i: int in rules.size():
-		out.append("rule %d: %s" % [rules[i], reasons[i]])
+		var hole: String = "hole %d, " % holes[i] if holes[i] > 0 else ""
+		out.append("%srule %d: %s" % [hole, rules[i], reasons[i]])
 	return out
 
 
@@ -140,12 +159,15 @@ func lines() -> PackedStringArray:
 func box_size() -> Vector2:
 	if rules.is_empty():
 		return Vector2.ZERO
+	if _box_size.x >= 0.0:
+		return _box_size
 	var font: Font = ThemeDB.fallback_font
 	var text: PackedStringArray = _wrapped(font)
 	var width: float = 0.0
 	for t: String in text:
 		width = maxf(width, font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
-	return Vector2(width + text_padding * 2.0, font.get_height(font_size) * text.size() + text_padding * 2.0)
+	_box_size = Vector2(width + text_padding * 2.0, font.get_height(font_size) * text.size() + text_padding * 2.0)
+	return _box_size
 
 
 ## The text box in screen px, relative to the tile centre, at a zoom of `scale` screen px per
@@ -173,9 +195,12 @@ func wrap_line(font: Font, line: String) -> PackedStringArray:
 
 
 func _wrapped(font: Font) -> PackedStringArray:
+	if _box_size.x >= 0.0:
+		return _wrapped_lines
 	var text := PackedStringArray()
 	for l: String in lines():
 		text.append_array(wrap_line(font, l))
+	_wrapped_lines = text
 	return text
 
 

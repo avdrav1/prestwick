@@ -97,6 +97,8 @@ var _issues_root: Node2D
 var _issue_markers: Array[IssueMarker] = []
 ## The zoom (screen px per local unit) the issue boxes were last laid out at; 0 forces a layout.
 var _issue_layout_scale: float = 0.0
+## The zoom the tee markers' hole numbers were last sized for (layout_hole_labels).
+var _hole_label_scale: float = 0.0
 ## How far past its resting height a text box may be pushed up, screen px
 ## (BuilderTuning.issue_box_max_stack).
 var issue_max_stack: float = 0.0
@@ -171,6 +173,7 @@ func refresh_holes() -> void:
 				continue
 			var m := HoleMarker.new(pair[0], hole.number, at)
 			m.place(_course)
+			m.text_scale = 1.0 / _view_scale()
 			_holes_root.add_child(m)
 			_markers.append(m)
 
@@ -190,27 +193,49 @@ func hole_marker(number: int, kind: HoleMarker.Kind) -> HoleMarker:
 
 ## Highlights every failing rule in `issues` (CourseBuilder.issues: hole number -> Array of
 ## CourseValidator.Issue) on its tile, one IssueMarker per tile with a line per rule. An issue
-## with no tile on the map (a hole with no tee and no cup) has no highlight.
+## with no tile on the map (a hole with no tee and no cup) has no highlight. A marker whose
+## tile shows the same rules as before is kept, not rebuilt (E3-S2 review: with nine holes
+## failing, rebuilding every box on every check cost a frame), and the boxes are laid out again.
 func show_issues(issues: Dictionary) -> void:
+	# Each tile's lines, in the validator's order: [rules, reasons, holes].
+	var wanted := {}
+	var order: Array[Vector2i] = []
+	if _course != null:
+		for number: int in issues:
+			for issue: CourseValidator.Issue in issues[number]:
+				if not _course.in_bounds(issue.tile.x, issue.tile.y):
+					continue
+				if not wanted.has(issue.tile):
+					wanted[issue.tile] = [PackedInt32Array(), PackedStringArray(), PackedInt32Array()]
+					order.append(issue.tile)
+				# Packed arrays are values: append to a copy and store it back.
+				var w: Array = wanted[issue.tile]
+				var rules: PackedInt32Array = w[0]
+				var reasons: PackedStringArray = w[1]
+				var holes: PackedInt32Array = w[2]
+				rules.append(issue.rule)
+				reasons.append(issue.reason)
+				holes.append(number)
+				wanted[issue.tile] = [rules, reasons, holes]
+	var kept := {}
 	for m: IssueMarker in _issue_markers:
-		_issues_root.remove_child(m)
-		m.free()
+		var w: Array = wanted.get(m.cell, [])
+		if not w.is_empty() and not kept.has(m.cell) and m.shows(w[0], w[1], w[2]):
+			kept[m.cell] = m
+		else:
+			_issues_root.remove_child(m)
+			m.free()
 	_issue_markers.clear()
-	if _course == null:
-		return
-	var by_cell := {}
-	for number: int in issues:
-		for issue: CourseValidator.Issue in issues[number]:
-			if not _course.in_bounds(issue.tile.x, issue.tile.y):
-				continue
-			var m: IssueMarker = by_cell.get(issue.tile)
-			if m == null:
-				m = IssueMarker.new(issue.tile)
-				m.place(_course)
-				by_cell[issue.tile] = m
-				_issues_root.add_child(m)
-				_issue_markers.append(m)
-			m.add(issue.rule, issue.reason)
+	for cell: Vector2i in order:
+		var m: IssueMarker = kept.get(cell)
+		if m == null:
+			m = IssueMarker.new(cell)
+			m.place(_course)
+			var w: Array = wanted[cell]
+			for i: int in (w[0] as PackedInt32Array).size():
+				m.add(w[0][i], w[1][i], w[2][i])
+			_issues_root.add_child(m)
+		_issue_markers.append(m)
 	layout_issue_labels(_view_scale())
 
 
@@ -299,12 +324,22 @@ func issue_label_rects() -> Array[Rect2]:
 
 
 func _process(_delta: float) -> void:
+	var s: float = _view_scale()
+	if not is_equal_approx(s, _hole_label_scale):
+		layout_hole_labels(s)
 	# The text boxes keep their screen size, so a zoom change needs a fresh layout.
 	if _issue_markers.is_empty():
 		return
-	var s: float = _view_scale()
 	if not is_equal_approx(s, _issue_layout_scale):
 		layout_issue_labels(s)
+
+
+## Keeps every tee marker's hole number at its screen size at a zoom of `scale` screen px per
+## local unit (HoleMarker.text_scale). CourseView reruns it when the zoom changes.
+func layout_hole_labels(scale: float) -> void:
+	_hole_label_scale = scale
+	for m: HoleMarker in _markers:
+		m.text_scale = 1.0 / scale
 
 
 ## Screen px per local unit (the camera zoom), 1 outside the tree.

@@ -72,9 +72,21 @@ static func from_json(text: String, errors: Array[String] = []) -> CourseData:
 
 
 ## Migrates `data` (version 1 or 2) and parses it. Returns null and appends reasons to
-## `errors` on failure.
+## `errors` on failure. A file may hold at most BuilderTuning.max_holes holes (9), numbered 1 to
+## that (E3-S2, docs/design.md Hole list): the builder cannot make any other, so a file that has
+## one is refused. Two holes sharing a number load, and validator rule 1 fails them.
 static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseData:
-	return CourseData.from_dict(migrate(data), errors)
+	var c := CourseData.from_dict(migrate(data), errors)
+	if c == null:
+		return null
+	var start := errors.size()
+	var max_holes: int = BuilderTuning.load_default().max_holes
+	if c.holes.size() > max_holes:
+		errors.append("a course has at most %d holes, this one has %d" % [max_holes, c.holes.size()])
+	for h: HoleData in c.holes:
+		if h.number < 1 or h.number > max_holes:
+			errors.append("hole %d: holes are numbered 1 to %d" % [h.number, max_holes])
+	return null if errors.size() > start else c
 
 
 ## `data` brought up to CourseData.FORMAT_VERSION, as a new dictionary; data of the current

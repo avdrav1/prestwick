@@ -11,7 +11,9 @@ extends Node2D
 ## onto the tile behind the one it just dug).
 ## The tee and cup tools (E2-S3) place hole `hole_number`'s tee or cup on the tile clicked,
 ## through the builder, creating the hole with `par` when it has none; a drag does not move
-## them. select_par sets `par` and the existing hole's par.
+## them. select_par sets `par` and the existing hole's par. The hole list (E3-S2) picks the
+## hole with select_hole, starts the next one with new_hole, and opens, closes and renumbers
+## holes through the tool, which goes through the builder.
 ## Land (E6-S5): the Buy land tool does not buy on a click; it emits buy_requested with the
 ## parcel under the cursor, and the HUD's confirm calls buy(). hover_hint gives, before the
 ## click, why the current tool would do nothing on the hovered tile (CourseBuilder's
@@ -48,7 +50,7 @@ const UNDO_ACTION: StringName = &"ui_undo"
 var builder: CourseBuilder
 var tool: Tool = Tool.PAINT
 var surface: Surface.Type = Surface.Type.FAIRWAY
-## The hole the tee and cup tools build. One hole in E2; E3 adds the others.
+## The hole the tee and cup tools build, picked in the hole list (select_hole, E3-S2).
 var hole_number: int = 1
 ## The par a new hole gets, and the one the par buttons last picked.
 var par: int = 3
@@ -112,9 +114,53 @@ func select_par(p: int) -> void:
 
 ## Opens hole `hole_number` (the HUD's Open). False unless it passes every rule.
 func open_hole() -> bool:
+	return set_hole_open(hole_number, true)
+
+
+## Points the tee and cup tools at hole `number` (the hole list's pick). It need not exist yet:
+## the first tee or cup creates it.
+func select_hole(number: int) -> void:
+	hole_number = number
+	queue_redraw()
+	settings_changed.emit()
+
+
+## Picks the next hole in build order (CourseBuilder.next_hole_number) and the Tee tool, so
+## the next click places its tee. Returns its number, or 0, changing nothing, when the course
+## is full.
+func new_hole() -> int:
+	if builder == null:
+		return 0
+	var n: int = builder.next_hole_number()
+	if n == 0:
+		return 0
+	hole_number = n
+	select_tool(Tool.TEE)
+	return n
+
+
+## Opens (open_hole's rules apply) or closes hole `number` through the builder. False when
+## nothing changed.
+func set_hole_open(number: int, open: bool) -> bool:
 	if builder == null or not active:
 		return false
-	return builder.open_hole(hole_number)
+	return builder.open_hole(number) if open else builder.close_hole(number)
+
+
+## Gives hole `number` the number `to` through the builder (CourseBuilder.renumber_hole). The
+## pick stays on the same hole: it follows the hole that moved, or, when the picked hole is the
+## one swapped out of `to`, goes with it to `number`. False when nothing changed.
+func renumber_hole(number: int, to: int) -> bool:
+	if builder == null or not active:
+		return false
+	var picked: int = hole_number
+	if not builder.renumber_hole(number, to):
+		return false
+	if picked == number:
+		select_hole(to)
+	elif picked == to:
+		select_hole(number)
+	return true
 
 
 ## The par to show: the hole's own when it exists, else the one picked for a new hole.
@@ -166,13 +212,32 @@ func buy(parcel: Vector2i) -> bool:
 	return ok
 
 
+## Undoes the builder's latest step (Ctrl+Z). The pick stays on the same hole: when the undo
+## gives the picked hole another number (an undone renumber), the pick goes to that number.
 func undo() -> bool:
 	if builder == null or not active:
 		return false
 	_dragging = false
+	var h: HoleData = builder.hole(hole_number)
+	var tee: Vector2i = h.tee if h != null else HoleData.UNPLACED
+	var cup: Vector2i = h.cup if h != null else HoleData.UNPLACED
 	var ok: bool = builder.undo()
+	if ok and h != null:
+		_follow_hole(tee, cup)
 	queue_redraw()
 	return ok
+
+
+## After an undo: when hole `hole_number` no longer has tee `tee` and cup `cup` and another
+## hole has both, picks that hole. A hole whose tee or cup the undo moved keeps its number.
+func _follow_hole(tee: Vector2i, cup: Vector2i) -> void:
+	var now: HoleData = builder.hole(hole_number)
+	if now != null and now.tee == tee and now.cup == cup:
+		return
+	for other: HoleData in builder.course.holes:
+		if other.tee == tee and other.cup == cup:
+			select_hole(other.number)
+			return
 
 
 ## Mouse moved to `local` (course screen space) with no button held.

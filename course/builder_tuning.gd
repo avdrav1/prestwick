@@ -15,6 +15,8 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export_range(0, 7) var plot_ground: int = 2
 ## The par the tee and cup tools give a new hole until the player picks another (3, 4 or 5).
 @export_range(3, 5) var default_par: int = 3
+## The most holes a course may have; holes are numbered 1 to this (E3-S2, a nine-hole course).
+@export_range(1, 18) var max_holes: int = 9
 ## How far past its resting height an issue text box may be pushed up to clear its
 ## neighbours, screen px at every zoom; past that it moves sideways instead (E2-S17).
 @export var issue_box_max_stack: float = 96.0

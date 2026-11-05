@@ -14,7 +14,8 @@ extends Node2D
 ## `club_next` (up and down) step through the clubs the lie and stroke allow (D13). Sits at
 ## the CourseView's origin, so local points are course screen space.
 ##
-## The hole (E2-S8): the ball and the aim know hole 1's cup, so a ball can be holed, and a
+## The hole (E2-S8): the ball and the aim know the played hole's cup (hole 1, or since E3-S2
+## the hole picked in the list, hole_to_play), so a ball can be holed, and a
 ## HoleScore (golf/hole_score.gd) counts each stroke the control struck, its penalty
 ## strokes (a water or OB drop, D15) and whether it holed. The next stroke starts where the
 ## ball rests or was dropped. Play goes on until the ball is holed or picked up at the
@@ -52,7 +53,7 @@ var club: Club
 var legal: Array[Club] = []
 ## Swings struck since the ball was set on the tee (begin).
 var strokes: int = 0
-## The hole being played (hole 1), or null when the course has no tee yet.
+## The hole being played (hole_to_play), or null when the course has no tee yet.
 var hole: HoleData
 ## The hole's score, or null with no hole.
 var score: HoleScore
@@ -108,9 +109,9 @@ func bind(shot_view: ShotView, aim_view: AimView) -> void:
 	_shot_view.came_to_rest.connect(_on_came_to_rest)
 
 
-## Sets the ball for a new hole on `c`: on hole 1's tee, aimed at its cup, when the course
-## has them; else on `fallback_tile` aimed `fallback_aim_deg`.
-func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float) -> void:
+## Sets the ball for a new hole on `c`: on hole `number`'s tee (hole_to_play), aimed at its
+## cup, when the course has them; else on `fallback_tile` aimed `fallback_aim_deg`.
+func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float, number: int = 1) -> void:
 	course = c
 	field = HeightField.new(c, model.params)
 	strokes = 0
@@ -118,7 +119,7 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float) -> v
 	swing.reset()
 	if _aim_view != null:
 		_aim_view.clear()  # a new course: no land line of the last one lingers (E6-S16)
-	hole = _first_hole(c)
+	hole = hole_to_play(c, number)
 	score = HoleScore.new(hole.par) if hole != null else null
 	if hole != null:
 		place_ball(field.tile_center(hole.tee), true)
@@ -191,7 +192,7 @@ func aim_at(p: Vector2) -> void:
 	changed.emit()
 
 
-## The cup the ball can drop into: hole 1's, or Ball.NO_CUP when it has none on the map.
+## The cup the ball can drop into: the played hole's, or Ball.NO_CUP when it has none on the map.
 func cup_tile() -> Vector2i:
 	if hole != null and course != null and course.in_bounds(hole.cup.x, hole.cup.y):
 		return hole.cup
@@ -436,8 +437,15 @@ func _show_aim(shot: ShotLaunch, prediction: ShotPrediction, along_deg: float) -
 		changed.emit()
 
 
-static func _first_hole(c: CourseData) -> HoleData:
+## The hole Play plays on `c` (E3-S2): hole `number` when its tee is on the map, else the
+## lowest-numbered hole whose tee is, else null.
+static func hole_to_play(c: CourseData, number: int) -> HoleData:
+	var best: HoleData = null
 	for h: HoleData in c.holes:
-		if h.number == 1 and c.in_bounds(h.tee.x, h.tee.y):
+		if not c.in_bounds(h.tee.x, h.tee.y):
+			continue
+		if h.number == number:
 			return h
-	return null
+		if best == null or h.number < best.number:
+			best = h
+	return best

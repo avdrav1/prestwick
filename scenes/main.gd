@@ -51,6 +51,7 @@ func _ready() -> void:
 	_refresh_label()
 	build_palette.bind(build_tool)
 	hole_panel.bind(build_tool)
+	hole_panel.play_requested.connect(play_hole)
 	land_panel.bind(build_tool)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
@@ -73,6 +74,8 @@ func _ready() -> void:
 
 
 ## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
+## A course with holes frames hole 1 and picks it in the hole list (E3-S2, frame_first_hole);
+## one with none frames the course centre at the player's zoom.
 func show_course(c: CourseData) -> void:
 	course = c
 	shot_view.clear()
@@ -81,11 +84,15 @@ func show_course(c: CourseData) -> void:
 	var builder := CourseBuilder.new(c)
 	course_view.show_course(c)
 	camera.frame(course_view.screen_bounds())
+	camera.restore_zoom()
 	builder.tiles_changed.connect(_on_tiles_changed)
 	builder.holes_changed.connect(course_view.refresh_holes)
 	builder.checked.connect(_on_checked)
 	builder.land_changed.connect(course_view.refresh_parcel)
 	build_tool.builder = builder
+	var first: HoleData = SwingControl.hole_to_play(c, 1)
+	build_tool.select_hole(first.number if first != null else 1)
+	frame_first_hole()
 	land_panel.watch(builder)
 	# New sandbox (and every version 1 file) has an unlimited budget and owns every parcel:
 	# nothing to buy, so the Buy land tool is hidden (E6-S6).
@@ -106,6 +113,74 @@ func new_sandbox() -> void:
 func new_course(seed_value: int = -1) -> void:
 	land_seed = seed_value if seed_value >= 0 else randi() % 1000000
 	show_course(CourseBuilder.new_course(land_seed))
+
+
+## Plays hole `number` (a hole list row's Play, E3-S2): picks it in the list and starts Play
+## on its tee, from Build or from Play.
+func play_hole(number: int) -> void:
+	build_tool.select_hole(number)
+	if mode == Mode.PLAY:
+		_begin_play()
+	else:
+		set_mode(Mode.PLAY)
+
+
+## Frames hole 1 (or, without one placed, the lowest-numbered hole with a tee) when its tee and
+## cup are on the map: the camera centres between them, zoomed out until both show (E3-S2).
+## False, leaving the camera, when there is no such hole.
+func frame_first_hole() -> bool:
+	var h: HoleData = SwingControl.hole_to_play(course, 1)
+	if h == null or not course.in_bounds(h.cup.x, h.cup.y):
+		return false
+	camera.frame_points(_tile_world(h.tee), _tile_world(h.cup), free_view_rect())
+	return true
+
+
+## The part of the view, in screen px, that the HUD leaves free: right of the left column
+## (mode label, buttons, land panel), left of the right panels (hole panel, score card) and
+## above the bottom panels (palette, swing panel), counting only those shown. Hole framing
+## (frame_first_hole) fits the hole inside it, so no panel covers the tee or the pin.
+func free_view_rect() -> Rect2:
+	var r := Rect2(Vector2.ZERO, camera.view_size())
+	var left: float = r.position.x
+	var right: float = r.end.x
+	var bottom: float = r.end.y
+	for c: Control in [mode_label, mode_button, new_course_button, new_sandbox_button, land_panel]:
+		if c.visible:
+			left = maxf(left, _hud_rect(c).end.x)
+	for c: Control in [hole_panel, score_card]:
+		if c.visible:
+			right = minf(right, _hud_rect(c).position.x)
+	for c: Control in [build_palette, swing_panel]:
+		if c.visible:
+			bottom = minf(bottom, _hud_rect(c).position.y)
+	return Rect2(left, r.position.y, maxf(right - left, 0.0), maxf(bottom - r.position.y, 0.0))
+
+
+## Where HUD control `c` sits on screen, at least its minimum size: a panel whose rows just
+## changed has not been resized yet (that is deferred), so this grows it from its anchored edge
+## (Control.grow_horizontal and grow_vertical) as the layout will.
+func _hud_rect(c: Control) -> Rect2:
+	var r: Rect2 = c.get_global_rect()
+	var size: Vector2 = r.size.max(c.get_combined_minimum_size())
+	var pos: Vector2 = r.position
+	match c.grow_horizontal:
+		Control.GROW_DIRECTION_BEGIN:
+			pos.x = r.end.x - size.x
+		Control.GROW_DIRECTION_BOTH:
+			pos.x = r.get_center().x - size.x * 0.5
+	match c.grow_vertical:
+		Control.GROW_DIRECTION_BEGIN:
+			pos.y = r.end.y - size.y
+		Control.GROW_DIRECTION_BOTH:
+			pos.y = r.get_center().y - size.y * 0.5
+	return Rect2(pos, size)
+
+
+## The centre of tile `cell`'s top in the camera's space.
+func _tile_world(cell: Vector2i) -> Vector2:
+	var at: Vector2 = Iso.tile_to_screen(Vector2(cell), course.get_height(cell.x, cell.y))
+	return camera.get_parent().to_local(course_view.to_global(at))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -150,11 +225,12 @@ func set_mode(new_mode: Mode) -> void:
 	mode_changed.emit(mode)
 
 
-## Puts the ball on hole 1's tee aimed at its cup (or, when the course has no tee yet, on
-## no_hole_tile) for the swing (E2-S7), with a fresh score, and centres the camera on it
-## (E2-S8).
+## Puts the ball on the picked hole's tee aimed at its cup (SwingControl.hole_to_play: the
+## hole list's pick, E3-S2, else the lowest-numbered hole with a tee; or, when the course has
+## no tee yet, on no_hole_tile) for the swing (E2-S7), with a fresh score, and centres the
+## camera on it (E2-S8).
 func _begin_play() -> void:
-	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg)
+	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg, build_tool.hole_number)
 	camera.centre_on(_ball_world(), true)
 
 

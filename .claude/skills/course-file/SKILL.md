@@ -28,6 +28,8 @@ Argument: `validate <path>`, `generate <par> [flat|hilly] [water|dry]`, or `insp
 
 Surface enum: 0 fairway, 1 rough, 2 green, 3 tee, 4 bunker, 5 water, 6 trees, 7 cart_path, 8 oob. Height 0 to 7 in the high nibble.
 
+Holes (E3-S2): at most `max_holes` (9, `course/builder_tuning.tres`), each numbered 1 to 9. A file with more holes, or a number outside 1 to 9, does not load (`validate` exits 2 and says why). Two holes sharing a number load and fail rule 1.
+
 Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 tiles, `CourseData.PARCEL_TILES`), top row first, one character per parcel, `"1"` owned and `"0"` not, so a 40 x 40 map has 3 rows of 3 (the last parcels partial). `land_budget` is the whole dollars left to buy parcels with, or `null` for no limit (New sandbox). Version 1 files (no `owned`, no `land_budget`) still load: `course/save.gd` migrates them with every parcel owned and `land_budget` null, and saves them as version 2. `generate` writes every parcel owned and `null`.
 
 ## Headless entry point
