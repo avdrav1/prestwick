@@ -45,6 +45,8 @@ var land_seed: int = -1
 @onready var sim_speed_panel: SimSpeedPanel = $HUD/SimSpeedPanel
 @onready var feed_panel: FeedPanel = $HUD/FeedPanel
 @onready var reaction_tags: ReactionTags = $CourseView/ReactionTags
+## After BuildTool and SwingControl, so a click on a map tag is hit-tested ahead of them (E3-S19).
+@onready var tag_clicks: TagClicks = $TagClicks
 
 
 func _ready() -> void:
@@ -68,8 +70,9 @@ func _ready() -> void:
 	guest_view.bind(guest_sim)
 	sim_speed_panel.bind(guest_sim)
 	feed_panel.bind(guest_sim)
-	feed_panel.hole_requested.connect(_on_feed_hole_requested)
+	feed_panel.hole_requested.connect(_on_hole_link)
 	reaction_tags.bind(guest_sim.feed)
+	tag_clicks.bind(reaction_tags, _on_tag_link)
 	hole_panel.bind_feed(guest_sim.feed)
 	_apply_mode()
 	var errors: Array[String] = []
@@ -142,13 +145,32 @@ func play_hole(number: int, slot: int = -1) -> void:
 		set_mode(Mode.PLAY)
 
 
-## A feed line was clicked (E3-S7): jump_to_hole, unless a swing is under way or the ball is
-## moving in Play, when the click is dropped so a line coming in under the cursor never ends a
-## shot or the round. True when it jumped.
-func _on_feed_hole_requested(number: int, slot: int = -1) -> bool:
+## A feed line (E3-S7) or a map tag (E3-S19, TagClicks) was clicked: jump_to_hole, so Build
+## picks the hole and frames it (frame_hole with its slot), unless a swing is under way or the
+## ball is moving in Play, when the click is dropped so a line coming in under the cursor never
+## ends a shot or the round (a tag then leaves the click to the swing). True when it jumped.
+func _on_hole_link(number: int, slot: int = -1) -> bool:
 	if mode == Mode.PLAY and (swing_control.swing.in_progress() or swing_control.is_ball_moving()):
 		return false
 	return jump_to_hole(number, slot)
+
+
+## A map tag was clicked (E3-S19, TagClicks): as a feed line (_on_hole_link), but in Play only
+## while the hole is not under way, before its first stroke or once it is finished. A tag sits on
+## the map, where the player aims and clicks to swing (a neighbouring green's tag is often under
+## the cursor), so mid-hole the click is left to the swing and the round in progress is kept
+## (E3-S19 review). True when it jumped.
+func _on_tag_link(number: int, slot: int = -1) -> bool:
+	if mode == Mode.PLAY and tag_waits_for_swing():
+		return false
+	return _on_hole_link(number, slot)
+
+
+## True in Play while the hole is under way: at least one stroke counted and not finished, so a
+## click on the map is the swing's.
+func tag_waits_for_swing() -> bool:
+	var score: HoleScore = swing_control.score
+	return score != null and score.strokes > 0 and not score.is_finished()
 
 
 ## Switches to Build, picks hole `number` in the hole list and frames it (frame_hole). `slot`

@@ -4,6 +4,8 @@ extends GutTest
 ## one line at a time and a line several guests gave at once folds into one; each line links
 ## to its hole, and clicking it switches to Build, picks the hole and frames it; each hole's
 ## tag on the map counts its praise and complaints among the last rating_window reactions.
+## E3-S19: clicking a map tag picks and frames its hole, and the click never reaches the build
+## tool or the swing.
 ## Checked by hand too: docs/decisions/e3-s7-feed.png, docs/decisions/e3-s7-jump.png.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
@@ -606,3 +608,129 @@ func test_cleared_reactions_hold_their_window_place_but_are_not_rated() -> void:
 	assert_eq(feed.rated()[0].hole_number, 2)
 	feed.push(_praise(3), 1, 5, 2)
 	assert_eq(feed.rated().size(), 2, "the oldest cleared one is pushed out")
+
+
+# --- E3-S19: a map tag picks its hole ---
+
+## A left press or release at viewport point `at`, through the real viewport, so the nodes
+## take it in the order Godot hands it out (TagClicks ahead of BuildTool and SwingControl).
+func _click(m: Main, at: Vector2, pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = pressed
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	ev.position = at
+	ev.global_position = at
+	m.get_viewport().push_input(ev, true)
+
+
+## Centres the camera on slot `slot`'s tag at 1x, clear of the HUD, and returns its centre on
+## the screen.
+func _show_tag(m: Main, slot: int) -> Vector2:
+	var tags: ReactionTags = m.reaction_tags
+	m.camera.restore_zoom()
+	m.camera.tracking = false
+	m.camera.has_focus = false
+	m.camera.position = m.camera.get_parent().to_local(tags.to_global(tags.anchor_at(slot)))
+	m.camera.force_update_scroll()
+	tags._process(0.0)
+	var at: Vector2 = tags.tag_centre(slot)
+	for ctl: Control in m.hud_controls():
+		assert_false(m._hud_rect(ctl).has_point(at), "the tag is clear of %s" % ctl.name)
+	return at
+
+
+func _assert_framed(m: Main, slot: int) -> void:
+	var h: HoleData = m.course.holes[slot]
+	var free: Rect2 = m.free_view_rect_for(m.tile_world(h.tee), m.tile_world(h.cup))
+	var inner: Rect2 = free.grow(-m.camera.tuning.aim_frame_margin + 0.5)
+	assert_true(inner.has_point(m.camera.screen_point(m.tile_world(h.tee))), "its tee is framed")
+	assert_true(inner.has_point(m.camera.screen_point(m.tile_world(h.cup))), "and its cup")
+
+
+func test_a_click_on_a_tag_frames_its_hole_and_paints_nothing() -> void:
+	var m := _main_with_verdicts()
+	var tags: ReactionTags = m.reaction_tags
+	await get_tree().process_frame
+	m.build_tool.select_surface(Surface.Type.BUNKER)
+	assert_eq(m.build_tool.picked_slot(), 0, "hole 1 picked to start")
+	var at: Vector2 = _show_tag(m, 2)
+	assert_eq(tags.slot_at(at), 2, "the hit test finds hole 3's tag")
+	assert_eq(tags.slot_at(at + Vector2(0, 60)), -1, "and none below it, on the green")
+	var before: String = m.course.content_hash()
+	var strokes: int = m.build_tool.stroke_count
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(m.build_tool.picked_slot(), 2, "the click picks hole 3")
+	assert_eq(m.build_tool.hole_number, 3)
+	_assert_framed(m, 2)
+	assert_eq(m.course.content_hash(), before, "and paints nothing")
+	assert_eq(m.build_tool.stroke_count, strokes, "the build tool never saw the click")
+	assert_false(m.build_tool.builder.can_undo(), "no undo step")
+	# A click off every tag still paints, as before.
+	m.camera.force_update_scroll()
+	var off: Vector2 = m.camera.screen_point(m.tile_world(Vector2i(10, 12)))
+	assert_eq(tags.slot_at(off), -1)
+	_click(m, off, true)
+	_click(m, off, false)
+	assert_eq(m.build_tool.stroke_count, strokes + 1, "the tool takes a click on the map")
+	assert_ne(m.course.content_hash(), before)
+
+
+func test_a_click_on_a_tag_in_play_goes_to_build_and_never_swings() -> void:
+	var m := _main_with_verdicts()
+	await get_tree().process_frame
+	m.set_mode(Main.Mode.PLAY)  # hole 1: its tag is not drawn, holes 2 and 3 are
+	assert_eq(m.reaction_tags.tag_slots().keys().has(0), false)
+	m.set_process(false)  # Play's ball follow would move the camera off the tag
+	var at: Vector2 = _show_tag(m, 1)
+	var before: String = m.course.content_hash()
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(m.mode, Main.Mode.BUILD, "the click goes to Build, as a feed line's does")
+	assert_eq(m.build_tool.picked_slot(), 1, "picks hole 2")
+	_assert_framed(m, 1)
+	assert_false(m.swing_control.swing.in_progress(), "no swing started")
+	assert_eq(m.course.content_hash(), before, "nothing painted")
+	# Mid-swing the click is the swing's: the tag leaves it, so the shot goes on.
+	m.set_mode(Main.Mode.PLAY)  # hole 2 now, so hole 3's tag
+	at = _show_tag(m, 2)
+	m.swing_control.press()
+	var phase: int = m.swing_control.swing.phase
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(m.mode, Main.Mode.PLAY, "a tag clicked mid-swing does not leave Play")
+	assert_ne(m.swing_control.swing.phase, phase, "the click went to the swing")
+
+
+## E3-S19 review: mid-hole, with the ball at rest, the click that starts the swing is often over
+## another hole's tag (the cursor aims at the ground under it). The tag leaves it to the swing,
+## so the round in progress is kept; once the hole is finished the tag takes the click again.
+func test_a_click_on_a_tag_mid_hole_at_rest_is_the_swings() -> void:
+	var m := _main_with_verdicts()
+	await get_tree().process_frame
+	m.set_mode(Main.Mode.PLAY)  # hole 1: holes 2 and 3 have tags
+	m.set_process(false)
+	var at: Vector2 = _show_tag(m, 1)
+	var score: HoleScore = m.swing_control.score
+	score.strokes = 2  # two strokes played, the ball at rest
+	assert_false(m.swing_control.is_ball_moving())
+	assert_false(m.swing_control.swing.in_progress())
+	assert_true(m.tag_waits_for_swing())
+	var phase: int = m.swing_control.swing.phase
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(m.mode, Main.Mode.PLAY, "the tag click mid-hole does not leave Play")
+	assert_eq(m.swing_control.score, score, "the round goes on")
+	assert_eq(m.swing_control.score.strokes, 2, "with its strokes")
+	assert_ne(m.swing_control.swing.phase, phase, "the click started the swing")
+	# Finished, the hole is no longer under way: the tag takes the click and goes to Build.
+	m.swing_control.swing.reset()  # the swing the click started is set down
+	score.holed = true
+	assert_false(m.tag_waits_for_swing())
+	at = _show_tag(m, 1)
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(m.mode, Main.Mode.BUILD, "a finished hole's tag click goes to Build")
+	assert_eq(m.build_tool.picked_slot(), 1, "and picks hole 2")
+	_assert_framed(m, 1)

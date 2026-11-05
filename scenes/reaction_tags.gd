@@ -16,6 +16,9 @@ extends Node2D
 ##
 ## In Play the hole being played (`played_hole`, Main sets it) has no tag: the tag stands over
 ## the back of the green, where the player's ball rests and the putt is read (pillar 2).
+##
+## A tag can be clicked (E3-S19): `slot_at` hit-tests the boxes as drawn, and TagClicks, ahead
+## of the build tool and the swing, hands the click to Main, which picks and frames the hole.
 
 ## Colours (art/palette.gpl): ink box, chalk number, sun_yellow praise, flag_red complaints.
 @export var box_color: Color = Color8(26, 28, 34)
@@ -121,31 +124,84 @@ func _view_scale() -> float:
 	return s if s > 0.0 else 1.0
 
 
+## Hole `slot`'s tag box in screen px, its foot at the origin (the anchor), as _draw lays it
+## out: the text pieces' widths, then the whole box with its 1 px ink edge.
+func tag_box(slot: int, tally: Vector2i) -> Rect2:
+	var widths: Array[float] = _widths(tag_texts(course.holes[slot].number, tally))
+	var total := 0.0
+	for w: float in widths:
+		total += w
+	var h: float = _box_height()
+	return Rect2(-total * 0.5 - 1.0, -h - 1.0, total + 2.0, h + 2.0)
+
+
+## The slot of the tag drawn under viewport point `viewport_pos` (a mouse event's position), or
+## -1 (E3-S19). Where tags overlap, the one drawn on top (the higher number) wins. Only tags
+## shown now count: none while the tags are hidden, nor the played hole's in Play.
+func slot_at(viewport_pos: Vector2) -> int:
+	if not is_visible_in_tree():
+		return -1
+	var all: Dictionary = tag_slots()
+	if all.is_empty():
+		return -1
+	var local: Vector2 = get_global_transform_with_canvas().affine_inverse() * viewport_pos
+	var s: float = _view_scale()
+	var slots: Array = _draw_order(all)
+	slots.reverse()
+	for slot: int in slots:
+		var at: Vector2 = anchor_at(slot)
+		if tag_box(slot, all[slot]).has_point((local - at) * s):
+			return slot
+	return -1
+
+
+## Viewport point of hole `slot`'s tag centre (tests and scripted clicks), or null with no tag.
+func tag_centre(slot: int) -> Variant:
+	var all: Dictionary = tag_slots()
+	if not all.has(slot):
+		return null
+	var box: Rect2 = tag_box(slot, all[slot])
+	var at: Vector2 = anchor_at(slot)
+	return get_global_transform_with_canvas() * (at + box.get_center() / _view_scale())
+
+
+func _box_height() -> float:
+	return ThemeDB.fallback_font.get_height(font_size) + padding * 2.0
+
+
+func _widths(pieces: PackedStringArray) -> Array[float]:
+	var font: Font = ThemeDB.fallback_font
+	var out: Array[float] = []
+	for p: String in pieces:
+		out.append(0.0 if p.is_empty() else font.get_string_size(p, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + padding * 2.0)
+	return out
+
+
+## Slots in the order their tags are drawn: by hole number, then slot (the last on top).
+func _draw_order(all: Dictionary) -> Array:
+	var slots: Array = all.keys()
+	slots.sort_custom(func(a: int, b: int) -> bool:
+		return course.holes[a].number < course.holes[b].number \
+				or (course.holes[a].number == course.holes[b].number and a < b))
+	return slots
+
+
 func _draw() -> void:
 	var all: Dictionary = tag_slots()
 	if all.is_empty():
 		return
 	var font: Font = ThemeDB.fallback_font
 	var k: float = 1.0 / _scale
-	var h: float = font.get_height(font_size) + padding * 2.0
-	var slots: Array = all.keys()
-	slots.sort_custom(func(a: int, b: int) -> bool:
-		return course.holes[a].number < course.holes[b].number \
-				or (course.holes[a].number == course.holes[b].number and a < b))
-	for slot: int in slots:
+	var h: float = _box_height()
+	for slot: int in _draw_order(all):
 		var at: Vector2 = anchor_at(slot)
 		var pieces: PackedStringArray = tag_texts(course.holes[slot].number, all[slot])
 		var colors: Array[Color] = [box_color, praise_color, complaint_color]
 		var text_colors: Array[Color] = [text_color, box_color, text_color]
-		var widths: Array[float] = []
-		var total := 0.0
-		for p: String in pieces:
-			var w := 0.0 if p.is_empty() else font.get_string_size(p, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + padding * 2.0
-			widths.append(w)
-			total += w
+		var widths: Array[float] = _widths(pieces)
 		draw_set_transform(at, 0.0, Vector2.ONE * k)
-		var x := -total * 0.5
-		draw_rect(Rect2(x - 1.0, -h - 1.0, total + 2.0, h + 2.0), box_color)
+		draw_rect(tag_box(slot, all[slot]), box_color)
+		var x: float = tag_box(slot, all[slot]).position.x + 1.0
 		for i: int in pieces.size():
 			if widths[i] <= 0.0:
 				continue
