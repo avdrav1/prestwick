@@ -45,8 +45,10 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 ## FAIR_TO_BLIND_COMPLAINTS more complaints); the one-parcel corridor par 4 on the generated
 ## land of `rng_seed` and the New sandbox dogleg, recorded. Then the nine-hole fixture
 ## (tests/fixtures/nine_holes.gd) plays the first `nine_days` days of a New sandbox course
-## (GuestSim.day_seed(0, d)), each against "every hole reached".
-func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS) -> Array[Dictionary]:
+## (GuestSim.day_seed(0, d)), each against "every hole reached". Last, E3-S24's scoring at
+## the edges (scripts/scoring_edges.gd): skill 10 on the spike holes, putting on sloped
+## greens and chips, `runs` guests each, unless `edges` is false (tests read them alone).
+func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool = true) -> Array[Dictionary]:
 	var n := maxi(runs, 1)
 	var rows: Array[Dictionary] = []
 	var fair := tally(play_field(ReactionHoles.fair_par4(), n, rng_seed))
@@ -79,6 +81,8 @@ func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS) -> Array[Dict
 			nine.note))
 	rows.append(_row("nine holes, New sandbox: days every hole was finished", nine.finished,
 			Vector2(-INF, INF), "by at least one guest"))
+	if edges:
+		rows.append_array(ScoringEdges.new(model).measure(n, rng_seed))
 	return rows
 
 

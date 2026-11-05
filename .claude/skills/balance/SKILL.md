@@ -21,7 +21,7 @@ The targets live in `docs/design.md` Balance targets, the one source of truth (D
 ## Steps
 
 1. Read the table's targets in `docs/design.md` Balance targets and its resource from the list above.
-2. Run `godot --headless --path . -s res://scripts/sim.gd -- --table <name> --runs 200 --seed 1` (tables built so far: clubs, lies, surfaces, land, reactions; for land, `--runs` is the number of generated seeds; for reactions it is the field, read at `--runs 50`, and the run takes about a minute). It prints the measured values next to the targets and exits 1 on a miss.
+2. Run `godot --headless --path . -s res://scripts/sim.gd -- --table <name> --runs 200 --seed 1` (tables built so far: clubs, lies, surfaces, land, reactions; for land, `--runs` is the number of generated seeds; for reactions it is the field, read at `--runs 50`, and the run takes about three minutes since E3-S24 added the scoring-at-the-edges rows). It prints the measured values next to the targets and exits 1 on a miss.
 3. Propose the smallest change that moves the measured value into range. One or two numbers, not a rewrite.
 4. Apply, rerun, show before and after in a short table.
 5. Update the matching line in `docs/design.md` if the target itself changed, and say why.

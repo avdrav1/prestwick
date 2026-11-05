@@ -73,7 +73,7 @@ func test_a_field_plays_the_hole_through_the_guest_day() -> void:
 
 
 func test_reaction_rows_print_next_to_their_targets() -> void:
-	var rows := sim.measure(SMALL, SEED, 1)
+	var rows := sim.measure(SMALL, SEED, 1, false)
 	for prefix: String in ["fair par 4: praise", "fair par 4: complaints",
 			"blind par 4: praise", "blind par 4: complaints",
 			"corridor par 4", "dogleg par 4", "nine holes"]:
@@ -97,3 +97,79 @@ func test_the_fair_par_4_hits_its_target_with_a_field_of_50() -> void:
 	var blind := ReactionField.tally(sim.play_field(ReactionHoles.blind_par4(), ReactionField.FIELD_TARGET, SEED))
 	assert_eq(float(blind.praise), 0.0, "nobody praises a blind hole")
 	assert_gt(float(blind.complaints), float(tally.complaints) + 0.25, "and many more complain")
+
+
+# --- E3-S24: scoring at the edges (scripts/scoring_edges.gd) ---
+
+func test_the_edge_rows_print_and_only_the_spike_mean_has_a_target() -> void:
+	var rows := ScoringEdges.new(sim.model).measure(1, SEED)
+	var prefixes: Array[String] = []
+	for hole_name: String in ScoringEdges.spike_holes():
+		prefixes.append("skill 10 on %s:" % hole_name)
+	prefixes.append_array(["skill 10 on the spike holes", "sloped green: three-putt",
+			"tier green: three-putt", "flat green: three-putt", "chips, flat green"])
+	for prefix: String in prefixes:
+		assert_false(_named(rows, prefix).is_empty(), "a row for %s" % prefix)
+	assert_eq(rows.size(), prefixes.size(), "one row each")
+	var mean := _named(rows, "skill 10 on the spike holes")
+	assert_eq(mean.target, Vector2(-ScoringEdges.SKILL_10_WITHIN, ScoringEdges.SKILL_10_WITHIN),
+			"skill 10 is read against par, within 0.25")
+	for r: Dictionary in rows:
+		if r != mean:
+			assert_eq(r.target, Vector2(-INF, INF), "%s is recorded" % r.name)
+	assert_string_contains(String(_named(rows, "sloped green").note), "skill 1:")
+	assert_string_contains(String(_named(rows, "chips").note), "guest_min_power")
+
+
+func test_the_short_game_greens_are_shaped_as_named() -> void:
+	var c := ShortGameHoles.CUP
+	var h := ShortGameHoles.GREEN_HALF
+	var sloped := ShortGameHoles.sloped_green()
+	for x in range(c.x - h, c.x + h + 1):
+		assert_eq(sloped.get_surface(x, c.y), Surface.Type.GREEN)
+		assert_eq(sloped.get_height(x, c.y), x - (c.x - h), "one step a tile along +x")
+	var tier := ShortGameHoles.tier_green()
+	assert_eq(tier.get_height(c.x - 1, c.y), 0)
+	assert_eq(tier.get_height(c.x, c.y), 1, "the cup on the upper tier")
+	assert_eq(ShortGameHoles.flat_green().get_height(c.x + h, c.y), 0)
+	assert_eq(sloped.get_surface(c.x - h - 1, c.y), Surface.Type.FAIRWAY, "fairway round the green")
+	var starts := ShortGameHoles.putt_starts()
+	assert_eq(starts.size(), 16, "eight directions at two distances")
+	for s: Vector2i in starts:
+		assert_eq(sloped.get_surface(s.x, s.y), Surface.Type.GREEN, "%s is a putt" % s)
+	assert_eq(sloped.get_surface(ShortGameHoles.chip_start(1).x, c.y), Surface.Type.FAIRWAY)
+
+
+func test_a_noise_free_guest_one_putts_a_flat_green_and_never_three_putts_a_sloped_one() -> void:
+	var edges := ScoringEdges.new(sim.model)
+	var flat := edges.putts(ShortGameHoles.flat_green(), ScoringEdges.NOISE_FREE, 16, SEED)
+	assert_eq(float(flat.one), 1.0, "with no noise every straight putt drops")
+	for course: CourseData in [ShortGameHoles.sloped_green(), ShortGameHoles.tier_green()]:
+		var p := edges.putts(course, ScoringEdges.NOISE_FREE, 16, SEED)
+		assert_eq(float(p.three), 0.0, "no three-putts with no noise")
+		assert_gt(float(p.two), 0.0, "aimed at the cup, some breaking putts miss (D41)")
+	var noisy := edges.putts(ShortGameHoles.sloped_green(), 1, 16, SEED)
+	assert_gt(float(noisy.three), float(flat.three), "skill 1 three-putts the sloped green")
+
+
+func test_chips_hole_out_and_skill_10_gets_down_in_fewer() -> void:
+	var edges := ScoringEdges.new(sim.model)
+	var best := edges.chips(10, 12, SEED)
+	var worst := edges.chips(1, 12, SEED)
+	gut.p("chips: skill 10 %.2f, skill 1 %.2f" % [best.mean, worst.mean])
+	assert_between(float(best.mean), 2.0, 3.5, "skill 10 about up and down")
+	assert_gt(float(worst.mean), float(best.mean), "skill 1 takes more")
+
+
+func test_skill_10_averages_near_par_over_the_spike_holes() -> void:
+	# The sim reads the target at 50 guests a hole; a field of 12 is looser.
+	var edges := ScoringEdges.new(sim.model)
+	var holes := ScoringEdges.spike_holes()
+	var sum := 0.0
+	for hole_name: String in holes:
+		var c: CourseData = holes[hole_name]
+		var m := edges.mean_over_par(c, c.holes[0], 10, 12, SEED)
+		gut.p("skill 10 on %s: %+.2f" % [hole_name, m.over])
+		sum += float(m.over)
+	assert_almost_eq(sum / holes.size(), 0.0, ScoringEdges.SKILL_10_WITHIN + 0.15,
+			"skill 10 averages about par (D40)")
