@@ -623,6 +623,26 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Test: sim output recorded in the balance commit. `/playtest full` checklist item 3.
   - Touches: `guests/`, `scripts/`, `docs/`
   - Settles: design doc open question "Guest readability".
+- [ ] E3-S9 Frame a hole clear of the whole HUD. A framed tee or cup should never sit under a button.
+  - Note: (found in E3 review) framing a hole (`CourseCamera.frame_points`) fits it in the view the hole panel leaves free, but at 0.5x a long hole 1 (par 4 or 5) still puts its tee and cup under the HUD corners: the top-left buttons and the bottom build palette. On the `tests/fixtures/nine_holes.gd` fixture the hole panel is about 335 px wide, so the free view is about 730 x 610 px, and most generated-land holes frame at 0.5x with the tee held near the free area's edge. E3-S7's jump-to-hole reuses this framing.
+  - Accept: framing insets by every HUD control that overlaps the view (top-left buttons, build palette, hole panel), and when a hole does not fit at the furthest zoom it favours the tee. On the nine_holes fixture at 1280 x 720, every hole's tee and cup land inside the free view. The playtest notes answer whether 0.5x framing with the tee near the edge reads well (put to the user's hand playtest).
+  - Test: a case in `tests/test_course_camera.gd` that frames each fixture hole and checks the tee and cup screen points sit inside the free rect. Screenshot.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S10 Let the hole list collapse. Nine rows plus details cover the map.
+  - Note: (found in E3 review) at 1280 x 720 the hole list stacks with the hole details and covers part of the map's top-right; with nine holes and issue text the panel is about 440 px tall. Open question from the review: should the list collapse while the camera frames a hole?
+  - Accept: the hole list or the details can collapse in one click (or the details collapse to the picked hole's one-line summary), so with nine holes and issue text the panel stays under a height set in a tuning resource at 1280 x 720. A collapsed list still shows the picked hole and its status. E3-S9's free view follows the panel's height.
+  - Test: `tests/test_hole_list.gd`: collapsing and expanding keep the pick, and the panel height stays under its limit with nine failing holes. Screenshot.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S11 Flag duplicate hole numbers in the list. Two holes with one number show as one row.
+  - Note: (found in E3 review) the hole list shows one row per number, so a loaded file with two holes sharing a number shows one row for both (validator rule 1 fails them). Renumbering the row parts them, but the second hole is not visible until then.
+  - Accept: a course with two holes sharing a number shows a row for each, marked as a duplicate with rule 1's text, and each row's renumber and pick act on its own hole.
+  - Test: `tests/test_hole_list.gd`: a loaded course with a duplicate number lists both holes, and renumbering one leaves the other in place.
+  - Touches: `scenes/`, `course/`, `tests/`
+- [ ] E3-S12 Keep Build frames inside budget as E3 adds work. Measure before caching.
+  - Note: (found in E3 review) the validator takes about 8.3 ms per check whatever the hole count, since rule 3's graph is shared (`docs/design.md` Plot says revisit past about 14 ms). `IssueMarker.wrap_line` still measures each word on a new box's first layout, so a check that builds many new boxes at once, such as a large drag that breaks several holes, has an unmeasured frame cost.
+  - Accept: with E3-S4's guest sim running on the nine_holes fixture, `scripts/nine_holes_perf.gd` measures the click-edit frame and the frame after a drag that breaks every hole at once (nine new issue boxes). If a check passes about 14 ms or the frame passes 16.7 ms, cache rule 3's graph between edits (or the box text measures) until it fits. The figures go in `docs/design.md` Plot.
+  - Test: the perf script's output recorded in the commit; if a cache is added, `tests/test_validator.gd` checks a cached check gives the same issues as a fresh one after edits.
+  - Touches: `course/`, `scripts/`, `docs/`
 
 ## E4: Economy — planned
 
