@@ -7,6 +7,7 @@ Usage:
   scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
   scripts/placeholder.py land                -> art/tiles/land_placeholder.png
   scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
+                                                and golfer_shirts_placeholder.png (E3-S28)
   scripts/placeholder.py all                 -> all of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
@@ -441,7 +442,57 @@ def golfer_frame(state: str, d: str, n: int, p: dict[str, Color]) -> Image:
 
 
 def build_golfer(state: str, frames: int, p: dict[str, Color]) -> Image:
-    return sheet([golfer_frame(state, d, n, p) for d in GOLFER_DIRS for n in range(frames)])
+    img = sheet([golfer_frame(state, d, n, p) for d in GOLFER_DIRS for n in range(frames)])
+    check_shirt_key(img, p)
+    return img
+
+
+# Shirts (E3-S28, art/specs/golfer.md "Shirts"): the sheets draw the shirt in GOLFER_SHIRT_KEY
+# and GuestView's shader (art/sprites/golfer_shirt.gdshader) swaps it per group. The set lives
+# in art/sprites/golfer.tres; this copy only draws the preview, and tests/test_guest_view.gd
+# checks the preview against the .tres, so the two cannot drift apart unseen.
+GOLFER_SHIRT_KEY = "chalk"
+# Sheet rows the shirt (and so the key colour) may cover, inclusive.
+GOLFER_SHIRT_ROWS = (9, 16)
+# Rows above this one wear a yoke shirt's trim.
+GOLFER_YOKE_ROW = 12
+# (body, trim, pattern), in golfer.tres order. Patterns: plain, hoops (trim on odd rows), yoke.
+GOLFER_SHIRTS = [
+    ("chalk", "chalk", "plain"),
+    ("flag_red", "chalk", "hoops"),
+    ("water_dark", "chalk", "yoke"),
+    ("sun_yellow", "sun_yellow", "plain"),
+    ("earth", "earth", "plain"),
+    ("slate_light", "water_dark", "yoke"),
+]
+
+
+def check_shirt_key(img: Image, p: dict[str, Color]) -> None:
+    key = p[GOLFER_SHIRT_KEY]
+    lo, hi = GOLFER_SHIRT_ROWS
+    for y in range(img.height):
+        if lo <= y <= hi:
+            continue
+        if any(img.get(x, y) == key for x in range(img.width)):
+            raise SystemExit(f"golfer: the shirt key {GOLFER_SHIRT_KEY} is on row {y}, off the shirt")
+
+
+def shirt_frame(base: Image, shirt: tuple[str, str, str], p: dict[str, Color]) -> Image:
+    body, trim, pattern = shirt
+    key = p[GOLFER_SHIRT_KEY]
+    img = Image(base.width, base.height)
+    for y in range(base.height):
+        is_trim = (pattern == "hoops" and y % 2 == 1) or (pattern == "yoke" and y < GOLFER_YOKE_ROW)
+        for x in range(base.width):
+            c = base.get(x, y)
+            img.set(x, y, (p[trim] if is_trim else p[body]) if c == key else c)
+    return img
+
+
+def build_golfer_shirts(p: dict[str, Color]) -> Image:
+    """The preview: the idle s_0 frame in each shirt, in order (not loaded by the game)."""
+    base = golfer_frame("idle", "s", 0, p)
+    return sheet([shirt_frame(base, shirt, p) for shirt in GOLFER_SHIRTS])
 
 
 # --- generic ---------------------------------------------------------------
@@ -490,6 +541,7 @@ def main(argv: list[str]) -> int:
     if args.thing in ("golfer", "all"):
         for state, frames in GOLFER_STATES:
             jobs.append((ROOT / f"art/sprites/golfer_{state}_placeholder.png", build_golfer(state, frames, p)))
+        jobs.append((ROOT / "art/sprites/golfer_shirts_placeholder.png", build_golfer_shirts(p)))
     if not jobs:
         if not args.size:
             ap.error(f"no built-in generator for {args.thing!r}; pass --size WxH and --frames N")

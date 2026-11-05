@@ -24,6 +24,10 @@ extends Node2D
 ## screen (at 0.5x it is drawn at twice its size, one texel a screen pixel), so it reads as a
 ## person at every zoom (art/specs/golfer.md).
 ##
+## Shirts (E3-S28): a figure wears its group's shirt (GolferArt.shirt_of_group: the day's
+## groups take the art spec's shirts in turn), drawn by swapping the sheet's chalk in a shader
+## material shared by everyone in that shirt, so a group reads as one and its neighbours differ.
+##
 ## Ball flights: the sim runs every guest's ball the same way, watched or not (GuestHole's
 ## off-screen shortcut: it rests within a simulated second or so). When a guest strikes and
 ## its ball's start is on screen (within GuestViewTuning.on_screen_margin_px of the view), the
@@ -159,6 +163,7 @@ func _add(guest: Guest) -> Figure:
 	f.strokes_seen = guest.hole.strokes.size() if guest.hole != null else 0
 	f.sprite = _Piece.new(_draw_figure.bind(f))
 	f.sprite.name = "Guest%d" % guest.id
+	f.sprite.material = art.shirt_material(shirt_of(f))
 	add_child(f.sprite)
 	f.ball = _Piece.new(_draw_ball.bind(f))
 	f.ball.name = "Ball%d" % guest.id
@@ -175,6 +180,12 @@ func _drop(id: int) -> void:
 	f.sprite.free()
 	f.ball.free()
 	_figures.erase(id)
+
+
+## The shirt figure `f` wears (E3-S28): its group's, so a group reads as one and the groups
+## on a hole and the next differ (GolferArt.shirt_of_group).
+func shirt_of(f: Figure) -> int:
+	return art.shirt_of_group(f.guest.group_id)
 
 
 ## A guest's place in its group as a small sideways step on screen, yards: place 0 on the

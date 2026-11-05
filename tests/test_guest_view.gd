@@ -5,6 +5,7 @@ extends GutTest
 ## checked by hand: docs/decisions/e3-s5-guests-ysort.png, docs/decisions/e3-s5-guest-flight.png.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const FRAME := 1.0 / 60.0
 
@@ -302,3 +303,169 @@ func test_main_runs_the_day_in_play_with_its_speed_controls() -> void:
 	var second := main.guest_sim.brain.second
 	await wait_physics_frames(5)
 	assert_eq(main.guest_sim.brain.second, second, "Build holds the day where it is")
+
+
+# --- shirts (E3-S28) ---
+
+const PALETTE_PATH: String = "res://art/palette.gpl"
+
+
+func _palette() -> Dictionary:
+	var colors: Dictionary = {}
+	for line: String in FileAccess.get_file_as_string(PALETTE_PATH).split("\n"):
+		var s := line.strip_edges()
+		if s.is_empty() or s.begins_with("#") or s.begins_with("GIMP") or s.begins_with("Name:") \
+				or s.begins_with("Columns:"):
+			continue
+		var p := s.replace("\t", " ").split(" ", false)
+		colors[Color8(p[0].to_int(), p[1].to_int(), p[2].to_int()).to_html(false)] = p[3]
+	return colors
+
+
+func test_the_shirt_set_is_palette_only_and_reads_in_grayscale() -> void:
+	var art := GolferArt.load_default()
+	var palette := _palette()
+	var n := art.shirt_count()
+	assert_gte(n, 6, "as many shirts as groups on a hole and the next on a backed-up day")
+	assert_eq(art.shirt_trim.size(), n)
+	assert_eq(art.shirt_pattern.size(), n)
+	assert_eq(palette.get(art.shirt_key.to_html(false)), "chalk", "the sheets draw the shirt in chalk")
+	assert_eq(art.shirt_body[0], art.shirt_key, "shirt 0 is the sheet's own chalk polo")
+	for i in n:
+		for c: Color in [art.shirt_body[i], art.shirt_trim[i]]:
+			assert_true(palette.has(c.to_html(false)),
+					"shirt %d colour %s is in the palette" % [i, c.to_html(false)])
+	# Grayscale: every pair differs in pattern, or by a clear step in luma.
+	for i in n:
+		for j in range(i + 1, n):
+			var same_pattern := art.shirt_pattern[i] == art.shirt_pattern[j]
+			var step := absf(GolferArt.luma(art.shirt_body[i]) - GolferArt.luma(art.shirt_body[j]))
+			assert_true(not same_pattern or step >= art.shirt_min_luma_step,
+					"shirts %d and %d tell apart in grayscale (step %.0f)" % [i, j, step])
+		if art.shirt_pattern[i] != GolferArt.Pattern.PLAIN:
+			var trim := absf(GolferArt.luma(art.shirt_body[i]) - GolferArt.luma(art.shirt_trim[i]))
+			assert_gte(trim, art.shirt_min_luma_step, "shirt %d's trim shows in grayscale" % i)
+
+
+func test_the_shirt_key_is_only_on_the_shirt() -> void:
+	# The shader swaps every key pixel, so the sheets keep chalk to the shirt rows.
+	var art := GolferArt.load_default()
+	for anim: GolferArt.Anim in [GolferArt.Anim.IDLE, GolferArt.Anim.WALK, GolferArt.Anim.SWING]:
+		var img := art.sheet(anim).texture.get_image()
+		var rows := {}
+		for y in img.get_height():
+			for x in img.get_width():
+				if img.get_pixel(x, y).is_equal_approx(art.shirt_key):
+					rows[y] = true
+		assert_false(rows.is_empty(), "the sheet has a shirt")
+		for y: int in rows:
+			assert_true(y >= art.shirt_rows.x and y <= art.shirt_rows.y,
+					"chalk only on the shirt rows, not row %d" % y)
+
+
+func test_shirt_rows_follow_each_pattern() -> void:
+	var art := GolferArt.load_default()
+	for i in art.shirt_count():
+		var seen := {}
+		for y in range(art.shirt_rows.x, art.shirt_rows.y + 1):
+			var c := art.shirt_color(i, y)
+			assert_true(c == art.shirt_body[i] or c == art.shirt_trim[i])
+			seen[c.to_html(false)] = true
+		var want := 1 if art.shirt_pattern[i] == GolferArt.Pattern.PLAIN else 2
+		assert_eq(seen.size(), want, "shirt %d shows %d colours" % [i, want])
+
+
+func test_the_shirt_preview_matches_the_set() -> void:
+	# scripts/placeholder.py golfer draws the idle s_0 frame in each shirt by its own copy of
+	# the set: it must dress the frame as GolferArt.shirt_color does.
+	var art := GolferArt.load_default()
+	var preview := (load("res://art/sprites/golfer_shirts_placeholder.png") as Texture2D).get_image()
+	var base := art.idle.texture.get_image().get_region(art.idle.region(art.idle.frame_index(&"s_0")))
+	assert_eq(preview.get_width(), art.shirt_count() * 25 - 1, "one frame a shirt")
+	for i in art.shirt_count():
+		for y in base.get_height():
+			for x in base.get_width():
+				var c := base.get_pixel(x, y)
+				var want := art.shirt_color(i, y) if c.is_equal_approx(art.shirt_key) else c
+				var got := preview.get_pixel(i * 25 + x, y)
+				if c.a == 0.0 and got.a == 0.0:
+					continue  # transparent (the import bleeds colour into it)
+				if not got.is_equal_approx(want):
+					fail_test("shirt %d pixel (%d, %d): %s, want %s" % [i, x, y, got, want])
+					return
+	pass_test("the preview dresses every frame as the shader does")
+
+
+func test_neighbouring_groups_get_different_shirts() -> void:
+	var art := GolferArt.load_default()
+	var n := art.shirt_count()
+	for g in 20:
+		for k in range(1, n):
+			assert_ne(art.shirt_of_group(g), art.shirt_of_group(g + k),
+					"groups %d and %d differ" % [g, g + k])
+
+
+## Same-shirt groups on one hole or on neighbouring holes (a group heading for a tee counts on
+## that hole), as [second, hole, group, group], for `brain` stepped to dusk.
+static func _shirt_clashes(brain: GuestBrain, art: GolferArt) -> Array:
+	var clashes := []
+	while not brain.day_over:
+		brain.step()
+		var by_hole := {}
+		for g: GuestGroup in brain.groups:
+			if g.phase == GuestGroup.Phase.TO_TEE or g.phase == GuestGroup.Phase.ON_HOLE:
+				by_hole.get_or_add(g.hole_number, []).append(g)
+		for h: int in by_hole:
+			var near: Array = by_hole[h] + by_hole.get(h + 1, [])
+			var worn := {}
+			for g: GuestGroup in near:
+				var shirt := art.shirt_of_group(g.guests[0].group_id)
+				if worn.has(shirt):
+					clashes.append([brain.second, h, worn[shirt], g.index])
+				worn[shirt] = g.index
+	return clashes
+
+
+func test_a_backed_up_day_keeps_shirts_apart_on_neighbouring_holes() -> void:
+	# E3-S28 review: play backs up. On the nine-hole fixture day seed 5 puts five groups on one
+	# hole and six on two neighbouring holes, seed 7 six on two (scripts/guest_day.gd's course),
+	# so four shirts by arrival order met; the set has as many shirts as that.
+	var course: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(course))
+	var art := GolferArt.load_default()
+	var model := ShotModel.new()
+	for day_seed: int in [5, 7]:
+		var clashes := _shirt_clashes(GuestBrain.new(course, day_seed, null, model), art)
+		assert_eq(clashes, [], "seed %d: no two groups in one shirt on a hole or the next" % day_seed)
+
+
+func test_two_groups_on_one_hole_draw_different_shirts() -> void:
+	var sim := _sim(GuestCourse.course(), 3)
+	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+	var found := {"a": null, "b": null}  # a lambda captures locals by value
+	var two_on_a_hole := func() -> bool:
+		var by_hole := {}
+		for f: GuestView.Figure in view.figures().values():
+			var grp := sim.brain.group_of(f.guest)
+			if grp.phase != GuestGroup.Phase.ON_HOLE and grp.phase != GuestGroup.Phase.TO_TEE:
+				continue
+			var here: Dictionary = by_hole.get_or_add(grp.hole_number, {})
+			here[grp.index] = f
+			if here.size() >= 2:
+				var ks := here.keys()
+				found.a = here[ks[0]]
+				found.b = here[ks[1]]
+				return true
+		return false
+	assert_true(_run(sim, view, two_on_a_hole, 60 * 180), "two groups share a hole")
+	var a: GuestView.Figure = found.a
+	var b: GuestView.Figure = found.b
+	assert_ne(a.guest.group_id, b.guest.group_id)
+	assert_ne(view.shirt_of(a), view.shirt_of(b), "two groups on one hole wear different shirts")
+	assert_ne(a.sprite.material, b.sprite.material, "and draw them")
+	var mat := a.sprite.material as ShaderMaterial
+	assert_eq(mat.get_shader_parameter("body_color"), view.art.shirt_body[view.shirt_of(a)])
+	for f: GuestView.Figure in view.figures().values():
+		if f.guest.group_id == a.guest.group_id:
+			assert_eq(view.shirt_of(f), view.shirt_of(a), "one group, one shirt")
+			assert_eq(f.sprite.material, a.sprite.material)
