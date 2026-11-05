@@ -12,13 +12,23 @@ extends Node2D
 ##
 ## Walks: the brain moves a guest once per simulated second (up to `walk_yd_per_s` 40 yd), so
 ## the view slides each figure from where it stood at the last step to where it stands now,
-## by the share of the second gone by (GuestBrain.step_fraction): it moves at the sim's speed
-## and stops when paused. A figure faces the way it walks, else its hole's cup.
+## over the share of the second its leg takes (E3-S20: Guest.leg_start to leg_end, at walk
+## speed; a whole leg over the whole second) by the share gone by (GuestBrain.step_fraction):
+## it moves at the sim's speed and stops when paused. A figure faces the way it walks, else
+## its hole's cup.
 ##
 ## Swing: a stroke is PLAYING for one simulated second (`stroke_s`); the 6 swing frames run
 ## over it by the same share. The swinging figure stands on its stroke's start, over its own
-## ball: no slide (the brain can end a walk and strike in one step) and no group spread, which
-## eases back in over `spread_ease_s` once the stroke is done.
+## ball. E3-S20: the brain strikes in the second a walk ended only when it ended within the
+## swing's address (`swing_address_share`), and the view draws those last steps first, so a
+## figure finishes its walk on screen before it swings. Its group spread closes over a swing
+## frame's time once it stands there, and eases back in over `spread_ease_s` once the stroke
+## is done.
+##
+## Sync (E3-S20): the ball leaves at the swing's impact frame (`swing_impact_share` of
+## `stroke_s`, replay_head), and the brain sets the guest off to its ball only once the
+## replay has drawn it to rest (GuestBrain.ball_shown_s), so a figure never walks off under
+## its own ball's flight.
 ##
 ## Size: the figure is never drawn under `figure_min_screen_scale` times its native 24 px on
 ## screen (at 0.5x it is drawn at twice its size, one texel a screen pixel), so it reads as a
@@ -35,9 +45,9 @@ extends Node2D
 ## Ball flights: the sim runs every guest's ball the same way, watched or not (GuestHole's
 ## off-screen shortcut: it rests within a simulated second or so). When a guest strikes and
 ## its ball's start is on screen (within GuestViewTuning.on_screen_margin_px of the view), the
-## view replays the stroke's recorded path (GuestHole.stroke_path), `flight_draw_speed` (D38)
-## times faster than real, times the sim's speed: the ball at its height with a shadow under
-## it in flight, on the tile top (D17) on the ground. Off screen there is no replay: the ball
+## view replays the stroke's recorded path (GuestHole.stroke_path) from the impact frame,
+## `flight_draw_speed` (D38; 7.5 since E3-S20) times faster than real, times the sim's speed:
+## the ball at its height with a shadow under it in flight, on the tile top (D17) on the ground. Off screen there is no replay: the ball
 ## shows again where it rests. A ball at rest shows where it lies until the hole is finished.
 
 ## Ball look: ShotView's placeholder (art/palette.gpl chalk, ink), until E5-S3's sprite, drawn
@@ -217,19 +227,39 @@ func screen_vector(d: Vector2) -> Vector2:
 
 func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 	var g := f.guest
+	# E3-S20: the leg walked in the step just run goes at walk speed from `leg_start` to
+	# `leg_end` of the second (a whole leg 0 to 1; a first leg after a stroke sets off as the
+	# ball rests on screen; a last leg ends when the guest gets there).
+	var s0 := 0.0
+	var s1 := 1.0
+	if g.last_walk_s == _brain.second - 1:
+		s0 = g.leg_start
+		s1 = maxf(g.leg_end, s0 + 0.001)
+	var p := clampf((frac - s0) / (s1 - s0), 0.0, 1.0)
+	var walking := frac >= s0 and frac < s1
 	if g.state == Guest.State.PLAYING:
-		# Over its own ball for the whole swing, not still sliding along its last walk leg.
+		# Over its own ball for the swing, not still sliding along its last walk leg.
 		var stand := g.position
 		if g.hole != null and not g.hole.strokes.is_empty():
 			var start: Vector3 = g.hole.strokes[-1].start
 			stand = Vector2(start.x, start.y)
-		f.from = stand
+		# E3-S20: a walk that ended in the second it struck ended within the address
+		# (GuestBrain.at_ball): its last steps are drawn first, then the address.
+		var up := 0.0
+		if g.last_walk_s != g.strike_s or f.from.distance_squared_to(stand) <= 1e-6:
+			f.from = stand
+			walking = false
+		else:
+			up = s1
 		f.to = stand
-		f.spread = 0.0
+		# The group spread closes over a swing frame's time once it stands at its ball, not in
+		# one jump (E3-S20), nor while it still walks.
+		var closing := maxf(frac - up, 0.0) * art.frames_per_dir(GolferArt.Anim.SWING)
+		f.spread = minf(f.spread, maxf(0.0, 1.0 - closing))
 	else:
 		f.spread = minf(1.0, f.spread + delta * speed / maxf(tuning.spread_ease_s, 0.001))
-	f.at = f.from.lerp(f.to, frac) + place_offset(g.place) * f.spread
-	var moving := f.from.distance_squared_to(f.to) > 1e-6
+	f.at = f.from.lerp(f.to, p) + place_offset(g.place) * f.spread
+	var moving := walking and f.from.distance_squared_to(f.to) > 1e-6
 	var d := -1
 	if moving:
 		d = GolferArt.direction_of(screen_vector(f.to - f.from))
@@ -237,7 +267,7 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 		d = GolferArt.direction_of(screen_vector(_field.tile_center(g.hole.hole.cup) - f.at))
 	if d >= 0:
 		f.dir = d
-	if g.state == Guest.State.PLAYING:
+	if g.state == Guest.State.PLAYING and not moving:
 		f.anim = GolferArt.Anim.SWING
 		f.frame = mini(floori(frac * art.frames_per_dir(f.anim)), art.frames_per_dir(f.anim) - 1)
 	elif moving:
@@ -270,9 +300,9 @@ func _update_ball(f: Figure, delta: float, speed: float) -> void:
 		if rh.strokes.size() != f.replay_stroke or path.is_empty():
 			f.replay_hole = null
 		else:
-			f.replay_head += delta * speed * Ball.TICK_HZ * guest_tuning.flight_draw_speed
+			f.replay_head = replay_head(f.guest)
 			var last := path.size() - 1
-			var i := mini(floori(f.replay_head), last)
+			var i := clampi(floori(f.replay_head), 0, last)
 			f.ball_shown = true
 			f.ball_at = path[i]
 			f.ball_flying = f.ball_at.z > _field.height_at(f.ball_at.x, f.ball_at.y) + 0.05
@@ -286,6 +316,17 @@ func _update_ball(f: Figure, delta: float, speed: float) -> void:
 		f.ball_at = h.ball_at
 		_place(f.ball, f.ball_at)
 	f.ball.visible = f.ball_shown
+
+
+## The tick of `guest`'s latest stroke path drawn now (E3-S20): none before the club meets
+## the ball (`swing_impact_share` of `stroke_s` after the strike, the swing's impact frame),
+## then `flight_draw_speed` ticks a simulated tick. Timed from the brain's clock (the strike's
+## second and the share of the second gone by), as the swing frames are, so the ball leaves
+## on the impact frame at any speed and stops when paused; the brain walks the guest once it
+## is drawn to rest (GuestBrain.ball_shown_s).
+func replay_head(guest: Guest) -> float:
+	var since := float(_brain.second - 1 - guest.strike_s) + _brain.step_fraction()
+	return (since - guest_tuning.impact_s()) * Ball.TICK_HZ * guest_tuning.flight_draw_speed
 
 
 ## True while a replay is drawing this guest's stroke.

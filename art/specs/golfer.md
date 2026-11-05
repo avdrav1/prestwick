@@ -110,7 +110,9 @@ hill in front hides a guest's feet or the whole guest.
 - idle: `idle_fps` frames a real second, looping.
 - walk: `walk_fps` frames a real second at 1x, times the sim speed, looping.
 - swing: the 6 frames over the stroke's simulated second (`stroke_s`), so it plays at the
-  sim's speed and freezes when paused.
+  sim's speed and freezes when paused. The ball leaves on the impact frame (frame 4,
+  `swing_impact_frame` in `art/sprites/golfer.tres`; `data/guests.json` `swing_impact_share`
+  0.6667 lands on it, E3-S20), so a redrawn swing keeps its impact on that frame or moves both.
 
 ## Which code reads it
 

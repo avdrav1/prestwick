@@ -91,6 +91,33 @@ func test_a_weight_or_rate_at_zero_and_min_power_outside_0_to_1_are_named() -> v
 	assert_eq(_errors(full).size(), 0, "guest_min_power 1 (full power) is inside the range")
 
 
+## E3-S20: the swing's impact share is a share of stroke_s, 0 up to (not) 1, and its address
+## share 0 up to the impact share.
+func test_the_swing_impact_share_out_of_range_is_named() -> void:
+	assert_eq(tuning.swing_impact_share, float(_shipped()["swing_impact_share"]))
+	assert_almost_eq(tuning.impact_s(), tuning.swing_impact_share * tuning.stroke_s, 1e-9)
+	assert_almost_eq(tuning.flight_shown_s(300), 300.0 / (Ball.TICK_HZ * tuning.flight_draw_speed), 1e-9,
+			"a 300-tick flight draws flight_draw_speed times faster than real time")
+	for bad: float in [-0.1, 1.0, 1.5]:
+		var d := _shipped()
+		d["swing_impact_share"] = bad
+		var errors := _errors(d)
+		# Below 0 it is also below the address share, which names both.
+		assert_eq(errors.size(), 2 if bad < 0.0 else 1, "swing_impact_share = %s: %s" % [bad, errors])
+		assert_true(_named(errors, "swing_impact_share"), str(errors))
+	var gone := _shipped()
+	gone.erase("swing_impact_share")
+	assert_true(_named(_errors(gone), "swing_impact_share"), "a missing share is named")
+	# The address comes before impact: swing_address_share 0 to swing_impact_share.
+	assert_almost_eq(tuning.address_s(), tuning.swing_address_share * tuning.stroke_s, 1e-9)
+	for bad: float in [-0.1, 0.9]:
+		var d := _shipped()
+		d["swing_address_share"] = bad
+		var errors := _errors(d)
+		assert_eq(errors.size(), 1, "swing_address_share = %s: %s" % [bad, errors])
+		assert_true(_named(errors, "swing_address_share"), str(errors))
+
+
 ## E3-S13 review: the day's clock keys are checked too, so a bad day_s edit (D46) fails loudly.
 func test_the_day_clock_keys_out_of_range_are_named() -> void:
 	var cases: Array = [["day_s", 0], ["day_s", -1], ["stroke_s", 0], ["stroke_s", -1],

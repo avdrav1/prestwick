@@ -58,12 +58,23 @@ var walk: GuestWalk
 var hole: GuestHole
 ## Simulated seconds left of the stroke being played (PLAYING).
 var stroke_left: float = 0.0
-## True from a strike until the guest has started walking to where that ball rested.
+## True from a strike until the guest has started walking to where that ball rested: the
+## walk waits for the stroke's flight to end as drawn (E3-S20, GuestBrain.ball_shown_s).
 var ball_moved: bool = false
+## The simulated second of its latest strike (E3-S20: GuestView times the swing's impact and
+## the flight's replay from it).
+var strike_s: int = -1
 ## True once the hole under way has given its record (at hole-out or pick-up).
 var hole_recorded: bool = false
 ## The last simulated second it walked (a guest walks at most once a second).
 var last_walk_s: int = -1
+## E3-S20: that second's leg runs at walk speed from `leg_start` to `leg_end`, shares of the
+## second (0 to 1 for a whole leg; a walk's first leg after a stroke sets off as its ball comes
+## to rest on screen, its last one ends when it gets there). `next_leg_start` is where the
+## next leg sets off. GuestView draws the leg over them.
+var leg_start: float = 0.0
+var leg_end: float = 1.0
+var next_leg_start: float = 0.0
 ## The finished holes, in the order played (a hole cut short by an edit or dusk has none).
 var records: Array[HoleRecord] = []
 ## Pace on the hole under way: seconds waited that count, and the walk to its tee. E3-S22:

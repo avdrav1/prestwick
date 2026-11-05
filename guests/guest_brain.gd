@@ -35,7 +35,11 @@ extends RefCounted
 ## stroke is under way and it stands at its ball, and nobody is in the stroke's way: no guest
 ## or ball of a group ahead on the hole (E3-S8 review), nor of a group out on another hole
 ## (E3-S22) (`play_clear`, `hold_for`; else the whole group waits): it strikes and is PLAYING
-## for `stroke_s`, then walks to where its ball rested once it rests.
+## for `stroke_s`, then walks to where its ball rested once it rests as GuestView draws it
+## (E3-S20, ball_shown_s: the swing's impact, then the replay), setting off part way into a
+## second if that is when; it strikes again no sooner than the second after its walk ends,
+## unless the walk ended within the swing's address (at_ball). So the figure on screen never
+## walks off under its ball's flight nor swings before it has walked up to its ball.
 ## A guest whose plan is unfinished at its turn waits for it (reading the green, on a putt;
 ## not counted against pace). The group leaves the hole when every one
 ## of it has holed out or picked up (D12) and stands still, and heads for the open hole with
@@ -399,10 +403,14 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 			guest.stroke_left -= 1.0
 			if guest.stroke_left <= 0.0:
 				guest.state = Guest.State.WAITING
+		# E3-S20: it sets off once its ball rests as drawn, which may be part way into this
+		# second: the walk's first leg starts there (a share of the second, `leg_start`).
 		if guest.state != Guest.State.PLAYING and guest.ball_moved \
-				and guest.hole.state != GuestHole.State.FLYING:
+				and guest.hole.state != GuestHole.State.FLYING \
+				and ball_shown_s(guest) < float(t + 1) - CLOCK_EPS:
 			guest.ball_moved = false
-			_start_walk(guest, Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y))
+			_start_walk(guest, Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y),
+					clampf(ball_shown_s(guest) - float(t), 0.0, 1.0))
 		if guest.is_walking():
 			_walk(guest, t)
 		if guest.hole.is_finished() and not guest.hole_recorded and not guest.ball_moved:
@@ -411,7 +419,8 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 	var done := true
 	var busy := false
 	for guest: Guest in g.guests:
-		done = done and guest.hole.is_finished() and guest.state == Guest.State.WAITING
+		done = done and guest.hole.is_finished() and guest.state == Guest.State.WAITING \
+				and not guest.ball_moved
 		busy = busy or guest.state == Guest.State.PLAYING \
 				or guest.hole.state == GuestHole.State.FLYING
 	if done:
@@ -423,7 +432,7 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 	var away_d := -1.0
 	if not busy:
 		for guest: Guest in g.guests:
-			if guest.hole.is_finished() or (tuning.ready_golf and guest.is_walking()):
+			if guest.hole.is_finished() or (tuning.ready_golf and not at_ball(guest, t)):
 				continue
 			var d := Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y).distance_to(cup)
 			if d > away_d:
@@ -431,7 +440,10 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 				away = guest
 	var held := false
 	var held_by := Hold.CLEAR
-	if away != null and not away.is_walking():
+	if away != null and not at_ball(away, t):
+		# Its ball is still showing in flight, or it reached it this second (E3-S20).
+		away.waiting_for = Guest.Wait.BALL if away.ball_moved else Guest.Wait.TURN
+	elif away != null:
 		if away.hole.state == GuestHole.State.READY:
 			held_by = hold_for(away, g)
 			if held_by == Hold.CLEAR:
@@ -461,6 +473,29 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 				guest.tee_wait_s += 1
 		else:
 			guest.waiting_for = Guest.Wait.TURN
+
+
+## True when `guest` stands at its ball, ready to swing in second `t` (E3-S20): not walking,
+## not waiting for its last ball to rest on screen (`ball_moved`), and not just arrived: a
+## walk that ended this second is drawn over it (at walk speed, to `leg_end`), so the guest
+## strikes the second after, unless the walk ended within the swing's address
+## (`swing_address_share` of `stroke_s`), when the view draws its last steps in the address.
+## Either way its figure finishes its walk on screen before it swings.
+func at_ball(guest: Guest, t: int) -> bool:
+	return not guest.is_walking() and not guest.ball_moved \
+			and (guest.last_walk_s != t or guest.leg_end <= tuning.address_s() + CLOCK_EPS)
+
+
+## The simulated second (from the day's start, a fraction) at which `guest`'s last stroke has
+## come to rest as GuestView draws it (E3-S20): the club meets the ball at
+## `swing_impact_share` of `stroke_s` after the strike, and the recorded path then takes
+## `flight_draw_speed` times less than real time to draw. The guest walks to its ball no
+## sooner, so its figure never leaves while its ball is still landing. The same whether the
+## stroke is watched or not, so the day never depends on the camera. Only meaningful once
+## the ball has rested (GuestHole not FLYING).
+func ball_shown_s(guest: Guest) -> float:
+	return float(guest.strike_s) + tuning.impact_s() \
+			+ tuning.flight_shown_s(guest.hole.last_path.size() - 1)
 
 
 ## True when group `g`, heading for hole `h`, may step onto its tee as far as the groups
@@ -581,6 +616,7 @@ func _strike(guest: Guest, g: GuestGroup) -> void:
 		g.start_s = second
 		teed_off[g.hole_number] = int(teed_off.get(g.hole_number, 0)) + 1
 	guest.hole.strike()
+	guest.strike_s = second
 	guest.state = Guest.State.PLAYING
 	guest.waiting_for = Guest.Wait.NONE
 	guest.stroke_left = tuning.stroke_s
@@ -647,20 +683,30 @@ func _leave(guest: Guest, t: int, at_dusk: bool) -> void:
 	guest_left.emit(guest)
 
 
-func _start_walk(guest: Guest, to: Vector2) -> void:
+## Starts `guest`'s walk to `to`, its first leg setting off `start_share` of the way into the
+## second (E3-S20: as its ball comes to rest on screen; 0 for every other walk).
+func _start_walk(guest: Guest, to: Vector2, start_share: float = 0.0) -> void:
 	if guest.position == to:
 		return
+	guest.next_leg_start = start_share
 	guest.walk = route(guest.position, to)
 	guest.state = Guest.State.WALKING
 	guest.waiting_for = Guest.Wait.NONE
 
 
-## One second's walk (at most one a second).
+## One second's walk (at most one a second): `walk_yd_per_s` yards, less the share of the
+## second before the walk's first leg sets off. Its leg runs from `leg_start` to `leg_end`
+## (shares of the second, at walk speed), which GuestView draws it over (E3-S20).
 func _walk(guest: Guest, t: int) -> void:
 	if guest.last_walk_s == t or guest.walk == null:
 		return
 	guest.last_walk_s = t
-	guest.position = guest.walk.move(tuning.walk_yd_per_s)
+	var s0 := guest.next_leg_start
+	guest.next_leg_start = 0.0
+	var was := guest.walk.walked
+	guest.position = guest.walk.move(tuning.walk_yd_per_s * (1.0 - s0))
+	guest.leg_start = s0
+	guest.leg_end = minf(s0 + (guest.walk.walked - was) / tuning.walk_yd_per_s, 1.0)
 	if guest.walk.is_done():
 		guest.position = guest.walk.end()
 		guest.walk = null

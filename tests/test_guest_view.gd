@@ -170,18 +170,19 @@ func _trace(b: GuestBrain) -> Array:
 func test_walks_slide_between_steps_and_stop_when_paused() -> void:
 	var sim := _sim(GuestCourse.course())
 	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+	# E3-S20: a leg goes at walk speed over its share of the second (leg_start to leg_end).
+	var found := {}
 	var walking := func() -> bool:
 		for f: GuestView.Figure in view.figures().values():
-			if f.from.distance_to(f.to) > 10.0 and sim.brain.step_fraction() > 0.3 \
-					and sim.brain.step_fraction() < 0.7:
+			var at := f.at - view.place_offset(f.guest.place) * f.spread
+			if f.from.distance_to(f.to) > 10.0 and f.anim == GolferArt.Anim.WALK \
+					and at.distance_to(f.from) > 3.0 and at.distance_to(f.to) > 3.0:
+				found.f = f
 				return true
 		return false
 	assert_true(_run(sim, view, walking), "a guest walks")
-	var f: GuestView.Figure = null
-	for each: GuestView.Figure in view.figures().values():
-		if each.from.distance_to(each.to) > 10.0:
-			f = each
-	var at := f.at - view.place_offset(f.guest.place)
+	var f: GuestView.Figure = found.f
+	var at := f.at - view.place_offset(f.guest.place) * f.spread
 	assert_gt(at.distance_to(f.from), 1.0, "between where it stood")
 	assert_gt(at.distance_to(f.to), 1.0, "and where it stands now")
 	assert_eq(f.anim, GolferArt.Anim.WALK)
@@ -204,7 +205,14 @@ func test_a_swinging_guest_stands_over_its_own_ball() -> void:
 				continue
 			seen.swings += 1
 			var start: Vector3 = g.hole.strokes[-1].start
+			if f.anim == GolferArt.Anim.WALK:
+				# E3-S20: the last steps of a walk that ended in the address.
+				assert_lte(sim.brain.step_fraction(), view.guest_tuning.address_s() + 0.02,
+						"walking up only in the address")
+				continue
 			assert_eq(f.anim, GolferArt.Anim.SWING)
+			if f.frame < 2:
+				continue  # E3-S20: the group spread closes over a frame's time once it stands
 			assert_almost_eq(f.at, Vector2(start.x, start.y), Vector2.ONE * 0.01,
 					"the swing is at the stroke's start, no slide and no group spread")
 			if g.place != 0:
@@ -220,6 +228,97 @@ func test_a_swinging_guest_stands_over_its_own_ball() -> void:
 				return true
 		return false
 	assert_true(_run(sim, view, eased), "the group spread comes back")
+
+
+# --- swing, flight and walk in sync (E3-S20) ---
+
+func test_the_impact_share_lands_on_the_arts_impact_frame() -> void:
+	var art := GolferArt.load_default()
+	var t := GuestTuning.load_default()
+	var frames := art.frames_per_dir(GolferArt.Anim.SWING)
+	assert_eq(art.swing_impact_frame, 4, "address, takeaway, top, down, impact, finish")
+	assert_eq(floori(t.swing_impact_share * frames), art.swing_impact_frame,
+			"swing_impact_share starts inside the impact frame")
+	assert_lt(t.swing_impact_share * frames - art.swing_impact_frame, 0.01, "at its start")
+
+
+func test_the_ball_leaves_at_the_impact_frame() -> void:
+	var sim := _sim(GuestCourse.course(), 7)
+	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+	var impact := view.art.swing_impact_frame
+	var seen := {"before": 0, "left": 0, "strokes": {}}  # a lambda captures locals by value
+	var check := func() -> bool:
+		for f: GuestView.Figure in view.figures().values():
+			var g := f.guest
+			if g.state != Guest.State.PLAYING or not view.is_replaying(f):
+				continue
+			var start: Vector3 = g.hole.strokes[-1].start
+			var moved := f.ball_at.distance_to(start) > 0.01
+			if f.frame < impact:
+				seen.before += 1
+				assert_false(moved, "the ball sits at the stroke's start before impact (frame %d)" % f.frame)
+				assert_false(f.ball_flying, "and is not in the air")
+			elif moved:
+				(seen.strokes as Dictionary)[[g.id, g.hole.hole.number, g.hole.strokes.size()]] = true
+				seen.left += 1
+		return (seen.strokes as Dictionary).size() >= 8
+	assert_true(_run(sim, view, check, 60 * 240), "eight strokes seen leaving on screen")
+	assert_gt(seen.before, 100, "many frames before impact")
+	assert_gt(seen.left, 0)
+
+
+func test_a_figure_waits_for_its_ball_to_rest_on_screen_before_it_walks() -> void:
+	var sim := _sim(GuestCourse.course(), 7)
+	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+	var seen := {"flying": 0, "walks": 0}
+	var check := func() -> bool:
+		for f: GuestView.Figure in view.figures().values():
+			if f.anim == GolferArt.Anim.WALK and f.guest.hole != null \
+					and not f.guest.hole.strokes.is_empty():
+				seen.walks += 1
+			if not view.is_replaying(f):
+				continue
+			var last := f.replay_hole.stroke_path().size() - 1
+			# From impact (head 0) until it rests; before impact it may still be walking up
+			# to its ball in the swing's address.
+			if f.replay_head >= 0.0 and f.replay_head < last - 1:
+				if f.ball_flying:
+					seen.flying += 1
+				assert_ne(f.anim, GolferArt.Anim.WALK,
+						"guest %d does not walk while its ball is drawn (tick %.0f of %d)"
+						% [f.guest.id, f.replay_head, last])
+		return false
+	_run(sim, view, check, 60 * 180)
+	assert_gt(seen.flying, 200, "many frames of balls in the air")
+	assert_gt(seen.walks, 200, "and of guests walking to their balls")
+
+
+func test_no_figure_jumps_at_the_start_of_a_swing() -> void:
+	for speed: float in [1.0, 3.0]:
+		var sim := _sim(GuestCourse.course(), 7)
+		sim.set_speed(speed)
+		var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+		var step_yd := view.guest_tuning.walk_yd_per_s * speed * FRAME + 0.01
+		var seen := {"starts": 0, "worst": 0.0, "prev": {}, "anim": {}}
+		var check := func() -> bool:
+			var prev: Dictionary = seen.prev
+			var anim: Dictionary = seen.anim
+			for f: GuestView.Figure in view.figures().values():
+				var id := f.guest.id
+				if prev.has(id) and (f.anim == GolferArt.Anim.SWING
+						or f.guest.state == Guest.State.PLAYING):
+					if anim.get(id, -1) != GolferArt.Anim.SWING and f.anim == GolferArt.Anim.SWING:
+						seen.starts += 1
+					var d: float = f.at.distance_to(prev[id])
+					seen.worst = maxf(seen.worst, d)
+					assert_lte(d, step_yd, "guest %d moved %.2f yd as it began its swing" % [id, d])
+				prev[id] = f.at
+				anim[id] = f.anim
+			return false
+		_run(sim, view, check, int(60 * 150 / speed))
+		assert_gt(seen.starts, 20, "%sx: many swings begun" % speed)
+		gut.p("%sx: %d swings begun, the most a figure moved in a frame while striking %.2f yd (a walk step %.2f)"
+				% [speed, seen.starts, seen.worst, step_yd])
 
 
 func test_guest_balls_are_smaller_than_the_players_and_figures_read_at_half_zoom() -> void:

@@ -286,10 +286,15 @@ func test_ready_golf_lets_a_partner_play_while_the_one_away_walks() -> void:
 	var before := {}
 	while not brain.day_over:
 		var was_walking := {}
+		var t := brain.second
 		for g: Guest in brain.guests:
-			was_walking[g.id] = g.is_walking()
+			# E3-S20: not yet at its ball also while its ball is still drawn in flight.
+			was_walking[g.id] = g.is_walking() or g.ball_moved
 			before[g.id] = g.hole.strokes.size() if g.hole != null else 0
 		brain.step()
+		for g: Guest in brain.guests:
+			if g.ball_moved or g.last_walk_s == t:
+				was_walking[g.id] = true
 		for g: Guest in brain.guests:
 			if g.hole == null or g.hole.strokes.size() <= int(before.get(g.id, 0)):
 				continue
@@ -307,6 +312,55 @@ func test_ready_golf_lets_a_partner_play_while_the_one_away_walks() -> void:
 					else:
 						fail_test("guest %d played while guest %d stood away at its ball" % [g.id, p.id])
 	assert_gt(ready, 0, "someone played while a partner farther out was still walking")
+
+
+## E3-S20: a guest sets off to its ball only once its flight is drawn to rest (the impact
+## share of stroke_s, then the path at flight_draw_speed: GuestBrain.ball_shown_s), part way
+## into a second if need be, and never strikes in the second its walk ended unless the walk
+## ended within the swing's address, so its figure has finished walking on screen.
+func test_a_guest_walks_once_its_ball_is_drawn_and_strikes_after_its_walk_ends() -> void:
+	var course: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(course))
+	var brain := GuestBrain.new(course, 4, tuning, model)
+	var walks := 0
+	var strikes := 0
+	var late := 0
+	var up := 0
+	var waited := {}
+	while not brain.day_over and brain.second < 300:
+		var t := brain.second
+		var moved := {}
+		var strokes := {}
+		for g: Guest in brain.guests:
+			moved[g.id] = g.ball_moved
+			strokes[g.id] = g.hole.strokes.size() if g.hole != null else 0
+		brain.step()
+		for g: Guest in brain.guests:
+			if g.hole == null or g.is_done():
+				continue
+			if bool(moved.get(g.id, false)) and not g.ball_moved:
+				walks += 1
+				var shown := brain.ball_shown_s(g)
+				var set_off := float(t) + (g.leg_start if g.last_walk_s == t else 0.0)
+				assert_gte(set_off, shown - 1e-6, "guest %d set off at %.2f, its ball drawn to rest at %.2f"
+						% [g.id, set_off, shown])
+				assert_lt(set_off, maxf(shown, float(g.strike_s) + tuning.stroke_s) + 1.0,
+						"and no later than the second it rests in")
+				if shown > float(g.strike_s) + tuning.stroke_s:
+					late += 1
+				waited[t - g.strike_s] = int(waited.get(t - g.strike_s, 0)) + 1
+			if g.hole.strokes.size() > int(strokes.get(g.id, 0)):
+				strikes += 1
+				if g.last_walk_s == t:
+					up += 1
+					assert_lte(g.leg_end, tuning.address_s() + 1e-6,
+							"guest %d struck in the second its walk ended, after the address" % g.id)
+	assert_gt(strikes, 300, "a morning's strokes")
+	assert_gt(walks, 200)
+	assert_gt(late, 50, "many flights draw past the stroke's second")
+	assert_gt(up, 10, "some walks end in the address of the stroke")
+	gut.p("E3-S20: %d strikes (%d walked up in the address), %d walks to a ball, %d waiting past stroke_s for the drawn flight; seconds from strike to walk %s"
+			% [strikes, up, walks, late, waited])
 
 
 ## E3-S8 review: on the hole the group behind never plays into the group ahead (play_clear):
@@ -367,7 +421,9 @@ func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> 
 	var violations := 0
 	var held_on_hole_1 := 0
 	var cross_wait := 0
-	for day_seed: int in [1, 2]:
+	# E3-S20: day 18 too, since the drawn-flight walks moved days 1 and 2's groups so no
+	# hole 1 tee shot met a group out on hole 2.
+	for day_seed: int in [1, 2, 18]:
 		var brain := GuestBrain.new(c, day_seed, tuning, model)
 		while not brain.day_over:
 			brain.serve(-1)
@@ -427,10 +483,13 @@ func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> 
 func test_a_lone_impatient_guest_never_fails_pace_on_wait() -> void:
 	var c := ReactionHoles.fair_par4()
 	var greens := 0
+	# E3-S20: at 480 ticks a second the putt solve now always finishes while the guest waits
+	# for its ball to show and walks to it, so a quarter of the budget makes it read the green.
+	var tight := _tuning({"guest_ticks_per_s": 120})
 	for s: int in 8:
 		var groups: Array[GuestGroup] = [
 			GuestSpawner.group(0, 0.0, [[1 + s, 1, Guest.Taste.CASUAL, 300 + s]], 0)]
-		var brain := GuestBrain.new(c, s, tuning, model, groups)
+		var brain := GuestBrain.new(c, s, tight, model, groups)
 		while not brain.day_over:
 			brain.step()
 			if not brain.guests.is_empty() \

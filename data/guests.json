@@ -1,5 +1,5 @@
 {
-  "_doc": "Guest tunables (E3-S1, D38 to D43; docs/design.md Guests and reactions has a line for each). Times are simulated seconds, distances yards, click errors fractions of the swing bar (0.05 is 5%, Swing.set_result's units). Read by guests/ from E3-S3 on; tuned by /balance reactions (E3-S8). arrivals_per_day is replaced by arrivals by rating in E4-S5. D46 (E3-S21): day_s is long enough for every group that tees off to finish its nine, and the groups arrive over the first arrival_window_s seconds (seconds, not a share of the day, so the morning rush the pace numbers were tuned on stays the same). skill and patience are drawn evenly between their min and max. Ball work (guest_ticks_per_s) runs while the guest walks and waits; pace counts only time behind a group ahead, at the tee or on the hole (E3-S8 review: its own unfinished putt solve, reading the green, no longer counts), never Ball work. A reaction is given at hole-out or pick-up (guests/guest_reaction.gd, E3-S6). E3-S8 (D44): ready_golf and the queue (GuestBrain.tee_clear) set who plays, and the pace numbers were tuned by /balance reactions. E3-S22 folded E3-S8's tee_clear_yd into play clear (GuestBrain.hold_for): a stroke holds while a guest or ball of a group ahead on its hole lies nearer its cup within play_clear_yd of the ball or inside the landing area (a disc round the planned rest of the larger of play_clear_yd and play_clear_share of the planned distance), or a guest out on another hole lies within cross_clear_yd of the ball or the rest; after cross_hold_max_s seconds held by other holes alone it plays on. E3-S24: full_sigma_best 0.075 (0.05 before) so skill 10 averages par over the spike holes (scripts/scoring_edges.gd).",
+  "_doc": "Guest tunables (E3-S1, D38 to D43; docs/design.md Guests and reactions has a line for each). Times are simulated seconds, distances yards, click errors fractions of the swing bar (0.05 is 5%, Swing.set_result's units). Read by guests/ from E3-S3 on; tuned by /balance reactions (E3-S8). arrivals_per_day is replaced by arrivals by rating in E4-S5. D46 (E3-S21): day_s is long enough for every group that tees off to finish its nine, and the groups arrive over the first arrival_window_s seconds (seconds, not a share of the day, so the morning rush the pace numbers were tuned on stays the same). skill and patience are drawn evenly between their min and max. Ball work (guest_ticks_per_s) runs while the guest walks and waits; pace counts only time behind a group ahead, at the tee or on the hole (E3-S8 review: its own unfinished putt solve, reading the green, no longer counts), never Ball work. A reaction is given at hole-out or pick-up (guests/guest_reaction.gd, E3-S6). E3-S8 (D44): ready_golf and the queue (GuestBrain.tee_clear) set who plays, and the pace numbers were tuned by /balance reactions. E3-S22 folded E3-S8's tee_clear_yd into play clear (GuestBrain.hold_for): a stroke holds while a guest or ball of a group ahead on its hole lies nearer its cup within play_clear_yd of the ball or inside the landing area (a disc round the planned rest of the larger of play_clear_yd and play_clear_share of the planned distance), or a guest out on another hole lies within cross_clear_yd of the ball or the rest; after cross_hold_max_s seconds held by other holes alone it plays on. E3-S24: full_sigma_best 0.075 (0.05 before) so skill 10 averages par over the spike holes (scripts/scoring_edges.gd). E3-S20: the club meets the ball at swing_impact_share of stroke_s (the golfer art's impact frame, 4 of 6); a guest sets off to its ball once its flight has been drawn to rest (impact, then the path at flight_draw_speed, watched or not), part way into a second if need be, and strikes no sooner than the second after its walk ends, unless the walk ended within swing_address_share of stroke_s (the address, swing frame 0). flight_draw_speed 7.5 (5 before) keeps D46's day, and wait_base_s 6 (2 before) keeps E3-S8's pace and praise targets (/balance reactions).",
 
   "day_s": 510,
   "arrivals_per_day": 16,
@@ -17,7 +17,9 @@
   "cross_hold_max_s": 30,
   "ready_golf": true,
   "max_steps_per_frame": 1,
-  "flight_draw_speed": 5.0,
+  "flight_draw_speed": 7.5,
+  "swing_impact_share": 0.6667,
+  "swing_address_share": 0.1667,
 
   "skill_min": 1,
   "skill_max": 10,
@@ -40,7 +42,7 @@
 
   "patience_min": 1,
   "patience_max": 10,
-  "wait_base_s": 2.0,
+  "wait_base_s": 6.0,
   "wait_per_patience_s": 1.0,
   "walk_base_yd": 60.0,
   "walk_per_patience_yd": 10.0,

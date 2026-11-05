@@ -14,6 +14,10 @@ const DIRS: PackedStringArray = ["s", "sw", "w", "nw", "n", "ne", "e", "se"]
 @export var idle: TileSheet
 @export var walk: TileSheet
 @export var swing: TileSheet
+## The swing frame where the club meets the ball (art/specs/golfer.md: address, takeaway,
+## top, down, impact, finish). E3-S20: data/guests.json `swing_impact_share` times the swing's
+## frames lands on it, and GuestView's replay starts there.
+@export var swing_impact_frame: int = 4
 
 ## Shirts (E3-S28, art/specs/golfer.md "Shirts"): the sheets draw the shirt in one key colour
 ## (chalk) and GuestView swaps it for its group's shirt in a shader (golfer_shirt.gdshader),

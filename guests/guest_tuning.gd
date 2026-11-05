@@ -42,6 +42,16 @@ var ready_golf: bool = false
 ## longer frame's extra time is let go (the day runs late, never differently).
 var max_steps_per_frame: int = 0
 var flight_draw_speed: float = 0.0
+## E3-S20: the share of `stroke_s` after the strike at which the club meets the ball: the
+## golfer art's impact frame (4 of the 6 swing frames, GolferArt.swing_impact_frame). The view
+## starts the flight's replay there, and the guest walks once the replay has drawn the ball
+## to rest (GuestBrain.ball_shown_s).
+var swing_impact_share: float = 0.0
+## E3-S20: the share of `stroke_s` before the takeaway (the address, swing frame 0 of 6). A
+## guest whose walk ends within `address_s` of a second may strike in that second: the view
+## draws its last steps in the address. Later, it strikes the second after, so the figure
+## walks all the way first.
+var swing_address_share: float = 0.0
 
 var skill_min: int = 1
 var skill_max: int = 10
@@ -143,6 +153,8 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("ready_golf is missing or not true or false")
 	t.max_steps_per_frame = CourseData.read_int(d, "max_steps_per_frame", errors)
 	t.flight_draw_speed = _float(d, "flight_draw_speed", errors)
+	t.swing_impact_share = _float(d, "swing_impact_share", errors)
+	t.swing_address_share = _float(d, "swing_address_share", errors)
 	t.skill_min = CourseData.read_int(d, "skill_min", errors)
 	t.skill_max = CourseData.read_int(d, "skill_max", errors)
 	t.full_sigma_best = _float(d, "full_sigma_best", errors)
@@ -253,6 +265,11 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_positive(errors, "guest_ticks_per_s", t.guest_ticks_per_s)
 	_positive(errors, "sim_ticks_per_s", t.sim_ticks_per_s)
 	_positive(errors, "flight_draw_speed", t.flight_draw_speed)
+	if t.swing_impact_share < 0.0 or t.swing_impact_share >= 1.0:
+		errors.append("swing_impact_share (%s) must be 0 or more and below 1" % t.swing_impact_share)
+	if t.swing_address_share < 0.0 or t.swing_address_share > t.swing_impact_share:
+		errors.append("swing_address_share (%s) must be 0 to swing_impact_share (%s)"
+				% [t.swing_address_share, t.swing_impact_share])
 	_positive(errors, "doubled_check_weight", t.doubled_check_weight)
 	var weights: Variant = d.get("taste_weights")
 	if typeof(weights) == TYPE_DICTIONARY:
@@ -288,6 +305,22 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 		errors.append("sight_step_yd must be above 0")
 	if t.guest_putt_max_runs < 2:
 		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
+
+
+## E3-S20: simulated seconds from a strike to the club meeting the ball.
+func impact_s() -> float:
+	return swing_impact_share * stroke_s
+
+
+## E3-S20: simulated seconds from a strike to the takeaway (the swing's address).
+func address_s() -> float:
+	return swing_address_share * stroke_s
+
+
+## E3-S20: simulated seconds a flight of `path_ticks` Ball ticks takes to draw (GuestView's
+## replay, `flight_draw_speed` times faster than real time).
+func flight_shown_s(path_ticks: int) -> float:
+	return maxf(float(path_ticks), 0.0) / (Ball.TICK_HZ * flight_draw_speed)
 
 
 static func _at_most(errors: Array[String], low_key: String, low: float, high_key: String,

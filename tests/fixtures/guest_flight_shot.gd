@@ -6,9 +6,16 @@ extends Node2D
 ## day with the Pause button's speed, so the picture holds the ball over its shadow and the
 ## speed panel shows Pause pressed. Run with enough frames for the first tee shot:
 ## scripts/screenshot.sh tests/fixtures/guest_flight_shot.tscn out.png 240
+## E3-S20: with `catch_landing` (guest_flight_shot_landing.tscn) it pauses instead as a tee
+## shot's drawn ball is about to rest, `landing_ticks` ticks from its end: its guest still
+## stands on the tee, in its finish, and has not set off after it.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
+
+## E3-S20: pause as the drawn ball lands, not as it first flies.
+@export var catch_landing: bool = false
+@export var landing_ticks: float = 15.0
 
 var main: Main
 var caught: bool = false
@@ -33,6 +40,13 @@ func _process(_delta: float) -> void:
 	if caught:
 		return
 	for f: GuestView.Figure in main.guest_view.figures().values():
+		if catch_landing:
+			if main.guest_view.is_replaying(f) and f.guest.hole.strokes.size() == 1 \
+					and f.replay_head > f.replay_hole.stroke_path().size() - 1 - landing_ticks:
+				caught = true
+				main.guest_sim.set_speed(0.0)
+				return
+			continue
 		if f.ball_flying and f.replay_head > 20.0:
 			caught = true
 			main.guest_sim.set_speed(0.0)
