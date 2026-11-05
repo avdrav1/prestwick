@@ -744,7 +744,7 @@ func _begin_budget_play() -> void:
 	sim.advance(0.0)  # builds day 1
 	var all: int = _guest_tuning.arrivals_per_day
 	while sim.brain.second < PLAY_START_S or (sim.guests_on_course() < all
-			and sim.brain.second < _guest_tuning.day_s / 2.0 + 10.0):
+			and sim.brain.second < _guest_tuning.arrival_window_s + 10.0):
 		sim.brain.step()
 	_set_play_zoom(1.0)
 

@@ -5,7 +5,8 @@ extends RefCounted
 ##
 ## - group sizes, each of `group_size_min` to `group_size_max` equally likely, until
 ##   `arrivals_per_day` guests (the last group cut to fit);
-## - group i of n arrives at i × `arrival_window` × `day_s` / n seconds from morning;
+## - group i of n arrives at i × `arrival_window_s` / n seconds from morning (D46: seconds,
+##   whatever `day_s` is);
 ## - then, guest by guest in arrival order: skill (`skill_min` to `skill_max`), patience
 ##   (`patience_min` to `patience_max`), each whole value equally likely; taste by
 ##   `taste_weights`; and a seed of its own for its holes.
@@ -24,7 +25,7 @@ static func day(tuning: GuestTuning, day_seed: int) -> Array[GuestGroup]:
 		sizes.append(n)
 		left -= n
 	var groups: Array[GuestGroup] = []
-	var gap := tuning.arrival_window * tuning.day_s / maxf(sizes.size(), 1.0)
+	var gap := tuning.arrival_window_s / maxf(sizes.size(), 1.0)
 	var id := 0
 	for i in sizes.size():
 		var g := GuestGroup.new()

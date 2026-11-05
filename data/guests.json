@@ -1,11 +1,11 @@
 {
-  "_doc": "Guest tunables (E3-S1, D38 to D43; docs/design.md Guests and reactions has a line for each). Times are simulated seconds, distances yards, click errors fractions of the swing bar (0.05 is 5%, Swing.set_result's units). Read by guests/ from E3-S3 on; tuned by /balance reactions (E3-S8). arrivals_per_day is replaced by arrivals by rating in E4-S5. skill and patience are drawn evenly between their min and max. Ball work (guest_ticks_per_s) runs while the guest walks and waits; pace counts only time behind a group ahead, at the tee or on the hole (E3-S8 review: its own unfinished putt solve, reading the green, no longer counts), never Ball work. A reaction is given at hole-out or pick-up (guests/guest_reaction.gd, E3-S6). E3-S8 (D44): tee_clear_yd and ready_golf set the queue (GuestBrain.tee_clear), play_clear_yd holds a stroke while a group ahead is in reach (GuestBrain.play_clear, E3-S8 review), and the pace numbers were tuned by /balance reactions.",
+  "_doc": "Guest tunables (E3-S1, D38 to D43; docs/design.md Guests and reactions has a line for each). Times are simulated seconds, distances yards, click errors fractions of the swing bar (0.05 is 5%, Swing.set_result's units). Read by guests/ from E3-S3 on; tuned by /balance reactions (E3-S8). arrivals_per_day is replaced by arrivals by rating in E4-S5. D46 (E3-S21): day_s is long enough for every group that tees off to finish its nine, and the groups arrive over the first arrival_window_s seconds (seconds, not a share of the day, so the morning rush the pace numbers were tuned on stays the same). skill and patience are drawn evenly between their min and max. Ball work (guest_ticks_per_s) runs while the guest walks and waits; pace counts only time behind a group ahead, at the tee or on the hole (E3-S8 review: its own unfinished putt solve, reading the green, no longer counts), never Ball work. A reaction is given at hole-out or pick-up (guests/guest_reaction.gd, E3-S6). E3-S8 (D44): tee_clear_yd and ready_golf set the queue (GuestBrain.tee_clear), play_clear_yd holds a stroke while a group ahead is in reach (GuestBrain.play_clear, E3-S8 review), and the pace numbers were tuned by /balance reactions.",
 
-  "day_s": 180,
+  "day_s": 510,
   "arrivals_per_day": 16,
   "group_size_min": 1,
   "group_size_max": 4,
-  "arrival_window": 0.5,
+  "arrival_window_s": 90.0,
 
   "walk_yd_per_s": 40.0,
   "cart_path_reach_yd": 15.0,

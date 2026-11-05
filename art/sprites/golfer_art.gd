@@ -92,8 +92,9 @@ func shirt_count() -> int:
 
 ## The shirt group `group_id` (its arrival order in the day) wears: the groups take the shirts
 ## in turn, so any `shirt_count()` groups in a row all differ. Groups never pass, so the groups
-## on a hole and the next differ while those hold no more than `shirt_count()` (six: the most
-## a backed-up day on the nine-hole fixture puts there, art/specs/golfer.md "Shirts").
+## on a hole and the next differ while those hold no more than `shirt_count()` (seven since
+## D46's longer day: the most a backed-up day on the nine-hole fixture puts there over day
+## seeds 1 to 10; seed 16 still repeats one, art/specs/golfer.md "Shirts").
 func shirt_of_group(group_id: int) -> int:
 	return posmod(group_id, maxi(shirt_count(), 1))
 

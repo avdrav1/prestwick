@@ -11,7 +11,9 @@ var day_s: float = 0.0
 var arrivals_per_day: int = 0
 var group_size_min: int = 0
 var group_size_max: int = 0
-var arrival_window: float = 0.0
+## D46: the groups arrive over the first `arrival_window_s` seconds of the day (seconds, not a
+## share of `day_s`, so a longer day keeps the morning rush the pace check was tuned on).
+var arrival_window_s: float = 0.0
 
 var walk_yd_per_s: float = 0.0
 ## E3-S4: a walk follows a cart path when one has a tile within cart_path_reach_yd of both
@@ -118,7 +120,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.arrivals_per_day = CourseData.read_int(d, "arrivals_per_day", errors)
 	t.group_size_min = CourseData.read_int(d, "group_size_min", errors)
 	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
-	t.arrival_window = _float(d, "arrival_window", errors)
+	t.arrival_window_s = _float(d, "arrival_window_s", errors)
 	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
 	t.cart_path_reach_yd = _float(d, "cart_path_reach_yd", errors)
 	t.cart_path_max_detour = _float(d, "cart_path_max_detour", errors)
@@ -216,7 +218,7 @@ func guest_swing_tuning(base: SwingTuning) -> SwingTuning:
 ## data/guests.json fails loudly instead of playing oddly. Each best sigma at most its worst,
 ## each min at most its max (skill strictly below: skill_share divides by the span), weights
 ## and per-second rates above 0, guest_min_power above 0 and at most 1; the day's clock
-## (day_s and stroke_s above 0, arrival_window 0 to 1 so no group arrives after dusk,
+## (day_s and stroke_s above 0, arrival_window_s 0 to day_s so no group arrives after dusk,
 ## arrivals_per_day 0 or more); and the older checks (E3-S3 to E3-S8) the engine leans on.
 static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) -> void:
 	_at_most(errors, "full_sigma_best", t.full_sigma_best, "full_sigma_worst", t.full_sigma_worst)
@@ -234,8 +236,8 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 		errors.append("guest_min_power (%s) must be above 0 and at most 1" % t.guest_min_power)
 	_positive(errors, "day_s", t.day_s)
 	_positive(errors, "stroke_s", t.stroke_s)
-	if t.arrival_window < 0.0 or t.arrival_window > 1.0:
-		errors.append("arrival_window (%s) must be 0 to 1 (a share of day_s)" % t.arrival_window)
+	if t.arrival_window_s < 0.0 or (t.day_s > 0.0 and t.arrival_window_s > t.day_s):
+		errors.append("arrival_window_s (%s) must be 0 to day_s (%s)" % [t.arrival_window_s, t.day_s])
 	if t.arrivals_per_day < 0:
 		errors.append("arrivals_per_day (%s) must be 0 or more" % t.arrivals_per_day)
 	_positive(errors, "walk_yd_per_s", t.walk_yd_per_s)

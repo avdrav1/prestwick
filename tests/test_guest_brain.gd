@@ -5,6 +5,8 @@ extends GutTest
 ## never per frame. The same seed gives the same day. docs/design.md Guests and reactions.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const GuestDay := preload("res://scripts/guest_day.gd")
 
 var tuning: GuestTuning
 var model: ShotModel
@@ -20,13 +22,13 @@ func before_all() -> void:
 func test_the_days_guests_are_drawn_from_its_seed() -> void:
 	var groups := GuestSpawner.day(tuning, 11)
 	var count := 0
-	var gap := tuning.arrival_window * tuning.day_s / groups.size()
+	var gap := tuning.arrival_window_s / groups.size()
 	var tastes := {}
 	for i in groups.size():
 		var g := groups[i]
 		assert_eq(g.index, i)
 		assert_almost_eq(g.arrive_s, i * gap, 1e-6, "one group every window / groups seconds")
-		assert_lt(g.arrive_s, tuning.arrival_window * tuning.day_s, "within the first half")
+		assert_lt(g.arrive_s, tuning.arrival_window_s, "within the morning's window")
 		assert_between(g.size(), tuning.group_size_min, tuning.group_size_max)
 		for guest: Guest in g.guests:
 			assert_eq(guest.id, count, "numbered in arrival order")
@@ -593,8 +595,53 @@ func test_ball_work_is_paced_by_need_not_spent_up_to_the_cap_at_once() -> void:
 
 # --- dusk and edits ---
 
+## D46 (E3-S21): the day is long enough for every group that tees off to finish its nine.
+## The slowest group a day draws is a skill-1 foursome, and it starts latest as the last of
+## the most groups a day can draw with a foursome last (`arrivals_per_day` - 4 singles first,
+## so (n - 1) / n of `arrival_window_s`, n = arrivals_per_day - 3). Alone on the nine-hole
+## fixture from there it holes out on all nine before dusk. `scripts/guest_day.gd` measures
+## days 1 to 10 with the field ahead of it.
+func test_a_skill_1_foursome_arriving_last_finishes_its_nine_by_dusk() -> void:
+	var course: CourseData = NineHoles.land(7)
+	var opened: Array[int] = NineHoles.build(CourseBuilder.new(course))
+	assert_eq(opened.size(), 9, "nine open holes")
+	var n := tuning.arrivals_per_day - 3
+	var arrive := float(n - 1) * tuning.arrival_window_s / float(n)
+	var specs := []
+	for i in 4:
+		specs.append([tuning.skill_min, 5, Guest.Taste.CASUAL, 900 + i])
+	var brain := GuestBrain.new(course, 1, tuning, model,
+			[GuestSpawner.group(0, arrive, specs)])
+	brain.run_day()
+	for g: Guest in brain.guests:
+		assert_eq(g.records.size(), 9, "guest %d played all nine" % g.id)
+		assert_false(g.left_at_dusk, "guest %d went home before dusk (left at %d of %d s)" % [
+				g.id, g.left_s, tuning.day_s])
+
+
+## D46 review: a slow foursome early in the day holds up every group behind it, since groups
+## never pass. Day seed 6 with its first group made a skill-1 foursome is the latest day of the
+## sweep (`scripts/guest_day.gd`, the foursome in every slot of days 1 to 10: last finish 490 s);
+## every guest of that field still holes out on all nine before dusk.
+func test_a_skill_1_foursome_leading_the_latest_day_still_lets_everyone_finish_nine() -> void:
+	var course: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(course))
+	var groups := GuestDay.with_foursome(GuestSpawner.day(tuning, 6), 0)
+	assert_eq(groups[0].size(), 4, "the first group is the foursome")
+	var brain := GuestBrain.new(course, 6, tuning, model, groups)
+	brain.run_day()
+	var field := 0
+	for gr: GuestGroup in groups:
+		field += gr.size()
+	assert_eq(brain.guests.size(), field, "every group teed off")
+	for g: Guest in brain.guests:
+		assert_eq(g.records.size(), 9, "guest %d (group %d) played all nine" % [g.id, g.group_id])
+		assert_false(g.left_at_dusk, "guest %d went home before dusk (left at %d of %d s)" % [
+				g.id, g.left_s, tuning.day_s])
+
+
 func test_dusk_sends_everyone_home_and_an_unfinished_hole_gives_no_record() -> void:
-	var short := _tuning({"day_s": 30})
+	var short := _tuning({"day_s": 30, "arrival_window_s": 15})
 	var brain := GuestBrain.new(GuestCourse.course(), 3, short, model)
 	var records: Array[Guest.HoleRecord] = []
 	brain.hole_finished.connect(func(_g: Guest, r: Guest.HoleRecord) -> void: records.append(r))

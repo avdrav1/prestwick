@@ -326,7 +326,7 @@ func test_the_shirt_set_is_palette_only_and_reads_in_grayscale() -> void:
 	var art := GolferArt.load_default()
 	var palette := _palette()
 	var n := art.shirt_count()
-	assert_gte(n, 6, "as many shirts as groups on a hole and the next on a backed-up day")
+	assert_gte(n, 7, "as many shirts as groups on a hole and the next on a backed-up day (D46)")
 	assert_eq(art.shirt_trim.size(), n)
 	assert_eq(art.shirt_pattern.size(), n)
 	assert_eq(palette.get(art.shirt_key.to_html(false)), "chalk", "the sheets draw the shirt in chalk")
@@ -429,7 +429,8 @@ static func _shirt_clashes(brain: GuestBrain, art: GolferArt) -> Array:
 func test_a_backed_up_day_keeps_shirts_apart_on_neighbouring_holes() -> void:
 	# E3-S28 review: play backs up. On the nine-hole fixture day seed 5 puts five groups on one
 	# hole and six on two neighbouring holes, seed 7 six on two (scripts/guest_day.gd's course),
-	# so four shirts by arrival order met; the set has as many shirts as that.
+	# so four shirts by arrival order met; the set has as many shirts as that. D46 (E3-S21):
+	# with every group playing all nine, seed 7 puts seven groups on holes 7 and 8, so seven.
 	var course: CourseData = NineHoles.land(7)
 	NineHoles.build(CourseBuilder.new(course))
 	var art := GolferArt.load_default()

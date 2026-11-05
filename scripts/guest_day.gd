@@ -10,8 +10,15 @@ extends SceneTree
 ## group, GuestBrain.teed_off) and finished by someone, with the records a hole. E3-S23:
 ## `fixture=hazards` plays tests/fixtures/nine_holes_hazards.gd instead (the same holes with a
 ## bunker on each line and hole 1's crest cut), and each day prints the holes praised.
+## E3-S21 (D46): each day prints whether every group that teed off finished its nine (the
+## latest finish against dusk), the pace walks (previous cup to tee) and the Ball work left
+## over (guest-seconds standing at its turn on an unfinished plan or putt solve); then the
+## same day with a skill-1 foursome in each arrival slot in turn (D46 review); and the groups alone run on a day
+## long enough to finish, so their whole round is measured. `day_s=N` plays the days at that
+## length instead of data/guests.json's (`arrival_window_s=N` likewise); `quick` leaves out the statics and the 60 fps runs.
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
+##       [day_s=540] [arrival_window_s=90] [quick]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
@@ -33,11 +40,48 @@ func _initialize() -> void:
 	print("nine holes (%s): %d open" % [fixture.resource_path.get_file(), opened.size()])
 	var model := ShotModel.new()
 	var tuning := GuestTuning.load_default()
+	var quick := false
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("day_s="):
+			tuning = _tuning_with({"day_s": float(arg.substr(6))}, tuning)
+		elif arg.begins_with("arrival_window_s="):
+			tuning = _tuning_with({"arrival_window_s": float(arg.substr(17))}, tuning)
+		elif arg == "quick":
+			quick = true
+	print("day_s %d s (arrivals over the first %d s)" % [tuning.day_s, tuning.arrival_window_s])
 	GuestClubTable.warm(model)
-	_statics(course, tuning, model)
+	if not quick:
+		_statics(course, tuning, model)
 	var all_plans: Array[int] = []
+	var all_finished := 0
+	var stress_finished := 0
 	for s in seeds:
-		_day(course, s, tuning, model, all_plans)
+		if _day(course, s, tuning, model, all_plans):
+			all_finished += 1
+		# D46 review: the skill-1 foursome in every arrival slot in turn, not only last, since a
+		# slow group early in the day holds up everyone behind it.
+		var drawn := GuestSpawner.day(tuning, s)
+		var day_ok := true
+		var failed_slots := PackedStringArray()
+		var worst_latest := 0
+		var worst_slot := 0
+		for slot in drawn.size():
+			var latest_out: Array[int] = [0]
+			var ok := _day(course, s, tuning, model, all_plans, with_foursome(drawn, slot),
+					"group %d a skill-1 foursome" % slot, latest_out)
+			if not ok:
+				day_ok = false
+				failed_slots.append(str(slot))
+			if latest_out[0] > worst_latest:
+				worst_latest = latest_out[0]
+				worst_slot = slot
+		print("day %d with a skill-1 foursome in each of %d slots: %s; latest finish %d s (foursome as group %d)" % [
+				s, drawn.size(), "EVERY SLOT HOLDS" if day_ok else "short with the foursome as group " + ",".join(failed_slots),
+				worst_latest, worst_slot])
+		if day_ok:
+			stress_finished += 1
+	print("every group that teed off finished its nine on %d of %d days; with a skill-1 foursome in every slot on %d of %d" % [
+			all_finished, seeds.size(), stress_finished, seeds.size()])
 	all_plans.sort()
 	if not all_plans.is_empty():
 		var near := 0
@@ -47,16 +91,22 @@ func _initialize() -> void:
 		print("plan ticks a stroke (all days): median %d, p95 %d, p99 %d, worst %d; %d of %d at 10,000 or more (worst case about 23,700)" % [
 			all_plans[all_plans.size() / 2], all_plans[int(all_plans.size() * 0.95)],
 			all_plans[int(all_plans.size() * 0.99)], all_plans[-1], near, all_plans.size()])
-	for speed in [1.0, 3.0]:
-		_frames(course, seeds[0], tuning, model, speed)
-	for spec: Array in [[2, 10], [2, 5], [2, 1], [1, 5], [4, 10], [4, 5]]:
+	if not quick:
+		for speed in [1.0, 3.0]:
+			_frames(course, seeds[0], tuning, model, speed)
+	# Alone on a day long enough to finish, so the round is measured whole.
+	var long_day := _tuning_with({"day_s": 3600.0}, tuning)
+	for spec: Array in [[2, 10], [2, 5], [2, 1], [1, 5], [1, 1], [4, 10], [4, 5], [4, 1]]:
 		var size: int = spec[0]
 		var skill: int = spec[1]
 		var specs := []
 		for i in size:
 			specs.append([skill, 5, Guest.Taste.CASUAL, 900 + i])
-		var alone := GuestBrain.new(course, 1, tuning, model, [GuestSpawner.group(0, 0.0, specs)])
-		alone.run_day()
+		var alone := GuestBrain.new(course, 1, long_day, model, [GuestSpawner.group(0, 0.0, specs)])
+		while not alone.day_over and alone.guests.any(func(x: Guest) -> bool: return x.state != Guest.State.DONE) \
+				or alone.second == 0:
+			alone.serve(-1)
+			alone.step()
 		var g: Guest = alone.guests[0]
 		print("a group of %d (skill %d) alone: %d holes, round %d s (left at %d, %s), waits %d s, %.1f strokes a guest" % [
 			size, skill, g.records.size(), g.left_s - g.arrived_s, g.left_s, "dusk" if g.left_at_dusk else "done",
@@ -64,11 +114,16 @@ func _initialize() -> void:
 	quit(0)
 
 
+## Returns whether every group that teed off finished its nine before dusk. `p_groups`
+## replaces the day's draws (`label` names the change in the output).
 func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotModel,
-		all_plans: Array[int]) -> void:
-	var brain := GuestBrain.new(course, day_seed, tuning, model)
+		all_plans: Array[int], p_groups: Array[GuestGroup] = [], label: String = "",
+		latest_out: Array[int] = []) -> bool:
+	var brain := GuestBrain.new(course, day_seed, tuning, model, p_groups)
 	var cpu: Array[float] = []
 	var moves: Array[float] = []
+	# Guest-seconds standing at its own turn on unfinished Ball work (plan or putt solve).
+	var left_over := {}
 	while not brain.day_over:
 		var t0 := Time.get_ticks_usec()
 		brain.serve(-1)
@@ -77,6 +132,47 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		var t2 := Time.get_ticks_usec()
 		cpu.append((t2 - t0) / 1000.0)
 		moves.append((t2 - t1) / 1000.0)
+		for g: Guest in brain.guests:
+			if g.state == Guest.State.WAITING and (g.waiting_for == Guest.Wait.PLANNING
+					or g.waiting_for == Guest.Wait.READING_GREEN):
+				left_over[g.id] = int(left_over.get(g.id, 0)) + 1
+	var teed := 0
+	var nine_groups := 0
+	var latest := 0
+	for gr: GuestGroup in brain.groups:
+		if not brain.guests.has(gr.guests[0]):
+			continue
+		teed += 1
+		var all_nine := true
+		for guest: Guest in gr.guests:
+			all_nine = all_nine and guest.records.size() == 9 and not guest.left_at_dusk
+			latest = maxi(latest, guest.left_s)
+		if all_nine:
+			nine_groups += 1
+	var pace_walks: Array[float] = []
+	var nine_left_over: Array[int] = []
+	for guest: Guest in brain.guests:
+		for r: Guest.HoleRecord in guest.records:
+			if r.walk_yd > 0.0:
+				pace_walks.append(r.walk_yd)
+		if guest.records.size() == 9:
+			nine_left_over.append(int(left_over.get(guest.id, 0)))
+	pace_walks.sort()
+	nine_left_over.sort()
+	var every := nine_groups == teed and teed == brain.groups.size()
+	if not latest_out.is_empty():
+		latest_out[0] = latest
+	var tag := "" if label.is_empty() else " (%s)" % label
+	print("day %d%s dusk at %d: %d of %d groups teed off, %d finished nine; %s; latest finish %d s; pace walks %d, %d to %d yd (median %d); Ball work left over a guest's nine median %d s, worst %d" % [
+			day_seed, tag, tuning.day_s, teed, brain.groups.size(), nine_groups,
+			"EVERY GROUP FINISHED" if every else "some ended short",
+			latest, pace_walks.size(),
+			roundi(pace_walks[0]) if not pace_walks.is_empty() else 0,
+			roundi(pace_walks[-1]) if not pace_walks.is_empty() else 0,
+			roundi(pace_walks[pace_walks.size() / 2]) if not pace_walks.is_empty() else 0,
+			_at(nine_left_over, 0.5), _at(nine_left_over, 1.0)])
+	if not label.is_empty():
+		return every
 	var nine := 0
 	var at_dusk := 0
 	var holes := 0
@@ -144,6 +240,7 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		praise_by_hole.append("%d:%d" % [number, int(praised.get(number, 0))])
 	print("day %d holes praised: %d of 9 (praise a hole %s)" % [
 			day_seed, praised.size(), " ".join(praise_by_hole)])
+	return every
 
 
 ## The day of `day_seed` in 60 fps frames at `speed` (GuestBrain.advance_real, as Play runs it):
@@ -207,3 +304,33 @@ func _strokes(brain: GuestBrain) -> int:
 		for r: Guest.HoleRecord in g.records:
 			n += r.play.strokes.size()
 	return n
+
+
+## `drawn` with group `slot` replaced by a skill-1 foursome at its arrival time, every guest
+## renumbered in arrival order (the other groups keep their own draws).
+static func with_foursome(drawn: Array[GuestGroup], slot: int) -> Array[GuestGroup]:
+	var out: Array[GuestGroup] = []
+	var id := 0
+	for gr: GuestGroup in drawn:
+		var specs := []
+		if gr.index == slot:
+			for i in 4:
+				specs.append([1, 5, Guest.Taste.CASUAL, 700 + i])
+		else:
+			for g: Guest in gr.guests:
+				specs.append([g.skill, g.patience, g.taste, g.guest_seed])
+		out.append(GuestSpawner.group(gr.index, gr.arrive_s, specs, id))
+		id += specs.size()
+	return out
+
+
+## data/guests.json with `base`'s day_s and arrival_window_s, then `changes` (the sweep for D46).
+func _tuning_with(changes: Dictionary, base: GuestTuning) -> GuestTuning:
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GuestTuning.PATH))
+	d["day_s"] = base.day_s
+	d["arrival_window_s"] = base.arrival_window_s
+	d.merge(changes, true)
+	var errors: Array[String] = []
+	var t := GuestTuning.from_dict(d, errors)
+	assert(errors.is_empty(), str(errors))
+	return t

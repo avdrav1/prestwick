@@ -94,14 +94,17 @@ func test_a_weight_or_rate_at_zero_and_min_power_outside_0_to_1_are_named() -> v
 ## E3-S13 review: the day's clock keys are checked too, so a bad day_s edit (D46) fails loudly.
 func test_the_day_clock_keys_out_of_range_are_named() -> void:
 	var cases: Array = [["day_s", 0], ["day_s", -1], ["stroke_s", 0], ["stroke_s", -1],
-			["arrival_window", -0.1], ["arrival_window", 1.5], ["arrivals_per_day", -2]]
+			["arrival_window_s", -0.1], ["arrival_window_s", 10000.0], ["arrivals_per_day", -2]]
 	for c: Array in cases:
 		var d := _shipped()
 		d[c[0]] = c[1]
 		var errors := _errors(d)
 		assert_eq(errors.size(), 1, "%s = %s: %s" % [c[0], c[1], errors])
 		assert_true(_named(errors, c[0]), str(errors))
-	for ok: Array in [["arrival_window", 0.0], ["arrival_window", 1.0], ["arrivals_per_day", 0]]:
+	# D46: the arrival window is seconds of morning, 0 up to the whole day (no group after dusk).
+	var whole_day: float = _shipped()["day_s"]
+	for ok: Array in [["arrival_window_s", 0.0], ["arrival_window_s", whole_day],
+			["arrivals_per_day", 0]]:
 		var d := _shipped()
 		d[ok[0]] = ok[1]
 		assert_eq(_errors(d).size(), 0, "%s = %s is inside the range" % [ok[0], ok[1]])

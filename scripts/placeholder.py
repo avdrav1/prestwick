@@ -464,6 +464,7 @@ GOLFER_SHIRTS = [
     ("sun_yellow", "sun_yellow", "plain"),
     ("earth", "earth", "plain"),
     ("slate_light", "water_dark", "yoke"),
+    ("water_light", "water_dark", "hoops"),
 ]
 
 

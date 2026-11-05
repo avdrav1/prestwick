@@ -31,14 +31,17 @@ as `ShotView` does for the ball, so the sheet keeps to fully opaque palette pixe
 ## Shirts (E3-S28)
 
 Each group wears one shirt, and the groups of a day take the shirts in turn by arrival order
-(`GolferArt.shirt_of_group`), so any six groups in a row differ. Groups never pass, so the
+(`GolferArt.shirt_of_group`), so any seven groups in a row differ. Groups never pass, so the
 groups on one hole and the next (queued for a tee or playing it) are groups in a row, and they
-all differ while no hole and its neighbour hold more than six. When play backs up they can
+all differ while no hole and its neighbour hold more than seven. When play backs up they can
 hold that many: on the nine-hole fixture (land seed 7) day seeds 1 to 10 put up to five groups
 on one hole and six on two neighbouring holes (seeds 5 and 7), so four shirts met there (seed 5:
-same-shirt groups on one hole for 21 simulated seconds, E3-S28 review) and the set is six
+same-shirt groups on one hole for 21 simulated seconds, E3-S28 review) and the set was six.
+D46 (E3-S21) lengthened the day (450 s, then 510 s in its review), so every group plays all nine and the last holes
+back up too: seed 7 puts six groups on hole 7 and seven on holes 7 and 8 (its first and last
+groups met in one shirt for 13 simulated seconds), so shirt 6 was added and the set is seven
 (`tests/test_guest_view.gd` plays seeds 5 and 7 and checks no two groups in one shirt share a
-hole or stand on neighbouring holes). A day that backs up further repeats a shirt within reach. The sheets draw the shirt in one key colour, chalk, and
+hole or stand on neighbouring holes). A day that backs up further repeats a shirt within reach: day seed 16 (seeds 1 to 30 checked in the D46 review) puts groups 0 and 7 in one shirt on holes 7 and 8 for 47 simulated seconds from 230 s. Seven is sized to seeds 1 to 10, not proven for every day. The sheets draw the shirt in one key colour, chalk, and
 nowhere else (rows 9 to 16 of a frame, `shirt_rows`); `GuestView` puts a shader
 (`art/sprites/golfer_shirt.gdshader`) on each figure that swaps every chalk pixel for the
 group's shirt, so one sheet dresses every group. The set, in `art/sprites/golfer.tres`:
@@ -51,11 +54,13 @@ group's shirt, so one sheet dresses every group. The set, in `art/sprites/golfer
 | 3 | sun_yellow | - | plain | 196 |
 | 4 | earth | - | plain | 101 |
 | 5 | slate_light | water_dark | yoke | 169 / 74 |
+| 6 | water_light | water_dark | hoops | 169 / 74 |
 
 Grayscale (colorblind rule: shape as well as colour): two shirts of one pattern differ by at
 least `shirt_min_luma_step` 32 in Rec. 601 luma, and a patterned shirt's trim by as much from
-its body, so plain light, striped, dark with light shoulders, plain mid-light, plain dark and
-light with dark shoulders tell apart with no colour (`docs/decisions/e3-s28-shirts-gray.png`); the ink outline keeps every shirt
+its body, so plain light, striped, dark with light shoulders, plain mid-light, plain dark,
+light with dark shoulders and light with dark stripes tell apart with no colour (shirt 6's hoops are
+dark on light where shirt 1's are light on dark, 64 apart in body luma) (`docs/decisions/e3-s28-shirts-gray.png`); the ink outline keeps every shirt
 off the grass. Chalk and sun_yellow are the closest pair (40 apart). The cap stays flag_red
 for everyone: the brim is the facing cue. Preview: `art/sprites/golfer_shirts_placeholder.png`
 (`scripts/placeholder.py golfer`: the idle `s_0` frame in each shirt, in order; not loaded by
