@@ -1,0 +1,49 @@
+{
+  "_doc": "Guest tunables (E3-S1, D38 to D43; docs/design.md Guests and reactions has a line for each). Times are simulated seconds, distances yards, click errors fractions of the swing bar (0.05 is 5%, Swing.set_result's units). Read by guests/ from E3-S3 on; tuned by /balance reactions (E3-S8). arrivals_per_day is replaced by arrivals by rating in E4-S5. skill and patience are drawn evenly between their min and max. Ball work (guest_ticks_per_s) runs while the guest walks and waits; pace counts only time behind the group ahead plus its own unfinished putt solve at its turn (reading the green), never other Ball work. A reaction is given at hole-out or pick-up.",
+
+  "day_s": 180,
+  "arrivals_per_day": 16,
+  "group_size_min": 1,
+  "group_size_max": 4,
+  "arrival_window": 0.5,
+
+  "walk_yd_per_s": 40.0,
+  "stroke_s": 1.0,
+  "flight_draw_speed": 5.0,
+
+  "skill_min": 1,
+  "skill_max": 10,
+  "full_sigma_best": 0.05,
+  "full_sigma_worst": 0.13,
+  "putt_aim_sigma_best": 0.03,
+  "putt_aim_sigma_worst": 0.07,
+  "putt_power_sigma_best": 0.045,
+  "putt_power_sigma_worst": 0.12,
+  "over_par_worst": 2.0,
+
+  "aim_offsets_deg": [8.0, -8.0, 16.0, -16.0],
+
+  "guest_ticks_per_s": 480,
+  "sim_ticks_per_s": 4800,
+  "guest_putt_max_runs": 6,
+
+  "patience_min": 1,
+  "patience_max": 10,
+  "wait_base_s": 4.0,
+  "wait_per_patience_s": 2.0,
+  "walk_base_yd": 60.0,
+  "walk_per_patience_yd": 10.0,
+
+  "challenge_within": 2.0,
+  "casual_challenge_within": 3.0,
+  "taste_weights": { "purist": 1, "adventurer": 1, "casual": 1 },
+  "doubled_check_weight": 2,
+
+  "praise_passes": 4,
+  "complaint_fails": 2,
+  "rating_window": 50,
+
+  "eye_height_yd": 1.75,
+  "mark_height_yd": 2.0,
+  "sight_step_yd": 1.0
+}

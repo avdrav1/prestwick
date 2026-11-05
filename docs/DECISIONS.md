@@ -379,3 +379,63 @@ Options:
 Choice: New sandbox (user, 2026-11-05, at `/next-epic` E3).
 Why: pillar 4: no economy work before E4, and D28's budget keeps its job of making E4's money matter. Pillar 3 holds on a New course: guests still play and react to the holes it has.
 Affects: docs/BACKLOG.md E3 (Done when, E3-S2, E3-S8)
+
+## D38: How long is a guest's nine-hole round? (2026-11-05)
+Question: a day is 180 simulated seconds (design doc "Economy and time"). Measured in E3-S1's spike: one guest's ball time a hole is 10 to 15 s on a 160 yd par 3, 15 to 22 s on 380 yd par 4s and 18 to 24 s on 520 yd par 5s (a drive flies 3.3 s and rolls 3.8 s); a typical nine is about 3,400 yd of walking and 40 strokes a guest. Walk speed and shot time set whether a round fits a day.
+Options:
+- About one day, about 20 s a hole: walk 40 yd/s (8 tiles/s), 1 s a stroke plus any green-reading wait, on-screen flights drawn about 5x faster than real; a pair plays nine in about 165 s, a foursome about 245 s. Cost: guest flights read less like the player's. Benefit: reactions arrive the same day, saves stay at morning (E4-S7), the pace check has room to bite.
+- About half a day, about 10 s a hole: walk 80 yd/s, 0.5 s a stroke. Cost: guests rush across the screen, flights drawn about 10x faster, waits too short to read. Benefit: every morning arrival finishes.
+- Real-speed shots, about 50 s a hole, a round over about 2.5 days. Cost: guests stay overnight, against E4-S7's morning save and E4's day-end accounting. Benefit: guest flights read exactly like the player's.
+Choice (user, 2026-11-05): about one day. `walk_yd_per_s` 40, `stroke_s` 1, `flight_draw_speed` 5 in `data/guests.json`, with `day_s` 180. Guests still on the course at dusk react to each hole they finished and leave; the hole in progress gives no reaction.
+Why: pillar 3: a guest's round is a story the player watches within a day, and a slow group's wait is long enough to see. Pillar 4: no guest survives a night, so saving and the day's accounts stay simple. Guest flights are story, not aim, so drawing them faster costs pillar 2 little.
+Affects: docs/design.md Guests and reactions (Round length, Dusk), Economy and time; data/guests.json; E3-S4, E3-S5, E4-S7
+
+## D39: What is one reaction: a hole played or a round? (2026-11-05)
+Question: the design doc has a reaction per guest at the last hole and also per hole, and the rating averages the last 50, so the unit matters. A nine-hole guest makes up to 9 hole verdicts: per hole, 50 reactions are about 6 nine-hole rounds; per round, 50 guests, about 3 days at 16 a day.
+Options:
+- One reaction per hole played: praise, complaint or a quiet neutral, each naming its hole; the rating averages the last 50. Cost: the rating moves quickly on a nine-hole course. Benefit: the unit of the checks, the feed and map tags link straight to holes, a guest leaving at dusk still counts.
+- One reaction per round, at the last hole, naming its worst or best hole. Cost: one feed line a guest, a rule for unfinished rounds, a slow rating. Benefit: steadier rating, one opinion a person.
+- Both: per-hole feed lines and a round reaction for the rating. Cost: two units to explain and tune. Benefit: rich feed and stable rating.
+Choice (user, 2026-11-05): one reaction per hole played. Praise when all four checks pass, complaint when 2 or more fail (a doubled check that fails counts as two, D42), else a quiet neutral; every reaction names its hole. The rating (E4-S5) averages the last 50 hole reactions (`rating_window`), and E4-S1 sets points per reaction type.
+Why: pillar 3: every reaction points at a hole the player can click and fix, which is E3's Done when. Pillar 4: one unit, and dusk needs no special rule.
+Affects: docs/design.md Guests and reactions (Reaction); data/guests.json; E3-S6, E3-S7, E4-S1, E4-S5
+
+## D40: How does skill turn into swing noise, and what score does each skill expect? (2026-11-05)
+Question: guests swing the real bar (`Swing.set_result`) with a Gaussian click error on power and accuracy, in bar units. Measured in E3-S1's spike (20 guests a hole, mean to par on example_par3 / flat par 4 / hilly par 4 / hilly par 4 water / hilly par 5 / flat par 5 water): sigma 3% (putts 2% aim, 3% power) -0.50 / -0.70 / -0.20 / -0.20 / -1.05 / -1.35; 5% (3%, 4.5%) +0.00 / -0.35 / +0.20 / +0.35 / -0.45 / -0.65; 9% (5%, 8%) +1.00 / +0.65 / +1.20 / +1.50 / +0.55 / +0.85; 13% (7%, 12%) +1.45 / +2.05 / +1.90 / +2.55 / +1.55 / +1.60, with 0.25 to 0.65 shanks a hole.
+Options:
+- Skill 10 plays about par, skill 1 about +2 a hole: sigma 5% to 13%. Cost: top guests rarely go under par. Benefit: meets E3-S3's "near par" and "clearly worse", par 5s in two stay rare (D35), low skills shank about 1 swing in 8.
+- Skill 10 a strong player under par: sigma 3% at skill 10. Cost: misses "near par", par 5s fall in two far more often than D35 assumed. Benefit: eagles and birdies for top guests.
+- Narrow spread, skill 1 about +1 a hole: sigma 5% to 9%. Cost: skill matters less, "clearly worse" is borderline on the flat par 4 (+0.65). Benefit: a uniform field, easier to tune.
+Choice (user, 2026-11-05): skill 10 about par, skill 1 about +2. Full-club click sigma 5% (skill 10) to 13% (skill 1), linear in skill, on power and accuracy; putts 3% to 7% accuracy and 4.5% to 12% power. Expected score = par + 2 × (10 - skill) / 9; challenge passes within 2 of it (Casual 3, D42). Shanks as for the player. Numbers in `data/guests.json`; E3-S8 retunes against the field.
+Why: pillar 3: skill shows in scores and in the odd shank, which is a story; a hole's challenge check reads against the guest who played it. Pillar 2: guests play the same bar and shot model as the player, so their shots mean the same.
+Affects: docs/design.md Guests and reactions (Skill and swing, Expected score, Challenge); data/guests.json; E3-S3, E3-S6, E3-S8
+
+## D41: How does a guest pick a club and an aim? (2026-11-05)
+Question: D11 checks one landing zone from the tee, so a par 5's second shot and a dogleg's corner are unchecked, and a one-parcel corridor (D30) sits beside the OB line. Measured in E3-S1's spike on the corridor par 4 (80 layouts): a driver at the cup with heading error goes OB 0% at 0 degrees, 2% at 2, 4% at 3, 7% at 4, 14% at 6, 21% at 8; a full-club prediction costs about 430 Ball ticks.
+Options:
+- Aim at the cup and club down until the perfect swing is safe. Cost: guests lay up short of a dogleg's corner and go straight at a par 5 green. Benefit: cheap (1 to 3 predictions a stroke), guests see what the player's marker shows, corridor OB stays low (0.01 to 0.21 penalties a round).
+- Also try aims either side when the straight plan is unsafe (+8, -8, +16, -16 degrees), keeping the safe one resting nearest the cup. Cost: up to about 5x the predictions on those strokes. Benefit: doglegs and hazards play as designed, so "interesting" risk and reward shows in scores.
+- Skill sets risk: low skill lays up, high skill goes for it. Cost: a third rule to tune, and needs one of the above. Benefit: character.
+Choice (user, 2026-11-05): also try aims either side. Aim at the cup, pick the club by distance (the Clubs table's flat total times the lie), check it with `ShotPrediction`; skip a blocked club (D20) or one whose perfect swing ends in water or OB; when the straight plan is unsafe try `aim_offsets_deg` +8, -8, +16, -16 and keep the safe one resting nearest the cup; fall back to clubbing down. All predictions are charged to the guest's tick budget.
+Why: pillar 3: guests play a hole the way its designer means it, so a dogleg or a carry over water tells in their scores and reactions. Pillar 2: their plan is the player's own marker. The cost is bounded by the tick budget, so a tricky hole only plays a little slower.
+Affects: docs/design.md Guests and reactions (Club and aim, Guest Ball work); data/guests.json; E3-S3
+
+## D42: What tastes do guests have, and what does each change? (2026-11-05)
+Question: the design doc gives a guest a taste but says nothing of what it does.
+Options:
+- Three tastes, each making one check count double: Purist (fair), Adventurer (interesting), Casual (challenge passes within 3 instead of 2); patience covers pace. Cost: three more lines to tune. Benefit: small, readable, reuses the four checks.
+- Tastes as hole likes (water, long holes, short holes, hills). Cost: new checks beyond the four, more to tune against 60 to 75% praise. Benefit: richer story.
+- No tastes in the MVP. Cost: a design doc change, and guests read alike. Benefit: fewest numbers.
+Choice (user, 2026-11-05): three tastes, drawn evenly (`taste_weights` 1 : 1 : 1). Purist: fair counts double. Adventurer: interesting counts double. Casual: challenge within 3. A doubled check that fails counts as two fails (`doubled_check_weight` 2), so it alone makes a complaint.
+Why: pillar 3: a guest's complaint says something about who they are ("I hate blind shots"). Pillar 4: no new check, three numbers.
+Affects: docs/design.md Guests and reactions (Tastes, Challenge, Reaction); data/guests.json; E3-S4, E3-S6
+
+## D43: When is a tee shot blind, for the fair check? (2026-11-05)
+Question: the fair check fails a hole whose target "could not be seen from the tee". Measured in E3-S1's spike from an eye 1.75 yd above the tee (2 yd a height step), trees blocking below 10 yd, on generated land (seeds 1 to 20, 320 lanes off the starting block), share blind at 160 / 240 yd: the target's ground hidden 36 / 45%; a 2 yd mark hidden 25 / 33%; a 4 yd mark hidden 18 / 26%.
+Options:
+- Blind when a 2 yd mark (a flagstick or a person) at the target cannot be seen. Cost: a one-step crest in front of the target hides it. Benefit: the golf meaning, and on land about a quarter to a third of lanes are blind, so shaping ground matters.
+- Blind when the target's ground cannot be seen. Cost: 36 to 45% of land lanes blind, so most hilly holes start with a fair fail. Benefit: strictest, a clear reason to level ground.
+- Blind only when hidden by two steps (a 4 yd mark). Cost: a one-step ridge no longer counts, and E3-S6's blind test needs a two-step crest. Benefit: gentle, 18 to 26% blind.
+Choice (user, 2026-11-05): blind when a 2 yd mark at the target cannot be seen from an eye 1.75 yd above the tee (`mark_height_yd` 2.0, `eye_height_yd` 1.75). The line is sampled every 1 yd (`sight_step_yd`) against the drawn terrace tops and trees (10 yd, `block_height`). The target is the landing-zone centre on holes of 300 yd or more (`zone_from_yd`), else the cup.
+Why: pillar 2: "blind" means what a golfer means by it, and the player can see the crest that causes it on the drawn terraces. Pillar 3: a complaint about a blind hole points at ground the player can reshape.
+Affects: docs/design.md Guests and reactions (Fair); data/guests.json; E3-S6
