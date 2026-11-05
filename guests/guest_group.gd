@@ -30,6 +30,9 @@ var has_prev_cup: bool = false
 var start_s: int = 0
 ## True once anyone in the group has struck a ball on `hole_number`.
 var struck: bool = false
+## Seconds in a row its next stroke has been held by groups on other holes alone (E3-S22,
+## GuestBrain.hold_for): at `cross_hold_max_s` it plays on.
+var cross_held_s: int = 0
 
 
 func size() -> int:

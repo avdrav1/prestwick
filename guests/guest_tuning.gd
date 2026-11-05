@@ -21,13 +21,20 @@ var walk_yd_per_s: float = 0.0
 var cart_path_reach_yd: float = 0.0
 var cart_path_max_detour: float = 0.0
 var stroke_s: float = 0.0
-## E3-S8: a group tees off behind the group ahead on its hole once every ball of that group
-## rests at least this far from the tee (GuestBrain.tee_clear).
-var tee_clear_yd: float = 0.0
-## E3-S8 review: on the hole, a guest of a following group holds its stroke while a guest or
-## unfinished ball of a group ahead lies nearer the cup and within the stroke's planned
-## distance plus this margin (GuestBrain.play_clear).
+## E3-S8 review, E3-S22: a guest holds its stroke while a guest, or an unfinished ball, of a
+## group ahead on its hole or of a group on another hole lies nearer its cup and within this
+## of its ball, or inside the landing area round the stroke's planned rest: a disc of the
+## larger of this and `play_clear_share` of the stroke's planned distance
+## (GuestBrain.hold_for). E3-S22 folded E3-S8's `tee_clear_yd` (250 yd) into it.
 var play_clear_yd: float = 0.0
+var play_clear_share: float = 0.0
+## E3-S22: a guest out on another hole (it has struck there), or its unfinished ball, holds
+## a stroke when nearer the stroke's cup than its ball and within this of the ball or of the
+## planned rest (GuestBrain.hold_for, CROSSING); and the seconds in a row a stroke waits on
+## such groups alone before it plays on, so two groups on crossing holes never wait on each
+## other for ever.
+var cross_clear_yd: float = 0.0
+var cross_hold_max_s: int = 0
 ## E3-S8: ready golf. True: the guest away among those standing at their balls plays, so a
 ## partner still walking to a ball farther out does not hold the group up.
 var ready_golf: bool = false
@@ -125,8 +132,10 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.cart_path_reach_yd = _float(d, "cart_path_reach_yd", errors)
 	t.cart_path_max_detour = _float(d, "cart_path_max_detour", errors)
 	t.stroke_s = _float(d, "stroke_s", errors)
-	t.tee_clear_yd = _float(d, "tee_clear_yd", errors)
 	t.play_clear_yd = _float(d, "play_clear_yd", errors)
+	t.play_clear_share = _float(d, "play_clear_share", errors)
+	t.cross_clear_yd = _float(d, "cross_clear_yd", errors)
+	t.cross_hold_max_s = CourseData.read_int(d, "cross_hold_max_s", errors)
 	var ready: Variant = d.get("ready_golf")
 	if typeof(ready) == TYPE_BOOL:
 		t.ready_golf = ready
@@ -255,10 +264,14 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 				_positive(errors, "taste_weights.%s" % name, float(w))
 	if t.sim_ticks_per_s < t.guest_ticks_per_s:
 		errors.append("sim_ticks_per_s must be at least guest_ticks_per_s")
-	if t.tee_clear_yd <= 0.0:
-		errors.append("tee_clear_yd must be above 0")
 	if t.play_clear_yd < 0.0:
 		errors.append("play_clear_yd must be 0 or more")
+	if t.play_clear_share < 0.0:
+		errors.append("play_clear_share must be 0 or more")
+	if t.cross_clear_yd < 0.0:
+		errors.append("cross_clear_yd must be 0 or more")
+	if t.cross_hold_max_s < 1:
+		errors.append("cross_hold_max_s must be at least 1")
 	if t.cart_path_max_detour < 1.0:
 		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
 	if t.max_steps_per_frame < 1:

@@ -17,6 +17,10 @@ extends RefCounted
 ## - dogleg_par4: New sandbox, a fairway east 250 yd then south 220 yd round a pond filling
 ##   the inside corner; the straight tee-to-cup line is 333 yd and the fairway's centre line
 ##   470 yd. Rule 4 measures its line of play round the corner, 450 yd, a par 4 (D47).
+## - crossing_holes (E3-S22): two open holes that cross. Hole 1 is the fair par 4's shape
+##   without its bunker (380 yd east, a 5-wide fairway), and hole 2 a 90 yd par 3 coming
+##   north to a green on hole 1's line 250 yd out, so a group putting on hole 2 stands in
+##   the landing area of the next group's drives on hole 1.
 
 const W: int = 90
 const H: int = 30
@@ -38,6 +42,14 @@ const DOG_TEE := Vector2i(6, 6)
 const DOG_CORNER := Vector2i(56, 6)
 const DOG_CUP := Vector2i(56, 50)
 const DOG_POND := Rect2i(14, 12, 38, 34)
+
+## Crossing holes: hole 1 along row 10, hole 2 north up column 56 to a cup 4 rows below it.
+const CROSS_W: int = 90
+const CROSS_H: int = 40
+const CROSS_TEE_1 := Vector2i(6, 10)
+const CROSS_CUP_1 := Vector2i(82, 10)
+const CROSS_TEE_2 := Vector2i(56, 32)
+const CROSS_CUP_2 := Vector2i(56, 14)
 
 
 static func fair_par4() -> CourseData:
@@ -84,6 +96,27 @@ static func dogleg_par4() -> CourseData:
 	_fairway(b, DOG_TEE, DOG_CORNER, 5)
 	_fairway(b, DOG_CORNER, DOG_CUP, 5)
 	_finish(b, DOG_TEE, DOG_CUP, 4)
+	return c
+
+
+## E3-S22: hole 1 (par 4) and hole 2 (par 3, its green on hole 1's line 250 yd out), both
+## open; New sandbox on level rough.
+static func crossing_holes() -> CourseData:
+	var c := CourseData.create(CROSS_W, CROSS_H, Surface.Type.ROUGH, GROUND)
+	var b := CourseBuilder.new(c)
+	for spec: Array in [[1, CROSS_TEE_1, CROSS_CUP_1, 4, 5], [2, CROSS_TEE_2, CROSS_CUP_2, 3, 3]]:
+		var tee: Vector2i = spec[1]
+		var cup: Vector2i = spec[2]
+		_fairway(b, tee, cup, spec[4])
+		b.paint(tee, Surface.Type.TEE, 3)
+		b.paint(cup, Surface.Type.GREEN, 5)
+		b.place_tee(spec[0], tee, spec[3])
+		b.place_cup(spec[0], cup)
+		b.set_par(spec[0], spec[3])
+	# Each hole's painting sits in the other's footprint: open them last.
+	for n: int in [1, 2]:
+		var opened := b.open_hole(n)
+		assert(opened, "crossing hole %d opens" % n)
 	return c
 
 

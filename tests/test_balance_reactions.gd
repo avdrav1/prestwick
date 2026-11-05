@@ -73,11 +73,22 @@ func test_a_field_plays_the_hole_through_the_guest_day() -> void:
 
 
 func test_reaction_rows_print_next_to_their_targets() -> void:
-	var rows := sim.measure(SMALL, SEED, 1, false)
+	var rows := sim.measure(SMALL, SEED, 1, false, SMALL, 1)
 	for prefix: String in ["fair par 4: praise", "fair par 4: complaints",
 			"blind par 4: praise", "blind par 4: complaints",
-			"corridor par 4", "dogleg par 4", "nine holes"]:
+			"corridor par 4", "dogleg par 4", "nine holes", "pace fails: fair par 4",
+			"crossing holes"]:
 		assert_false(_named(rows, prefix).is_empty(), "a row for %s" % prefix)
+	# E3-S22: pace on the first tee, the par 5 and the dogleg, each against the fair par 4's.
+	for prefix: String in ["pace fails: first tee", "pace fails: par 5", "pace fails: dogleg"]:
+		var r := _named(rows, prefix)
+		assert_false(r.is_empty(), "a row for %s" % prefix)
+		assert_eq(r.target, Vector2(-ReactionField.PACE_SPREAD, ReactionField.PACE_SPREAD),
+				"%s: within 10 points of the fair par 4" % prefix)
+	# E3-S22 review: the fixture's other par 5 is recorded beside the target, not under it.
+	var other := _named(rows, "pace fails: other par 5")
+	assert_false(other.is_empty(), "a recorded row for the other par 5")
+	assert_eq(other.target, Vector2(-INF, INF), "the other par 5 is recorded, no target")
 	var praise := _named(rows, "fair par 4: praise")
 	assert_eq(praise.target, ReactionField.FAIR_PRAISE, "praise is read against 60 to 75%")
 	var blind := _named(rows, "blind par 4: praise")

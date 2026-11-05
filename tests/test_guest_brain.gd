@@ -196,9 +196,11 @@ func test_a_group_waits_behind_a_slower_group() -> void:
 		brain.step()
 		var playing := {}
 		for g: GuestGroup in brain.groups:
-			if g.phase == GuestGroup.Phase.ON_HOLE:
+			# E3-S22: a group may stand on the tee, held, while the group ahead is on the
+			# green; it has teed off once it has struck.
+			if g.phase == GuestGroup.Phase.ON_HOLE and g.struck:
 				assert_false(playing.has(g.hole_number),
-						"one group on hole %d at a time (second %d)" % [g.hole_number, brain.second])
+						"one group out on hole %d at a time (second %d)" % [g.hole_number, brain.second])
 				playing[g.hole_number] = true
 				on_hole[g.index] = true
 	assert_eq(on_hole.size(), 2)
@@ -215,10 +217,14 @@ func test_a_group_waits_behind_a_slower_group() -> void:
 	assert_eq(fast.records.size(), 3, "and still played all three")
 
 
-## E3-S8: on a hole longer than `tee_clear_yd` the next group does not wait for the group
-## ahead to hole out: it tees off once every ball of that group rests out of reach (or is
-## holed), so two groups play the par 4 at once. The 80 yd par 3s above never allow it.
+## E3-S8: on a par 4 the next group does not wait for the group ahead to hole out: it steps
+## onto the tee once every one of that group has struck, and tees off once its first tee shot
+## is clear (E3-S22: no guest or ball of the group ahead within `play_clear_yd` of the tee or
+## inside the drive's landing area, GuestBrain.hold_for; E3-S8's `tee_clear_yd` folded into
+## it), so two groups play the par 4 at once. The 80 yd par 3s above never allow it.
 func test_the_next_group_tees_off_once_the_group_ahead_is_out_of_reach() -> void:
+	assert_false("tee_clear_yd" in tuning,
+			"E3-S22: tee_clear_yd is folded into play_clear")
 	var c := ReactionHoles.fair_par4()
 	var h: HoleData = c.holes[0]
 	var groups: Array[GuestGroup] = [
@@ -227,19 +233,33 @@ func test_the_next_group_tees_off_once_the_group_ahead_is_out_of_reach() -> void
 	]
 	var brain := GuestBrain.new(c, 3, tuning, model, groups)
 	var tee := brain.field.tile_center(h.tee)
+	var cup := brain.field.tile_center(h.cup)
 	var b_teed := -1
+	var held := 0
 	while not brain.day_over and b_teed < 0:
+		brain.serve(-1)
+		var first: Guest = groups[1].guests[0]
+		var rest := Vector2.INF
+		if first.hole != null and first.hole.state == GuestHole.State.READY:
+			rest = Vector2(first.hole.plan.prediction.rest.x, first.hole.plan.prediction.rest.y)
 		brain.step()
-		if groups[1].phase == GuestGroup.Phase.ON_HOLE:
+		if first.waiting_for == Guest.Wait.GROUP_AHEAD:
+			held += 1
+		if first.hole != null and first.hole.strokes.size() == 1:
 			b_teed = brain.second
+			assert_eq(brain.teed_off.get(1, 0), 2, "it tees off with its first tee shot")
 			assert_eq(groups[0].phase, GuestGroup.Phase.ON_HOLE, "the group ahead is still on the hole")
+			var radius := brain.landing_radius(tee.distance_to(rest))
 			for g: Guest in groups[0].guests:
 				assert_false(g.hole.strokes.is_empty(), "every one of it has struck")
-				if not g.hole.is_finished():
-					assert_ne(g.hole.state, GuestHole.State.FLYING, "no ball of it in the air")
-					var d := Vector2(g.hole.ball_at.x, g.hole.ball_at.y).distance_to(tee)
-					assert_gte(d, tuning.tee_clear_yd, "its ball rests out of reach (%.0f yd)" % d)
+				for at: Vector2 in [g.position, Vector2(g.hole.ball_at.x, g.hole.ball_at.y)]:
+					if at == Vector2(g.hole.ball_at.x, g.hole.ball_at.y) and g.hole.is_finished():
+						continue
+					assert_false(GuestBrain.in_the_way(at, tee, rest, cup, tuning.play_clear_yd, radius),
+							"guest %d (or its ball) at %.0f yd from the tee, %.0f from the drive's plan, is out of its way" % [
+								g.id, at.distance_to(tee), at.distance_to(rest)])
 	assert_gt(b_teed, 0, "the single teed off")
+	assert_gt(held, 0, "after waiting for the group ahead to clear its landing area")
 	brain.run_day()
 	var a_done := 0
 	for g: Guest in groups[0].guests:
@@ -333,6 +353,72 @@ func test_the_group_behind_never_plays_into_the_group_ahead() -> void:
 	assert_gt(behind, 0, "the group behind played with a group ahead still on the hole")
 	assert_gt(held, 0, "and was held for it on the hole")
 	assert_eq(close, 0, "no ball of it rested within %.0f yd of a guest ahead" % PLAY_CLEAR_TEST_YD)
+
+
+## E3-S22: a guest holds for a group on a crossing hole in its landing area. On
+## ReactionHoles.crossing_holes hole 2's green lies on hole 1's line 250 yd out, so groups
+## putting there stand where the next group's drives come down. No stroke is struck while a
+## guest out on another hole (it has struck there), or its unfinished ball, is in the
+## stroke's way (GuestBrain.in_the_way at `cross_clear_yd`), unless the striking group has
+## waited `cross_hold_max_s` on such groups alone; the holds count against pace as waits.
+func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> void:
+	var c := ReactionHoles.crossing_holes()
+	var strokes := 0
+	var violations := 0
+	var held_on_hole_1 := 0
+	var cross_wait := 0
+	for day_seed: int in [1, 2]:
+		var brain := GuestBrain.new(c, day_seed, tuning, model)
+		while not brain.day_over:
+			brain.serve(-1)
+			# Before the step: each guest's strokes, plan and place, and each group's hold count.
+			var before := {}
+			for g: Guest in brain.guests:
+				if g.hole == null:
+					continue
+				var plan := Vector2.INF
+				if g.hole.state == GuestHole.State.READY and g.hole.plan != null:
+					plan = Vector2(g.hole.plan.prediction.rest.x, g.hole.plan.prediction.rest.y)
+				before[g.id] = [g.hole.strokes.size(), plan, g.position,
+						Vector2(g.hole.ball_at.x, g.hole.ball_at.y), g.hole.strokes.is_empty(),
+						g.hole.is_finished(), brain.group_of(g).phase, brain.group_of(g).hole_number]
+			var capped := {}
+			for gr: GuestGroup in brain.groups:
+				capped[gr.index] = gr.cross_held_s >= tuning.cross_hold_max_s
+			brain.step()
+			for g: Guest in brain.guests:
+				if g.hole == null or not before.has(g.id) or g.hole.strokes.size() != int(before[g.id][0]) + 1:
+					continue
+				strokes += 1
+				var me := brain.group_of(g)
+				if bool(capped[me.index]):
+					continue
+				var at := Vector2(g.hole.strokes[-1].start.x, g.hole.strokes[-1].start.y)
+				var rest: Vector2 = before[g.id][1]
+				var cup := brain.field.tile_center(g.hole.hole.cup)
+				for o: Guest in brain.guests:
+					var og := brain.group_of(o)
+					if og == me or not before.has(o.id) or int(before[o.id][7]) == me.hole_number:
+						continue
+					# Groups update in index order: one ahead of the striker has already moved.
+					var b: Array = before[o.id]
+					var pos: Vector2 = o.position if og.index < me.index else b[2]
+					var ball: Vector2 = Vector2(o.hole.ball_at.x, o.hole.ball_at.y) if og.index < me.index and o.hole != null else b[3]
+					if b[6] != GuestGroup.Phase.ON_HOLE or bool(b[4]) or og.hole_number != int(b[7]):
+						continue  # not out on another hole (a group moving on this second has left it)
+					if GuestBrain.in_the_way(pos, at, rest, cup, tuning.cross_clear_yd, tuning.cross_clear_yd) \
+							or (not bool(b[5]) and GuestBrain.in_the_way(ball, at, rest, cup,
+									tuning.cross_clear_yd, tuning.cross_clear_yd)):
+						violations += 1
+		for g: Guest in brain.guests:
+			for r: Guest.HoleRecord in g.records:
+				cross_wait += r.cross_wait_s
+				if r.number == 1 and r.cross_wait_s > 0:
+					held_on_hole_1 += 1
+	assert_gt(strokes, 100, "both days were played")
+	assert_eq(violations, 0, "nobody struck into a guest out on the other hole")
+	assert_gt(cross_wait, 0, "guests waited for the crossing group, counted against pace")
+	assert_gt(held_on_hole_1, 0, "hole 1 guests held for guests out on hole 2")
 
 
 ## E3-S8 review: the engine's budget never fails pace by itself. A guest alone on the course

@@ -16,12 +16,19 @@ extends SceneTree
 ## same day with a skill-1 foursome in each arrival slot in turn (D46 review); and the groups alone run on a day
 ## long enough to finish, so their whole round is measured. `day_s=N` plays the days at that
 ## length instead of data/guests.json's (`arrival_window_s=N` likewise); `quick` leaves out the statics and the 60 fps runs.
+## E3-S22: `--lines` prints each day's reaction lines as they came (the feed's text, neutrals
+## too, with the second, the guest's skill, patience and taste, its wait and walk), and each
+## day prints its pace fails by hole and where the counted waits were (on the tee, on the hole
+## behind its own queue, or held for a group on another hole, on the tee or the hole).
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
-##       [day_s=540] [arrival_window_s=90] [quick]
+##       [day_s=540] [arrival_window_s=90] [quick] [--lines]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
+
+## `--lines`: print every reaction line of each day's own draws.
+var lines: bool = false
 
 
 func _initialize() -> void:
@@ -48,6 +55,8 @@ func _initialize() -> void:
 			tuning = _tuning_with({"arrival_window_s": float(arg.substr(17))}, tuning)
 		elif arg == "quick":
 			quick = true
+		elif arg == "--lines" or arg == "lines":
+			lines = true
 	print("day_s %d s (arrivals over the first %d s)" % [tuning.day_s, tuning.arrival_window_s])
 	GuestClubTable.warm(model)
 	if not quick:
@@ -120,6 +129,9 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		all_plans: Array[int], p_groups: Array[GuestGroup] = [], label: String = "",
 		latest_out: Array[int] = []) -> bool:
 	var brain := GuestBrain.new(course, day_seed, tuning, model, p_groups)
+	if lines and label.is_empty():
+		brain.reacted.connect(func(g: Guest, r: GuestReaction) -> void:
+			print(reaction_line(day_seed, brain.second, g, r)))
 	var cpu: Array[float] = []
 	var moves: Array[float] = []
 	# Guest-seconds standing at its own turn on unfinished Ball work (plan or putt solve).
@@ -230,6 +242,23 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		day_seed, kinds[0], kinds[1], kinds[2], holes, roundi(100.0 * fails[0] / n),
 		roundi(100.0 * fails[1] / n), roundi(100.0 * fails[2] / n), roundi(100.0 * fails[3] / n),
 		brain.checks.measured])
+	# E3-S22: pace fails by hole, and where the counted waits were.
+	var pace := {}
+	var waits_at := [0, 0, 0]
+	for g: Guest in brain.guests:
+		for r: Guest.HoleRecord in g.records:
+			var acc: Array = pace.get(r.number, [0, 0])
+			pace[r.number] = [int(acc[0]) + 1,
+					int(acc[1]) + (0 if r.reaction.passed[GuestReaction.Check.PACE] else 1)]
+			waits_at[0] += r.tee_wait_s
+			waits_at[2] += r.cross_wait_s
+			waits_at[1] += r.wait_s - r.tee_wait_s - r.cross_wait_s
+	var pace_by_hole := PackedStringArray()
+	for number: int in range(1, 10):
+		var acc: Array = pace.get(number, [0, 0])
+		pace_by_hole.append("%d:%d%%" % [number, roundi(100.0 * int(acc[1]) / maxi(int(acc[0]), 1))])
+	print("day %d pace fails by hole %s; counted waits %d s on the tee, %d s on the hole behind its queue, %d s held for a group on another hole" % [
+			day_seed, " ".join(pace_by_hole), waits_at[0], waits_at[1], waits_at[2]])
 	var praised := {}
 	for g: Guest in brain.guests:
 		for r: Guest.HoleRecord in g.records:
@@ -241,6 +270,17 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 	print("day %d holes praised: %d of 9 (praise a hole %s)" % [
 			day_seed, praised.size(), " ".join(praise_by_hole)])
 	return every
+
+
+## One reaction as `--lines` prints it: "day 1 s 41 guest 3 (skill 4, patience 2, purist)
+## complaint, wait 9 s of 4, walk 66 yd of 80: Hole 1: slow, waited 9 s. Also ...".
+static func reaction_line(day_seed: int, second: int, g: Guest, r: GuestReaction) -> String:
+	return "day %d s %d guest %d (skill %d, patience %d, %s) %s, wait %d s of %d, walk %s: %s" % [
+			day_seed, second, g.id, g.skill, g.patience,
+			String(Guest.Taste.keys()[g.taste]).to_lower(), r.kind_name(), r.wait_s,
+			roundi(r.wait_limit_s),
+			"none" if r.walk_yd < 0.0 else "%d yd of %d" % [roundi(r.walk_yd), roundi(r.walk_limit_yd)],
+			r.text]
 
 
 ## The day of `day_seed` in 60 fps frames at `speed` (GuestBrain.advance_real, as Play runs it):

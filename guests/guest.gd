@@ -66,8 +66,13 @@ var hole_recorded: bool = false
 var last_walk_s: int = -1
 ## The finished holes, in the order played (a hole cut short by an edit or dusk has none).
 var records: Array[HoleRecord] = []
-## Pace on the hole under way: seconds waited that count, and the walk to its tee.
+## Pace on the hole under way: seconds waited that count, and the walk to its tee. E3-S22:
+## of the counted wait, the seconds held for a group on another hole (GuestBrain.hold_for,
+## CROSSING), and the other seconds held on the tee before its own tee shot (behind its own
+## hole's queue); the rest was on the hole, behind the group ahead.
 var wait_s: int = 0
+var tee_wait_s: int = 0
+var cross_wait_s: int = 0
 var walk_yd: float = -1.0
 ## Ball ticks spent this simulated second (GuestBrain's budget), and in all.
 var second_ticks: int = 0
@@ -89,6 +94,11 @@ class HoleRecord:
 	var picked_up: bool = false
 	## Seconds waited that count against pace: behind the group ahead (at the tee or on the hole).
 	var wait_s: int = 0
+	## E3-S22: of `wait_s`, the seconds held on the tee behind its own hole's queue, and those
+	## held for a group on another hole (on the tee or the hole); the rest was on the hole,
+	## behind the group ahead.
+	var tee_wait_s: int = 0
+	var cross_wait_s: int = 0
 	## The walk from the previous hole's cup to this tee, yards; -1 on the first hole played.
 	var walk_yd: float = -1.0
 	## Simulated seconds of the day it teed off and holed out.
