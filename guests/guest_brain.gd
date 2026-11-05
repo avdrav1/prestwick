@@ -296,6 +296,7 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 		if not guest.is_walking() and guest.hole == null:
 			guest.hole = GuestHole.new(course, h, guest.skill,
 					GuestHole.hole_seed(guest.guest_seed, h.number), tuning, model, _swing_tuning)
+			guest.hole.slot = course.holes.find(h)
 	var clear := tee_clear(g, h)
 	var all_there := true
 	for guest: Guest in g.guests:

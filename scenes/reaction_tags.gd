@@ -10,8 +10,9 @@ extends Node2D
 ## and a flag_red segment "!n" for complaints (a mark as well as a colour), each only when its
 ## count is above 0. A hole with neither has no tag. A tag belongs to the hole guests played,
 ## by its slot (ReactionFeed.slot_tallies), so a renumber or a swap in Build keeps it there,
-## showing the hole's number now. It sits on that hole's cup, above the pin's pennant; a hole
-## with no cup on the map has none.
+## showing the hole's number now; an edit to the hole (its tee, cup, par or the terrain on its
+## line) clears it (E3-S17). It sits on that hole's cup, above the pin's pennant; a hole with no
+## cup on the map has none.
 ##
 ## In Play the hole being played (`played_hole`, Main sets it) has no tag: the tag stands over
 ## the back of the green, where the player's ball rests and the putt is read (pillar 2).
@@ -49,6 +50,7 @@ func bind(p_feed: ReactionFeed) -> void:
 	feed = p_feed
 	feed.added.connect(func(_e: ReactionFeed.Entry) -> void: queue_redraw())
 	feed.cleared.connect(queue_redraw)
+	feed.slot_cleared.connect(func(_slot: int) -> void: queue_redraw())
 
 
 ## The course whose holes the tags stand on (Main.show_course).

@@ -67,6 +67,10 @@ var ball_ticks: int = 0
 ## The most ticks any one `advance` call stepped, and (play_out) any one simulated second.
 var max_call_ticks: int = 0
 var max_second_ticks: int = 0
+## The hole's slot in `course.holes` when the guest started it, -1 when unknown (GuestBrain
+## sets it; E3-S17 review: the feed files the reaction under it, and drops it when Build
+## edits that slot while the guest plays it).
+var slot: int = -1
 
 var _rng := RandomNumberGenerator.new()
 var _seed: int
