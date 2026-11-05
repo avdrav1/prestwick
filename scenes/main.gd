@@ -133,8 +133,8 @@ func frame_first_hole() -> bool:
 
 
 ## Picks hole `number` in the hole list and frames it clear of the whole HUD (E3-S9; E3-S7's
-## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect, zoomed out until
-## both show; a hole too long for the farthest zoom keeps its tee inside the free view and runs
+## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect_for them,
+## zoomed out until both show; a hole too long for the farthest zoom keeps its tee inside the free view and runs
 ## off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
 ## course has no hole `number` with its tee and cup on the map.
 func frame_hole(number: int) -> bool:
@@ -146,7 +146,9 @@ func frame_hole(number: int) -> bool:
 	if h == null or not course.in_bounds(h.tee.x, h.tee.y) or not course.in_bounds(h.cup.x, h.cup.y):
 		return false
 	build_tool.select_hole(number)
-	camera.frame_points(tile_world(h.tee), tile_world(h.cup), free_view_rect())
+	var tee: Vector2 = tile_world(h.tee)
+	var cup: Vector2 = tile_world(h.cup)
+	camera.frame_points(tee, cup, free_view_rect_for(tee, cup))
 	return true
 
 
@@ -173,11 +175,39 @@ func _hud_groups() -> Array:
 ## The part of the view, in screen px, that the HUD leaves free (E3-S9): right of the left
 ## column, left of the right panels and above the bottom panels, counting only those shown
 ## (hud_controls), so it overlaps none of them. Hole framing (frame_hole) fits the hole inside
-## it, so no control covers the tee or the pin.
+## it, so no control covers the tee or the pin. It follows the right panels' height (E3-S10):
+## of the strip left of them and the strip under them (free_view_rects), it takes the larger.
 func free_view_rect() -> Rect2:
+	var strips: Array[Rect2] = free_view_rects()
+	return strips[1] if strips[1].get_area() > strips[0].get_area() else strips[0]
+
+
+## The free view hole framing uses for world points `a` and `b` (a tee and cup, E3-S10): of the
+## strip beside the right panels and the strip under them, the one that shows both at the
+## nearest zoom (CourseCamera.frame_zoom_index), or at a tie the larger. So a collapsed hole
+## list frees the map under it for a hole that fits there better, even when the strip beside
+## the panel is the larger.
+func free_view_rect_for(a: Vector2, b: Vector2) -> Rect2:
+	var best: Rect2 = free_view_rect()
+	var best_zoom: int = camera.frame_zoom_index(a, b, best.size)
+	for strip: Rect2 in free_view_rects():
+		if not strip.has_area():
+			continue
+		var z: int = camera.frame_zoom_index(a, b, strip.size)
+		if z > best_zoom:
+			best = strip
+			best_zoom = z
+	return best
+
+
+## The two strips of the view the HUD leaves free (E3-S10), in screen px, both right of the
+## left column and above the bottom panels: [0] left of the right panels, full height; [1]
+## under the right panels, full width. Neither overlaps a shown control.
+func free_view_rects() -> Array[Rect2]:
 	var r := Rect2(Vector2.ZERO, camera.view_size())
 	var left: float = r.position.x
 	var right: float = r.end.x
+	var below: float = r.position.y
 	var bottom: float = r.end.y
 	var groups: Array = _hud_groups()
 	for c: Control in groups[0]:
@@ -186,30 +216,41 @@ func free_view_rect() -> Rect2:
 	for c: Control in groups[1]:
 		if c.visible:
 			right = minf(right, _hud_rect(c).position.x)
+			below = maxf(below, _hud_rect(c).end.y)
 	for c: Control in groups[2]:
 		if c.visible:
 			bottom = minf(bottom, _hud_rect(c).position.y)
-	return Rect2(left, r.position.y, maxf(right - left, 0.0), maxf(bottom - r.position.y, 0.0))
+	var beside := Rect2(left, r.position.y, maxf(right - left, 0.0), maxf(bottom - r.position.y, 0.0))
+	var under := Rect2(left, below, maxf(r.end.x - left, 0.0), maxf(bottom - below, 0.0))
+	return [beside, under]
 
 
-## Where HUD control `c` sits on screen, at least its minimum size: a panel whose rows just
-## changed has not been resized yet (that is deferred), so this grows it from its anchored edge
-## (Control.grow_horizontal and grow_vertical) as the layout will.
+## Where HUD control `c` sits on screen as the layout will place it: its anchored size, at
+## least its minimum size, grown from its anchored edge (Control.grow_horizontal and
+## grow_vertical). A panel whose rows just changed has not been resized yet (that is deferred),
+## so this reads its anchors and offsets rather than its current size, whether it is about to
+## grow or, its list collapsed (E3-S10), to shrink.
 func _hud_rect(c: Control) -> Rect2:
-	var r: Rect2 = c.get_global_rect()
-	var size: Vector2 = r.size.max(c.get_combined_minimum_size())
-	var pos: Vector2 = r.position
+	var parent: Vector2 = c.get_parent_area_size()
+	var anchored := Rect2(
+			Vector2(c.anchor_left * parent.x + c.offset_left, c.anchor_top * parent.y + c.offset_top),
+			Vector2.ZERO)
+	anchored.end = Vector2(c.anchor_right * parent.x + c.offset_right,
+			c.anchor_bottom * parent.y + c.offset_bottom)
+	var size: Vector2 = anchored.size.max(c.get_combined_minimum_size())
+	var pos: Vector2 = anchored.position
 	match c.grow_horizontal:
 		Control.GROW_DIRECTION_BEGIN:
-			pos.x = r.end.x - size.x
+			pos.x = anchored.end.x - size.x
 		Control.GROW_DIRECTION_BOTH:
-			pos.x = r.get_center().x - size.x * 0.5
+			pos.x = anchored.get_center().x - size.x * 0.5
 	match c.grow_vertical:
 		Control.GROW_DIRECTION_BEGIN:
-			pos.y = r.end.y - size.y
+			pos.y = anchored.end.y - size.y
 		Control.GROW_DIRECTION_BOTH:
-			pos.y = r.get_center().y - size.y * 0.5
-	return Rect2(pos, size)
+			pos.y = anchored.get_center().y - size.y * 0.5
+	# From the parent's space to the screen's, as the control's own transform sits now.
+	return Rect2(c.get_global_rect().position - c.position + pos, size)
 
 
 ## The centre of tile `cell`'s top in the camera's space.

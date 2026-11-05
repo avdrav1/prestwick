@@ -12,6 +12,13 @@ extends PanelContainer
 ## opens or closes it in one click; Play emits play_requested, which Main answers by playing
 ## that hole; up and down give it the number above or below (BuildTool.renumber_hole, swapping
 ## with the hole there). New hole picks the next number in build order and the Tee tool.
+##
+## The list collapses in one click (E3-S10, collapse_button): collapsed, it shows only the
+## picked hole's row (its status and buttons with it), which stands in for the title and status
+## lines. Collapsed, the panel stays under HolePanelTuning.max_height whatever the hole fails:
+## its issue text is cut to the room left and scrolls (issues_scroll). Main.free_view_rects
+## follows the panel's height, so framing can use the map under it. Collapsing never moves the
+## pick.
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`.
 signal play_requested(number: int)
@@ -55,10 +62,20 @@ var open_button: Button
 var title_label: Label
 var status_label: Label
 var issues_label: Label
+## Holds issues_label: as tall as its text, except with the list collapsed, when it is cut to
+## what keeps the panel under HolePanelTuning.max_height and scrolls the rest (E3-S10).
+var issues_scroll: ScrollContainer
 ## Picks the next hole in build order (BuildTool.new_hole); disabled when the course is full.
 var new_hole_button: Button
-## The list's rows, in number order; only the first shown_rows().size() are visible.
+## The list's rows, in number order; the first shown_rows().size() hold a hole, and of those
+## listed_rows() are visible.
 var rows: Array[HoleRow] = []
+## Collapses or expands the list in one click (set_collapsed).
+var collapse_button: Button
+## True while the list shows only the picked hole's row.
+var collapsed: bool = false
+## Null loads scenes/hole_panel_tuning.tres.
+@export var tuning: HolePanelTuning
 
 ## Width of the issues text before it wraps, screen px.
 @export var text_width: float = 340.0
@@ -72,18 +89,26 @@ var _shown: int = 0
 
 
 func _ready() -> void:
+	if tuning == null:
+		tuning = HolePanelTuning.load_default()
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	add_child(box)
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 2)
 	box.add_child(_list)
+	var list_row := HBoxContainer.new()
+	box.add_child(list_row)
 	new_hole_button = Button.new()
 	new_hole_button.text = "New hole"
 	new_hole_button.tooltip_text = "Start the next hole: the Tee tool places its tee"
 	new_hole_button.focus_mode = Control.FOCUS_NONE
 	new_hole_button.pressed.connect(func() -> void: _tool.new_hole())
-	box.add_child(new_hole_button)
+	list_row.add_child(new_hole_button)
+	collapse_button = Button.new()
+	collapse_button.focus_mode = Control.FOCUS_NONE
+	collapse_button.pressed.connect(func() -> void: set_collapsed(not collapsed))
+	list_row.add_child(collapse_button)
 	box.add_child(HSeparator.new())
 	title_label = Label.new()
 	box.add_child(title_label)
@@ -111,11 +136,15 @@ func _ready() -> void:
 	open_button.focus_mode = Control.FOCUS_NONE
 	open_button.pressed.connect(func() -> void: _tool.open_hole())
 	row.add_child(open_button)
+	issues_scroll = ScrollContainer.new()
+	issues_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(issues_scroll)
 	issues_label = Label.new()
 	issues_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	issues_label.custom_minimum_size = Vector2(text_width, 0)
+	issues_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	issues_label.add_theme_color_override("font_color", Color8(240, 160, 150))
-	box.add_child(issues_label)
+	issues_scroll.add_child(issues_label)
 
 
 ## Follows `tool` from now on.
@@ -154,14 +183,47 @@ func refresh() -> void:
 					else " at (%d, %d)" % [issue.tile.x, issue.tile.y]
 			text.append("rule %d%s: %s" % [issue.rule, at, issue.reason])
 	issues_label.text = "\n".join(text)
-	issues_label.visible = not text.is_empty()
+	issues_scroll.visible = not text.is_empty()
 	_refresh_list(b)
 	new_hole_button.disabled = b == null or b.next_hole_number() == 0
+	# Collapsed, the picked hole's row is its one-line summary: the title and status would
+	# say it again.
+	var summarised: bool = collapsed and not listed_rows().is_empty()
+	title_label.visible = not summarised
+	status_label.visible = not summarised
+	_fit_issues()
 
 
-## The rows showing a hole now, in number order.
+## Sizes issues_scroll: its text's full height, or with the list collapsed no more than the
+## room max_height leaves beside the rest of the panel, the rest scrolling. However many rules
+## the hole fails, and however their text wraps, a collapsed panel stays under max_height.
+func _fit_issues() -> void:
+	issues_scroll.custom_minimum_size = Vector2.ZERO
+	var full: float = issues_label.get_combined_minimum_size().y
+	var room: float = full
+	if collapsed and issues_scroll.visible:
+		room = maxf(tuning.max_height - get_combined_minimum_size().y, 0.0)
+	issues_scroll.custom_minimum_size = Vector2(0, minf(full, room))
+	if room >= full:
+		issues_scroll.scroll_vertical = 0
+
+
+## The rows showing a hole now, in number order, whether or not the list is collapsed.
 func shown_rows() -> Array[HoleRow]:
 	return rows.slice(0, _shown)
+
+
+## The rows visible now: every shown row, or with the list collapsed the picked hole's alone
+## (none when the picked hole has no tee or cup yet).
+func listed_rows() -> Array[HoleRow]:
+	return shown_rows().filter(func(r: HoleRow) -> bool: return r.visible)
+
+
+## Collapses the list to the picked hole's row, or expands it to every hole (E3-S10). The pick
+## stays. The panel shrinks at once, so Main.free_view_rects sees its new height.
+func set_collapsed(value: bool) -> void:
+	collapsed = value
+	refresh()
 
 
 ## The row showing hole `number`, or null.
@@ -196,10 +258,10 @@ func _refresh_list(b: CourseBuilder) -> void:
 	_shown = numbers.size()
 	for i: int in rows.size():
 		var r: HoleRow = rows[i]
-		r.visible = i < _shown
-		if i >= _shown:
+		var h: HoleData = b.hole(numbers[i]) if i < _shown else null
+		r.visible = h != null and (not collapsed or h.number == _tool.hole_number)
+		if h == null:
 			continue
-		var h: HoleData = b.hole(numbers[i])
 		r.number = h.number
 		r.pick_button.text = row_text(b.course, h)
 		r.pick_button.set_pressed_no_signal(h.number == _tool.hole_number)
@@ -209,6 +271,10 @@ func _refresh_list(b: CourseBuilder) -> void:
 				else "Open the hole to guests (every rule must pass)"
 		r.up_button.disabled = h.number <= 1
 		r.down_button.disabled = i == _shown - 1
+	collapse_button.text = ("Show all %d holes" if collapsed else "Hide the list (%d holes)") % _shown
+	collapse_button.tooltip_text = "Show every hole in the list" if collapsed \
+			else "Show only the picked hole, to free the map"
+	collapse_button.visible = _shown > 0 or collapsed
 
 
 func _make_row() -> HoleRow:

@@ -179,6 +179,15 @@ func set_zoom_index(index: int) -> void:
 	zoom = Vector2(z, z)
 
 
+## The zoom level frame_points frames world points `a` and `b` at inside an area `area` px in
+## size: the player's own level, stepped out until both fit, never past the farthest (0).
+func frame_zoom_index(a: Vector2, b: Vector2, area: Vector2) -> int:
+	var i: int = clampi(_player_zoom_index, 0, tuning.zoom_levels.size() - 1)
+	while i > 0 and not fits(a, b, tuning.zoom_levels[i], area):
+		i -= 1
+	return i
+
+
 ## Frames world points `a` and `b` (a hole's tee and cup, E3-S2) inside `safe`, the part of
 ## the view the HUD leaves free (screen px; an empty rect is the whole view): from the player's
 ## own zoom, steps the zoom out until both fit inside it, never past the farthest level, and
@@ -193,9 +202,7 @@ func frame_points(a: Vector2, b: Vector2, safe: Rect2 = Rect2()) -> void:
 	var v: Vector2 = view_size()
 	if not safe.has_area():
 		safe = Rect2(Vector2.ZERO, v)
-	set_zoom_index(_player_zoom_index)
-	while _zoom_index > 0 and not fits(a, b, tuning.zoom_levels[_zoom_index], safe.size):
-		set_zoom_index(_zoom_index - 1)
+	set_zoom_index(frame_zoom_index(a, b, safe.size))
 	var z: float = zoom.x
 	# A world point w shows at (w - position) * z + v / 2: put the midpoint at safe's centre.
 	var p: Vector2 = (a + b) * 0.5 - (safe.get_center() - v * 0.5) / z

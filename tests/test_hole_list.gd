@@ -433,6 +433,194 @@ func test_a_tee_number_keeps_its_screen_size_at_every_zoom() -> void:
 	tee = m.course_view.hole_marker(1, HoleMarker.Kind.TEE)
 	assert_almost_eq(tee.label_screen_height(m.camera.zoom.x), at_1x, 0.01, "a rebuilt marker too")
 
+# --- collapsing the list (E3-S10) ---
+
+func test_collapsing_and_expanding_keep_the_pick() -> void:
+	var m := _main_with(_course_with(3))
+	var panel: HolePanel = m.hole_panel
+	panel.row_for(2).pick_button.pressed.emit()
+	assert_false(panel.collapsed, "the list starts expanded")
+	assert_eq(panel.listed_rows().size(), 3)
+	panel.collapse_button.pressed.emit()
+	assert_true(panel.collapsed, "one click collapses it")
+	assert_eq(m.build_tool.hole_number, 2, "the pick stays")
+	var listed: Array[HolePanel.HoleRow] = panel.listed_rows()
+	assert_eq(listed.size(), 1, "a collapsed list shows the picked hole alone")
+	assert_eq(listed[0].number, 2)
+	assert_true(listed[0].pick_button.button_pressed)
+	assert_string_contains(listed[0].pick_button.text, "open", "with its status")
+	assert_eq(panel.shown_rows().size(), 3, "every hole still has its row")
+	listed[0].open_button.pressed.emit()
+	assert_false(m.build_tool.builder.hole(2).open, "the collapsed row still closes its hole")
+	assert_string_contains(panel.listed_rows()[0].pick_button.text, "closed")
+	m.build_tool.select_hole(3)
+	assert_eq(panel.listed_rows()[0].number, 3, "a collapsed list follows the pick")
+	panel.collapse_button.pressed.emit()
+	assert_false(panel.collapsed, "one click expands it")
+	assert_eq(panel.listed_rows().size(), 3)
+	assert_eq(m.build_tool.hole_number, 3, "the pick stays")
+	assert_true(panel.row_for(3).pick_button.button_pressed)
+	assert_false(panel.row_for(2).pick_button.button_pressed)
+
+
+func test_a_collapsed_list_says_how_many_holes_it_hides() -> void:
+	var m := _main_with(_course_with(3))
+	var panel: HolePanel = m.hole_panel
+	panel.collapse_button.pressed.emit()
+	assert_string_contains(panel.collapse_button.text, "3", "it names the hole count")
+	m.hole_panel.new_hole_button.pressed.emit()
+	assert_eq(panel.listed_rows().size(), 0, "hole 4 has no row until its tee is down")
+	assert_string_contains(panel.title_label.text, "Hole 4", "the details still name the pick")
+
+
+## Every nine_holes hole failing rules 2 and 4 (cup on rough, wrong par): two issue lines each.
+func _nine_failing(m: Main) -> void:
+	var b: CourseBuilder = m.build_tool.builder
+	for spec: Array in NineHoles.HOLES:
+		b.paint(spec[3], Surface.Type.ROUGH, 1)
+		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
+
+
+func test_a_collapsed_panel_stays_under_its_limit_with_nine_failing_holes() -> void:
+	var c: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(c))
+	var m := _main_with(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	_nine_failing(m)
+	var panel: HolePanel = m.hole_panel
+	var limit: float = panel.tuning.max_height
+	assert_gt(limit, 0.0)
+	for n: int in range(1, 10):
+		m.build_tool.select_hole(n)
+		assert_eq(m.build_tool.builder.issues_for(n).size(), 2, "hole %d fails two rules" % n)
+		var open_h: float = m._hud_rect(panel).size.y
+		assert_gt(open_h, limit, "hole %d: expanded, nine rows and the issues pass the limit" % n)
+		panel.collapse_button.pressed.emit()
+		var shut_h: float = m._hud_rect(panel).size.y
+		assert_lte(shut_h, limit, "hole %d: collapsed, %.0f px is under %.0f" % [n, shut_h, limit])
+		assert_lt(m._hud_rect(panel).end.y, 720.0 - m._hud_rect(m.build_palette).size.y,
+				"and clear of the palette")
+		gut.p("E3-S10: hole %d panel %.0f px expanded, %.0f px collapsed" % [n, open_h, shut_h])
+		panel.collapse_button.pressed.emit()
+
+
+## The most a nine_holes hole can fail at once: its cup on water (rules 2 and 3, with rule 3's
+## long reason wrapping), the wrong par (rule 4) and its tee and cup on land the player does not own (both rule 6 lines,
+## as on a New course).
+func _nine_failing_worst() -> CourseData:
+	var c: CourseData = NineHoles.land(7)
+	var b := CourseBuilder.new(c)
+	NineHoles.build(b)
+	for spec: Array in NineHoles.HOLES:
+		b.paint(spec[3], Surface.Type.WATER, 1)
+		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
+	for spec: Array in NineHoles.HOLES:
+		for cell: Vector2i in [spec[2], spec[3]]:
+			c.set_parcel_owned(c.parcel_of(cell.x, cell.y), false)
+	return c
+
+
+func test_a_collapsed_panel_stays_under_its_limit_whatever_the_hole_fails() -> void:
+	var m := _main_with(_nine_failing_worst())
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	var limit: float = panel.tuning.max_height
+	panel.collapse_button.pressed.emit()
+	var cut: int = 0
+	for n: int in range(1, 10):
+		m.build_tool.select_hole(n)
+		var rules: Array[int] = []
+		for issue: CourseValidator.Issue in m.build_tool.builder.issues_for(n):
+			rules.append(issue.rule)
+		for want: int in [2, 3, 4, 6]:
+			assert_has(rules, want, "hole %d fails rule %d" % [n, want])
+		assert_eq(rules.count(6), 2, "hole %d: both rule 6 lines" % n)
+		var shut_h: float = m._hud_rect(panel).size.y
+		assert_lte(shut_h, limit, "hole %d: collapsed, %.0f px is under %.0f" % [n, shut_h, limit])
+		var full: float = panel.issues_label.get_combined_minimum_size().y
+		if full > panel.issues_scroll.custom_minimum_size.y + 0.5:
+			cut += 1
+		assert_eq(panel.issues_label.text.count("\n") + 1, rules.size(),
+				"hole %d: every issue is still in the text, the rest scrolls" % n)
+		gut.p("E3-S10: hole %d fails %s: issues %.0f px, shown %.0f, panel %.0f px collapsed"
+				% [n, rules, full, panel.issues_scroll.custom_minimum_size.y, shut_h])
+	assert_gt(cut, 0, "the worst case needs the issue text cut to stay under the limit")
+	panel.collapse_button.pressed.emit()
+	assert_almost_eq(panel.issues_scroll.custom_minimum_size.y,
+			panel.issues_label.get_combined_minimum_size().y, 0.5, "expanded, the issues show in full")
+
+
+func test_a_collapsed_list_frames_a_hole_under_the_panel_when_it_fits_nearer() -> void:
+	# Nine par 3s on the plot, each failing rule 4 (issue text), and hole 9 turned to run across
+	# the screen: 13 tiles each way, about 830 px wide at 1x, too wide for the strip beside the
+	# panel but not for the strip under the collapsed one.
+	var c := _plot()
+	var b := CourseBuilder.new(c)
+	_build(b, 9, false)
+	assert_true(b.place_tee(9, Vector2i(4, 66), 3))
+	assert_true(b.place_cup(9, Vector2i(17, 53)))
+	for n: int in range(1, 10):
+		b.set_par(n, 5)
+	var m := _main_with(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	var cam: CourseCamera = m.camera
+	var open_zoom: Array[float] = []
+	for n: int in range(1, 10):
+		assert_false(m.build_tool.builder.issues_for(n).is_empty(), "hole %d has issue text" % n)
+		m.frame_hole(n)
+		open_zoom.append(cam.zoom.x)
+	assert_eq(open_zoom[8], 0.5, "expanded, hole 9 frames at the farthest zoom")
+	panel.collapse_button.pressed.emit()
+	var strips: Array[Rect2] = []
+	for n: int in range(1, 10):
+		var h: HoleData = m.build_tool.builder.hole(n)
+		assert_true(m.frame_hole(n))
+		strips = m.free_view_rects()  # the picked hole's issue text sets the panel's height
+		var tee_w: Vector2 = m.tile_world(h.tee)
+		var cup_w: Vector2 = m.tile_world(h.cup)
+		var free: Rect2 = m.free_view_rect_for(tee_w, cup_w)
+		assert_true(free == strips[0] or free == strips[1], "hole %d frames in one of the strips" % n)
+		if n == 9:
+			assert_gt(strips[0].get_area(), strips[1].get_area(),
+					"hole 9's issue text keeps the strip beside the collapsed panel the larger")
+			assert_eq(free, strips[1], "yet hole 9 frames in the strip under the panel")
+			assert_eq(cam.zoom.x, 1.0, "nearer than expanded")
+		assert_gte(cam.zoom.x, open_zoom[n - 1], "hole %d: collapsing never frames it farther out" % n)
+		var inner: Rect2 = free.grow(-cam.tuning.aim_frame_margin + 0.5)
+		for at: Vector2 in [cam.screen_point(tee_w), cam.screen_point(cup_w)]:
+			assert_true(inner.has_point(at), "hole %d: %s shows in the free view %s" % [n, at, free])
+			for ctl: Control in m.hud_controls():
+				assert_false(m._hud_rect(ctl).has_point(at), "hole %d: %s does not cover it" % [n, ctl.name])
+		for ctl: Control in m.hud_controls():
+			assert_false(free.intersects(m._hud_rect(ctl)), "hole %d: the free view misses %s" % [n, ctl.name])
+
+
+func test_the_free_view_follows_the_panel_height() -> void:
+	var c: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(c))
+	var m := _main_with(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	var open_free: Rect2 = m.free_view_rect()
+	panel.collapse_button.pressed.emit()
+	var shut_free: Rect2 = m.free_view_rect()
+	var shut_panel: Rect2 = m._hud_rect(panel)
+	assert_gt(shut_free.get_area(), open_free.get_area(), "a short panel frees more of the view")
+	assert_gt(shut_free.end.x, shut_panel.position.x, "the free view runs under the collapsed panel")
+	for ctl: Control in m.hud_controls():
+		assert_false(shut_free.intersects(m._hud_rect(ctl)), "it misses %s" % ctl.name)
+	assert_true(m.frame_hole(2))
+	var cam: CourseCamera = m.camera
+	var inner: Rect2 = m.free_view_rect().grow(-cam.tuning.aim_frame_margin + 0.5)
+	for cell: Vector2i in [c.holes[1].tee, c.holes[1].cup]:
+		var at: Vector2 = cam.screen_point(m.tile_world(cell))
+		assert_true(inner.has_point(at), "hole 2's %s shows in the free view" % cell)
+		assert_false(m._hud_rect(panel).has_point(at), "not under the panel")
+	panel.collapse_button.pressed.emit()
+	assert_eq(m.free_view_rect(), open_free, "expanding gives the old free view back")
+
+
 # --- framing hole 1 ---
 
 func test_loading_a_course_with_holes_frames_hole_one() -> void:
