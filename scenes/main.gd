@@ -201,7 +201,8 @@ func frame_first_hole() -> bool:
 ## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect_for them,
 ## zoomed out until both show, as far as the farthest step (0.175x, D45, sized so every
 ## nine_holes fixture hole fits at 1280 x 720); a hole too long even for that keeps its tee
-## inside the free view and runs off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
+## inside the free view and runs off the screen toward its cup (CourseCamera.frame_points),
+## its cup either off the screen or in the free view, never under a control (E3-S26). False, changing nothing, when the
 ## course has no hole `number` with its tee and cup on the map. `slot` picks that one of several
 ## holes sharing `number` (E3-S11) while it still has the number.
 func frame_hole(number: int, slot: int = -1) -> bool:
@@ -219,7 +220,7 @@ func frame_hole(number: int, slot: int = -1) -> bool:
 	build_tool.select_hole(number, slot)
 	var tee: Vector2 = tile_world(h.tee)
 	var cup: Vector2 = tile_world(h.cup)
-	camera.frame_points(tee, cup, free_view_rect_for(tee, cup))
+	camera.frame_points(tee, cup, free_view_rect_for(tee, cup), free_view_rects())
 	return true
 
 
@@ -258,17 +259,30 @@ func free_view_rect() -> Rect2:
 ## strip beside the right panels and the strip under them, the one that shows both at the
 ## nearest zoom (CourseCamera.frame_zoom_index), or at a tie the larger. So a collapsed hole
 ## list frees the map under it for a hole that fits there better, even when the strip beside
-## the panel is the larger.
+## the panel is the larger. When neither fits them even at the farthest zoom (E3-S26), the one
+## whose framing keeps the cup clear of the controls and shows more of the tee-to-cup line
+## (CourseCamera.frame_placement) wins, the larger at a tie.
 func free_view_rect_for(a: Vector2, b: Vector2) -> Rect2:
+	var strips: Array[Rect2] = free_view_rects()
 	var best: Rect2 = free_view_rect()
 	var best_zoom: int = camera.frame_zoom_index(a, b, best.size)
-	for strip: Rect2 in free_view_rects():
+	for strip: Rect2 in strips:
 		if not strip.has_area():
 			continue
 		var z: int = camera.frame_zoom_index(a, b, strip.size)
 		if z > best_zoom:
 			best = strip
 			best_zoom = z
+	if best_zoom > 0 or camera.fits(a, b, camera.tuning.zoom_levels[0], best.size):
+		return best
+	var best_f: CourseCamera.Framing = camera.frame_placement(a, b, best, strips)
+	for strip: Rect2 in strips:
+		if not strip.has_area() or strip == best:
+			continue
+		var f: CourseCamera.Framing = camera.frame_placement(a, b, strip, strips)
+		if (f.cup_clear and not best_f.cup_clear) or (f.cup_clear == best_f.cup_clear and f.shown > best_f.shown + 0.001):
+			best = strip
+			best_f = f
 	return best
 
 

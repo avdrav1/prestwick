@@ -219,24 +219,156 @@ func frame_zoom_index(a: Vector2, b: Vector2, area: Vector2) -> int:
 ## the view the HUD leaves free (screen px; an empty rect is the whole view): from the player's
 ## own zoom, steps the zoom out until both fit inside it, never past the farthest level, and
 ## puts their midpoint at its centre. When they do not fit even then, `a` (the tee) is held at
-## least aim_frame_margin inside it, so a long hole still shows where it starts. The bounds
+## least aim_frame_margin inside it, so a long hole still shows where it starts. `free` (E3-S26)
+## is every part of the view the HUD leaves free (Main.free_view_rects); given it, a cup that
+## would then show on screen under a control is moved clear (frame_placement). The bounds
 ## stay; the camera is not tracking. The player's zoom level is kept, so Play's next centre_on
 ## comes back to it.
-func frame_points(a: Vector2, b: Vector2, safe: Rect2 = Rect2()) -> void:
+func frame_points(a: Vector2, b: Vector2, safe: Rect2 = Rect2(), free: Array[Rect2] = []) -> void:
 	tracking = false
 	has_focus = false
 	has_lead = false
+	var f: Framing = frame_placement(a, b, safe, free)
+	set_zoom_index(f.zoom_index)
+	position = f.position
+
+
+## Where frame_points would put the camera for `a` and `b` in `safe`, and what it shows.
+class Framing:
+	extends RefCounted
+	var zoom_index: int = 0
+	var position: Vector2 = Vector2.ZERO
+	## True when `b` (the cup) is either off the screen, at least aim_frame_margin past its edge,
+	## or inside one of the free rects (inset by aim_frame_margin, or by a quarter of a strip
+	## too thin for it), so no control covers it.
+	var cup_clear: bool = true
+	## How much of the screen line from `a` to `b` lies in the free rects, 0 to 1.
+	var shown: float = 0.0
+
+
+## The framing frame_points uses (E3-S26). With `free` empty it is E3-S9's: the midpoint at
+## `safe`'s centre, the tee held inside when the hole does not fit. With `free` given and a
+## hole too long for the farthest zoom whose cup would then show on screen under a control, the
+## tee is moved within `safe` (a grid of FRAME_SEARCH_STEP px) to where the cup is clear (off
+## the screen, or inside a free rect) and the most of the tee-to-cup line shows; with no such
+## place the first framing stays.
+func frame_placement(a: Vector2, b: Vector2, safe: Rect2 = Rect2(), free: Array[Rect2] = []) -> Framing:
+	var f := Framing.new()
 	var v: Vector2 = view_size()
 	if not safe.has_area():
 		safe = Rect2(Vector2.ZERO, v)
-	set_zoom_index(frame_zoom_index(a, b, safe.size))
-	var z: float = zoom.x
+	f.zoom_index = frame_zoom_index(a, b, safe.size)
+	var z: float = tuning.zoom_levels[f.zoom_index]
 	# A world point w shows at (w - position) * z + v / 2: put the midpoint at safe's centre.
 	var p: Vector2 = (a + b) * 0.5 - (safe.get_center() - v * 0.5) / z
 	var m: Vector2 = Vector2.ONE * _frame_margin()
 	var lo: Vector2 = a - (safe.end - m - v * 0.5) / z
 	var hi: Vector2 = a - (safe.position + m - v * 0.5) / z
-	position = _clamped(p.clamp(lo.min(hi), hi.max(lo)))
+	f.position = _clamped(p.clamp(lo.min(hi), hi.max(lo)))
+	if free.is_empty():
+		f.shown = _shown(a, b, f.position, z, [safe])
+		return f
+	f.cup_clear = _cup_clear(_screen_at(b, f.position, z), free)
+	f.shown = _shown(a, b, f.position, z, free)
+	if f.cup_clear or fits(a, b, z, safe.size):
+		return f
+	# The cup would show under a control: look for a tee point in safe that clears it.
+	var area: Rect2 = _inset(safe)
+	var first_tee: Vector2 = _screen_at(a, f.position, z)
+	var best_d: float = INF
+	var found: bool = false
+	var y: float = area.position.y
+	while y <= area.end.y + 0.01:
+		var x: float = area.position.x
+		while x <= area.end.x + 0.01:
+			var q: Vector2 = _clamped(a - (Vector2(x, y) - v * 0.5) / z)
+			var t: Vector2 = _screen_at(a, q, z)
+			if area.grow(0.5).has_point(t) and _cup_clear(_screen_at(b, q, z), free):
+				var shown: float = _shown(a, b, q, z, free)
+				var d: float = t.distance_squared_to(first_tee)
+				if not found or shown > f.shown + 0.001 or (shown > f.shown - 0.001 and d < best_d):
+					found = true
+					f.shown = shown
+					f.position = q
+					best_d = d
+			x += FRAME_SEARCH_STEP
+		y += FRAME_SEARCH_STEP
+	f.cup_clear = found
+	return f
+
+
+## The tee grid frame_placement searches, in screen px (not a tuning number: a finer grid only
+## finds the same framing a few px over).
+const FRAME_SEARCH_STEP: float = 16.0
+
+
+## `r` inset by aim_frame_margin on each side, or by a quarter of its size on a side too thin
+## for it, so a thin strip (the one under a tall hole panel) still holds a point.
+func _inset(r: Rect2) -> Rect2:
+	var m: Vector2 = (Vector2.ONE * _frame_margin()).min(r.size * 0.25)
+	return r.grow_individual(-m.x, -m.y, -m.x, -m.y)
+
+
+## True when screen point `c` (a cup) shows under no control: off the screen by at least
+## aim_frame_margin, or inside one of `free` inset (_inset).
+func _cup_clear(c: Vector2, free: Array[Rect2]) -> bool:
+	if not Rect2(Vector2.ZERO, view_size()).grow(_frame_margin()).has_point(c):
+		return true
+	for r: Rect2 in free:
+		if r.has_area() and _inset(r).has_point(c):
+			return true
+	return false
+
+
+## How much of the screen line from `a` to `b`, with the camera at `pos` and zoom `z`, lies in
+## the union of `rects`, as a fraction of its length (1 for a point inside one).
+func _shown(a: Vector2, b: Vector2, pos: Vector2, z: float, rects: Array[Rect2]) -> float:
+	var s: Vector2 = _screen_at(a, pos, z)
+	var e: Vector2 = _screen_at(b, pos, z)
+	var spans: Array[Vector2] = []
+	for r: Rect2 in rects:
+		var span: Vector2 = _clip(s, e, r)
+		if span.y > span.x:
+			spans.append(span)
+	if spans.is_empty():
+		return 0.0
+	spans.sort_custom(func(p: Vector2, q: Vector2) -> bool: return p.x < q.x)
+	var total: float = 0.0
+	var cur: Vector2 = spans[0]
+	for i: int in range(1, spans.size()):
+		if spans[i].x <= cur.y:
+			cur.y = maxf(cur.y, spans[i].y)
+		else:
+			total += cur.y - cur.x
+			cur = spans[i]
+	return total + cur.y - cur.x
+
+
+## The part of the segment `s` to `e` inside `r`, as parameters (t0, t1) along it (Liang-Barsky);
+## t1 <= t0 when it misses.
+static func _clip(s: Vector2, e: Vector2, r: Rect2) -> Vector2:
+	var t0: float = 0.0
+	var t1: float = 1.0
+	var d: Vector2 = e - s
+	for axis: int in 2:
+		var lo: float = r.position[axis]
+		var hi: float = r.end[axis]
+		if absf(d[axis]) < 0.000001:
+			if s[axis] < lo or s[axis] > hi:
+				return Vector2(1, 0)
+			continue
+		var ta: float = (lo - s[axis]) / d[axis]
+		var tb: float = (hi - s[axis]) / d[axis]
+		t0 = maxf(t0, minf(ta, tb))
+		t1 = minf(t1, maxf(ta, tb))
+	if s == e:
+		return Vector2(0, 1) if r.has_point(s) else Vector2(1, 0)
+	return Vector2(t0, t1)
+
+
+## Where world point `w` shows on screen with the camera at `pos` and zoom `z`.
+func _screen_at(w: Vector2, pos: Vector2, z: float) -> Vector2:
+	return (w - pos) * z + view_size() * 0.5
 
 
 ## Where world point `w` shows on screen, in px, at the camera's position and zoom.

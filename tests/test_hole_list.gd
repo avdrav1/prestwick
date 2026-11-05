@@ -660,7 +660,7 @@ func test_the_free_view_follows_the_panel_height() -> void:
 		assert_false(shut_free.intersects(m._hud_rect(ctl)), "it misses %s" % ctl.name)
 	assert_true(m.frame_hole(2))
 	var cam: CourseCamera = m.camera
-	var inner: Rect2 = m.free_view_rect().grow(-cam.tuning.aim_frame_margin + 0.5)
+	var inner: Rect2 = m.free_view_rect_for(m.tile_world(c.holes[1].tee), m.tile_world(c.holes[1].cup)).grow(-cam.tuning.aim_frame_margin + 0.5)
 	for cell: Vector2i in [c.holes[1].tee, c.holes[1].cup]:
 		var at: Vector2 = cam.screen_point(m.tile_world(cell))
 		assert_true(inner.has_point(at), "hole 2's %s shows in the free view" % cell)
@@ -677,7 +677,7 @@ func test_loading_a_course_with_holes_frames_hole_one() -> void:
 	b.renumber_hole(1, 2)  # hole 1 is the second row now
 	var m := _main_with(c)
 	var h: HoleData = b.hole(1)
-	var free: Rect2 = m.free_view_rect()
+	var free: Rect2 = m.free_view_rect_for(m.tile_world(h.tee), m.tile_world(h.cup))
 	assert_true(free.has_area(), "the HUD leaves part of the view free")
 	var view := Rect2(Vector2.ZERO, m.camera.view_size())
 	assert_lt(free.size.x, view.size.x, "the left column and the hole panel are taken off")
@@ -699,7 +699,7 @@ func test_a_long_hole_one_frames_tee_and_cup_clear_of_the_hud() -> void:
 	NineHoles.build(CourseBuilder.new(c))
 	var m := _main_with(c)
 	assert_eq(m.camera.zoom.x, m.camera.tuning.zoom_levels[0], "framed at the farthest zoom")
-	var free: Rect2 = m.free_view_rect()
+	var free: Rect2 = m.free_view_rect_for(m.tile_world(c.holes[0].tee), m.tile_world(c.holes[0].cup))
 	for cell: Vector2i in [c.holes[0].tee, c.holes[0].cup]:
 		var at: Vector2 = _screen_of(m, cell)
 		assert_true(free.grow(-m.camera.tuning.aim_frame_margin + 0.5).has_point(at),

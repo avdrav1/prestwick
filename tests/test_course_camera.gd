@@ -294,7 +294,8 @@ func test_a_long_hole_keeps_its_tee_inside_the_safe_area_in_every_direction() ->
 
 
 ## E3-S9 Accept (D45): every nine_holes hole framed at 1280 x 720 (the hole list showing all
-## nine rows) puts its tee and its cup inside the free view, clear of every HUD control: the
+## nine rows) puts its tee and its cup inside the free view it frames in (free_view_rect_for,
+## E3-S26), clear of every HUD control: the
 ## top-left column, the hole panel and the build palette. The farthest zoom, 0.175x, is sized
 ## for the longest, hole 3 (520 yd, 3328 x 1680 px at 1x, against a free view of 731 x 622):
 ## it fits there and not at 0.5x. Each hole frames at the nearest level that fits it.
@@ -312,7 +313,7 @@ func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 	for h: HoleData in c.holes:
 		assert_true(m.frame_hole(h.number), "hole %d frames" % h.number)
 		assert_eq(m.build_tool.hole_number, h.number, "and is picked")
-		var free: Rect2 = m.free_view_rect()
+		var free: Rect2 = m.free_view_rect_for(m.tile_world(h.tee), m.tile_world(h.cup))
 		var controls: Array[Control] = m.hud_controls()
 		var names: PackedStringArray = []
 		for ctl: Control in controls:
@@ -345,8 +346,91 @@ func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 		assert_eq(framed_at[n], levels[0], "hole %d needs the farthest step" % n)
 	var h3: HoleData = c.holes[2]
 	assert_eq(h3.number, 3)
-	var free3: Rect2 = m.free_view_rect()
+	var free3: Rect2 = m.free_view_rect_for(m.tile_world(h3.tee), m.tile_world(h3.cup))
 	assert_false(cam.fits(m.tile_world(h3.tee), m.tile_world(h3.cup), 0.5, free3.size),
 			"the longest hole does not fit at 0.5x")
 	assert_true(cam.fits(m.tile_world(h3.tee), m.tile_world(h3.cup), levels[0], free3.size),
 			"and fits at the farthest step")
+
+
+
+# --- framing long holes against the controls themselves (E3-S26) ---
+
+## FrameHoleShot.across_course in Main at 1280 x 720: a 128 x 128 plot with eight par 3 rows (so
+## the expanded hole list stands tall, about 506 px) and hole 9 running straight across the
+## screen, `steps` tiles east and as many north (64 screen px a step at 1x).
+func _across_main(steps: int) -> Main:
+	var c: CourseData = FrameHoleShot.across_course(steps)
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	m.show_course(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	return m
+
+
+## Checks hole `number` of `m` once framed: its tee shows in free_view_rect_for(tee, cup) and
+## under no control, and its cup, when it shows on screen at all, under no control either (nor
+## within half aim_frame_margin of one, so its flag is not cut by the control's edge).
+func _assert_framed_clear(m: Main, number: int, label: String) -> void:
+	var h: HoleData = m.build_tool.builder.hole(number)
+	assert_true(m.frame_hole(number), "%s: frames" % label)
+	var cam: CourseCamera = m.camera
+	var tee_w: Vector2 = m.tile_world(h.tee)
+	var cup_w: Vector2 = m.tile_world(h.cup)
+	var free: Rect2 = m.free_view_rect_for(tee_w, cup_w)
+	var tee: Vector2 = cam.screen_point(tee_w)
+	var cup: Vector2 = cam.screen_point(cup_w)
+	gut.p("E3-S26: %s at %.3fx: tee %s, cup %s, in %s" % [label, cam.zoom.x, tee, cup, free])
+	assert_true(free.has_point(tee), "%s: the tee %s shows in %s" % [label, tee, free])
+	var screen := Rect2(Vector2.ZERO, cam.view_size())
+	for ctl: Control in m.hud_controls():
+		var r: Rect2 = m._hud_rect(ctl)
+		assert_false(r.has_point(tee), "%s: %s does not cover the tee" % [label, ctl.name])
+		assert_false(r.grow(cam.tuning.aim_frame_margin * 0.5).has_point(cup) and screen.has_point(cup),
+				"%s: the cup %s does not show under %s %s" % [label, cup, ctl.name, r])
+
+
+## E3-S26 Accept: a hole just over the 0.5x fit (30 steps, 960 px across at 0.5x against the
+## 1080 px strip under the panel less its margins) frames at 0.175x with its cup clear of every
+## control, and one just over the 0.175x fit (64 steps, 717 px across at 0.175x against a
+## 716 px strip beside the panel; E3-S9 put its cup at x 981, under the hole panel) keeps it
+## clear too, as do longer ones (80 steps: under the panel at x 1160 before).
+func test_a_hole_just_over_the_fit_keeps_its_cup_clear_of_every_control() -> void:
+	var m := _across_main(30)
+	_assert_framed_clear(m, 9, "30 steps")
+	assert_almost_eq(m.camera.zoom.x, 0.175, 0.0001, "too long for 0.5x, framed at the farthest step")
+	var h: HoleData = m.course.holes[8]
+	var inner: Rect2 = m.free_view_rect_for(m.tile_world(h.tee), m.tile_world(h.cup)).grow(
+			-m.camera.tuning.aim_frame_margin + 0.5)
+	assert_true(inner.has_point(m.camera.screen_point(m.tile_world(h.cup))), "the whole hole shows")
+	for steps: int in [56, 64, 72, 80, 100]:
+		var long_m := _across_main(steps)
+		_assert_framed_clear(long_m, 9, "%d steps" % steps)
+		assert_eq(long_m.camera.zoom.x, long_m.camera.tuning.zoom_levels[0], "%d steps: the farthest step" % steps)
+
+
+## E3-S26 Accept: when no strip fits a hole, the one that shows more of the tee-to-cup line wins.
+## Hole 9 running across the screen, 64 steps, is too wide for the strip beside the panel and
+## for the 100 px strip under it with its margins; the strip under the panel shows all of its
+## line, the strip beside it only part.
+func test_when_no_strip_fits_the_one_showing_more_of_the_line_wins() -> void:
+	var m := _across_main(64)
+	var cam: CourseCamera = m.camera
+	var h: HoleData = m.course.holes[8]
+	var tee_w: Vector2 = m.tile_world(h.tee)
+	var cup_w: Vector2 = m.tile_world(h.cup)
+	var t0: int = Time.get_ticks_usec()
+	assert_true(m.frame_hole(9))
+	gut.p("E3-S26: frame_hole on a hole too long for both strips took %.2f ms" % [(Time.get_ticks_usec() - t0) / 1000.0])
+	var strips: Array[Rect2] = m.free_view_rects()
+	for s: Rect2 in strips:
+		assert_false(cam.fits(tee_w, cup_w, cam.tuning.zoom_levels[0], s.size), "%s does not fit it" % s)
+	assert_gt(strips[0].get_area(), strips[1].get_area(), "the strip beside the panel is the larger")
+	var beside: CourseCamera.Framing = cam.frame_placement(tee_w, cup_w, strips[0], strips)
+	var under: CourseCamera.Framing = cam.frame_placement(tee_w, cup_w, strips[1], strips)
+	gut.p("E3-S26: 64 steps across: beside shows %.2f (cup clear %s), under %.2f (cup clear %s)" % [
+			beside.shown, beside.cup_clear, under.shown, under.cup_clear])
+	assert_gt(under.shown, beside.shown, "under the panel the line shows more")
+	assert_eq(m.free_view_rect_for(tee_w, cup_w), strips[1], "so it wins over the larger strip")
+	assert_almost_eq(cam.position, under.position, Vector2(0.01, 0.01), "and the hole is framed there")
