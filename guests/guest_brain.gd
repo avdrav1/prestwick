@@ -98,12 +98,14 @@ var _sim_used: int = 0
 var _need: int = 0
 ## Share of the current simulated second gone by in real time (advance_real).
 var _clock: float = 0.0
-## Cart path searches this step ({Vector4i(from tile, to tile): tiles}, GuestWalk.route). The
-## course cannot change inside a step, so a search is shared by every walk of the step (a
-## group setting off from one cup, its pace walk) and the cache is dropped before the next.
-var _route_cache: Dictionary = {}
+## Cart path searches (GuestWalk.route's cache) kept across steps while the course's tiles
+## stand unchanged (E3-S15): every walk of the day between the same two path tiles shares one
+## search, and the cache is dropped at the first walk after any tile or parcel write
+## (CourseData.revision moved, GuestWalk.Cache.follow). A cached route is the one a fresh
+## search finds, so the day is the same with or without it.
+var _route_cache := GuestWalk.Cache.new()
 ## HoleChecks.terrain_key of the course this step ("" until a reaction needs it); dropped
-## before the next step, as the route cache is.
+## before the next step.
 var _terrain_key: String = ""
 
 
@@ -183,7 +185,6 @@ func step() -> void:
 		g.second_ticks = 0
 	_cursor = 0
 	_sim_used = 0
-	_route_cache.clear()
 	_terrain_key = ""
 	_update(second)
 	second += 1
@@ -364,8 +365,7 @@ func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	teed_off[h.number] = int(teed_off.get(h.number, 0)) + 1
 	g.struck = false
 	var tee := field.tile_center(h.tee)
-	var walk_yd := (GuestWalk.route(course, g.prev_cup, tee, tuning, field.yards_per_tile,
-			_route_cache).length if g.has_prev_cup else -1.0)
+	var walk_yd := route(g.prev_cup, tee).length if g.has_prev_cup else -1.0
 	for guest: Guest in g.guests:
 		guest.walk_yd = walk_yd
 	_update_on_hole(g, t)
@@ -588,8 +588,7 @@ func _leave(guest: Guest, t: int, at_dusk: bool) -> void:
 func _start_walk(guest: Guest, to: Vector2) -> void:
 	if guest.position == to:
 		return
-	guest.walk = GuestWalk.route(course, guest.position, to, tuning, field.yards_per_tile,
-			_route_cache)
+	guest.walk = route(guest.position, to)
 	guest.state = Guest.State.WALKING
 	guest.waiting_for = Guest.Wait.NONE
 
@@ -604,6 +603,18 @@ func _walk(guest: Guest, t: int) -> void:
 		guest.position = guest.walk.end()
 		guest.walk = null
 		guest.state = Guest.State.WAITING
+
+
+## A guest's walk from `from` to `to` (yards) on the course as it is now (GuestWalk.route),
+## its cart path search shared through `_route_cache`, which is dropped first if any tile or
+## parcel was written since it was filled (E3-S15). Reads only.
+func route(from: Vector2, to: Vector2) -> GuestWalk:
+	return GuestWalk.route(course, from, to, tuning, field.yards_per_tile, _route_cache)
+
+
+## Cart path searches kept (start and end tile pairs), for tests and the perf script.
+func route_cache_size() -> int:
+	return _route_cache.size()
 
 
 ## True when hole `number` is there and open (an open hole passed every rule).

@@ -370,7 +370,7 @@ func test_a_walk_follows_a_cart_path_when_one_serves_it() -> void:
 		b.paint(cell, Surface.Type.CART_PATH, 1)
 	b.end_stroke()
 	var w := GuestWalk.route(b.course, from, to, tuning)
-	var cache := {}
+	var cache := GuestWalk.Cache.new()
 	var first := GuestWalk.route(b.course, from, to, tuning, 5.0, cache)
 	var again := GuestWalk.route(b.course, from, to, tuning, 5.0, cache)
 	assert_eq(cache.size(), 1, "one search for both walks")
@@ -410,6 +410,112 @@ func test_a_walk_follows_a_cart_path_when_one_serves_it() -> void:
 	assert_false(c.is_owned(20, 2))
 	var over := GuestWalk.route(c, from, to, tuning)
 	assert_eq(over.points, PackedVector2Array([from, to]), "straight over water and unowned land")
+
+
+func test_the_bounded_path_search_takes_the_route_an_unbounded_one_would() -> void:
+	# E3-S15: random lattices of cart path (some pieces cut off from the rest) and random walks
+	# across them: the bounded search gives the same walk as the unbounded search with the
+	# detour check after it, every time, and searches fewer tiles where an end is cut off.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1515
+	var taken := 0
+	var refused := 0
+	for lattice in 6:
+		var c := CourseData.create(48, 48, Surface.Type.ROUGH, 2)
+		var b := CourseBuilder.new(c)
+		b.begin_stroke()
+		var step := 2 + lattice % 3
+		for y in 48:
+			for x in 48:
+				if (x % step == 0 or y % step == 0) and rng.randf() < 0.85:
+					b.paint(Vector2i(x, y), Surface.Type.CART_PATH, 1)
+		b.end_stroke()
+		for walk in 40:
+			var from := Vector2(rng.randf_range(0.0, 240.0), rng.randf_range(0.0, 240.0))
+			var to := Vector2(rng.randf_range(0.0, 240.0), rng.randf_range(0.0, 240.0))
+			var w := GuestWalk.route(c, from, to, tuning)
+			var want := _unbounded_route(c, from, to)
+			assert_eq(w.points, want, "lattice %d walk %d: the unbounded search's walk" % [lattice, walk])
+			if want.size() > 2:
+				taken += 1
+			else:
+				refused += 1
+	assert_gt(taken, 20, "many walks follow the path")
+	assert_gt(refused, 20, "and many do not")
+	# A disconnected end: a long path row and one lone path tile below it. No route either way,
+	# bounded or not (the bound only stops the search sooner), so the walk is straight.
+	var c := CourseData.create(120, 10, Surface.Type.ROUGH, 2)
+	var row := CourseBuilder.new(c)
+	row.begin_stroke()
+	for x in 119:
+		row.paint(Vector2i(x, 2), Surface.Type.CART_PATH, 1)
+	row.paint(Vector2i(20, 6), Surface.Type.CART_PATH, 1)
+	row.end_stroke()
+	assert_eq(GuestWalk._search(c, Vector2i(0, 2), Vector2i(20, 6), 30), [] as Array[Vector2i])
+	assert_eq(GuestWalk.route(c, Vector2(2.5, 12.5), Vector2(102.5, 32.5), tuning).points,
+			PackedVector2Array([Vector2(2.5, 12.5), Vector2(102.5, 32.5)]), "no path: straight")
+
+
+func test_a_cached_walk_equals_a_fresh_one_after_a_path_edit() -> void:
+	# E3-S15: the brain keeps cart path searches across steps and drops them when the course is
+	# written (CourseData.revision), so a walk after a path edit is the fresh walk on the edited
+	# course, never the one cached before it.
+	var b := CourseBuilder.new(CourseData.create(40, 20, Surface.Type.ROUGH, 2))
+	b.begin_stroke()
+	for cell: Vector2i in BuildTool.grid_line(Vector2i(3, 3), Vector2i(31, 3)):
+		b.paint(cell, Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+	var brain := GuestBrain.new(b.course, 1, tuning, model, [
+		GuestSpawner.group(0, 0.0, [[10, 10, Guest.Taste.CASUAL, 61]]),
+	])
+	var from := Vector2(12.5, 12.5)
+	var to := Vector2(162.5, 12.5)
+	var first := brain.route(from, to)
+	assert_true(first.on_path, "the path serves the walk")
+	assert_eq(brain.route_cache_size(), 1)
+	for i in 5:
+		brain.step()
+	var again := brain.route(from, to)
+	assert_eq(again.points, first.points, "kept across steps")
+	assert_eq(brain.route_cache_size(), 1, "the search ran once")
+	# Cut the path in the middle: the cached route crosses rough now; the brain's walk is the
+	# fresh one (straight: no path joins the ends).
+	b.paint(Vector2i(17, 3), Surface.Type.ROUGH, 1)
+	var cut := brain.route(from, to)
+	assert_eq(cut.points, GuestWalk.route(b.course, from, to, tuning).points, "fresh after the cut")
+	assert_false(cut.on_path, "the cut path no longer serves the walk")
+	# Mend it one row down round the cut: the fresh walk follows the new tiles.
+	b.begin_stroke()
+	for cell: Vector2i in [Vector2i(16, 4), Vector2i(17, 4), Vector2i(18, 4)]:
+		b.paint(cell, Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+	var mended := brain.route(from, to)
+	assert_eq(mended.points, GuestWalk.route(b.course, from, to, tuning).points, "fresh after the mend")
+	assert_true(mended.on_path)
+	assert_true(Vector2(17.5, 4.5) * 5.0 in mended.points, "round the cut")
+	# An undo writes the tiles back: the walk is the original one again, searched afresh.
+	b.undo()
+	b.undo()
+	assert_eq(brain.route(from, to).points, first.points, "the old path, searched afresh")
+
+
+## GuestWalk.route as it was before E3-S15: an unbounded search, then the detour check.
+func _unbounded_route(c: CourseData, from: Vector2, to: Vector2) -> PackedVector2Array:
+	var straight := PackedVector2Array([from, to])
+	var a := GuestWalk._nearest_path_tile(c, from, tuning.cart_path_reach_yd, 5.0)
+	var e := GuestWalk._nearest_path_tile(c, to, tuning.cart_path_reach_yd, 5.0)
+	if a.x < 0 or e.x < 0 or a == e:
+		return straight
+	var tiles := GuestWalk._search(c, a, e, -1)
+	if tiles.is_empty():
+		return straight
+	var out := PackedVector2Array([from])
+	for t: Vector2i in tiles:
+		out.append((Vector2(t) + Vector2(0.5, 0.5)) * 5.0)
+	out.append(to)
+	if GuestWalk._polyline_length(out) <= from.distance_to(to) * tuning.cart_path_max_detour:
+		return out
+	return straight
 
 
 func test_guests_walk_the_cart_path_between_holes() -> void:

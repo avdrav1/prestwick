@@ -40,6 +40,15 @@ extends SceneTree
 ## rules and the click edits run with a fresh day of guests playing hole 1 (the script's own
 ## GuestBrain, as in the other Build phases). The run fails (exit 1) when a 3x frame's guest
 ## work at 60 fps passes `frame_guest_ms_max`.
+##
+## E3-S15: in either mode, before the rest, the guests' two searches under load with no scene
+## (_time_searches): the cart path search on a dense painted lattice and Interesting's safe
+## route on a map whose trees walls make it flood, each with whole guest days running at 3x.
+## Each day counts its frames past `frame_guest_ms_max`, as _time_guest_frames does; the run
+## fails (exit 1) when a lattice frame passes it (the cart path search is bounded so it does
+## not). The flooded map's are counted and printed but do not fail the run: a step that
+## measures a hole's statics afresh there runs HoleChecks.measure in one frame (5 to 7 ms a
+## hole), so a step measuring two can pass 10 ms (a followup: spread or defer the measure).
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
@@ -62,6 +71,9 @@ const PLAY_START_S: int = 92
 ## Frames one breaking-drag cycle takes: press, 8 drag frames, release, undo, settle.
 const DRAG_CYCLE: int = 16
 const WARMUP_FRAMES: int = 60
+## E3-S15: the flooded map's trees walls (columns), and how often its guest days get a click edit.
+const SEARCH_WALL_X: Array[int] = [37, 106]
+const SEARCH_EDIT_FRAMES: int = 60
 const IDLE_FRAMES: int = 300
 ## Tiles a click edit paints: rough land below the nine rows, outside every footprint.
 const EDIT_TILES: Array[Vector2i] = [Vector2i(64, 100), Vector2i(30, 110), Vector2i(100, 96)]
@@ -94,6 +106,9 @@ var _undo_guest_ms: Array[float] = []
 ## E3-S14: Play frames (3x, 60 fps) whose guest work passed frame_guest_ms_max; and, beside
 ## _guest_ms in Play, whether each frame ran a step.
 var _play_over: int = 0
+## E3-S15 review: lattice guest-day frames (3x, 60 fps) whose guest work passed
+## frame_guest_ms_max.
+var _search_over: int = 0
 var _guest_stepped: Array[bool] = []
 
 
@@ -106,9 +121,10 @@ func _initialize() -> void:
 	_time_break_drag(b)
 	_model = ShotModel.new()
 	_guest_tuning = GuestTuning.load_default()
+	_time_searches()
 	if DisplayServer.get_name() == "headless":
 		var over := _time_guest_frames()
-		quit(0 if opened.size() == 9 and over == 0 else 1)
+		quit(0 if opened.size() == 9 and over == 0 and _search_over == 0 else 1)
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -216,6 +232,186 @@ func _time_guest_frames() -> int:
 				_guest_tuning.frame_ticks_max, over, budget, ms.size(), on_time, brain.held_frames,
 				100.0 * (ms.size() - on_time) / on_time])
 	return over_60
+
+
+## E3-S15: the guests' two searches under load, guests running (in either mode, no scene):
+## the cart path search on a dense painted lattice and Interesting's safe route on a map it
+## floods. Each course is the nine-hole fixture on its own land; a whole guest day (seeds 1
+## and 2) runs at 3x in frames of 1/60 s with a click edit off every line every
+## SEARCH_EDIT_FRAMES frames (untimed), so the terrain changes as it does in Build; each
+## frame's guest work is timed, and the frames past 16.7 ms and past `frame_guest_ms_max`
+## counted (the lattice's past `frame_guest_ms_max` go to _search_over and fail the run). Then each search alone,
+## RUNS times: the walks the day's groups make between holes and along them (no cache), and
+## each hole's statics measured afresh (HoleChecks.measure).
+func _time_searches() -> void:
+	var lat := NineHoles.land(7)
+	var lb := CourseBuilder.new(lat)
+	_paint_lattice(lb)
+	var lat_open: Array[int] = NineHoles.build(lb)
+	var path_tiles := _count_surface(lat, Surface.Type.CART_PATH)
+	print("E3-S15 cart path lattice: %d path tiles (x or y a multiple of 3, painted before the holes), %d holes open" % [
+		path_tiles, lat_open.size()])
+	_time_search_walks(lat)
+	_search_over = _time_search_day("cart path lattice", lat, lb)
+	var fl := NineHoles.land(7)
+	var fb := CourseBuilder.new(fl)
+	NineHoles.build(fb)
+	var fl_open := _paint_walls(fb)
+	print("E3-S15 flooded map: trees walls at x %s, gap at row %d, %d holes open" % [
+		SEARCH_WALL_X, fl.height - 1, fl_open])
+	_time_search_statics(fl)
+	var fl_over := _time_search_day("flooded map", fl, fb)
+	print("E3-S15 3x guest frames over %.1f ms: cart path lattice %d (any fails the run), flooded map %d (reported only)" % [
+		_guest_tuning.frame_guest_ms_max, _search_over, fl_over])
+
+
+## Paints cart path on every tile of `b`'s course whose x or y is a multiple of 3 (9,159 tiles
+## on 128 x 128, E3 review's lattice), as one stroke; the holes painted after it cut it into
+## bands, so many walks have a path tile at one end that no path joins to the other.
+func _paint_lattice(b: CourseBuilder) -> void:
+	var c := b.course
+	b.begin_stroke()
+	for y: int in c.height:
+		for x: int in c.width:
+			if x % 3 == 0 or y % 3 == 0:
+				b.paint(Vector2i(x, y), Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+
+
+func _count_surface(c: CourseData, s: Surface.Type) -> int:
+	var n := 0
+	for y: int in c.height:
+		for x: int in c.width:
+			n += 1 if c.get_surface(x, y) == s else 0
+	return n
+
+
+## Trees walls down columns SEARCH_WALL_X from row 0 to the second last, so a hole whose line
+## crosses one (8 of the 9) has a hazard on its line and its only safe route round the wall's
+## far end: Interesting's search floods most of the map. The walls close the holes they cross
+## (footprint edits), so every hole is opened again. Returns the holes open.
+func _paint_walls(b: CourseBuilder) -> int:
+	var c := b.course
+	b.begin_stroke()
+	for x: int in SEARCH_WALL_X:
+		for y: int in c.height - 1:
+			b.paint(Vector2i(x, y), Surface.Type.TREES, 1)
+	b.end_stroke()
+	var n := 0
+	for spec: Array in NineHoles.HOLES:
+		n += 1 if b.open_hole(spec[0]) else 0
+	return n
+
+
+## A whole guest day (seeds 1 and 2) on `c` at 3x in 1/60 s frames, a click edit off every
+## line every SEARCH_EDIT_FRAMES frames; each frame's guest work. Returns the frames, over
+## both days, whose guest work passed frame_guest_ms_max.
+func _time_search_day(what: String, c: CourseData, b: CourseBuilder) -> int:
+	var over := 0
+	for day: int in [1, 2]:
+		var brain := GuestBrain.new(c, day, _guest_tuning, _model)
+		var ms: Array[float] = []
+		var step_ms: Array[float] = []
+		var frames := 0
+		var edits := 0
+		var measured := 0
+		var statics_ms: Array[float] = [0.0]
+		while not brain.day_over:
+			frames += 1
+			if frames % SEARCH_EDIT_FRAMES == 0:
+				var cell: Vector2i = EDIT_TILES[edits % EDIT_TILES.size()]
+				b.paint(cell, Surface.Type.FAIRWAY if edits % 2 == 0 else Surface.Type.ROUGH, 1)
+				edits += 1
+			var t0 := Time.get_ticks_usec()
+			var stepped := brain.advance_real(1.0 / 60.0, 3.0)
+			var d: float = (Time.get_ticks_usec() - t0) / 1000.0
+			ms.append(d)
+			if stepped > 0:
+				step_ms.append(d)
+			if brain.checks.measured > measured:
+				statics_ms.append(d)
+				measured = brain.checks.measured
+		over += _over(ms)
+		print("E3-S15 %s, guest day %d at 3x, 60 fps, %d click edits: guest work a frame %s; frames that ran a step %s; %d frames over 16.7 ms, %d over frame_guest_ms_max %.1f ms (%d of them measuring a hole); %d holes' statics measured, in frames %s; %d reactions; %d path searches kept at dusk" % [
+			what, day, edits, _stats(ms), _stats(step_ms), ms.filter(func(v: float) -> bool: return v > 16.7).size(),
+			_over(ms), _guest_tuning.frame_guest_ms_max, _over(statics_ms),
+			measured, _stats(statics_ms), _reactions(brain), brain.route_cache_size()])
+	return over
+
+
+func _reactions(brain: GuestBrain) -> int:
+	var n := 0
+	for g: Guest in brain.guests:
+		n += g.records.size()
+	return n
+
+
+## The cart path search alone (no cache), RUNS times each: every hole's cup to the next
+## hole's tee, and every hole's tee to points along its line (a guest walking to its ball).
+func _time_search_walks(c: CourseData) -> void:
+	var ypt := 5.0
+	var pairs: Array = []
+	for k: int in NineHoles.HOLES.size():
+		var tee: Vector2i = NineHoles.HOLES[k][2]
+		var cup: Vector2i = NineHoles.HOLES[k][3]
+		if k > 0:
+			pairs.append([NineHoles.HOLES[k - 1][3], tee])
+		for f: float in [0.25, 0.5, 0.75, 1.0]:
+			pairs.append([tee, Vector2i(Vector2(tee).lerp(Vector2(cup), f))])
+	var grid_ms: Array[float] = []
+	for i: int in RUNS / 4:
+		var t0 := Time.get_ticks_usec()
+		GuestWalk.path_grid(c)
+		grid_ms.append((Time.get_ticks_usec() - t0) / 1000.0)
+	print("E3-S15 cart path lattice: the path grid, read once per course revision: %s" % _stats(grid_ms))
+	var cache := GuestWalk.Cache.new()
+	var each: Array[float] = []
+	var unbounded: Array[float] = []
+	var on_path := 0
+	for pair: Array in pairs:
+		var from := (Vector2(pair[0]) + Vector2(0.5, 0.5)) * ypt
+		var to := (Vector2(pair[1]) + Vector2(0.5, 0.5)) * ypt
+		var runs: Array[float] = []
+		var full: Array[float] = []
+		var w: GuestWalk
+		var a := GuestWalk._nearest_path_tile(c, from, _guest_tuning.cart_path_reach_yd, ypt)
+		var b := GuestWalk._nearest_path_tile(c, to, _guest_tuning.cart_path_reach_yd, ypt)
+		for i: int in RUNS / 4:
+			cache.searches.clear()  # the grid stays: the search alone
+			var t0 := Time.get_ticks_usec()
+			w = GuestWalk.route(c, from, to, _guest_tuning, ypt, cache)
+			runs.append((Time.get_ticks_usec() - t0) / 1000.0)
+			if a.x >= 0 and b.x >= 0 and a != b:
+				t0 = Time.get_ticks_usec()
+				GuestWalk._search(c, a, b, -1, cache.grid)
+				full.append((Time.get_ticks_usec() - t0) / 1000.0)
+		runs.sort()
+		each.append(runs[runs.size() / 2])
+		if not full.is_empty():
+			full.sort()
+			unbounded.append(full[full.size() / 2])
+		on_path += 1 if w.on_path else 0
+	print("E3-S15 cart path lattice: one walk's route alone (median of %d runs each; %d walks, %d on the path): %s; the same searches with no bound (%d with path tiles at both ends) %s" % [
+		RUNS / 4, pairs.size(), on_path, _stats(each), unbounded.size(), _stats(unbounded)])
+
+
+## Interesting's safe route alone: every hole's statics measured afresh, RUNS times each.
+func _time_search_statics(c: CourseData) -> void:
+	var checks := HoleChecks.new(_guest_tuning, _model.params)
+	var each: Array[float] = []
+	var floods := 0
+	for h: HoleData in c.holes:
+		var runs: Array[float] = []
+		var s: HoleChecks.Statics
+		for i: int in RUNS / 4:
+			var t0 := Time.get_ticks_usec()
+			s = checks.measure(c, h)
+			runs.append((Time.get_ticks_usec() - t0) / 1000.0)
+		runs.sort()
+		each.append(runs[runs.size() / 2])
+		floods += 1 if s.hazard_on_line else 0
+	print("E3-S15 flooded map: one hole's statics measured afresh (hazard grid and safe route; median of %d runs each; %d holes, %d with a hazard on the line): %s" % [
+		RUNS / 4, c.holes.size(), floods, _stats(each)])
 
 
 func _q(a: Array[float], q: float) -> int:
@@ -527,7 +723,8 @@ func _process(_delta: float) -> bool:
 				print("every hole but hole 1 failing: frame holding a click edit, 1x: %s" % _stats(_edit_samples))
 				_print_guests("every hole but hole 1 failing")
 				print("3x guest frames over %.1f ms in Play: %d" % [_guest_tuning.frame_guest_ms_max, _play_over])
-				quit(0 if _play_over == 0 else 1)
+				print("3x guest frames over %.1f ms on the cart path lattice: %d" % [_guest_tuning.frame_guest_ms_max, _search_over])
+				quit(0 if _play_over == 0 and _search_over == 0 else 1)
 	return false
 
 	return false

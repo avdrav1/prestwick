@@ -18,6 +18,31 @@ const NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
 ]
 
+## Cart path searches kept for one course while its tiles stand unchanged (E3-S15). A walk
+## passed a Cache reads CourseData.revision first and drops what it holds when the course was
+## written since (any tile or parcel write), so a kept route is always the one a fresh search
+## would find. GuestBrain holds one for the whole day.
+class Cache:
+	extends RefCounted
+	## CourseData.revision the searches and the grid stand for.
+	var revision: int = -1
+	## {Vector4i(start tile, end tile): [tiles between, empty for none; steps searched]}.
+	var searches: Dictionary = {}
+	## path_grid of that course (empty until a search needs it).
+	var grid := PackedByteArray()
+
+	## Searches kept.
+	func size() -> int:
+		return searches.size()
+
+	## Drops everything if `course` was written since it was filled.
+	func follow(course: CourseData) -> void:
+		if course.revision != revision:
+			searches.clear()
+			grid = PackedByteArray()
+			revision = course.revision
+
+
 ## The route's corners, yards: the start first, the end last.
 var points: PackedVector2Array = PackedVector2Array()
 ## The route's length, yards.
@@ -28,11 +53,10 @@ var on_path: bool = false
 var walked: float = 0.0
 
 
-## The walk from `from` to `to` (yards) on `course`. `cache` ({Vector4i(start tile, end
-## tile): the path tiles between, empty for none}) shares the cart path search between walks
-## while the course stands unchanged; the caller drops it when the course may have changed.
+## The walk from `from` to `to` (yards) on `course`. `cache` shares the cart path search (and
+## the path grid it reads) between walks while the course stands unchanged (Cache.follow).
 static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
-		yards_per_tile: float = 5.0, cache: Variant = null) -> GuestWalk:
+		yards_per_tile: float = 5.0, cache: Cache = null) -> GuestWalk:
 	var w := GuestWalk.new()
 	var straight := from.distance_to(to)
 	var path := _path_route(course, from, to, tuning, yards_per_tile, cache)
@@ -84,56 +108,144 @@ static func _polyline_length(p: PackedVector2Array) -> float:
 
 
 ## from, the cart path's tile centres from the one nearest `from` to the one nearest `to`,
-## then to; empty when no path serves both ends.
+## then to; empty when no path serves both ends within the detour bound.
+##
+## E3-S15: the search is bounded by the detour. Every step between tile centres is at least
+## `ypt` yards, so a route of h steps is at least the two legs (from to the first tile, the last
+## tile to `to`) plus h * ypt; past `cart_path_max_detour` times the straight line it would be
+## refused. So the search never goes deeper than that many steps, and never enters a tile from
+## which `b` is further than the steps left (8-neighbour distance). It finds exactly the route
+## the unbounded search finds whenever that route is taken, and none only when that route
+## would have been refused: a disconnected end costs the tiles inside the bound, not its whole
+## component.
 static func _path_route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
-		ypt: float, cache: Variant = null) -> PackedVector2Array:
+		ypt: float, cache: Cache = null) -> PackedVector2Array:
 	var a := _nearest_path_tile(course, from, tuning.cart_path_reach_yd, ypt)
 	if a.x < 0:
 		return PackedVector2Array()
 	var b := _nearest_path_tile(course, to, tuning.cart_path_reach_yd, ypt)
 	if b.x < 0 or a == b:
 		return PackedVector2Array()
-	var key := Vector4i(a.x, a.y, b.x, b.y)
-	var tiles: Array[Vector2i] = []
-	if cache is Dictionary and (cache as Dictionary).has(key):
-		tiles = (cache as Dictionary)[key]
-	else:
-		tiles = _search(course, a, b)
-		if cache is Dictionary:
-			(cache as Dictionary)[key] = tiles
+	var legs := from.distance_to(_center(a, ypt)) + _center(b, ypt).distance_to(to)
+	var hops := max_hops(from.distance_to(to) * tuning.cart_path_max_detour - legs, ypt)
+	if hops < 1:
+		return PackedVector2Array()
+	var tiles := cached_search(course, a, b, hops, cache)
 	if tiles.is_empty():
 		return PackedVector2Array()
 	var out := PackedVector2Array([from])
 	for t: Vector2i in tiles:
-		out.append((Vector2(t) + Vector2(0.5, 0.5)) * ypt)
+		out.append(_center(t, ypt))
 	out.append(to)
 	return out
 
 
-## The cart path tiles from `a` to `b`, both included; empty when no path joins them.
-static func _search(course: CourseData, a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+## The most steps a route of at most `yards` between its first and last path tile can take
+## (each step at least `ypt`). Rounded up a hair, so float error never cuts a route.
+static func max_hops(yards: float, ypt: float) -> int:
+	return floori(yards / ypt + 1e-6)
+
+
+## _search from `a` to `b` within `hops` steps, through `cache` when one is given: a route
+## found is kept for any bound (a bound shorter than it refuses it by its length), and "none"
+## only for bounds no deeper than the search that found none.
+static func cached_search(course: CourseData, a: Vector2i, b: Vector2i, hops: int,
+		cache: Cache = null) -> Array[Vector2i]:
+	if cache == null:
+		return _search(course, a, b, hops)
+	cache.follow(course)
+	var key := Vector4i(a.x, a.y, b.x, b.y)
+	if cache.searches.has(key):
+		var hit: Array = cache.searches[key]
+		var found: Array[Vector2i] = hit[0]
+		if not found.is_empty() or int(hit[1]) >= hops:
+			return found
+	if cache.grid.is_empty():
+		cache.grid = path_grid(course)
+	var tiles := _search(course, a, b, hops, cache.grid)
+	cache.searches[key] = [tiles, hops]
+	return tiles
+
+
+## 1 per cart path tile, row-major over the map with a border of one 0 tile all round
+## ((width + 2) x (height + 2)), so the search reads its neighbours with no bounds test.
+static func path_grid(course: CourseData) -> PackedByteArray:
+	var w := course.width + 2
+	var grid := PackedByteArray()
+	grid.resize(w * (course.height + 2))
+	var surfaces := course.surface_grid()
+	var path := Surface.Type.CART_PATH
+	for y: int in course.height:
+		var row := (y + 1) * w + 1
+		var src := y * course.width
+		for x: int in course.width:
+			if surfaces[src + x] == path:
+				grid[row + x] = 1
+	return grid
+
+
+## The cart path tiles from `a` to `b`, both included, at most `hops` steps apart (below 0: no
+## bound); empty when no path joins them within it. `grid` is path_grid(course), read afresh
+## when not given.
+static func _search(course: CourseData, a: Vector2i, b: Vector2i, hops: int = -1,
+		grid: PackedByteArray = PackedByteArray()) -> Array[Vector2i]:
 	# Breadth-first over cart path tiles, neighbours in a fixed order (the same route every run).
-	var came := {a: a}
-	var queue: Array[Vector2i] = [a]
+	# A tile is entered only if b is still in reach from it in the steps left: that never drops
+	# a tile of the route found nor any tile that could be its parent, so the search finds the
+	# same route as an unbounded one whenever that route has `hops` steps or fewer.
+	# E3-S15: tiles by index into the bordered grid, in packed arrays (a Dictionary entry and a
+	# CourseData read per tile cost about 4 us a tile on a dense lattice).
+	if grid.is_empty():
+		grid = path_grid(course)
+	var w := course.width + 2
+	var n_tiles := grid.size()
+	var start := (a.y + 1) * w + a.x + 1
+	var goal := (b.y + 1) * w + b.x + 1
+	var offsets := PackedInt32Array()
+	for d: Vector2i in NEIGHBOURS:
+		offsets.append(d.y * w + d.x)
+	var came := PackedInt32Array()  # parent index + 1; 0: not reached
+	came.resize(n_tiles)
+	var depth := PackedInt32Array()
+	depth.resize(n_tiles)
+	var queue := PackedInt32Array()
+	queue.resize(n_tiles)
+	came[start] = start + 1
+	queue[0] = start
+	var tail := 1
 	var head := 0
-	while head < queue.size():
-		var c := queue[head]
+	var bound := hops >= 0
+	var bx: int = b.x + 1
+	var by: int = b.y + 1
+	while head < tail:
+		var c: int = queue[head]
 		head += 1
-		if c == b:
+		if c == goal:
 			break
-		for d: Vector2i in NEIGHBOURS:
-			var n := c + d
-			if came.has(n) or not _is_path(course, n):
+		var dn: int = depth[c] + 1
+		for off: int in offsets:
+			var n: int = c + off
+			if grid[n] == 0 or came[n] != 0:
 				continue
-			came[n] = c
-			queue.append(n)
-	if not came.has(b):
+			if bound and dn + maxi(absi(bx - n % w), absi(by - n / w)) > hops:
+				continue
+			came[n] = c + 1
+			depth[n] = dn
+			queue[tail] = n
+			tail += 1
+	if came[goal] == 0:
 		return [] as Array[Vector2i]
 	var tiles: Array[Vector2i] = [b]
-	while tiles[-1] != a:
-		tiles.append(came[tiles[-1]])
+	var i := goal
+	while i != start:
+		i = came[i] - 1
+		tiles.append(Vector2i(i % w - 1, i / w - 1))
 	tiles.reverse()
 	return tiles
+
+
+static func _center(t: Vector2i, ypt: float) -> Vector2:
+	return (Vector2(t) + Vector2(0.5, 0.5)) * ypt
 
 
 ## The cart path tile whose centre is nearest `at` within `reach` yards; (-1, -1) if none.
