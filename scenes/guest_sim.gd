@@ -13,6 +13,9 @@ extends Node
 ##
 ## The same seed gives the same day: day `d` of a course is GuestBrain's day of
 ## day_seed(base_seed, d), whatever the speed, the frame rate or what the camera looks at.
+##
+## The feed (E3-S7): every reaction of every day goes into `feed` (ReactionFeed) with its day
+## and second, for the HUD feed and the map tags; a new course empties it.
 
 signal day_started(day: int)
 signal speed_changed(speed: float)
@@ -31,6 +34,10 @@ var speed: float = 1.0
 ## True in Play: real time moves the day.
 var running: bool = false
 var tuning: GuestTuning
+## The reactions of the course's days, for the feed and the map tags (E3-S7).
+var feed: ReactionFeed
+## Null loads scenes/feed_tuning.tres.
+var feed_tuning: FeedTuning
 
 
 func _init() -> void:
@@ -39,8 +46,16 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	_ensure_feed()
+
+
+func _ensure_feed() -> void:
 	if tuning == null:
 		tuning = GuestTuning.load_default()
+	if feed_tuning == null:
+		feed_tuning = FeedTuning.load_default()
+	if feed == null:
+		feed = ReactionFeed.new(tuning.rating_window, feed_tuning.max_entries)
 
 
 ## The seed of day `d` of a course seeded `base`.
@@ -50,10 +65,12 @@ static func day_seed(base: int, d: int) -> int:
 
 ## A new course: drops the old day; day 1 is built when the sim first runs.
 func start(c: CourseData, p_base_seed: int = 0) -> void:
+	_ensure_feed()
 	course = c
 	base_seed = p_base_seed
 	brain = null
 	day = 0
+	feed.clear()
 
 
 func set_speed(s: float) -> void:
@@ -99,8 +116,33 @@ func guests_on_course() -> int:
 
 
 func _new_day(d: int) -> void:
-	if tuning == null:
-		tuning = GuestTuning.load_default()
+	_ensure_feed()
 	day = d
 	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning)
+	brain.reacted.connect(_on_reacted.bind(brain))
 	day_started.emit(day)
+
+
+## A guest of `from_brain`'s day reacted: into the feed, at the second the brain is playing,
+## with the slot of the hole it played (hole_slot), so a later renumber keeps it on that hole.
+func _on_reacted(guest: Guest, reaction: GuestReaction, from_brain: GuestBrain) -> void:
+	var played: HoleData = guest.hole.hole if guest != null and guest.hole != null else null
+	feed.push(reaction, day, from_brain.second, hole_slot(course, reaction.hole_number, played))
+
+
+## The slot of `c.holes` holding hole `number`: the one with `played`'s tee and cup when
+## `played` (the guest's copy of the hole) is given and one matches (two holes may share a
+## number, E3-S11), else the first with the number, else -1.
+static func hole_slot(c: CourseData, number: int, played: HoleData = null) -> int:
+	if c == null:
+		return -1
+	var first := -1
+	for i: int in c.holes.size():
+		var h: HoleData = c.holes[i]
+		if h.number != number:
+			continue
+		if played == null or (h.tee == played.tee and h.cup == played.cup):
+			return i
+		if first < 0:
+			first = i
+	return first

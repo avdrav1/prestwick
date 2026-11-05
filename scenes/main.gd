@@ -43,6 +43,8 @@ var land_seed: int = -1
 @onready var guest_sim: GuestSim = $GuestSim
 @onready var guest_view: GuestView = $CourseView/GuestView
 @onready var sim_speed_panel: SimSpeedPanel = $HUD/SimSpeedPanel
+@onready var feed_panel: FeedPanel = $HUD/FeedPanel
+@onready var reaction_tags: ReactionTags = $CourseView/ReactionTags
 
 
 func _ready() -> void:
@@ -65,6 +67,9 @@ func _ready() -> void:
 	score_card.bind(swing_control)
 	guest_view.bind(guest_sim)
 	sim_speed_panel.bind(guest_sim)
+	feed_panel.bind(guest_sim)
+	feed_panel.hole_requested.connect(_on_feed_hole_requested)
+	reaction_tags.bind(guest_sim.feed)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -86,6 +91,7 @@ func show_course(c: CourseData) -> void:
 	shot_view.clear()
 	# The guests' day of this course (E3-S5): day 1 starts when Play first runs it.
 	guest_sim.start(c, maxi(land_seed, 0))
+	reaction_tags.show_course(c)
 	# The builder first: it closes any open hole the course brought in failing a rule, and the
 	# view then draws the holes as they are.
 	var builder := CourseBuilder.new(c)
@@ -133,6 +139,32 @@ func play_hole(number: int, slot: int = -1) -> void:
 		set_mode(Mode.PLAY)
 
 
+## A feed line was clicked (E3-S7): jump_to_hole, unless a swing is under way or the ball is
+## moving in Play, when the click is dropped so a line coming in under the cursor never ends a
+## shot or the round. True when it jumped.
+func _on_feed_hole_requested(number: int, slot: int = -1) -> bool:
+	if mode == Mode.PLAY and (swing_control.swing.in_progress() or swing_control.is_ball_moving()):
+		return false
+	return jump_to_hole(number, slot)
+
+
+## Switches to Build, picks hole `number` in the hole list and frames it (frame_hole). `slot`
+## (its index in CourseData.holes, as the feed keeps it) picks that hole while the course still
+## has it, whatever its number now; else the hole goes by `number`. A hole whose tee or cup is
+## off the map is picked without framing. False when the course has neither (the hole was
+## removed since the guest named it): Build shows, the pick and camera stay.
+func jump_to_hole(number: int, slot: int = -1) -> bool:
+	set_mode(Mode.BUILD)
+	var at: int = ReactionFeed.resolve_slot(course, slot, number)
+	if at < 0:
+		return false
+	var h: HoleData = course.holes[at]
+	if frame_hole(h.number, at):
+		return true
+	build_tool.select_hole(h.number, at)
+	return true
+
+
 ## Frames hole 1 (or, without one placed, the lowest-numbered hole with a tee) when its tee and
 ## cup are on the map: frame_hole (E3-S2). False, leaving the camera, when there is no such hole.
 func frame_first_hole() -> bool:
@@ -144,16 +176,21 @@ func frame_first_hole() -> bool:
 ## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect_for them,
 ## zoomed out until both show; a hole too long for the farthest zoom keeps its tee inside the free view and runs
 ## off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
-## course has no hole `number` with its tee and cup on the map.
-func frame_hole(number: int) -> bool:
+## course has no hole `number` with its tee and cup on the map. `slot` picks that one of several
+## holes sharing `number` (E3-S11) while it still has the number.
+func frame_hole(number: int, slot: int = -1) -> bool:
 	var h: HoleData = null
-	for each: HoleData in course.holes:
-		if each.number == number:
-			h = each
-			break
+	if slot >= 0 and slot < course.holes.size() and course.holes[slot].number == number:
+		h = course.holes[slot]
+	else:
+		slot = -1
+		for each: HoleData in course.holes:
+			if each.number == number:
+				h = each
+				break
 	if h == null or not course.in_bounds(h.tee.x, h.tee.y) or not course.in_bounds(h.cup.x, h.cup.y):
 		return false
-	build_tool.select_hole(number)
+	build_tool.select_hole(number, slot)
 	var tee: Vector2 = tile_world(h.tee)
 	var cup: Vector2 = tile_world(h.cup)
 	camera.frame_points(tee, cup, free_view_rect_for(tee, cup))
@@ -174,7 +211,8 @@ func hud_controls() -> Array[Control]:
 
 func _hud_groups() -> Array:
 	return [
-		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, sim_speed_panel],
+		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, sim_speed_panel,
+				feed_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
 	]
@@ -305,6 +343,7 @@ func set_mode(new_mode: Mode) -> void:
 		_begin_play()
 	else:
 		shot_view.clear()
+		reaction_tags.played_hole = null
 	_refresh_label()
 	mode_changed.emit(mode)
 
@@ -316,6 +355,8 @@ func set_mode(new_mode: Mode) -> void:
 func _begin_play() -> void:
 	swing_control.begin(course, no_hole_tile(), debug_shot.heading_deg, build_tool.hole_number,
 			build_tool.picked_slot())
+	# The played hole's map tag would stand over the back of its green (E3-S7 review).
+	reaction_tags.played_hole = swing_control.hole
 	camera.centre_on(_ball_world(), true)
 
 
@@ -385,6 +426,8 @@ func _apply_mode() -> void:
 	guest_sim.running = not building
 	guest_view.visible = not building
 	sim_speed_panel.visible = not building
+	# The feed is read in Play, where the day runs; its tags stay on the map in Build (E3-S7).
+	feed_panel.visible = not building
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
 
@@ -398,6 +441,8 @@ func _on_tiles_changed(cells: Array[Vector2i]) -> void:
 func _on_checked(issues: Dictionary) -> void:
 	course_view.show_issues(issues)
 	hole_panel.refresh()
+	# A tag stands on its hole's cup, which an edit can move.
+	reaction_tags.queue_redraw()
 
 
 ## True when the debug shot may fire: in Play, with no swing in progress and no ball moving.

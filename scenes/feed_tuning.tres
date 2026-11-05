@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="FeedTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/feed_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+visible_rows = 5
+reveal_interval_s = 0.4
+highlight_s = 1.5
+width = 300.0
+row_lines = 3
+font_size = 13
+max_entries = 100
