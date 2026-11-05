@@ -494,7 +494,8 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Accept: wall-clock tests are tagged and run one at a time after the parallel batch (or their limits stop depending on the frame budget), so the default run passes with a playtest running beside it. Each run uses its own `user://` folder. `--full` time is re-measured and stated in the godot-check skill; the slowest `--full` test is split or its grid trimmed if it is over a third of the run.
   - Test: `bash scripts/run_tests.sh` green twice, once beside `bash scripts/playtest.sh`; `--full` green; wall times in the commit body.
   - Touches: `scripts/`, `tests/`
-- [ ] E6-S31 Put the E6 swarm's feel questions to the hand playtest. Questions E6-S16 to E6-S18 left for a person.
+- [x] E6-S31 Put the E6 swarm's feel questions to the hand playtest. Questions E6-S16 to E6-S18 left for a person.
+  - Done 2026-11-05: the user answered yes to all five (`docs/playtests/2026-11-05-e6-hand.md`): the land line is not misleading and stays in AimView, the OB cue reads at 2x, "2 of 4" reads, fairway height on hills reads without a contour hatch, and the 3 px ball reads at 0.5x. No "no", nothing filed.
   - Note: (found in E6 review) each item needs a person at the screen.
   - Accept: the user has answered each item below in `docs/playtests/`, and each "no" is filed as a story or at the top of the Icebox with its pillar.
     - Is the land line, drawn over the terrain and faded where a hill covers it (`docs/decisions/e6-s7-land-line-hill.png`), misleading? If so, move it into `CourseView` as Y-sorted pieces per tile edge (E6-S16). Pillar 2.
