@@ -1,7 +1,7 @@
 class_name CourseCamera
 extends Camera2D
-## The course camera: pan with WASD or a middle-mouse drag, zoom in steps (0.5x, 1x, 2x by
-## default) with the wheel or +/-. Numbers come from CameraTuning (scenes/camera_tuning.tres).
+## The course camera: pan with WASD or a middle-mouse drag, zoom in steps (0.175x, 0.5x, 1x,
+## 2x by default; D45) with the wheel or +/-. Numbers come from CameraTuning (scenes/camera_tuning.tres).
 ## The center is kept inside `bounds` grown by the edge margin, so the course never gets lost.
 ##
 ## Play (E2-S8): Main gives the camera a focus, the ball, when a shot starts, while it moves
@@ -12,7 +12,8 @@ extends Camera2D
 ## While the player aims at rest, Main also gives a lead, the aim marker (pillar 2: the
 ## player must see where the shot goes). The camera then centres on the midpoint of the ball
 ## and the marker, held so the ball stays on screen (CameraTuning aim_frame_margin), and if
-## both do not fit it steps the zoom out, never past the farthest level, until they do. A
+## both do not fit it steps the zoom out, never past CameraTuning aim_farthest_zoom (0.5x),
+## until they do. A
 ## flight has no lead, so the camera follows the ball alone. The zoom comes back to the
 ## player's own level (their last zoom key) when the next aim is framed with centre_on.
 
@@ -112,8 +113,18 @@ func set_lead(p: Vector2) -> void:
 	lead = p
 	has_lead = true
 	if tracking and has_focus and not _player_zoomed:
-		while _zoom_index > 0 and not fits(focus, lead, tuning.zoom_levels[_zoom_index]):
+		var floor_index: int = aim_floor_index()
+		while _zoom_index > floor_index and not fits(focus, lead, tuning.zoom_levels[_zoom_index]):
 			set_zoom_index(_zoom_index - 1)
+
+
+## The farthest zoom level the aim fit steps out to (CameraTuning aim_farthest_zoom, D45): the
+## first level at or nearer than it. The zoom keys and hole framing reach farther.
+func aim_floor_index() -> int:
+	for i: int in tuning.zoom_levels.size():
+		if tuning.zoom_levels[i] >= tuning.aim_farthest_zoom - 0.0001:
+			return i
+	return tuning.zoom_levels.size() - 1
 
 
 ## Drops the lead (a flight): the camera follows the focus alone. The zoom stays.
@@ -179,8 +190,24 @@ func set_zoom_index(index: int) -> void:
 	zoom = Vector2(z, z)
 
 
+## The index of the zoom level nearest `z` (such as 0.5 for 0.5x), so a fixture or script names
+## a zoom by its value, not by its place in the list.
+func zoom_index_of(z: float) -> int:
+	var best: int = 0
+	for i: int in tuning.zoom_levels.size():
+		if absf(tuning.zoom_levels[i] - z) < absf(tuning.zoom_levels[best] - z):
+			best = i
+	return best
+
+
+## Sets the zoom to the level nearest `z` (set_zoom_index).
+func set_zoom_level(z: float) -> void:
+	set_zoom_index(zoom_index_of(z))
+
+
 ## The zoom level frame_points frames world points `a` and `b` at inside an area `area` px in
-## size: the player's own level, stepped out until both fit, never past the farthest (0).
+## size: the player's own level, stepped out until both fit, never past the farthest (0, 0.175x:
+## unlike the aim fit, hole framing reaches it, D45).
 func frame_zoom_index(a: Vector2, b: Vector2, area: Vector2) -> int:
 	var i: int = clampi(_player_zoom_index, 0, tuning.zoom_levels.size() - 1)
 	while i > 0 and not fits(a, b, tuning.zoom_levels[i], area):

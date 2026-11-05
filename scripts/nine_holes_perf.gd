@@ -14,6 +14,9 @@ extends SceneTree
 ## frames in which a click edit goes through the build tool (press and release, so the view,
 ## the issue markers and the hole panel refresh too), mean and worst frame in ms; then the
 ## same click edits with every hole failing two rules (9 issue boxes of 2 lines, E3-S2 review).
+## E3-S9 (D45): idle Build frames at the farthest step, 0.175x, too, and Play frames at 0.175x
+## and 0.5x with the main scene's own guest day (GuestSim) at 3x, stepped to GUEST_REFRESH_S so
+## a full field (14 to 16 guests) is on the course and drawn, the camera on the map's centre.
 ##
 ## E3-S12: a guest day (GuestBrain, E3-S4) runs through every phase, stepped to GUEST_START_S
 ## first so groups are out on the course, then advanced each frame by 1/60 s of real time at 3x
@@ -58,6 +61,7 @@ var _guest_frames: int = 0
 var _undo_samples: Array[float] = []
 var _release_samples: Array[float] = []
 var _release_guests: Array[int] = []
+var _shown: Array[int] = []
 
 
 func _initialize() -> void:
@@ -185,8 +189,10 @@ func _advance_guests() -> void:
 
 func _print_guests(phase: String) -> void:
 	if not _guest_ms.is_empty():
+		var b: GuestBrain = _main.guest_sim.brain if phase == "Play" else _brain
 		print("  guests at 3x during %s: CPU a frame %s; day %d at %d s, %d on the course" % [
-			phase, _stats(_guest_ms), _day, _brain.second, _brain.on_course().size()])
+			phase, _stats(_guest_ms), _main.guest_sim.day if phase == "Play" else _day, b.second,
+			b.on_course().size()])
 	_guest_ms.clear()
 
 
@@ -203,7 +209,10 @@ func _stats(ms: Array[float]) -> String:
 func _process(_delta: float) -> bool:
 	if _main == null:
 		return false
-	_advance_guests()
+	if _phase == 4 or _phase == 5:
+		_advance_main_guests()
+	else:
+		_advance_guests()
 	var now := Time.get_ticks_usec()
 	var frame_ms: float = (now - _last_usec) / 1000.0
 	_last_usec = now
@@ -211,21 +220,43 @@ func _process(_delta: float) -> bool:
 	match _phase:
 		0:  # warm up at 1x on hole 1
 			if _frames == 1:
-				_main.camera.set_zoom_index(1)
+				_main.camera.set_zoom_level(1.0)
 			if _frames >= WARMUP_FRAMES:
 				_next_phase()
-		1, 2:  # idle at 1x, then 0.5x
+		1, 2, 3:  # idle in Build at 1x, then 0.5x, then the farthest zoom (D45) on the map's centre
 			if _frames > 2:
 				_samples.append(frame_ms)
 			if _frames >= IDLE_FRAMES:
-				print("idle frames at %sx: %s" % ["1" if _phase == 1 else "0.5", _stats(_samples)])
+				print("idle frames in Build at %sx: %s" % [_main.camera.zoom.x, _stats(_samples)])
 				_print_guests("idle")
 				_next_phase()
 				if _phase == 2:
+					_main.camera.set_zoom_level(0.5)
+				elif _phase == 3:
+					_main.camera.frame(_main.course_view.screen_bounds())
 					_main.camera.set_zoom_index(0)
 				else:
-					_main.camera.set_zoom_index(1)
-		3:  # a click edit every 10th frame at 1x: time the frame after it was applied
+					_begin_play_phase()
+		4, 5:  # E3-S9 (D45): Play at the farthest zoom, then 0.5x, the whole map's guests shown
+			# and the main scene's own day at 3x (_advance_main_guests)
+			if _frames > 2:
+				_samples.append(frame_ms)
+				_shown.append(_main.guest_view.figures().size())
+			if _frames >= IDLE_FRAMES:
+				_shown.sort()
+				print("Play frames at %sx, guests at 3x, %d to %d figures shown: %s" % [
+					_main.camera.zoom.x, _shown[0], _shown[-1], _stats(_samples)])
+				_print_guests("Play")
+				_shown.clear()
+				_next_phase()
+				if _phase == 5:
+					_main.camera.set_zoom_level(0.5)
+				else:
+					_main.set_mode(Main.Mode.BUILD)
+					_main.guest_sim.set_process(true)
+					_main.camera.frame(_main.course_view.screen_bounds())
+					_main.camera.set_zoom_level(1.0)
+		6:  # a click edit every 10th frame at 1x: time the frame after it was applied
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)
 			if _frames % 10 == 0:
@@ -242,11 +273,11 @@ func _process(_delta: float) -> bool:
 				print("frame holding a click edit, 1x: %s" % _stats(_edit_samples))
 				_print_guests("click edits")
 				_main.camera.frame(_main.course_view.screen_bounds())
-				_main.camera.set_zoom_index(1)
+				_main.camera.set_zoom_level(1.0)
 				_next_phase()
 				_edits = 0
 				_edit_samples.clear()
-		4:  # a drag that breaks every hole at once, through the build tool, every DRAG_CYCLE
+		7:  # a drag that breaks every hole at once, through the build tool, every DRAG_CYCLE
 			# frames: press on cup 1 (frame 0), one drag_to a frame through cups 2 to 9 (1 to 8),
 			# release (9: the check, nine new issue boxes), undo (12); time the frames holding
 			# the release and the undo; a fresh guest day stepped to GUEST_REFRESH_S after the
@@ -296,7 +327,7 @@ func _process(_delta: float) -> bool:
 				_next_phase()
 				_edits = 0
 				_edit_samples.clear()
-		5:  # the same with every hole failing two rules (cup on rough, wrong par): 9 issue
+		8:  # the same with every hole failing two rules (cup on rough, wrong par): 9 issue
 			# boxes of 2 lines each, the camera on the map's centre
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)
@@ -327,7 +358,30 @@ func _fail_every_hole() -> void:
 		b.paint(spec[3], Surface.Type.ROUGH, 1)
 		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
 	_main.camera.frame(_main.course_view.screen_bounds())
-	_main.camera.set_zoom_index(1)
+	_main.camera.set_zoom_level(1.0)
+
+
+## E3-S9 (D45): Play on the nine holes with the main scene's own guest day (GuestSim), stepped
+## to GUEST_REFRESH_S at 1x first so a full field is out (14 to 16 guests, E3-S9 review: at
+## GUEST_START_S only 8 to 10 were), then run at 3x by _advance_main_guests; the
+## camera holds the map's centre at the farthest zoom, so every guest on the course is drawn.
+func _begin_play_phase() -> void:
+	_main.set_mode(Main.Mode.PLAY)
+	var sim: GuestSim = _main.guest_sim
+	sim.set_process(false)
+	sim.set_speed(1.0)
+	for i: int in GUEST_REFRESH_S:
+		sim.advance(1.0)
+	sim.set_speed(3.0)
+	_main.camera.frame(_main.course_view.screen_bounds())
+	_main.camera.set_zoom_index(0)
+
+
+## The main scene's guest day by one frame of 1/60 s of real time at 3x, its CPU counted.
+func _advance_main_guests() -> void:
+	var t0 := Time.get_ticks_usec()
+	_main.guest_sim.advance(1.0 / 60.0)
+	_guest_ms.append((Time.get_ticks_usec() - t0) / 1000.0)
 
 
 func _open_count() -> int:

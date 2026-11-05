@@ -8,8 +8,8 @@ extends Node2D
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
-## CameraTuning zoom level index: 0 is 0.5x, 1 is 1x, 2 is 2x.
-@export var zoom_index: int = 2
+## The camera's zoom (one of CameraTuning.zoom_levels): 2.0 is 2x, 1.0 is 1x.
+@export var zoom_level: float = 2.0
 
 
 func _ready() -> void:
@@ -32,6 +32,6 @@ func _ready() -> void:
 	sc.place_ball(Vector2(rest.x, rest.y), false, false)
 	sc.rotate_aim(-25.0 - sc.aim_deg)
 	sc._refresh_aim()
-	main.camera.set_zoom_index(zoom_index)
+	main.camera.set_zoom_level(zoom_level)
 	main.camera.position = main.shot_view.ball_screen()
 	main.camera.tracking = false

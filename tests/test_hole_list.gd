@@ -433,6 +433,54 @@ func test_a_tee_number_keeps_its_screen_size_at_every_zoom() -> void:
 	tee = m.course_view.hole_marker(1, HoleMarker.Kind.TEE)
 	assert_almost_eq(tee.label_screen_height(m.camera.zoom.x), at_1x, 0.01, "a rebuilt marker too")
 
+## E3-S9 (D45): at the farthest step, 0.175x, a tee marker and pin keep their 0.5x size on
+## screen and draw over the terrain, so a tile in front does not cut them; at 0.5x and nearer
+## they are drawn at their own size and sort with the terrain as before.
+func test_hole_markers_keep_their_half_size_at_the_farthest_step() -> void:
+	var m := _main_with(_course_with(2))
+	var min_scale: float = BuilderTuning.load_default().marker_min_screen_scale
+	assert_eq(min_scale, 0.5, "from the tuning resource")
+	for z: float in m.camera.tuning.zoom_levels:
+		m.camera.set_zoom_level(z)
+		await wait_process_frames(2)
+		for kind: HoleMarker.Kind in [HoleMarker.Kind.TEE, HoleMarker.Kind.PIN]:
+			var marker: HoleMarker = m.course_view.hole_marker(1, kind)
+			var on_screen: float = marker.shape_scale * z
+			if z < min_scale:
+				assert_almost_eq(on_screen, min_scale, 0.001, "%.3fx: shown as at 0.5x" % z)
+				assert_eq(marker.z_index, 1, "%.3fx: over the terrain" % z)
+			else:
+				assert_eq(marker.shape_scale, 1.0, "%.3fx: its own size" % z)
+				assert_eq(marker.z_index, 0, "%.3fx: sorted with the terrain" % z)
+	m.course_view.refresh_holes()
+	var rebuilt: HoleMarker = m.course_view.hole_marker(1, HoleMarker.Kind.PIN)
+	assert_almost_eq(rebuilt.shape_scale * m.camera.zoom.x, maxf(min_scale, m.camera.zoom.x), 0.001,
+			"a rebuilt marker too")
+
+## E3-S9 review (D45): where the markers grow over the terrain (z 1) the ball and the guests
+## go to z 1 too, so they still Y-sort with them: a ball resting on its tee at 0.175x draws over
+## the tee's blocks and hole number (same sort key, drawn after), as it does at 0.5x.
+func test_the_ball_on_its_tee_draws_over_the_tee_at_every_zoom() -> void:
+	var m := _main_with(_course_with(2))
+	m.set_mode(Main.Mode.PLAY)
+	await wait_process_frames(2)
+	var shot: ShotView = m.shot_view
+	assert_true(shot.visible and shot.ball != null, "the ball rests on hole 1's tee")
+	var tee: HoleMarker = m.course_view.hole_marker(1, HoleMarker.Kind.TEE)
+	var min_scale: float = BuilderTuning.load_default().marker_min_screen_scale
+	var holes_index: int = tee.get_parent().get_index()
+	assert_gt(shot.get_index(), holes_index, "ties go to the ball: it comes after the markers")
+	assert_gt(m.guest_view.get_index(), holes_index, "and so do the guests")
+	for z: float in m.camera.tuning.zoom_levels:
+		m.camera.set_zoom_level(z)
+		await wait_process_frames(2)
+		var want: int = 1 if z < min_scale else 0
+		assert_eq(tee.z_index, want, "%.3fx: the tee" % z)
+		assert_eq(shot.sprite.z_index + shot.z_index, tee.z_index, "%.3fx: the ball at the tee's z" % z)
+		assert_eq(m.guest_view.z_index, tee.z_index, "%.3fx: the guests at the markers' z" % z)
+		assert_true(shot.sprite.position.y >= tee.sort_key() - 0.001,
+				"%.3fx: the ball sorts no earlier than its tee" % z)
+
 # --- collapsing the list (E3-S10) ---
 
 func test_collapsing_and_expanding_keep_the_pick() -> void:
@@ -570,7 +618,7 @@ func test_a_collapsed_list_frames_a_hole_under_the_panel_when_it_fits_nearer() -
 		assert_false(m.build_tool.builder.issues_for(n).is_empty(), "hole %d has issue text" % n)
 		m.frame_hole(n)
 		open_zoom.append(cam.zoom.x)
-	assert_eq(open_zoom[8], 0.5, "expanded, hole 9 frames at the farthest zoom")
+	assert_eq(open_zoom[8], 0.5, "expanded, hole 9 frames at 0.5x")
 	panel.collapse_button.pressed.emit()
 	var strips: Array[Rect2] = []
 	for n: int in range(1, 10):
@@ -644,17 +692,20 @@ func test_loading_a_course_with_holes_frames_hole_one() -> void:
 	assert_eq(m.build_tool.hole_number, 1, "and picks it in the list")
 
 
-func test_a_hole_too_long_to_frame_keeps_its_tee_clear_of_the_hud() -> void:
+## E3-S9 (D45): hole 1 of nine_holes, a 380 yd par 4, is too long for 0.5x; loading frames it
+## at the farthest step with its tee and cup both clear of the HUD.
+func test_a_long_hole_one_frames_tee_and_cup_clear_of_the_hud() -> void:
 	var c: CourseData = NineHoles.land(7)
 	NineHoles.build(CourseBuilder.new(c))
 	var m := _main_with(c)
 	assert_eq(m.camera.zoom.x, m.camera.tuning.zoom_levels[0], "framed at the farthest zoom")
 	var free: Rect2 = m.free_view_rect()
-	var tee: Vector2 = _screen_of(m, c.holes[0].tee)
-	assert_true(free.grow(-m.camera.tuning.aim_frame_margin + 0.5).has_point(tee),
-			"hole 1's tee %s shows inside %s" % [tee, free])
-	for ctl: Control in [m.mode_button, m.new_sandbox_button, m.hole_panel, m.build_palette]:
-		assert_false(m._hud_rect(ctl).has_point(tee), "%s does not cover it" % ctl.name)
+	for cell: Vector2i in [c.holes[0].tee, c.holes[0].cup]:
+		var at: Vector2 = _screen_of(m, cell)
+		assert_true(free.grow(-m.camera.tuning.aim_frame_margin + 0.5).has_point(at),
+				"hole 1's %s at %s shows inside %s" % [cell, at, free])
+		for ctl: Control in [m.mode_button, m.new_sandbox_button, m.hole_panel, m.build_palette]:
+			assert_false(m._hud_rect(ctl).has_point(at), "%s does not cover it" % ctl.name)
 
 
 ## Where tile `cell`'s top centre shows on screen in `m`.

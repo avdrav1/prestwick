@@ -24,6 +24,10 @@ const PATH: String = "res://course/builder_tuning.tres"
 ## that fits nowhere within both limits collapses to its badge, and the hole panel lists its
 ## reasons (E2-S17).
 @export var issue_box_max_side: float = 160.0
+## Tee markers and pins (D45, E3-S9): never drawn under this times their 1x size on screen.
+## At 0.5x and nearer they are drawn at their own size; at the farthest zoom step (0.175x) they
+## grow to show as at 0.5x, over the terrain, so a framed hole's tee and pin still read.
+@export var marker_min_screen_scale: float = 0.5
 
 ## Unowned land (E6-S5, art/specs/land.md): the modulate on every top, riser and edge cue of
 ## a tile on a parcel the player does not own. The hatch and parcel lines are the pattern.

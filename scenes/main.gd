@@ -177,8 +177,9 @@ func frame_first_hole() -> bool:
 
 ## Picks hole `number` in the hole list and frames it clear of the whole HUD (E3-S9; E3-S7's
 ## jump-to-hole reuses it): the camera centres its tee and cup in free_view_rect_for them,
-## zoomed out until both show; a hole too long for the farthest zoom keeps its tee inside the free view and runs
-## off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
+## zoomed out until both show, as far as the farthest step (0.175x, D45, sized so every
+## nine_holes fixture hole fits at 1280 x 720); a hole too long even for that keeps its tee
+## inside the free view and runs off the screen toward its cup (CourseCamera.frame_points). False, changing nothing, when the
 ## course has no hole `number` with its tee and cup on the map. `slot` picks that one of several
 ## holes sharing `number` (E3-S11) while it still has the number.
 func frame_hole(number: int, slot: int = -1) -> bool:

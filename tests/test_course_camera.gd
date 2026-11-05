@@ -1,5 +1,6 @@
 extends GutTest
-## E1-S4: the course camera pans with WASD and a middle-mouse drag, and zooms 0.5x, 1x, 2x.
+## E1-S4: the course camera pans with WASD and a middle-mouse drag, and zooms 0.5x, 1x, 2x;
+## E3-S9 (D45) adds a farthest step, 0.175x.
 
 var _cam: CourseCamera
 
@@ -16,8 +17,9 @@ func after_each() -> void:
 
 func test_tuning_comes_from_the_resource() -> void:
 	assert_not_null(_cam.tuning)
-	assert_eq(_cam.tuning.zoom_levels, PackedFloat32Array([0.5, 1.0, 2.0]))
+	assert_eq(_cam.tuning.zoom_levels, PackedFloat32Array([0.175, 0.5, 1.0, 2.0]))
 	assert_eq(_cam.zoom, Vector2.ONE, "starts at 1x")
+	assert_eq(_cam.tuning.aim_farthest_zoom, 0.5, "the aim fit stops at 0.5x")
 
 
 func test_zoom_steps_and_stops_at_the_ends() -> void:
@@ -29,7 +31,17 @@ func test_zoom_steps_and_stops_at_the_ends() -> void:
 	_cam.step_zoom(-1)
 	assert_eq(_cam.zoom, Vector2(0.5, 0.5))
 	_cam.step_zoom(-1)
-	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "0.5x is the farthest")
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the player reaches the farthest step, 0.175x (D45)")
+	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001)
+	_cam.step_zoom(-1)
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "0.175x is the farthest")
+
+
+func test_a_zoom_is_named_by_its_value() -> void:
+	for z: float in [0.175, 0.5, 1.0, 2.0]:
+		_cam.set_zoom_level(z)
+		assert_almost_eq(_cam.zoom.x, z, 0.0001, "%sx" % z)
+	assert_eq(_cam.zoom_index_of(0.6), _cam.zoom_index_of(0.5), "the nearest level")
 
 
 func test_zoom_actions() -> void:
@@ -203,7 +215,7 @@ func test_a_lead_too_far_for_any_zoom_keeps_the_ball_on_screen() -> void:
 	_aiming_cam()
 	_cam.set_lead(Vector2(6000, 0))
 	_cam._process(10.0)
-	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "the farthest level")
+	assert_eq(_cam.zoom, Vector2(0.5, 0.5), "the aim fit's farthest level, aim_farthest_zoom (D45)")
 	assert_true(_on_screen(Vector2.ZERO), "the ball never leaves the screen")
 	assert_gt(_cam.position.x, 0.0, "the view leans toward the marker")
 
@@ -218,6 +230,16 @@ func test_the_next_aim_comes_back_to_the_players_zoom() -> void:
 	_cam.centre_on(Vector2(1568, 784), true)
 	assert_eq(_cam.zoom, Vector2.ONE, "the next aim starts from the player's 1x")
 	assert_false(_cam.has_lead)
+
+
+func test_from_the_farthest_step_the_aim_keeps_the_players_zoom() -> void:
+	_aiming_cam()
+	_cam.step_zoom(-1)
+	_cam.step_zoom(-1)
+	_cam.centre_on(Vector2.ZERO, true)
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the player's own 0.175x")
+	_cam.set_lead(Vector2(1568, 784))
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the fit never zooms in")
 
 
 func test_a_zoom_key_wins_over_the_fit() -> void:
@@ -259,9 +281,10 @@ func test_a_long_hole_keeps_its_tee_inside_the_safe_area_in_every_direction() ->
 	var inner: Rect2 = safe.grow(-_cam.tuning.aim_frame_margin + 0.5)
 	for dir: Vector2 in [Vector2(2, 1), Vector2(-2, -1), Vector2(2, -1), Vector2(-2, 1)]:
 		var tee := Vector2(300, -200)
-		var cup: Vector2 = tee + dir * 1500.0
+		var cup: Vector2 = tee + dir * 4000.0
 		_cam.frame_points(tee, cup, safe)
 		assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "%s: the farthest zoom" % dir)
+		assert_false(_cam.fits(tee, cup, _cam.zoom.x, safe.size), "%s: too long even there" % dir)
 		var t: Vector2 = _cam.screen_point(tee)
 		assert_true(inner.has_point(t), "%s: the tee %s shows inside %s" % [dir, t, safe])
 		var toward: Vector2 = _cam.screen_point(cup) - t
@@ -270,12 +293,11 @@ func test_a_long_hole_keeps_its_tee_inside_the_safe_area_in_every_direction() ->
 		assert_true(safe.has_point(mid_on_screen), "%s: the hole runs into the free view" % dir)
 
 
-## E3-S9 Accept: every nine_holes hole framed at 1280 x 720 (the hole list showing all nine
-## rows) puts its tee inside the free view, clear of every HUD control: the top-left column,
-## the hole panel and the build palette. A hole that fits at the farthest zoom has its cup
-## there too. One too long for any zoom (most par 4s and 5s at 0.5x: hole 1 is 1216 x 608 px
-## on screen against a free view of about 735 x 622) favours the tee and leaves its cup off
-## the screen past the free view, never under a control.
+## E3-S9 Accept (D45): every nine_holes hole framed at 1280 x 720 (the hole list showing all
+## nine rows) puts its tee and its cup inside the free view, clear of every HUD control: the
+## top-left column, the hole panel and the build palette. The farthest zoom, 0.175x, is sized
+## for the longest, hole 3 (520 yd, 3328 x 1680 px at 1x, against a free view of 731 x 622):
+## it fits there and not at 0.5x. Each hole frames at the nearest level that fits it.
 func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 	var m := MAIN_SCENE.instantiate() as Main
 	m.course_path = "res://tests/fixtures/flat_20x20.json"
@@ -285,8 +307,8 @@ func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 	m.show_course(c)
 	m.camera.view_size_override = Vector2(1280, 720)
 	var cam: CourseCamera = m.camera
-	var screen := Rect2(Vector2.ZERO, cam.view_size())
-	var fitting: Array[int] = []
+	var levels: PackedFloat32Array = cam.tuning.zoom_levels
+	var framed_at: Dictionary = {}
 	for h: HoleData in c.holes:
 		assert_true(m.frame_hole(h.number), "hole %d frames" % h.number)
 		assert_eq(m.build_tool.hole_number, h.number, "and is picked")
@@ -300,20 +322,31 @@ func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 		for ctl: Control in controls:
 			var r: Rect2 = m._hud_rect(ctl)
 			assert_false(free.intersects(r), "hole %d: the free view %s misses %s %s" % [h.number, free, ctl.name, r])
-		var tee: Vector2 = cam.screen_point(m.tile_world(h.tee))
-		var cup: Vector2 = cam.screen_point(m.tile_world(h.cup))
+		var tee_w: Vector2 = m.tile_world(h.tee)
+		var cup_w: Vector2 = m.tile_world(h.cup)
+		var tee: Vector2 = cam.screen_point(tee_w)
+		var cup: Vector2 = cam.screen_point(cup_w)
 		var inner: Rect2 = free.grow(-cam.tuning.aim_frame_margin + 0.5)
 		assert_true(inner.has_point(tee), "hole %d: its tee %s shows inside %s" % [h.number, tee, free])
-		var fits: bool = cam.fits(m.tile_world(h.tee), m.tile_world(h.cup), cam.tuning.zoom_levels[0], free.size)
-		if fits:
-			fitting.append(h.number)
-			assert_true(inner.has_point(cup), "hole %d fits: its cup %s shows inside %s" % [h.number, cup, free])
-		else:
-			assert_eq(cam.zoom.x, cam.tuning.zoom_levels[0], "hole %d: framed at the farthest zoom" % h.number)
-			assert_false(screen.has_point(cup), "hole %d: its cup %s is past the screen, not under the HUD" % [h.number, cup])
+		assert_true(inner.has_point(cup), "hole %d: its cup %s shows inside %s" % [h.number, cup, free])
 		for ctl: Control in controls:
 			var r: Rect2 = m._hud_rect(ctl)
 			assert_false(r.has_point(tee), "hole %d: %s does not cover its tee" % [h.number, ctl.name])
 			assert_false(r.has_point(cup), "hole %d: %s does not cover its cup" % [h.number, ctl.name])
-	gut.p("E3-S9: holes whose tee and cup both fit at 0.5x: %s" % [fitting])
-	assert_eq(fitting, [2, 4, 7] as Array[int], "the three par 3s fit; the par 4s and 5s are longer than 0.5x shows")
+		var at: int = cam.zoom_index
+		if at < levels.size() - 1 and at < cam.tuning.start_zoom_index:
+			assert_false(cam.fits(tee_w, cup_w, levels[at + 1], free.size),
+					"hole %d: framed at the nearest level that fits" % h.number)
+		framed_at[h.number] = levels[at]
+	gut.p("E3-S9: zoom each nine_holes hole frames at: %s" % [framed_at])
+	for n: int in [2, 4, 7]:
+		assert_eq(framed_at[n], 0.5, "par 3 hole %d fits at 0.5x" % n)
+	for n: int in [1, 3, 5, 6, 8, 9]:
+		assert_eq(framed_at[n], levels[0], "hole %d needs the farthest step" % n)
+	var h3: HoleData = c.holes[2]
+	assert_eq(h3.number, 3)
+	var free3: Rect2 = m.free_view_rect()
+	assert_false(cam.fits(m.tile_world(h3.tee), m.tile_world(h3.cup), 0.5, free3.size),
+			"the longest hole does not fit at 0.5x")
+	assert_true(cam.fits(m.tile_world(h3.tee), m.tile_world(h3.cup), levels[0], free3.size),
+			"and fits at the farthest step")

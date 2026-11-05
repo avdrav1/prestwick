@@ -44,6 +44,20 @@ var text_scale: float = 1.0:
 			queue_redraw()
 
 
+## How many times its 1x size the shape is drawn, in the CourseView's space (D45, E3-S9): 1 at
+## 0.5x and nearer; below that CourseView grows it (layout_hole_labels, BuilderTuning
+## marker_min_screen_scale) so the tee blocks and the pin keep their 0.5x size on screen. A
+## grown marker spans several tiles, so it draws over the terrain (z_index 1), as the aim
+## marker does, rather than be cut by the tiles in front of it. The ball and the guests go to
+## z 1 at the same zooms (CourseView.lifted_z), so they still Y-sort with it.
+var shape_scale: float = 1.0:
+	set(v):
+		if not is_equal_approx(v, shape_scale):
+			shape_scale = v
+			z_index = 1 if shape_scale > 1.0 + 0.0001 else 0
+			queue_redraw()
+
+
 func _init(p_kind: Kind = Kind.TEE, p_hole_number: int = 0, p_cell: Vector2i = Vector2i.ZERO) -> void:
 	kind = p_kind
 	hole_number = p_hole_number
@@ -81,30 +95,34 @@ func sort_key() -> float:
 
 func _draw() -> void:
 	var at: Vector2 = draw_point() - position
+	# The shape, drawn about its tile's centre at shape_scale (D45: never under its 0.5x size).
+	var k: float = shape_scale
 	if kind == Kind.TEE:
+		draw_set_transform(at, 0.0, Vector2.ONE * k)
 		for side: float in [-1.0, 1.0]:
-			var c: Vector2 = at + Vector2(side * tee_block_offset, -tee_block_radius)
+			var c: Vector2 = Vector2(side * tee_block_offset, -tee_block_radius)
 			var r := Vector2(tee_block_radius, tee_block_radius)
 			draw_rect(Rect2(c - r - Vector2.ONE, (r + Vector2.ONE) * 2.0), ink_color)
 			draw_rect(Rect2(c - r, r * 2.0), tee_color)
+		draw_set_transform(Vector2.ZERO)
 		var text: String = label_text()
 		if not text.is_empty():
 			var font: Font = ThemeDB.fallback_font
 			var size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size)
 			var base := Vector2(-size.x * 0.5, font.get_ascent(number_font_size) * 0.5)
-			draw_set_transform(at + Vector2(0.0, -tee_block_radius), 0.0, Vector2.ONE * text_scale)
+			draw_set_transform(at + Vector2(0.0, -tee_block_radius * k), 0.0, Vector2.ONE * text_scale)
 			draw_string_outline(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, 3, ink_color)
 			draw_string(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, pole_color)
 			draw_set_transform(Vector2.ZERO)
 		return
-	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
+	draw_set_transform(at, 0.0, Vector2(k, k * 0.5))
 	draw_circle(Vector2.ZERO, cup_radius, ink_color)
-	draw_set_transform(Vector2.ZERO)
-	var top: Vector2 = at + Vector2(0.0, -pole_height)
-	draw_line(at, top, ink_color, 4.0)
-	draw_line(at, top, pole_color, 2.0)
+	draw_set_transform(at, 0.0, Vector2.ONE * k)
+	var top := Vector2(0.0, -pole_height)
+	draw_line(Vector2.ZERO, top, ink_color, 4.0)
+	draw_line(Vector2.ZERO, top, pole_color, 2.0)
 	var flag := PackedVector2Array([top, top + Vector2(flag_width, flag_height * 0.5), top + Vector2(0.0, flag_height)])
 	draw_colored_polygon(flag, flag_color)
 	flag.append(top)
 	draw_polyline(flag, ink_color, 1.0)
-
+	draw_set_transform(Vector2.ZERO)

@@ -24,7 +24,7 @@ func _ready() -> void:
 	main.set_process(false)
 	main.aim_view.visible = false
 	main.guest_sim.set_speed(3.0)
-	main.camera.set_zoom_index(2)
+	main.camera.set_zoom_level(2.0)
 	main.camera.tracking = false
 	main.camera.position = main.tile_world(Vector2i(8, 6))
 

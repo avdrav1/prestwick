@@ -36,11 +36,11 @@ func _ready() -> void:
 		"green_mirrored":
 			_green(true)
 		"hill":
-			_hill(false, 1)
+			_hill(false, 1.0)
 		"hill_mirrored":
-			_hill(true, 1)
+			_hill(true, 1.0)
 		"riser":
-			_hill(true, 2)
+			_hill(true, 2.0)
 		"steps":
 			_steps()
 		_:
@@ -94,7 +94,7 @@ func _green(mirrored: bool) -> void:
 
 ## The hillside, or its mirror along x (rising towards the camera, risers in view). Shots are
 ## mirrored with it. The live ball is frozen at its first touchdown.
-func _hill(mirrored: bool, zoom_index: int) -> void:
+func _hill(mirrored: bool, zoom_level: float) -> void:
 	var c := GridHeightEvidence.hillside(mirrored)
 	_main.show_course(c)
 	var field := HeightField.new(c, BallParams.load_default())
@@ -118,8 +118,8 @@ func _hill(mirrored: bool, zoom_index: int) -> void:
 	lines.append("  ball: up, 1 step / tile, frozen at its first touchdown %s (z %.1f steps)" % [
 		shot.landing_tile, shot.landing.z / 2.0])
 	_overlay.caption = "\n".join(lines)
-	if zoom_index != _main.camera.zoom_index:
-		_main.camera.set_zoom_index(zoom_index)
+	if not is_equal_approx(zoom_level, _main.camera.zoom.x):
+		_main.camera.set_zoom_level(zoom_level)
 		_main.camera.position = Iso.point_to_screen(field.iso_point(shot.landing))
 		_main.camera.tracking = false  # hold the framing; Play would ease back to the ball
 

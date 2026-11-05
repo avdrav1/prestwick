@@ -104,6 +104,9 @@ var _hole_label_scale: float = 0.0
 var issue_max_stack: float = 0.0
 ## How far sideways off centre a text box may move, screen px (BuilderTuning.issue_box_max_side).
 var issue_max_side: float = 0.0
+## The smallest a hole marker shows on screen, times its 1x size (BuilderTuning
+## marker_min_screen_scale, D45).
+var marker_min_screen_scale: float = 0.5
 
 ## Whether the issue highlights show (Build mode).
 var issues_visible: bool = true:
@@ -117,6 +120,7 @@ func _init() -> void:
 	var tuning := BuilderTuning.load_default()
 	issue_max_stack = tuning.issue_box_max_stack
 	issue_max_side = tuning.issue_box_max_side
+	marker_min_screen_scale = tuning.marker_min_screen_scale
 	_art = TileArt.load_default()
 	_tile_set = _make_tile_set(_art, tuning.unowned_tint, top_shades(_art.surfaces, tuning.height_shade, tuning.height_shaded))
 	for k: int in CourseData.MAX_HEIGHT + 1:
@@ -174,6 +178,7 @@ func refresh_holes() -> void:
 			var m := HoleMarker.new(pair[0], hole.number, at)
 			m.place(_course)
 			m.text_scale = 1.0 / _view_scale()
+			m.shape_scale = marker_shape_scale(_view_scale())
 			_holes_root.add_child(m)
 			_markers.append(m)
 
@@ -338,8 +343,27 @@ func _process(_delta: float) -> void:
 ## local unit (HoleMarker.text_scale). CourseView reruns it when the zoom changes.
 func layout_hole_labels(scale: float) -> void:
 	_hole_label_scale = scale
+	var k: float = marker_shape_scale(scale)
 	for m: HoleMarker in _markers:
 		m.text_scale = 1.0 / scale
+		m.shape_scale = k
+
+
+## How large a tee marker or pin is drawn at a zoom of `scale` screen px per local unit (D45):
+## its own size, or grown so it is never under marker_min_screen_scale of its 1x size on screen
+## (BuilderTuning, 0.5: at the farthest step, 0.175x, it shows as at 0.5x).
+func marker_shape_scale(scale: float) -> float:
+	return maxf(1.0, marker_min_screen_scale / maxf(scale, 0.0001))
+
+
+## The z_index of a piece standing on the map (the player's ball, a guest's figure and ball)
+## at a zoom of `scale` screen px per local unit (D45, E3-S9 review): 1 where the hole markers
+## grow over the terrain (under `min_screen_scale`, BuilderTuning marker_min_screen_scale), so
+## those pieces still Y-sort with the grown markers (a ball on its tee draws over the tee's
+## blocks and number, a guest in front of a pin over the pin); 0 at that zoom and nearer, where
+## everything sorts with the terrain as before.
+static func lifted_z(scale: float, min_screen_scale: float) -> int:
+	return 1 if min_screen_scale / maxf(scale, 0.0001) > 1.0 + 0.0001 else 0
 
 
 ## Screen px per local unit (the camera zoom), 1 outside the tree.

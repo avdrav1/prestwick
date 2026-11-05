@@ -29,6 +29,10 @@ extends Node2D
 ## at 2x, where it fills more of the fixed-size ring, the slash reaches further
 ## (ob_slash_reach_at) so each piece stays at least its 1x length on screen.
 ##
+## D45 (E3-S9 review): below BuilderTuning marker_min_screen_scale (0.5x) the ball draws at
+## z 1 (CourseView.lifted_z), as the grown tee markers and pins do, so it still Y-sorts with
+## them: a ball on its tee draws over the tee's blocks and hole number.
+##
 ## Place it as a child of CourseView: it is Y-sorted, and each piece sits at y = its
 ## Iso.object_sort_key and draws itself offset back to its screen point, so hills nearer the
 ## camera hide the ball and farther ones do not.
@@ -80,10 +84,13 @@ var _was_landed: bool = false
 var _drop_at: float = -1.0
 ## Whether this shot shows its landing cross at all (a putt does not).
 var _marker_wanted: bool = false
+## The zoom under which the ball draws at z 1 (BuilderTuning marker_min_screen_scale, D45).
+var _lift_below: float = 0.5
 
 
 func _init() -> void:
 	tuning = ShotViewTuning.load_default()
+	_lift_below = BuilderTuning.load_default().marker_min_screen_scale
 	y_sort_enabled = true
 	visible = false
 	# Before the ball: at the same sort key it draws under the ball, as rings round it.
@@ -109,8 +116,15 @@ func _init() -> void:
 
 
 func _process(delta: float) -> void:
+	update_lift()
 	if playing:
 		advance(delta)
+
+
+## Puts the ball at z 1 below marker_min_screen_scale, else 0 (CourseView.lifted_z, D45).
+func update_lift() -> void:
+	if is_inside_tree():
+		sprite.z_index = CourseView.lifted_z(get_viewport().get_canvas_transform().get_scale().x, _lift_below)
 
 
 ## Predicts the shot, then launches the live ball with the same course, seed and launch.

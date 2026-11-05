@@ -13,7 +13,7 @@ extends Node2D
 ## rest stands over it; the one behind the trees 0.3 tile forward, so the trees hide its feet
 ## and legs and its body and head show over them. The guests on top and in front show whole.
 ## Run: scripts/screenshot.sh tests/fixtures/guest_view_shot.tscn
-## At 0.5x (zoom_index 0, guest_view_shot_0_5x.tscn): the figures keep their 24 px on screen
+## At 0.5x (zoom_level 0.5, guest_view_shot_0_5x.tscn): the figures keep their 24 px on screen
 ## (GuestViewTuning.figure_min_screen_scale), docs/decisions/e3-s5-guests-0.5x.png.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -24,8 +24,8 @@ const SPOTS: Array[Vector2i] = [Vector2i(11, 11), Vector2i(9, 11), Vector2i(19, 
 ## Each guest's shift from its tile's centre, tiles (+x+y: down the screen, toward the camera).
 const SHIFTS: Array[Vector2] = [Vector2.ZERO, Vector2(-0.45, -0.45), Vector2(0.1, 0.1), Vector2.ZERO]
 
-## The camera's zoom level (CameraTuning.zoom_levels index): 2 is 2x, 0 is 0.5x.
-@export var zoom_index: int = 2
+## The camera's zoom (one of CameraTuning.zoom_levels): 2.0 is 2x, 0.5 is 0.5x.
+@export var zoom_level: float = 2.0
 
 
 ## The guest course with the hill and the trees (a fixture writes CourseData directly).
@@ -62,6 +62,6 @@ func _ready() -> void:
 	# The player's ball and aim stay off this picture: the camera holds still.
 	main.set_process(false)
 	main.aim_view.visible = false
-	main.camera.set_zoom_index(zoom_index)
+	main.camera.set_zoom_level(zoom_level)
 	main.camera.tracking = false
 	main.camera.position = main.tile_world(Vector2i(15, 11))

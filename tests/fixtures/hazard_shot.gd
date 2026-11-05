@@ -11,7 +11,7 @@ extends Node2D
 ## 8), captured in the hold, so the OB cue (a flag_red circle struck through) shows where the
 ## ball came to rest on unowned land. E6-S16: the land line stays drawn through the hold, so
 ## the boundary the ball crossed is in frame, and the
-## camera is settled on the ball before the capture. `zoom_index` picks the zoom (0.5x, 1x,
+## camera is settled on the ball before the capture. `zoom_level` picks the zoom (0.5x, 1x,
 ## 2x); the cue keeps its size on screen at each.
 ## Run: scripts/screenshot.sh tests/fixtures/hazard_shot_ob.tscn (2x),
 ## tests/fixtures/hazard_shot_ob_1x.tscn, tests/fixtures/hazard_shot_ob_0_5x.tscn
@@ -21,8 +21,8 @@ const FLAT_PATH: String = "res://tests/fixtures/flat_20x20.json"
 
 @export var dropped: bool = false
 @export var out_of_bounds: bool = false
-## The camera zoom level for the OB capture (CameraTuning.zoom_levels).
-@export var zoom_index: int = 2
+## The camera zoom for the OB capture (one of CameraTuning.zoom_levels).
+@export var zoom_level: float = 2.0
 
 
 func _ready() -> void:
@@ -50,7 +50,7 @@ func _ready() -> void:
 	main.camera.centre_on(main._ball_world(), true)
 	if out_of_bounds:
 		# After centre_on, which restores 1x.
-		main.camera.set_zoom_index(zoom_index)
+		main.camera.set_zoom_level(zoom_level)
 	# Settle the camera on the ball now (E6-S16): the capture comes before it eases there.
 	main.camera.position = main.camera._clamped(main.camera.goal())
 	print("hazard shot: hazard %s, showing %s, drawn %s, drop %s" % [view.ball.hazard,

@@ -30,4 +30,4 @@ func _ready() -> void:
 	sc.rotate_aim(12.0)
 	sc._refresh_aim()
 	main.swing_panel.refresh()
-	main.camera.set_zoom_index(0)
+	main.camera.set_zoom_level(0.5)

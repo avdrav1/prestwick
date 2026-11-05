@@ -24,4 +24,4 @@ func _ready() -> void:
 	sc.press()
 	sc.advance(0.6 / sc.swing.rate())
 	main.swing_panel.refresh()
-	main.camera.set_zoom_index(0)
+	main.camera.set_zoom_level(0.5)

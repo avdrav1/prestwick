@@ -12,4 +12,4 @@ func _ready() -> void:
 	main.course_path = COURSE_PATH
 	add_child(main)
 	# 0.5x, so the whole 160 yd hole fits the window.
-	main.camera.set_zoom_index(0)
+	main.camera.set_zoom_level(0.5)

@@ -33,7 +33,7 @@ func _ready() -> void:
 	_click(Vector2i(48, 70))
 	tool.select_tool(BuildTool.Tool.CUP)
 	tool.hover_at(_at(Vector2i(62, 60)))
-	_main.camera.set_zoom_index(1)
+	_main.camera.set_zoom_level(1.0)
 	_main.camera.position = Iso.tile_to_screen(Vector2(58, 64), 2)
 
 

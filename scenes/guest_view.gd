@@ -28,6 +28,10 @@ extends Node2D
 ## groups take the art spec's shirts in turn), drawn by swapping the sheet's chalk in a shader
 ## material shared by everyone in that shirt, so a group reads as one and its neighbours differ.
 ##
+## D45 (E3-S9 review): below BuilderTuning marker_min_screen_scale (0.5x) the whole view draws
+## at z 1 (CourseView.lifted_z), as the grown tee markers and pins do, so figures and balls
+## still Y-sort with them.
+##
 ## Ball flights: the sim runs every guest's ball the same way, watched or not (GuestHole's
 ## off-screen shortcut: it rests within a simulated second or so). When a guest strikes and
 ## its ball's start is on screen (within GuestViewTuning.on_screen_margin_px of the view), the
@@ -62,6 +66,8 @@ var _field: HeightField
 var _second: int = 0
 ## Real seconds since the view started drawing (idle frames).
 var _time: float = 0.0
+## The zoom under which the view draws at z 1 (BuilderTuning marker_min_screen_scale, D45).
+var _lift_below: float = 0.5
 
 
 ## What the view keeps for one guest.
@@ -100,6 +106,7 @@ func _init() -> void:
 	tuning = GuestViewTuning.load_default()
 	guest_tuning = GuestTuning.load_default()
 	shot_tuning = ShotViewTuning.load_default()
+	_lift_below = BuilderTuning.load_default().marker_min_screen_scale
 
 
 func bind(p_sim: GuestSim) -> void:
@@ -107,8 +114,15 @@ func bind(p_sim: GuestSim) -> void:
 
 
 func _process(delta: float) -> void:
+	update_lift()
 	if sim != null and visible:
 		update_view(delta, sim.effective_speed())
+
+
+## Puts the view at z 1 below marker_min_screen_scale, else 0 (CourseView.lifted_z, D45).
+func update_lift() -> void:
+	if is_inside_tree():
+		z_index = CourseView.lifted_z(get_viewport().get_canvas_transform().get_scale().x, _lift_below)
 
 
 ## Every figure drawn, by guest id (tests).
