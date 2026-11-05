@@ -622,3 +622,123 @@ func test_check_hole_on_a_128_plot_is_fast() -> void:
 	assert_eq(issues, [] as Array[CourseValidator.Issue])
 	gut.p("check_hole, one par 5 on 128x128: %.1f ms (fastest of %d)" % [ms, BestTime.RUNS])
 	assert_lt(ms, 30.0, "one hole's check stays under 30 ms (debug build)")
+
+
+# --- rule 3's graph kept between edits (E3-S12) ---
+
+## Every slot's issues as strings, for comparing two checks.
+func _strings(slots: Array) -> Array:
+	var out: Array = []
+	for issues: Array in slots:
+		out.append(issues.map(func(i: CourseValidator.Issue) -> String: return str(i)))
+	return out
+
+
+## The builder's cached check matches a fresh validator on the same course.
+func _assert_matches_fresh(b: CourseBuilder, what: String) -> void:
+	var fresh: Array = CourseValidator.new().check_slots(b.course)
+	var cached: Array = []
+	for slot: int in b.course.holes.size():
+		cached.append(b.issues_at(slot))
+	assert_eq(_strings(cached), _strings(fresh), what)
+
+
+func test_reach_update_relabels_only_when_a_crossing_changes() -> void:
+	var c := CourseData.create(20, 10, Surface.Type.ROUGH, 0)
+	var r := CourseValidator.Reach.new(c)
+	assert_true(r.connected(Vector2i(0, 5), Vector2i(19, 5)))
+	c.set_tile(10, 5, 0, Surface.Type.FAIRWAY)
+	assert_false(r.update(c, [Vector2i(10, 5)] as Array[Vector2i]), "rough to fairway changes no crossing")
+	for y: int in 10:
+		c.set_tile(10, y, 0, Surface.Type.WATER)
+	var wall: Array[Vector2i] = []
+	for y: int in 10:
+		wall.append(Vector2i(10, y))
+	assert_true(r.update(c, wall), "a water wall changes crossings")
+	assert_false(r.connected(Vector2i(0, 5), Vector2i(19, 5)), "the wall cuts the path")
+	c.set_tile(10, 3, 0, Surface.Type.BUNKER)
+	assert_true(r.update(c, [Vector2i(10, 3)] as Array[Vector2i]))
+	assert_true(r.connected(Vector2i(0, 5), Vector2i(19, 5)), "a gap in the wall joins them again")
+
+
+func test_a_cached_check_gives_the_same_issues_as_a_fresh_one_after_edits() -> void:
+	var c := LandGenerator.generate(7)
+	var b := CourseBuilder.new(c)
+	var NineHoles: GDScript = load("res://tests/fixtures/nine_holes.gd")
+	NineHoles.build(b)
+	_assert_matches_fresh(b, "nine holes built")
+	var h1: HoleData = b.hole(1)
+	var mid := Vector2i(60, h1.tee.y)
+	# A click edit that changes no crossing: the graph is kept.
+	b.paint(Vector2i(64, 100), Surface.Type.FAIRWAY, 1)
+	_assert_matches_fresh(b, "after a fairway click")
+	# A water wall the height of the map across hole 1's line, as one stroke: rule 3 fails.
+	b.begin_stroke()
+	for y: int in c.height:
+		b.paint(Vector2i(mid.x, y), Surface.Type.WATER, 1)
+	b.end_stroke()
+	assert_not_null(_issue(b.issues_for(1), 3), "the wall cuts hole 1")
+	_assert_matches_fresh(b, "after a water wall")
+	# A gap of rough: rule 3 passes again.
+	b.paint(Vector2i(mid.x, 100), Surface.Type.ROUGH, 1)
+	assert_null(_issue(b.issues_for(1), 3), "the gap joins hole 1 again")
+	_assert_matches_fresh(b, "after a gap in the wall")
+	b.paint(Vector2i(mid.x, 100), Surface.Type.OOB, 1)
+	_assert_matches_fresh(b, "after OB closing the gap")
+	# Undo opens the gap, then takes the wall away.
+	b.undo()
+	_assert_matches_fresh(b, "after undoing the OB")
+	b.undo()
+	b.undo()
+	assert_null(_issue(b.issues_for(1), 3), "the wall is undone")
+	_assert_matches_fresh(b, "after undoing the wall")
+	# The breaking drag: rough through every cup in one stroke, then its undo.
+	b.begin_stroke()
+	for spec: Array in NineHoles.HOLES:
+		b.paint(spec[3], Surface.Type.ROUGH, 1)
+	b.end_stroke()
+	_assert_matches_fresh(b, "after rough on every cup")
+	b.undo()
+	_assert_matches_fresh(b, "after undoing it")
+	# Raising and lowering ground changes no crossing.
+	b.raise(mid, 3)
+	b.lower(mid + Vector2i(0, 2), 5)
+	_assert_matches_fresh(b, "after raise and lower")
+	# A write the builder did not make (a test fixture's set_tile) is caught too.
+	for y: int in c.height:
+		c.set_tile(h1.cup.x - 3, y, c.get_height(h1.cup.x - 3, y), Surface.Type.WATER)
+	b.paint(Vector2i(64, 100), Surface.Type.ROUGH, 1)
+	assert_not_null(_issue(b.issues_for(1), 3), "the outside wall cuts hole 1")
+	_assert_matches_fresh(b, "after an outside write")
+
+
+func test_a_cached_check_follows_land_bought_and_undone() -> void:
+	var c := CourseBuilder.new_course(7)
+	var b := CourseBuilder.new(c)
+	# A hole in the starting block (tiles 48 to 79), tee and cup owned.
+	b.paint(Vector2i(50, 60), Surface.Type.TEE, 1)
+	b.paint(Vector2i(75, 60), Surface.Type.GREEN, 1)
+	b.place_tee(1, Vector2i(50, 60), 3)
+	b.place_cup(1, Vector2i(75, 60))
+	_assert_matches_fresh(b, "a hole on a New course")
+	var bought: bool = b.buy_parcel(Vector2i(5, 3))
+	_assert_matches_fresh(b, "after buying a parcel (%s)" % bought)
+	b.undo()
+	_assert_matches_fresh(b, "after undoing the purchase")
+
+
+func test_reach_finds_a_long_way_round_past_its_search_budget() -> void:
+	# A water wall at x = 15 with one gap at the far edge: the way round is about 140 tiles for
+	# a 10-tile distance, past the search's budget, so the flood answers.
+	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 0)
+	for y: int in 127:
+		c.set_tile(15, y, 0, Surface.Type.WATER)
+	var r := CourseValidator.Reach.new(c)
+	assert_true(r.connected(Vector2i(10, 64), Vector2i(20, 64)), "round by the gap at y 127")
+	assert_true(r.connected(Vector2i(20, 64), Vector2i(10, 64)), "and back, from the labels")
+	c.set_tile(15, 127, 0, Surface.Type.OOB)
+	assert_true(r.update(c, [Vector2i(15, 127)] as Array[Vector2i]))
+	assert_false(r.connected(Vector2i(10, 64), Vector2i(20, 64)), "the gap closed")
+	assert_true(r.connected(Vector2i(10, 64), Vector2i(10, 0)), "same side")
+	assert_false(r.connected(Vector2i(10, 64), Vector2i(15, 64)), "onto the water")
+	assert_true(r.connected(Vector2i(3, 3), Vector2i(3, 3)), "a tile reaches itself")

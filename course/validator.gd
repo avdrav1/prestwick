@@ -48,16 +48,36 @@ func _init(p_tuning: ValidatorTuning = null) -> void:
 
 
 ## Rule 3's passable graph for one course, read once and shared by every hole checked
-## against it: each tile's connected component, labelled lazily, one flood per component.
+## against it. connected(a, b) first searches from `a` toward `b`, nearest-to-`b` first (a
+## bucket queue on the 4-neighbour distance to `b`), and stops when it reaches `b`, so a hole
+## with a clear line costs a few hundred tiles, not a flood of the map (E3-S12). A search that
+## sees SEARCH_SLACK times the distance plus SEARCH_BASE tiles without reaching `b` gives up,
+## and `a`'s component is flooded and labelled as before; later questions about a labelled
+## component, or a pair a search already joined, are answered from what was found.
+## E3-S12: the builder keeps one between edits and hands it the tiles each edit wrote
+## (update); what it found is kept unless an edit changed whether a tile can be crossed.
 class Reach:
 	extends RefCounted
+	## The search's tile budget: SEARCH_SLACK x the 4-neighbour distance + SEARCH_BASE. Not a
+	## tunable: it changes only how fast rule 3 answers, never what.
+	const SEARCH_SLACK: int = 4
+	const SEARCH_BASE: int = 256
 	var _w: int
 	var _h: int
 	## 1 where a tile can be crossed (not water, not OB, on an owned parcel), 0 otherwise.
 	var _passable := PackedByteArray()
-	## Component id per tile, 0 = not flooded yet.
+	## Component id per tile, 0 = its component not searched out yet.
 	var _label := PackedInt32Array()
 	var _next_label: int = 1
+	## Pairs a search joined (ia * size + ib -> true), kept with the labels.
+	var _joined: Dictionary = {}
+	## Search scratch, sized once: the search a tile was last seen in, the next tile in its
+	## bucket, every tile seen in the current search in order, and each bucket's first tile.
+	var _seen := PackedInt32Array()
+	var _next := PackedInt32Array()
+	var _visited := PackedInt32Array()
+	var _head := PackedInt32Array()
+	var _stamp: int = 0
 
 	func _init(course: CourseData) -> void:
 		_w = course.width
@@ -77,6 +97,30 @@ class Reach:
 					for x: int in range(r.position.x, r.end.x):
 						_passable[y * _w + x] = 0
 		_label.resize(grid.size())
+		_seen.resize(grid.size())
+		_next.resize(grid.size())
+		_visited.resize(grid.size())
+		_head.resize(_w + _h)
+
+	## Rereads `cells` of `course` (the tiles an edit wrote). True, dropping every label, when
+	## any of them changed whether it can be crossed.
+	func update(course: CourseData, cells: Array[Vector2i]) -> bool:
+		var changed: bool = false
+		for c: Vector2i in cells:
+			var i: int = _index(c)
+			if i < 0:
+				continue
+			var s: Surface.Type = course.get_surface(c.x, c.y)
+			var p: int = 1 if course.is_owned(c.x, c.y) and s != Surface.Type.WATER \
+					and s != Surface.Type.OOB else 0
+			if p != _passable[i]:
+				_passable[i] = p
+				changed = true
+		if changed:
+			_label.fill(0)
+			_next_label = 1
+			_joined.clear()
+		return changed
 
 	## A 4-neighbour path of crossable tiles joins `a` and `b` (heights ignored).
 	func connected(a: Vector2i, b: Vector2i) -> bool:
@@ -84,8 +128,18 @@ class Reach:
 		var ib: int = _index(b)
 		if ia < 0 or ib < 0 or _passable[ia] == 0 or _passable[ib] == 0:
 			return false
-		if _label[ia] == 0:
-			_flood(ia)
+		if ia == ib:
+			return true
+		# A labelled component is complete: two tiles share it or they are apart.
+		if _label[ia] != 0 or _label[ib] != 0:
+			return _label[ia] == _label[ib]
+		var key: int = ia * _passable.size() + ib
+		if _joined.has(key):
+			return true
+		if _search(ia, ib):
+			_joined[key] = true
+			return true
+		_flood(ia)
 		return _label[ia] == _label[ib]
 
 	func _index(t: Vector2i) -> int:
@@ -93,13 +147,78 @@ class Reach:
 			return -1
 		return t.y * _w + t.x
 
+	## Best-first from `start` toward `goal`: true on reaching it; false when its component
+	## runs out or the tile budget does (nothing is labelled either way).
+	func _search(start: int, goal: int) -> bool:
+		_stamp += 1
+		var st: int = _stamp
+		var w: int = _w
+		var last: int = _w * _h - 1
+		var gx: int = goal % w
+		var gy: int = goal / w
+		_head.fill(-1)
+		var seen: int = 0
+		var lo: int = absi(start % w - gx) + absi(start / w - gy)
+		var budget: int = SEARCH_SLACK * lo + SEARCH_BASE
+		_seen[start] = st
+		_visited[0] = start
+		seen = 1
+		_next[start] = -1
+		_head[lo] = start
+		var top: int = _head.size()
+		while true:
+			while lo < top and _head[lo] == -1:
+				lo += 1
+			if lo >= top:
+				break
+			var i: int = _head[lo]
+			_head[lo] = _next[i]
+			var x: int = i % w
+			var y: int = i / w
+			for n: int in 4:
+				var j: int
+				var d: int
+				if n == 0:
+					if x == 0:
+						continue
+					j = i - 1
+					d = absi(x - 1 - gx) + absi(y - gy)
+				elif n == 1:
+					if x == w - 1:
+						continue
+					j = i + 1
+					d = absi(x + 1 - gx) + absi(y - gy)
+				elif n == 2:
+					if i < w:
+						continue
+					j = i - w
+					d = absi(x - gx) + absi(y - 1 - gy)
+				else:
+					if i + w > last:
+						continue
+					j = i + w
+					d = absi(x - gx) + absi(y + 1 - gy)
+				if _passable[j] == 0 or _seen[j] == st:
+					continue
+				if j == goal:
+					return true
+				if seen >= budget:
+					return false
+				_seen[j] = st
+				_visited[seen] = j
+				seen += 1
+				_next[j] = _head[d]
+				_head[d] = j
+				if d < lo:
+					lo = d
+		return false
+
 	func _flood(start: int) -> void:
 		var id: int = _next_label
 		_next_label += 1
 		var w: int = _w
 		var last: int = _w * _h - 1
-		var queue := PackedInt32Array()
-		queue.resize(_w * _h)
+		var queue := _visited
 		queue[0] = start
 		_label[start] = id
 		var head: int = 0
@@ -134,10 +253,12 @@ func check_course(course: CourseData) -> Dictionary:
 
 ## Every hole's failing rules, one array per entry of `course.holes`, in its order (E3-S11):
 ## two holes sharing a number each keep their own, rule 1 naming the other's tee. The passable
-## graph is read once for all holes.
-func check_slots(course: CourseData) -> Array:
+## graph is read once for all holes, or `reach` is used when given (the builder's, kept
+## between edits, E3-S12): it must describe `course` as it is now.
+func check_slots(course: CourseData, reach: Reach = null) -> Array:
 	var out: Array = []
-	var reach := Reach.new(course)
+	if reach == null:
+		reach = Reach.new(course)
 	for hole: HoleData in course.holes:
 		out.append(check_hole(course, hole, reach))
 	return out

@@ -44,6 +44,12 @@ extends RefCounted
 ## takes the price from the budget and is one undo step; undoing it gives the parcel up and
 ## the price back, and reruns the validator. Land is never sold back (D27).
 ##
+## Rule 3's graph (E3-S12): the builder keeps the validator's CourseValidator.Reach between
+## checks and hands it the tiles written since the last one, so a check after an edit that
+## changes no crossing (most paint, every raise and lower) reuses what rule 3 found. A write the
+## builder did not make (CourseData.revision moved past the builder's own writes) or a parcel
+## bought or given up drops the graph, and the next check builds it afresh.
+##
 ## Owned land only (E6-S4, D30): paint, raise and lower write only tiles on owned parcels, so
 ## a brush that straddles the line edits its owned tiles and leaves the rest. A brush with
 ## tiles on the map but none owned, or a tee or cup placed on an unowned tile, changes
@@ -126,6 +132,12 @@ var _stroke: Step = null
 var _stroke_lifted: Dictionary = {}
 ## The holes changed since holes_changed was last emitted.
 var _holes_dirty: bool = false
+## Rule 3's graph as of the last check (E3-S12), or null to build it afresh at the next.
+var _reach: CourseValidator.Reach = null
+## Tiles the builder wrote since the last check.
+var _reach_dirty: Dictionary = {}
+## CourseData.revision the graph stands for once _reach_dirty is applied.
+var _reach_revision: int = 0
 
 
 func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null,
@@ -494,6 +506,7 @@ func buy_parcel(parcel: Vector2i) -> bool:
 	if not _course.has_unlimited_budget():
 		_course.set_land_budget(_course.land_budget - parcel_price(parcel))
 	_course.set_parcel_owned(parcel, true)
+	_reach = null
 	land_changed.emit(parcel)
 	_finish(step)
 	return true
@@ -520,7 +533,7 @@ func undo() -> bool:
 	var cells: Array[Vector2i] = []
 	for c: Vector2i in step.tiles:
 		var packed: int = step.tiles[c]
-		_course.set_tile(c.x, c.y, packed >> 4, (packed & 0x0F) as Surface.Type)
+		_set_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
 		cells.append(c)
 	if not cells.is_empty():
 		tiles_changed.emit(cells)
@@ -529,6 +542,7 @@ func undo() -> bool:
 		_holes_dirty = true
 	if step.land_parcel != Step.NO_PARCEL:
 		_course.set_parcel_owned(step.land_parcel, false)
+		_reach = null
 		_course.set_land_budget(step.land_budget)
 		land_changed.emit(step.land_parcel)
 	# The course is back as it was before the edit, when every open hole passed (_init closed
@@ -562,7 +576,14 @@ func _lift(center: Vector2i, size: int, delta: int) -> bool:
 func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
 	if not tiles.has(c):
 		tiles[c] = (_course.get_height(c.x, c.y) << 4) | _course.get_surface(c.x, c.y)
+	_set_tile(c, h, s)
+
+
+## Writes one tile and notes it for rule 3's graph.
+func _set_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
 	_course.set_tile(c.x, c.y, h, s)
+	_reach_dirty[c] = true
+	_reach_revision += 1
 
 
 ## Files the tiles one terrain edit wrote into its step (the open stroke's, or a new one),
@@ -655,7 +676,7 @@ func _finish(step: Step) -> void:
 ## Reruns the validator for every hole and closes each open one that now fails a rule,
 ## recording the holes in `step` first.
 func _rerun(step: Step) -> void:
-	_slot_issues = [] if _course.holes.is_empty() else _validator.check_slots(_course)
+	_slot_issues = [] if _course.holes.is_empty() else _validator.check_slots(_course, _current_reach())
 	_issues = CourseValidator.by_number(_course, _slot_issues)
 	var hs: Array[HoleData] = _holes_copy()
 	var closed: bool = false
@@ -665,6 +686,20 @@ func _rerun(step: Step) -> void:
 			closed = true
 	if closed:
 		_write_holes(step, hs)
+
+
+## Rule 3's graph for the course as it is now: the kept one with the tiles written since the
+## last check reread, or a fresh one when it was dropped or someone else wrote the course.
+func _current_reach() -> CourseValidator.Reach:
+	if _reach == null or _course.revision != _reach_revision:
+		_reach = CourseValidator.Reach.new(_course)
+	else:
+		var cells: Array[Vector2i] = []
+		cells.assign(_reach_dirty.keys())
+		_reach.update(_course, cells)
+	_reach_dirty.clear()
+	_reach_revision = _course.revision
+	return _reach
 
 
 func _announce() -> void:

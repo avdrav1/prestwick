@@ -14,7 +14,7 @@ extends Resource
 ##   course_name, author, thumbnail, to_dict(), content_hash(), copy(),
 ##   parcels_wide, parcels_high, parcel_in_bounds(p), parcel_of(x, y), parcel_rect(p),
 ##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
-##   has_unlimited_budget().
+##   has_unlimited_budget(), revision.
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
 ## set_info, set_parcel_owned and set_land_budget (CLAUDE.md Architecture). Tests may call
@@ -64,6 +64,12 @@ var parcels_high: int:
 var land_budget: int:
 	get:
 		return _land_budget
+## Counts tile and ownership writes (set_tile, set_parcel_owned) since this object was made,
+## so a reader keeping something derived from the tiles can tell when someone else wrote
+## (the builder's rule 3 graph, E3-S12). Not saved, not part of the content.
+var revision: int:
+	get:
+		return _revision
 
 var _width: int = 0
 var _height: int = 0
@@ -75,6 +81,7 @@ var _thumbnail: String = ""
 ## One byte per parcel, row-major (index = q * parcels_wide + p): 1 owned, 0 not.
 var _owned: PackedByteArray = PackedByteArray()
 var _land_budget: int = UNLIMITED_BUDGET
+var _revision: int = 0
 
 
 func _init() -> void:
@@ -224,6 +231,7 @@ func set_tile(x: int, y: int, tile_height: int, surface: Surface.Type) -> void:
 	assert(tile_height >= 0 and tile_height <= MAX_HEIGHT, "height out of range")
 	assert(Surface.is_valid(surface), "surface out of range")
 	_tiles[_index(x, y)] = _pack(tile_height, surface)
+	_revision += 1
 
 
 ## Replaces the holes list with copies of `new_holes`.
@@ -241,6 +249,7 @@ func set_info(p_name: String, p_author: String, p_thumbnail: String) -> void:
 func set_parcel_owned(p: Vector2i, owned: bool) -> void:
 	assert(parcel_in_bounds(p), "parcel out of bounds")
 	_owned[_parcel_index(p)] = 1 if owned else 0
+	_revision += 1
 
 
 ## Sets the land budget left: whole dollars, 0 or more, or UNLIMITED_BUDGET.
