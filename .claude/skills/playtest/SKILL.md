@@ -17,7 +17,7 @@ The smoke asserts only what the milestones shipped so far have built, so it can 
 | --- | --- | --- |
 | E1 Ball on a tile (built) | switch to Play, fire the debug shot | the ball lands on the course, on the ground, on the predicted tile, and comes to rest on the course on the predicted tile |
 | E2 One hole | load `courses/example_par3.json`, play the hole with a scripted swing | the ball holes out |
-| E3 Nine holes and guests | spawn one guest | the guest leaves a reaction |
+| E3 Nine holes and guests (built) | Play on `courses/example_par3.json` at 3x until the first guest finishes hole 1 | a guest arrives, leaves a reaction naming hole 1 within 60 simulated s, and a headless GuestBrain of the same day seed gives the same reaction at the same second |
 | E4 Economy | run one in-game day | the day ends with money changed |
 
 The full bar (holed out, guest reaction, money changed) is the E4 smoke. Before E4 a passing smoke means every stage built so far passed, not that the full bar did.

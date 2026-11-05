@@ -20,13 +20,17 @@ extends RefCounted
 ## (a hitch) runs at most `max_steps_per_frame` steps and lets the rest of its time go: the
 ## day runs late, never differently.
 ##
-## A hole (E3-S4): the group stands on the tee until all of it is there and it is first in
-## that hole's queue (groups queue in the order they head for the hole), so it waits behind a
-## slower group; only one group plays a hole at a time. The guest away (farthest from the cup;
-## on the tee, the group's order) plays next, once every ball in the group is at rest, no
-## stroke is under way and it stands at its ball: it strikes and is PLAYING for `stroke_s`,
-## then walks to where its ball rested once it rests. A guest whose plan is unfinished at its
-## turn waits for it (reading the green, on a putt). The group leaves the hole when every one
+## A hole (E3-S4): the group stands on the tee until all of it is there and the tee is clear
+## (groups queue in the order they head for the hole): it is first in the queue, or the group
+## just ahead has teed off and every ball of it rests `tee_clear_yd` out or is holed (E3-S8,
+## `tee_clear`), so it waits behind a slower group, and on a par 3 for it to finish. The guest
+## away (farthest from the cup; on the tee, the group's order; with `ready_golf`, E3-S8, the
+## farthest of those not walking) plays next, once every ball in the group is at rest, no
+## stroke is under way and it stands at its ball, and no group ahead on the hole is in reach
+## of the stroke (E3-S8 review, `play_clear`; else the whole group waits on the group ahead):
+## it strikes and is PLAYING for `stroke_s`, then walks to where its ball rested once it rests.
+## A guest whose plan is unfinished at its turn waits for it (reading the green, on a putt;
+## not counted against pace). The group leaves the hole when every one
 ## of it has holed out or picked up (D12) and stands still, and heads for the open hole with
 ## the next number. With none left, it goes home.
 ##
@@ -72,6 +76,8 @@ var capped_seconds: int = 0
 var ticks: int = 0
 ## The holes' static checks (blind, interesting), kept per hole until it or the terrain changes.
 var checks: HoleChecks
+## {hole number: groups that teed off it today} (E3-S8: a day reaches every hole).
+var teed_off: Dictionary = {}
 
 var _swing_tuning: SwingTuning
 ## {hole number: [GuestGroup]}: the groups heading for or playing each hole, in order.
@@ -290,17 +296,17 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 		if not guest.is_walking() and guest.hole == null:
 			guest.hole = GuestHole.new(course, h, guest.skill,
 					GuestHole.hole_seed(guest.guest_seed, h.number), tuning, model, _swing_tuning)
-	var front: bool = (_queues[g.hole_number] as Array)[0] == g
+	var clear := tee_clear(g, h)
 	var all_there := true
 	for guest: Guest in g.guests:
 		all_there = all_there and not guest.is_walking()
-	if front and all_there:
+	if clear and all_there:
 		_tee_off(g, h, t)
 		return
 	for guest: Guest in g.guests:
 		if guest.is_walking():
 			continue
-		if front:
+		if clear:
 			guest.waiting_for = Guest.Wait.PARTNERS
 		else:
 			guest.waiting_for = Guest.Wait.GROUP_AHEAD
@@ -310,6 +316,7 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	g.phase = GuestGroup.Phase.ON_HOLE
 	g.start_s = t
+	teed_off[h.number] = int(teed_off.get(h.number, 0)) + 1
 	g.struck = false
 	var tee := field.tile_center(h.tee)
 	var walk_yd := (GuestWalk.route(course, g.prev_cup, tee, tuning, field.yards_per_tile,
@@ -361,29 +368,104 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 	var away_d := -1.0
 	if not busy:
 		for guest: Guest in g.guests:
-			if guest.hole.is_finished():
+			if guest.hole.is_finished() or (tuning.ready_golf and guest.is_walking()):
 				continue
 			var d := Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y).distance_to(cup)
 			if d > away_d:
 				away_d = d
 				away = guest
+	var held := false
 	if away != null and not away.is_walking():
 		if away.hole.state == GuestHole.State.READY:
-			_strike(away, g)
+			if play_clear(away, g):
+				_strike(away, g)
+			else:
+				held = true
 		elif away.hole.plan != null and away.hole.plan.is_putt():
+			# Its own putt solve: shown, but never counted against pace (E3-S8 review).
 			away.waiting_for = Guest.Wait.READING_GREEN
-			away.wait_s += 1
 		else:
 			away.waiting_for = Guest.Wait.PLANNING
 	for guest: Guest in g.guests:
-		if guest.state != Guest.State.WAITING or guest == away:
+		if guest.state != Guest.State.WAITING or (guest == away and not held):
 			continue
 		if guest.hole.is_finished():
 			guest.waiting_for = Guest.Wait.HOLED_OUT
 		elif guest.hole.state == GuestHole.State.FLYING:
 			guest.waiting_for = Guest.Wait.BALL
+		elif held:
+			# The group ahead is in reach of the stroke: the whole group waits on it.
+			guest.waiting_for = Guest.Wait.GROUP_AHEAD
+			guest.wait_s += 1
 		else:
 			guest.waiting_for = Guest.Wait.TURN
+
+
+## True when group `g`, heading for hole `h`, may tee off as far as the groups ahead go
+## (E3-S8, docs/design.md Guests and reactions, Tee clear): it is first in the hole's queue,
+## or the group just ahead of it has teed off and is out of reach: every one of that group
+## has struck, no ball of it is in the air or a stroke under way, and every ball not yet holed
+## or picked up rests at least `tee_clear_yd` from this tee. On a hole shorter than that
+## (a par 3) the group ahead must finish first.
+func tee_clear(g: GuestGroup, h: HoleData) -> bool:
+	var q: Array = _queues[g.hole_number]
+	var i := q.find(g)
+	if i <= 0:
+		return true
+	var ahead: GuestGroup = q[i - 1]
+	if ahead.phase != GuestGroup.Phase.ON_HOLE:
+		return false
+	var tee := field.tile_center(h.tee)
+	for guest: Guest in ahead.guests:
+		if guest.hole == null:
+			return false
+		if guest.hole.is_finished():
+			continue
+		if guest.state == Guest.State.PLAYING or guest.hole.state == GuestHole.State.FLYING \
+				or guest.hole.strokes.is_empty():
+			return false
+		if Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y).distance_to(tee) < tuning.tee_clear_yd:
+			return false
+	return true
+
+
+## True when `guest` of group `g`, ready to strike, may play as far as the groups ahead on
+## its hole go (E3-S8 review, docs/design.md Guests and reactions, Tee clear and ready golf):
+## no guest of a group ahead in the hole's queue that is on the hole, and no ball of it not
+## yet holed or picked up, lies nearer the cup than the guest's ball and within the stroke's
+## planned distance (its plan's perfect-swing rest) plus `play_clear_yd`. So the group behind
+## never plays into the group ahead, nor onto a green it is still on; a group it has passed
+## (nearer the tee) never holds it, so no two groups wait on each other.
+func play_clear(guest: Guest, g: GuestGroup) -> bool:
+	var q: Array = _queues[g.hole_number]
+	var i := q.find(g)
+	if i <= 0:
+		return true
+	var at := Vector2(guest.hole.ball_at.x, guest.hole.ball_at.y)
+	var cup := field.tile_center(guest_hole_cup(g))
+	var to_cup := at.distance_to(cup)
+	var reach := tuning.play_clear_yd
+	var p := guest.hole.plan.prediction if guest.hole.plan != null else null
+	if p != null:
+		reach += at.distance_to(Vector2(p.rest.x, p.rest.y))
+	for j in i:
+		var ahead: GuestGroup = q[j]
+		if ahead.phase != GuestGroup.Phase.ON_HOLE:
+			continue
+		for other: Guest in ahead.guests:
+			if _in_the_way(other.position, at, cup, to_cup, reach):
+				return false
+			if other.hole != null and not other.hole.is_finished() \
+					and not other.hole.strokes.is_empty() \
+					and _in_the_way(Vector2(other.hole.ball_at.x, other.hole.ball_at.y), at, cup,
+							to_cup, reach):
+				return false
+	return true
+
+
+static func _in_the_way(point: Vector2, at: Vector2, cup: Vector2, to_cup: float,
+		reach: float) -> bool:
+	return point.distance_to(cup) < to_cup and point.distance_to(at) < reach
 
 
 ## The cup tile of the hole group `g` is playing (from its guests' play, which is the hole

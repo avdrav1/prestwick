@@ -7,13 +7,15 @@ extends RefCounted
 ## State: WALKING (to its ball, the next tee or the cup), WAITING (standing: for the group
 ## ahead, a partner, its own ball, its plan, its turn), PLAYING (its stroke, `stroke_s`) and
 ## DONE (gone home: its round is over, or dusk came). `waiting_for` says what a WAITING guest
-## waits for; only GROUP_AHEAD and READING_GREEN count against pace (E3-S1, Pace).
+## waits for; only GROUP_AHEAD counts against pace (E3-S1, Pace; reading the green
+## too until the E3-S8 review).
 
 enum State { WALKING, WAITING, PLAYING, DONE }
 enum Taste { PURIST, ADVENTURER, CASUAL }
 enum Wait {
 	NONE,
-	## At the tee, behind another group on the hole (counts against pace).
+	## At the tee, or at its ball with a group ahead in reach of the stroke (counts against
+	## pace).
 	GROUP_AHEAD,
 	## A partner is not at the tee yet, or still walking to its ball.
 	PARTNERS,
@@ -23,7 +25,8 @@ enum Wait {
 	BALL,
 	## Its turn, and its full-club plan is not finished (does not count against pace).
 	PLANNING,
-	## Its turn, and its putt solve is not finished (counts against pace).
+	## Its turn, and its putt solve is not finished (does not count against pace: the
+	## engine's budget never fails pace by itself, E3-S8 review).
 	READING_GREEN,
 	## Holed out or picked up; the group is still playing the hole.
 	HOLED_OUT,
@@ -84,7 +87,7 @@ class HoleRecord:
 	var score: int = 0
 	var holed: bool = false
 	var picked_up: bool = false
-	## Seconds waited that count against pace: behind the group ahead, and reading the green.
+	## Seconds waited that count against pace: behind the group ahead (at the tee or on the hole).
 	var wait_s: int = 0
 	## The walk from the previous hole's cup to this tee, yards; -1 on the first hole played.
 	var walk_yd: float = -1.0

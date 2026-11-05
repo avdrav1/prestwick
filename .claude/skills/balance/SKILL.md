@@ -15,13 +15,13 @@ The targets live in `docs/design.md` Balance targets, the one source of truth (D
 - lies: `golf/lies.tres`
 - surfaces: `course/surfaces.tres`
 - land: `data/land.json` (parcel prices and the land budget, D28; E6-S8)
-- reactions: `guests/reactions.tres` (E3)
+- reactions: `data/guests.json` (E3; the pace, challenge and verdict numbers, the queue's `tee_clear_yd`)
 - economy: `data/economy.json` (E4)
 
 ## Steps
 
 1. Read the table's targets in `docs/design.md` Balance targets and its resource from the list above.
-2. Run `godot --headless --path . -s res://scripts/sim.gd -- --table <name> --runs 200 --seed 1` (tables built so far: clubs, lies, surfaces, land; for land, `--runs` is the number of generated seeds). It prints the measured values next to the targets and exits 1 on a miss.
+2. Run `godot --headless --path . -s res://scripts/sim.gd -- --table <name> --runs 200 --seed 1` (tables built so far: clubs, lies, surfaces, land, reactions; for land, `--runs` is the number of generated seeds; for reactions it is the field, read at `--runs 50`, and the run takes about a minute). It prints the measured values next to the targets and exits 1 on a miss.
 3. Propose the smallest change that moves the measured value into range. One or two numbers, not a rewrite.
 4. Apply, rerun, show before and after in a short table.
 5. Update the matching line in `docs/design.md` if the target itself changed, and say why.

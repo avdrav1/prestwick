@@ -6,7 +6,8 @@ extends SceneTree
 ## and the CPU per simulated second; then a pair and a foursome alone on the course. The
 ## figures go in docs/design.md Guests and reactions (Guest day). E3-S6: each hole's static
 ## checks (blind, interesting) and their cost, and each day's reactions (praise, neutral,
-## complaint, and how often each check failed).
+## complaint, and how often each check failed). E3-S8: the holes reached each day (teed off by a
+## group, GuestBrain.teed_off) and finished by someone, with the records a hole.
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3]
 
@@ -112,6 +113,15 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 			for c: int in GuestReaction.Check.size():
 				if not r.reaction.passed[c]:
 					fails[c] += 1
+	var reached := {}
+	for g: Guest in brain.guests:
+		for r: Guest.HoleRecord in g.records:
+			reached[r.number] = int(reached.get(r.number, 0)) + 1
+	var per_hole := PackedStringArray()
+	for number: int in range(1, 10):
+		per_hole.append("%d:%d" % [number, int(reached.get(number, 0))])
+	print("day %d holes reached (teed off): %d of 9, finished by someone: %d of 9 (records a hole %s)" % [
+			day_seed, brain.teed_off.size(), reached.size(), " ".join(per_hole)])
 	var n := maxi(holes, 1)
 	print("day %d reactions: praise %d, neutral %d, complaint %d of %d; fails fair %d%%, interesting %d%%, pace %d%%, challenge %d%%; statics measured %d times" % [
 		day_seed, kinds[0], kinds[1], kinds[2], holes, roundi(100.0 * fails[0] / n),

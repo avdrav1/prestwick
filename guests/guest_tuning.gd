@@ -19,6 +19,16 @@ var walk_yd_per_s: float = 0.0
 var cart_path_reach_yd: float = 0.0
 var cart_path_max_detour: float = 0.0
 var stroke_s: float = 0.0
+## E3-S8: a group tees off behind the group ahead on its hole once every ball of that group
+## rests at least this far from the tee (GuestBrain.tee_clear).
+var tee_clear_yd: float = 0.0
+## E3-S8 review: on the hole, a guest of a following group holds its stroke while a guest or
+## unfinished ball of a group ahead lies nearer the cup and within the stroke's planned
+## distance plus this margin (GuestBrain.play_clear).
+var play_clear_yd: float = 0.0
+## E3-S8: ready golf. True: the guest away among those standing at their balls plays, so a
+## partner still walking to a ball farther out does not hold the group up.
+var ready_golf: bool = false
 ## E3-S4 review: the most simulated seconds GuestBrain.advance_real steps in one frame; a
 ## longer frame's extra time is let go (the day runs late, never differently).
 var max_steps_per_frame: int = 0
@@ -103,6 +113,13 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.cart_path_reach_yd = _float(d, "cart_path_reach_yd", errors)
 	t.cart_path_max_detour = _float(d, "cart_path_max_detour", errors)
 	t.stroke_s = _float(d, "stroke_s", errors)
+	t.tee_clear_yd = _float(d, "tee_clear_yd", errors)
+	t.play_clear_yd = _float(d, "play_clear_yd", errors)
+	var ready: Variant = d.get("ready_golf")
+	if typeof(ready) == TYPE_BOOL:
+		t.ready_golf = ready
+	else:
+		errors.append("ready_golf is missing or not true or false")
 	t.max_steps_per_frame = CourseData.read_int(d, "max_steps_per_frame", errors)
 	t.flight_draw_speed = _float(d, "flight_draw_speed", errors)
 	t.skill_min = CourseData.read_int(d, "skill_min", errors)
@@ -151,6 +168,10 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("skill_max must be above skill_min")
 	if t.guest_min_power <= 0.0 or t.guest_min_power > 1.0:
 		errors.append("guest_min_power must be above 0 and at most 1")
+	if t.tee_clear_yd <= 0.0:
+		errors.append("tee_clear_yd must be above 0")
+	if t.play_clear_yd < 0.0:
+		errors.append("play_clear_yd must be 0 or more")
 	if t.walk_yd_per_s <= 0.0:
 		errors.append("walk_yd_per_s must be above 0")
 	if t.cart_path_max_detour < 1.0:

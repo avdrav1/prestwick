@@ -6,17 +6,19 @@ extends SceneTree
 ##
 ##   godot --headless --path . -s res://scripts/sim.gd -- --table clubs --runs 200 --seed 1
 ##
-## Tables: clubs, lies, surfaces, land. --runs defaults to 200 and --seed to 1 (fixed, so two
-## runs differ only by what was tuned). For land, --runs is the number of generated seeds,
-## counted up from --seed (E6-S8).
+## Tables: clubs, lies, surfaces, land, reactions. --runs defaults to 200 and --seed to 1
+## (fixed, so two runs differ only by what was tuned). For land, --runs is the number of
+## generated seeds, counted up from --seed (E6-S8). For reactions (E3-S8), --runs is the
+## field, how many guests play each fixture hole (the target is read at --runs 50); the
+## field's days count up from --seed, which is also the corridor par 4's land seed.
 
-const TABLES: PackedStringArray = ["clubs", "lies", "surfaces", "land"]
+const TABLES: PackedStringArray = ["clubs", "lies", "surfaces", "land", "reactions"]
 
 
 func _initialize() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
 	if args.is_empty():
-		print("usage: sim.gd -- --table clubs|lies|surfaces|land [--runs N] [--seed S]")
+		print("usage: sim.gd -- --table clubs|lies|surfaces|land|reactions [--runs N] [--seed S]")
 		quit(2)
 		return
 	var sim := BalanceSim.new()
@@ -31,6 +33,8 @@ func _initialize() -> void:
 			rows = sim.measure_lies(runs, rng_seed)
 		"land":
 			rows = sim.measure_land(runs, rng_seed)
+		"reactions":
+			rows = sim.measure_reactions(runs, rng_seed)
 		_:
 			rows = sim.measure_surfaces(runs, rng_seed)
 	print("== /balance %s, %d runs, seed %d" % [table, runs, rng_seed])

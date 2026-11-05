@@ -213,6 +213,147 @@ func test_a_group_waits_behind_a_slower_group() -> void:
 	assert_eq(fast.records.size(), 3, "and still played all three")
 
 
+## E3-S8: on a hole longer than `tee_clear_yd` the next group does not wait for the group
+## ahead to hole out: it tees off once every ball of that group rests out of reach (or is
+## holed), so two groups play the par 4 at once. The 80 yd par 3s above never allow it.
+func test_the_next_group_tees_off_once_the_group_ahead_is_out_of_reach() -> void:
+	var c := ReactionHoles.fair_par4()
+	var h: HoleData = c.holes[0]
+	var groups: Array[GuestGroup] = [
+		GuestSpawner.group(0, 0.0, [[6, 5, Guest.Taste.CASUAL, 71], [4, 5, Guest.Taste.CASUAL, 72]], 0),
+		GuestSpawner.group(1, 1.0, [[8, 5, Guest.Taste.CASUAL, 81]], 2),
+	]
+	var brain := GuestBrain.new(c, 3, tuning, model, groups)
+	var tee := brain.field.tile_center(h.tee)
+	var b_teed := -1
+	while not brain.day_over and b_teed < 0:
+		brain.step()
+		if groups[1].phase == GuestGroup.Phase.ON_HOLE:
+			b_teed = brain.second
+			assert_eq(groups[0].phase, GuestGroup.Phase.ON_HOLE, "the group ahead is still on the hole")
+			for g: Guest in groups[0].guests:
+				assert_false(g.hole.strokes.is_empty(), "every one of it has struck")
+				if not g.hole.is_finished():
+					assert_ne(g.hole.state, GuestHole.State.FLYING, "no ball of it in the air")
+					var d := Vector2(g.hole.ball_at.x, g.hole.ball_at.y).distance_to(tee)
+					assert_gte(d, tuning.tee_clear_yd, "its ball rests out of reach (%.0f yd)" % d)
+	assert_gt(b_teed, 0, "the single teed off")
+	brain.run_day()
+	var a_done := 0
+	for g: Guest in groups[0].guests:
+		a_done = maxi(a_done, g.records[0].end_s)
+	assert_lt(groups[1].guests[0].records[0].start_s, a_done,
+			"before the group ahead holed out: two groups on the par 4 at once")
+	assert_eq(brain.teed_off.get(1, 0), 2, "both groups teed off hole 1")
+
+
+## E3-S8: ready golf. The guest away among those standing at their balls plays, so a partner
+## still walking out to a ball farther from the cup does not hold the group up; nobody plays
+## while a ball of the group is moving or a stroke is under way.
+func test_ready_golf_lets_a_partner_play_while_the_one_away_walks() -> void:
+	assert_true(tuning.ready_golf, "data/guests.json plays ready golf")
+	var c := ReactionHoles.fair_par4()
+	var cup := Vector2.ZERO
+	var specs := []
+	for i in 4:
+		specs.append([[10, 1, 5, 3][i], 5, Guest.Taste.CASUAL, 90 + i])
+	var groups: Array[GuestGroup] = [GuestSpawner.group(0, 0.0, specs, 0)]
+	var brain := GuestBrain.new(c, 5, tuning, model, groups)
+	cup = brain.field.tile_center(c.holes[0].cup)
+	var ready := 0
+	var before := {}
+	while not brain.day_over:
+		var was_walking := {}
+		for g: Guest in brain.guests:
+			was_walking[g.id] = g.is_walking()
+			before[g.id] = g.hole.strokes.size() if g.hole != null else 0
+		brain.step()
+		for g: Guest in brain.guests:
+			if g.hole == null or g.hole.strokes.size() <= int(before.get(g.id, 0)):
+				continue
+			if g.hole.strokes.size() == 1:
+				continue  # tee shots go in the group's order
+			var at := g.hole.strokes[-1].start
+			var d := Vector2(at.x, at.y).distance_to(cup)
+			for p: Guest in brain.guests:
+				if p == g or p.hole == null or p.hole.is_finished() or p.hole.strokes.is_empty():
+					continue
+				var pd := Vector2(p.hole.ball_at.x, p.hole.ball_at.y).distance_to(cup)
+				if pd > d + 0.01:
+					if p.is_walking() or bool(was_walking.get(p.id, false)):
+						ready += 1
+					else:
+						fail_test("guest %d played while guest %d stood away at its ball" % [g.id, p.id])
+	assert_gt(ready, 0, "someone played while a partner farther out was still walking")
+
+
+## E3-S8 review: on the hole the group behind never plays into the group ahead (play_clear):
+## no ball of a following group comes to rest within PLAY_CLEAR_TEST_YD of a guest of a group
+## still on the hole ahead of it, and the holds it takes for that count as GROUP_AHEAD waits.
+const PLAY_CLEAR_TEST_YD: float = 20.0
+
+
+func test_the_group_behind_never_plays_into_the_group_ahead() -> void:
+	var c := ReactionHoles.fair_par4()
+	var close := 0
+	var behind := 0
+	var held := 0
+	for day_seed: int in [1, 2]:
+		var brain := GuestBrain.new(c, day_seed, tuning, model)
+		var flying := {}
+		while not brain.day_over:
+			var before := {}
+			for g: Guest in brain.guests:
+				before[g.id] = g.hole.strokes.size() if g.hole != null else 0
+			brain.step()
+			var q: Array = brain._queues.get(1, [])
+			for i: int in q.size():
+				var gg: GuestGroup = q[i]
+				if gg.phase != GuestGroup.Phase.ON_HOLE:
+					continue
+				for g: Guest in gg.guests:
+					if g.waiting_for == Guest.Wait.GROUP_AHEAD:
+						held += 1
+					if g.hole.strokes.size() > int(before.get(g.id, 0)):
+						flying[g.id] = true
+					if not flying.has(g.id) or g.hole.state == GuestHole.State.FLYING:
+						continue
+					flying.erase(g.id)
+					var rest := Vector2(g.hole.ball_at.x, g.hole.ball_at.y)
+					for j: int in i:
+						var ahead: GuestGroup = q[j]
+						if ahead.phase != GuestGroup.Phase.ON_HOLE:
+							continue
+						behind += 1
+						for o: Guest in ahead.guests:
+							if o.position.distance_to(rest) < PLAY_CLEAR_TEST_YD:
+								close += 1
+	assert_gt(behind, 0, "the group behind played with a group ahead still on the hole")
+	assert_gt(held, 0, "and was held for it on the hole")
+	assert_eq(close, 0, "no ball of it rested within %.0f yd of a guest ahead" % PLAY_CLEAR_TEST_YD)
+
+
+## E3-S8 review: the engine's budget never fails pace by itself. A guest alone on the course
+## counts no wait at all, its own putt solve (reading the green) included, so even patience 1
+## never fails pace on a hole with nobody ahead.
+func test_a_lone_impatient_guest_never_fails_pace_on_wait() -> void:
+	var c := ReactionHoles.fair_par4()
+	var greens := 0
+	for s: int in 8:
+		var groups: Array[GuestGroup] = [
+			GuestSpawner.group(0, 0.0, [[1 + s, 1, Guest.Taste.CASUAL, 300 + s]], 0)]
+		var brain := GuestBrain.new(c, s, tuning, model, groups)
+		while not brain.day_over:
+			brain.step()
+			if not brain.guests.is_empty() \
+					and brain.guests[0].waiting_for == Guest.Wait.READING_GREEN:
+				greens += 1
+		var r: Guest.HoleRecord = brain.guests[0].records[0]
+		assert_eq(r.wait_s, 0, "nobody ahead: no counted wait (guest %d)" % s)
+		assert_true(r.reaction.passed[GuestReaction.Check.PACE], "so pace passes")
+	assert_gt(greens, 0, "some of them did wait reading the green, uncounted")
+
+
 # --- walking ---
 
 func test_a_walk_follows_a_cart_path_when_one_serves_it() -> void:

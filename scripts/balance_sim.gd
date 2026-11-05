@@ -517,6 +517,13 @@ static func parcel_tally(c: CourseData, parcel: Vector2i) -> Dictionary:
 	return {"relief": hi - lo, "trees": trees, "water": water}
 
 
+# --- reactions (E3-S8) ---
+
+## /balance reactions: ReactionField.measure (scripts/reaction_field.gd), with this sim's bag.
+func measure_reactions(runs: int, rng_seed: int, nine_days: int = ReactionField.NINE_DAYS) -> Array[Dictionary]:
+	return ReactionField.new(model).measure(runs, rng_seed, nine_days)
+
+
 # --- helpers ---
 
 func _tee_tile() -> Vector2i:

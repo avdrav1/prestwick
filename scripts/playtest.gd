@@ -11,13 +11,15 @@ extends SceneTree
 ##                       the prediction said, and comes to rest on the course.   (here)
 ##   E2 One hole         load courses/example_par3.json, play the hole with a scripted
 ##                       swing, the ball holes out.                               (here)
-##   E3 Guests           spawn one guest, it plays and leaves a reaction.
+##   E3 Guests           Play on courses/example_par3.json at 3x: the day's first guest
+##                       arrives, plays hole 1 and leaves a reaction naming it, the same
+##                       one a headless GuestBrain of that day's seed gives.     (here)
 ##   E4 Economy          run one in-game day, it ends with money changed.
 ##
 ## Exit code 0 when every check passes, 1 when one fails. Prints one line per check.
 
 ## The last milestone whose smoke stage exists in this script.
-const BUILT_MILESTONE: int = 2
+const BUILT_MILESTONE: int = 3
 const MAIN_SCENE := "res://scenes/main.tscn"
 ## What each stage expects, from docs/design.md. Kept as data so the numbers are not
 ## literals here, and so a silent fallback course or a physics change fails the smoke.
@@ -27,7 +29,7 @@ const MAX_FRAMES: int = 4000
 ## E2: the most strokes the scripted player may take (double par on a par 5).
 const MAX_STROKES: int = 10
 
-enum Phase { START, FLYING, E2_START, E2_SWING, E2_FLYING, DONE }
+enum Phase { START, FLYING, E2_START, E2_SWING, E2_FLYING, E3_START, E3_RUN, DONE }
 
 var _main: Main
 var _phase: Phase = Phase.START
@@ -39,18 +41,26 @@ var _expect: Dictionary = {}
 var _expect_e2: Dictionary = {}
 var _e2_hash: String = ""
 var _e2_strokes: int = 0
+var _expect_e3: Dictionary = {}
+## E3: the first reaction Play gave, with the simulated second it came at, and the guests
+## that had arrived by then.
+var _e3_reaction: GuestReaction = null
+var _e3_second: int = -1
+var _e3_arrived: int = 0
 
 
 func _initialize() -> void:
 	print("playtest smoke: milestone E%d stages" % BUILT_MILESTONE)
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(EXPECT_PATH))
 	if not parsed is Dictionary or not (parsed as Dictionary).get("e1") is Dictionary \
-			or not (parsed as Dictionary).get("e2") is Dictionary:
+			or not (parsed as Dictionary).get("e2") is Dictionary \
+			or not (parsed as Dictionary).get("e3") is Dictionary:
 		_fail("expectations load (%s)" % EXPECT_PATH)
 		_finish()
 		return
 	_expect = (parsed as Dictionary)["e1"]
 	_expect_e2 = (parsed as Dictionary)["e2"]
+	_expect_e3 = (parsed as Dictionary)["e3"]
 	if not _add_main(_expect["course_path"]):
 		_finish()
 
@@ -88,6 +98,13 @@ func _process(_delta: float) -> bool:
 				_check(not _main.shot_view.playing,
 						"stroke %d comes to rest within %d frames" % [_e2_strokes, MAX_FRAMES])
 				_phase = Phase.E2_SWING
+		Phase.E3_START:
+			_start_guests()
+		Phase.E3_RUN:
+			_frames += 1
+			if _e3_reaction != null or _frames >= _e3_max_frames():
+				_check_guests()
+				_finish()
 	return false
 
 
@@ -179,7 +196,9 @@ func _swing() -> void:
 	var sc := _main.swing_control
 	if sc.is_finished() or _e2_strokes >= MAX_STROKES:
 		_check_hole()
-		_finish()
+		_main.queue_free()
+		_main = null
+		_phase = Phase.E3_START
 		return
 	var plan := ScriptedRound.plan(sc)
 	if plan == null:
@@ -213,6 +232,66 @@ func _check_hole() -> void:
 	_main.mode_button.pressed.emit()
 	_check(_main.mode == Main.Mode.BUILD, "one click back to Build")
 	_check(_main.course.content_hash() == _e2_hash, "the course is unchanged")
+
+
+# --- E3: a guest plays and leaves a reaction ---
+
+## Play on the E3 course at the smoke's speed; the guests' day starts with Play (GuestSim).
+func _start_guests() -> void:
+	if not _add_main(_expect_e3["course_path"]):
+		_finish()
+		return
+	var sim := _main.guest_sim
+	sim.day_started.connect(func(_d: int) -> void:
+		sim.brain.guest_arrived.connect(func(_g: Guest) -> void: _e3_arrived += 1)
+		sim.brain.reacted.connect(func(_g: Guest, r: GuestReaction) -> void:
+			if _e3_reaction == null:
+				_e3_reaction = r
+				_e3_second = sim.brain.second))
+	_main.mode_button.pressed.emit()
+	_check(_main.mode == Main.Mode.PLAY, "E3: one click to Play on %s" % _expect_e3["course_path"])
+	sim.set_speed(float(_expect_e3["speed"]))
+	_check(sim.running, "the guests' day runs in Play")
+	_frames = 0
+	_phase = Phase.E3_RUN
+
+
+## Frames for `max_sim_s` simulated seconds at the smoke's speed, plus a second's margin.
+func _e3_max_frames() -> int:
+	return ceili(float(_expect_e3["max_sim_s"]) * 60.0 / float(_expect_e3["speed"])) + 60
+
+
+func _check_guests() -> void:
+	var sim := _main.guest_sim
+	_check(_e3_arrived > 0, "a guest arrives at the first tee (%d by then)" % _e3_arrived)
+	_check(_e3_reaction != null, "a guest leaves a reaction within %d simulated s (%d frames)" % [
+			int(_expect_e3["max_sim_s"]), _frames])
+	if _e3_reaction == null:
+		return
+	var r := _e3_reaction
+	print("  reaction: guest %d, second %d, %s: %s" % [r.guest_id, _e3_second, r.kind_name(), r.text])
+	var hole := int(_expect_e3["hole"])
+	_check(r.hole_number == hole and r.text.begins_with("Hole %d:" % hole),
+			"it names hole %d" % hole)
+	_check(sim.feed.total >= 1, "the feed holds it")
+	# The same seed gives the same day: a headless brain of the day's seed, stepped once a
+	# simulated second, gives the same first reaction at the same second.
+	var brain := GuestBrain.new(_main.course, GuestSim.day_seed(sim.base_seed, 1))
+	# The handler must not hold the brain (a reference cycle through its own signal).
+	var first: Array[GuestReaction] = []
+	brain.reacted.connect(func(_g: Guest, x: GuestReaction) -> void:
+		if first.is_empty():
+			first.append(x))
+	while first.is_empty() and not brain.day_over:
+		brain.step()
+	_check(not first.is_empty(), "a headless day of the same seed gives a reaction")
+	if first.is_empty():
+		return
+	var h := first[0]
+	var at := brain.second - 1  # the step that gave it played second `at`
+	_check(h.guest_id == r.guest_id and h.kind == r.kind and h.text == r.text and at == _e3_second,
+			"the same reaction as a headless day of seed %d (guest %d, second %d)" % [
+				GuestSim.day_seed(sim.base_seed, 1), h.guest_id, at])
 
 
 # --- reporting ---
