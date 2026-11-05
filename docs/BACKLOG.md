@@ -297,7 +297,7 @@ Planning notes:
   - Test: by hand: read the design doc sections named above against `docs/design.md` and `docs/DECISIONS.md`.
   - Touches: `docs/`
 
-## E6: Land — active
+## E6: Land — done
 
 Ships as 0.3.0. Runs before E3 (D19). Serves pillars 3 and 1: the course starts as land the player buys and shapes, and a hole can only go on land they own, so it is still playable the moment it is placed.
 
@@ -554,13 +554,13 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Test: `tests/test_validator.gd` (the shipped `course/validator_tuning.tres` keeps the order; a tuning with `zone_from_yd` above `par4_min_yd` is caught).
   - Touches: `course/`, `tests/`, `.claude/skills/course-file/`
 
-## E3: Nine holes and guests — planned
+## E3: Nine holes and guests — active
 
 Ships as 0.4.0 (D19). Serves pillar 3: the course tells a story through its guests. No money yet, so arrivals are a flat number until E4 connects rating.
 
-Done when: nine holes are open, guests play them in order, and their complaints name a hole you can click and fix.
+Done when: nine holes are open, guests play them in order, and their complaints name a hole you can click and fix. Nine holes are checked in New sandbox, where every parcel is owned (user, 2026-11-05, at `/next-epic`): a New course's $5,000 land budget buys about 4 parcels and nine holes need about 34, so on a New course guests play the one or two holes it can afford, and E4's money buys the rest. Guests play whatever holes are open, on any course.
 
-Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it rewrites or extends E3's stories):
+Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-05 and folded them into the stories below; they stay as background):
 
 - E6 Land runs before E3 (D19). By the time E3 starts, a course opens on generated land and holes go only on owned parcels; E3's stories assume that land, not the blank D10 plot, except in New sandbox.
 - Hole picking: the tee and cup tools build hole 1 only (`BuildTool.hole_number` is fixed at 1, `scenes/build_tool.gd`). E3-S2 needs a way to pick which hole the tools build.
@@ -580,7 +580,11 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it r
   - Touches: `docs/`
   - Settles:
     - Round length. A day is 180 simulated seconds, so a 9-hole round must fit in about 20 seconds per hole or span days. This sets walk speed and shot time.
+    - Arrivals until E4: a flat number of guests per day, and group size.
     - Skill to noise on power and accuracy, and expected score per skill for the challenge check.
+    - How a guest picks a club and an aim on a hole with no landing zone checked past the tee (D11 checks one, from the tee; a par 5's second shot and a dogleg's corner are not), and on a narrow land corridor (D30; on the E6-S8 lanes a one-parcel par 4 sent 29% of swept tee strokes within 60 degrees of the line OB).
+    - Guests and unowned land: a guest's ball obeys D29 like the player's; may a guest walk over unowned land to reach it, or round it? Proposed: walk over it (it is out of bounds for the ball, not a wall).
+    - Guest putting cost: a tick or time budget per guest per simulated second for `PuttAim.begin` / `advance` (planning notes, Guest putting), and a lower `putt_aim_max_runs` for guests if that is the cheaper choice.
     - Patience scale and how it fails the pace check: wait time and walk distance limits.
     - Taste list and what each taste changes.
     - How "interesting" is detected. Proposed: a hazard on the direct line plus a safe route that is longer.
@@ -588,21 +592,21 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it r
     - What one reaction is. The design doc has a reaction per guest at the last hole and also per hole; rating averages the last 50, so the unit matters.
     - Revisit rule 4 yardage along the line of play. E2-S1 measured a straight line from tee to cup; doglegs on a nine-hole course may want the line of play.
 - [ ] E3-S2 Manage nine holes. Move from one hole to a course.
-  - Accept: list of up to 9 holes, numbered in build order and renumberable. Open or close each, and play any one in one click. A plot of the size set in E2-S1 with 9 holes holds 60 fps at 1x on the dev machine.
-  - Test: `tests/test_hole_list.gd`. Frame time checked by hand.
+  - Accept: a hole list of up to 9 holes, numbered in build order and renumberable. Picking a hole in the list points the tee and cup tools at it (today `BuildTool.hole_number` is fixed at 1), opens or closes it, and plays it in one click. Loading a course with holes frames hole 1. On a New course the list works with the holes its land holds (D30). Nine holes in New sandbox on generated land (`LandGenerator`, every parcel owned) hold 60 fps at 1x on the dev machine, and a click edit with nine holes reruns the validator inside a frame; if it does not, cache the rule 3 graph between edits.
+  - Test: `tests/test_hole_list.gd` (numbering, renumbering, picking, open and close, the tools building the picked hole). Frame time and validator time measured and written into `docs/design.md` Plot.
   - Touches: `course/`, `scenes/`, `tests/`
 - [ ] E3-S3 Give guests a golf swing. Same shot model as the player, with skill as noise.
-  - Note: (E6-S12 review) a guest's putt solve on a steep green costs about 300 ms at once; step it with `PuttAim.begin` / `advance` under a budget (planning notes, Guest putting).
-  - Accept: a guest picks a legal club, aims and plays out a hole with no scene. Skill 10 scores near par on `courses/example_par3.json`, and skill 1 clearly worse. The off-screen shortcut, which skips the flight and jumps to the landing, gives the same result as the full flight for the same seed.
+  - Note: (E6-S12 review) a guest's putt solve on a steep green costs about 300 ms at once; step it with `PuttAim.begin` / `advance` under E3-S1's budget (planning notes, Guest putting).
+  - Accept: a guest picks a legal club, skips a blocked one (`ClubSet.is_blocked`, D20), aims and plays out a hole with no scene, with the ball obeying D29 on unowned land. Skill 10 scores near par on `courses/example_par3.json` and on a `/course-file generate 4 hilly` par 4, and skill 1 clearly worse. The off-screen shortcut, which skips the flight and jumps to the landing, gives the same result as the full flight for the same seed. No putt solve runs past its budget in one call.
   - Test: `tests/test_guest_shot.gd`
   - Touches: `guests/`, `golf/`, `tests/`
 - [ ] E3-S4 Run guests on a timer. Spawn them and move them through the course once per simulated second.
-  - Note: (E6-S12 review) the per-second step must bound each guest's PuttAim work with a tick or time budget (`PuttAim.advance`), carrying an unfinished solve to the next simulated second (planning notes, Guest putting).
-  - Accept: each guest has skill, patience and taste, and holds a state: walking, waiting, playing, done. The sim advances once per simulated second, never per frame, three steps per real second at 3x. Guests play open holes in number order, walk cart paths when present and straight lines otherwise, and wait behind a slower group. The same seed gives the same day.
+  - Note: (E6-S12 review) the per-second step bounds each guest's PuttAim work with E3-S1's budget, carrying an unfinished solve to the next simulated second.
+  - Accept: each guest has skill, patience and taste, and holds a state: walking, waiting, playing, done. The sim advances once per simulated second, never per frame, three steps per real second at 3x. E3-S1's flat arrivals spawn at the first open hole's tee. Guests play open holes in number order, walk cart paths when present and straight lines otherwise (over unowned land as E3-S1 settled), and wait behind a slower group. The same seed gives the same day.
   - Test: `tests/test_guest_brain.gd`
   - Touches: `guests/`, `tests/`
 - [ ] E3-S5 Show guests on the course. Make the simulation visible.
-  - Accept: run `/art-spec golfer` and use the placeholder sheet: 24 px, 8 directions, idle, walk and swing. Guests Y-sort correctly with trees, the ball and hills. On-screen guests show their ball flight; off-screen ones do not.
+  - Accept: run `/art-spec golfer` and use the placeholder sheet: 24 px, 8 directions, idle, walk and swing. Guests Y-sort correctly with trees, the ball and hills. On-screen guests show their ball flight; off-screen ones do not. Speed controls (pause, 1x, 3x) work in Play mode's sim view.
   - Test: by hand with a screenshot of a guest behind a tree and on a hill.
   - Touches: `art/`, `scenes/`
 - [ ] E3-S6 Score the four checks. Turn behavior into a verdict.
@@ -610,11 +614,11 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` reads these before it r
   - Test: `tests/test_reactions.gd`, a pass and a fail case for each check, plus the blind tee shot and risk-reward par 5 from the design doc.
   - Touches: `guests/`, `tests/`
 - [ ] E3-S7 Build the feed and the map tags. Close the loop back to the builder.
-  - Accept: complaints and praise scroll in a HUD feed and tag the hole on the map. Clicking one jumps to the hole in Build. The feed is readable with several guests finishing at once.
+  - Accept: complaints and praise scroll in a HUD feed and tag the hole on the map. Clicking one jumps to the hole in Build and picks it in the hole list (E3-S2). The feed is readable with several guests finishing at once.
   - Test: `tests/test_feed.gd` for ordering and hole links. Screenshot.
   - Touches: `scenes/`, `guests/`, `tests/`
-- [ ] E3-S8 Tune reactions against a field. Close the "too few or too many checks" question.
-  - Accept: `scripts/sim.gd --table reactions` plays a field of 50 guests. `/balance reactions` reaches 60 to 75% praise and under 15% complaints on a fair par 4. A blind hole clearly scores worse. A `/decision` answers whether four checks is right. `/playtest` smoke now requires one guest reaction.
+- [ ] E3-S8 Tune reactions against a field. Close the "too few or too many checks" question and the milestone's risk.
+  - Accept: `scripts/sim.gd --table reactions` plays a field of 50 guests. `/balance reactions` reaches 60 to 75% praise and under 15% complaints on a fair par 4. A blind hole clearly scores worse. A one-parcel-corridor par 4 on generated land is played too, and its OB rate and reactions are recorded (planning notes, Routing on land). A nine-hole course in New sandbox runs a full day with every hole reached. A `/decision` answers whether four checks is right. `/playtest` smoke now requires one guest reaction.
   - Test: sim output recorded in the balance commit. `/playtest full` checklist item 3.
   - Touches: `guests/`, `scripts/`, `docs/`
   - Settles: design doc open question "Guest readability".

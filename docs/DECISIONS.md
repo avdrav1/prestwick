@@ -369,3 +369,13 @@ Options:
 Choice (the user, 2026-11-04): two clocks. Every settle is under 600 ticks from its first touchdown (or from being set down still, or from a putt starting); a ball that rests on the green is also under 480 ticks from reaching it, the later of its touchdown and the first tick it is over a green tile. A ball set down on the green or a putt starts there, so every D16 and D31 case in `tests/test_ball.gd` reads the same as before. On the six hilly holes (`--full`, every full club at 100% and 110%) every strike now meets both, so `GUARDS` is gone and D31's accepted limits are unchanged.
 Why: pillar 2: the 8 s green target exists to stop a ball creeping on the green (D7, D16), and it stays strict there; the player's real wait for a full shot is held to 10 s. Pillar 4: no physics or tuning change, one test file and a sentence of `docs/design.md`.
 Affects: D16 (the green clause's clock), docs/design.md Ball (Settle targets; Accepted exceptions), Holes (Generated courses settle times), tests/test_settle.gd
+
+## D37: Where does E3 check nine holes, when a New course can afford about four parcels? (2026-11-05)
+Question: E3's milestone is nine open holes with guests playing them. A New course's $5,000 land budget (D28) buys about 4 parcels and nine holes need about 34, and money arrives only in E4.
+Options:
+- Check nine holes in New sandbox (every parcel owned); guests play whatever holes are open on any course. Cost: on a New course guests see one or two holes until E4. Benefit: no new numbers, D28 stands.
+- Raise the land budget to about $40,000 until E4-S1. Cost: D28 changes and E4 resets it. Benefit: a New course reaches nine holes in E3.
+- A flat green fee per guest round into the land budget in E3. Cost: part of E4's economy moves forward, with a fee and arrival rate to tune twice. Benefit: a New course earns its way to nine holes.
+Choice: New sandbox (user, 2026-11-05, at `/next-epic` E3).
+Why: pillar 4: no economy work before E4, and D28's budget keeps its job of making E4's money matter. Pillar 3 holds on a New course: guests still play and react to the holes it has.
+Affects: docs/BACKLOG.md E3 (Done when, E3-S2, E3-S8)
