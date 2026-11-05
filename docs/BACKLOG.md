@@ -655,6 +655,104 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Accept: with E3-S4's guest sim running on the nine_holes fixture, `scripts/nine_holes_perf.gd` measures the click-edit frame and the frame after a drag that breaks every hole at once (nine new issue boxes). If a check passes about 14 ms or the frame passes 16.7 ms, cache rule 3's graph between edits (or the box text measures) until it fits. The figures go in `docs/design.md` Plot.
   - Test: the perf script's output recorded in the commit; if a cache is added, `tests/test_validator.gd` checks a cached check gives the same issues as a fresh one after edits.
   - Touches: `course/`, `scripts/`, `docs/`
+- [ ] E3-S13 Check the guest tunables' ranges when they load. A bad edit to `data/guests.json` should fail loudly, not play oddly.
+  - Note: (found in E3 review) `GuestTuning` reads every key and names missing ones, but no check or test asks whether the values make sense.
+  - Accept: loading `data/guests.json` reports an error for each range that does not hold: every best sigma at most its worst, every min at most its max (group sizes, skill, patience), weights and per-second rates positive, `guest_min_power` inside 0 to 1. The shipped file passes.
+  - Test: `tests/test_guest_shot.gd`: the shipped file loads with no errors, and a dictionary with each range swapped names that range.
+  - Touches: `guests/`, `tests/`
+- [ ] E3-S14 Spread the guest sim's Ball work across frames. At 3x its peaks leave little room for anything else.
+  - Note: (found in E3 review) the work is front-loaded into the first frames of each simulated second, because a step serves guests up to the 4,800-tick cap. E3-S4 measured 3x at 60 fps: 1.39 ms a frame mean, p95 7.8, worst 10.3 to 11.0 ms; E3-S8's fuller field 1.99 ms mean, p95 8.05. At 30 fps the worst frame is 18.6 ms (11 of 1,810 over 16.7 ms), at 20 fps 26.3 ms (95 of 1,207 over), since a frame's share grows with its delta; one step's catch-up after a hitch is about 28 ms, capped at one step a frame. E3-S12 saw `GuestBrain.advance_real` reach 10 to 12 ms in some Build frames (idle Build p95 about 9 ms), and push the breaking drag's release frame to 17.5 to 17.6 ms. The view with all 16 guests on the nine-hole fixture at 3x has not been measured. `scripts/nine_holes_perf.gd` phase 5 (every hole failing) has no guest on the course, as the game behaves, so it measures no guest load.
+  - Accept: the sim slices each simulated second's ticks over its frames in proportion to need (about 80 ticks a frame at 1x, 240 at 3x, not up to the cap at once), with a per-frame guest budget in tuning data, and the seeded day's records are unchanged. `scripts/nine_holes_perf.gd` measures the main scene with all 16 guests shown at 3x and has a phase that edits under guest load with at least one hole open. At 3x and 60 fps no frame's guest work passes a budget set in tuning data; the 30 fps figures are recorded in `docs/design.md`.
+  - Test: `tests/test_guest_brain.gd`: a day run in sliced frames gives the same records as one run a step at a time. The perf script's output recorded in the commit.
+  - Touches: `guests/`, `scripts/`
+- [ ] E3-S15 Bound the guests' path and route searches. Measure them under load, cache only if they need it.
+  - Note: (found in E3 review) on a dense painted cart path lattice (about 9,159 path tiles) a step's moves reached p95 19.3 ms and worst 42.1 ms, and a disconnected end makes the cart path search explore its whole component. The route search for interesting can cost about 8 ms in one step when it floods most of a 128 x 128 map; it runs at most once per hole after a terrain edit.
+  - Accept: `scripts/nine_holes_perf.gd` measures both searches on the dense lattice and on a flooded 128 x 128 map with guests running. If either pushes a frame past 16.7 ms, the cart path search is cached across steps and cleared on `CourseBuilder.tiles_changed` (or path components are labelled once per edit), with the brain told of edits by a signal or a course revision counter; the interesting search is counted in E3-S12's Build budget.
+  - Test: the perf script's output in the commit; if a cache is added, `tests/test_guest_brain.gd` checks a cached walk equals a fresh one after a path edit.
+  - Touches: `guests/`, `scripts/`
+- [ ] E3-S16 Make a multi-tile refresh cost in proportion to its tiles. Undo of a big drag holds a 40 ms frame.
+  - Note: (found in E3 review) `CourseView.refresh_cell` runs once per tile and, for each, loops every `IssueMarker` (covered, place, layout reset). Undoing the 528-tile breaking drag with nine issue boxes shown holds a 41 to 43 ms frame (p95 46 to 47, worst 56), and with guests out the perf script's undo frame is 44 to 45 ms median (p95 52 to 93); the validator part is only 1.7 ms. A `drag_to` that paints about 60 tiles in one frame reaches 17.8 to 18.0 ms, and the breaking drag's `drag_to` 19.9 to 31.3 ms at worst with guests out.
+  - Accept: a batch of changed tiles updates each issue box once per `tiles_changed` (for example `Main._on_tiles_changed` tests the boxes once per batch). `scripts/nine_holes_perf.gd`'s undo frame and fast `drag_to` frames stay under 16.7 ms with guests running.
+  - Test: `tests/test_issue_marker.gd`: a batched refresh leaves the boxes where a per-tile refresh would. The perf script's output in the commit.
+  - Touches: `scenes/`, `scripts/`
+- [ ] E3-S17 Keep reactions on the hole that earned them. Edits should not carry old verdicts onto a new hole.
+  - Note: (found in E3 review) tags and feed lines follow the number a reaction named, so after a renumber an old reaction tags whatever hole now has that number. A fixed hole keeps its old complaints until 50 newer reactions push them out. A slot is an index into `CourseData.holes`, so undoing a new hole and placing another at the same index carries the old reactions onto it; a stable hole id would need a builder and save change. E4-S5's rating views should read `ReactionFeed.slot_tallies` (by slot), not `tallies()` (by named number).
+  - Accept: changing a hole's tee, cup or terrain on its line clears its tally (or a `/decision` says otherwise), a renumber keeps the tally on the hole the guests played, and a hole placed at a freed slot starts with none.
+  - Test: `tests/test_feed.gd`: a moved cup clears its hole's tag, a renumber keeps it, undo-then-place starts clean.
+  - Touches: `guests/`, `scenes/`
+- [ ] E3-S18 Show in Build why guests complained. The tag counts alone do not say what to fix.
+  - Note: (found in E3 review) the hole panel could show the picked hole's latest reaction line, inside E3-S10's 280 px collapsed limit. If the line does not fit, cut it to its lead sentence and show the rest on hover or in the panel; `lead_check()` and `failed()` give both parts. The same cut serves a narrower HUD feed, since the 140-character bound assumes one line per reaction.
+  - Accept: picking a hole in Build shows its latest praise or complaint, led by the check that failed, and the panel stays under its collapsed limit at 1280 x 720.
+  - Test: `tests/test_hole_list.gd`: a picked hole with a complaint shows its lead check, and the collapsed panel stays under its limit. Screenshot.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S19 Let a map tag pick its hole. A tag shows a hole number but cannot be clicked.
+  - Note: (found in E3 review) in Build a click on the map goes to the build tool, so a tag needs a hit test ahead of the tool.
+  - Accept: clicking a tag in Build or Play picks and frames its hole (`Main.frame_hole` with its slot), and the click never reaches the build tool.
+  - Test: `tests/test_feed.gd`: a click on a tag frames its hole and paints nothing.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S20 Sync a guest's swing, flight and walk on screen. The ball leaves before the club reaches it.
+  - Note: (found in E3 review) the replay starts as soon as the stroke is seen, but the swing's impact is frame 4 of 6. At 1x a drive's replay takes about 1.4 s and `stroke_s` is 1 s, so the guest can walk off while its ball is still landing. In the brain `_walk` can end a walk and `_strike` fire in the same step, so the figure snaps up to about 8 tiles onto its ball; the view hides it by snapping. Changing the brain (no strike in the step a walk ends) changes seeded days.
+  - Accept: the replay starts at the impact share of `stroke_s`, the figure does not start walking until its ball rests on screen (or `flight_draw_speed` is raised until it does), and a figure finishes its walk visibly before it swings. If the brain changes, `/balance reactions` is rerun and its figures updated.
+  - Test: `tests/test_guest_view.gd`: the ball leaves at the impact frame, and no figure moves more than a walk step between frames at the start of a swing.
+  - Touches: `guests/`, `scenes/`
+- [ ] E3-S21 Settle whether every day reaches every hole. Only a good pair plays nine inside `day_s`.
+  - Note: (found in E3 review) alone on the course a skill-10 pair plays nine in 157 s (35.5 strokes each), a skill-5 pair needs all 180 s, a skill-1 pair plays 8 holes and a foursome 7 to 8 (with ready golf). "Every hole reached" held on days 1 to 5; on days 6 to 10 it held on 4 of 5 for teeing off (day 7, led by a foursome, reaches 8) and 2 of 5 for finishing. Each walk rounds up to whole seconds, adding up to 1 s a stroke. The between-hole walks (green to next tee) were estimated at 20 to 60 yd, never measured against the pace walk limits (70 to 160 yd), and the leftover Ball work over a full nine was left out of the 165 s figure. E4-S3 owns the day clock.
+  - Accept: the walks and a full nine's Ball work at `guest_ticks_per_s` 480 are measured on the nine-hole fixture, and a `/decision` picks among day length, walk speed, arrival order, sub-second walks or playing through, or accepts that some days end short.
+  - Test: `scripts/guest_day.gd` output over days 1 to 10 in the decision.
+  - Touches: `guests/`, `docs/`
+  - Settles: D38's "about one day a nine-hole round" against groups of four and low skill.
+- [ ] E3-S22 Tune pace across hole shapes. Before the rating averages pace complaints.
+  - Note: (found in E3 review) on the nine-hole fixture pace fails 28% on the first tee and 33% on the par 5; the dogleg fails 44% against 20% on the fair par 4, because lay-ups short of `tee_clear_yd` hold the next tee. `GuestBrain.play_clear` only looks at groups ahead in the same hole's queue, never a crossing or adjacent hole with a shared landing area. With `play_clear` in place, `tee_clear`'s 250 yd check is mostly redundant on par 4s and 5s. A shot that flies well past its plan (a 13% power error on a long club) can still beat the 50 yd margin, so `play_clear_yd` could scale with the club. A hole closed before the group struck there measures the next pace walk from the last cup finished (cup 1 to tee 3 when hole 2 closes); confirm that is the walk pace should judge. `scripts/guest_day.gd` prints only a day's summary, so feed text cannot be read from the command line.
+  - Accept: `scripts/guest_day.gd --lines` prints a day's reaction lines. `/balance reactions` brings pace fails on the first tee, the par 5 and the dogleg within 10 points of the fair par 4, folds `tee_clear` into `play_clear` or records why not, checks groups on crossing holes, and keeps the fair par 4's praise target. The `docs/design.md` Balance targets line for reactions names the field's taste and patience mix.
+  - Test: `tests/test_guest_brain.gd`: a guest holds for a group on a crossing hole in its landing area. Sim output in the commit.
+  - Touches: `guests/`, `scripts/`
+- [ ] E3-S23 Give the nine-hole fixture holes that can be praised. Today none can.
+  - Note: (found in E3 review) `tests/fixtures/nine_holes.gd` paints a 3-wide fairway over any pond, so no line crosses a hazard and interesting fails on every hole; with pace failing too it gives no praise and about half complaints. Hole 1 (generated land, seed 7) is blind under D43, which makes up the 21 to 23% of fair fails. Interesting counts bunkers and trees as hazards, as `docs/design.md` says, so a plain hole always fails it and Adventurers complain on every such hole; the corridor par 4 likewise never earns praise. A New course built the same way reads as neutral or complaints until the player adds hazards: E5's tutorial or tooltips should say so.
+  - Accept: the fixture (or a new nine-hole fixture beside it) has a hazard with a way round on most lines and hole 1 not blind, and `scripts/guest_day.gd` on it shows praise on at least half its holes over days 1 to 5. Tests and perf scripts that rely on today's fixture still pass or move to it by name.
+  - Test: `tests/test_reactions.gd`: each fixture hole's statics (fair, interesting) as intended.
+  - Touches: `tests/`, `scripts/`
+- [ ] E3-S24 Check guest scoring at the edges. The top of the skill range and the short game are untested against targets.
+  - Note: (found in E3 review) skill 10 plays under par on the flatter holes (-0.45 on example_par3 and the flat par 4, -0.67 on the hilly par 5) against an expected score of par; challenge (within 2) still passes. `guest_min_power` 0.05 was added after the spike, so short-game scores and three-putt rates have not been rechecked with it. How often noise-free guests three-putt on sloped greens is not recorded.
+  - Accept: `/balance reactions` records three-putt rates on sloped greens by skill and short-game scores with `guest_min_power`, and moves `full_sigma_best` (or records why not) so skill 10 averages within 0.25 of par on the spike's holes.
+  - Test: sim output in the balance commit; `tests/test_guest_shot.gd`'s skill test still passes.
+  - Touches: `guests/`, `scripts/`
+- [ ] E3-S25 Settle rule 4 on doglegs. A dogleg plays nearly a stroke over its par.
+  - Note: (found in E3 review) `ReactionHoles.dogleg_par4` is 333 yd straight (a par 4 by rule 4) but 470 yd round its corner. It plays +0.83 over the expected score with 50 guests and +0.89 with 200 (skill 4 to 7 +1.46), against about 0 on the straight fair par 4, and challenge fails 26% against 14%. No D entry was added beyond D44.
+  - Accept: a `/decision` by the user: rule 4 keeps the straight line (the designer's choice, shown on the card), or measures a line of play (for example through the landing zone), with what it costs the validator.
+  - Test: none for the decision; if rule 4 changes, `tests/test_validator.gd` measures the dogleg's yardage round its corner.
+  - Touches: `docs/`, `course/`
+  - Settles: whether a dogleg's par follows its straight yardage.
+- [ ] E3-S26 Frame long holes against the controls themselves. The free view is one rectangle.
+  - Note: (found in E3 review) a hole only slightly too long for 0.5x could leave its cup on screen under the hole panel or the palette, because the cup goes just past the free view's edge; nine_holes has no such hole, so it is untested. When neither strip fits a long hole even at 0.5x, `free_view_rect_for` falls back to the larger strip, so the par 4s and 5s never use the strip under a collapsed panel; a better tie-break would show more of the tee-to-cup line. The framing tests in `tests/test_course_camera.gd` and the frame-hole-one tests in `tests/test_hole_list.gd` check against `free_view_rect()`, not `free_view_rect_for(tee, cup)` which `frame_hole` uses. Waits on E3-S9's Accept ruling.
+  - Accept: a framed cup that shows on screen never sits under any control in `Main.hud_controls()` (step the zoom or position, or use the L-shaped region below the hole panel), and when no strip fits, the one that shows more of the tee-to-cup line wins.
+  - Test: `tests/test_course_camera.gd`: a hole just over the 0.5x fit keeps its cup clear of every control, and the framing tests check against `free_view_rect_for(tee, cup)`.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S27 Tidy the hole panel, feed box and map labels. Small readability gaps E3 left.
+  - Note: (found in E3 review) the collapsed panel frees the strip below it only under about 185 px; with two issue lines (214 px) the side strip still wins. A cut issue text's vertical scrollbar adds its width to the panel's minimum width, widening it a few pixels. The issue boxes and tee markers label two duplicates with the same number (two tees marked "4"). The fixed-height feed panel shows an empty 300 x ~200 px box at the top left in Play before any line arrives. E3-S10's Note says about 440 px; the expanded panel measures 532 to 558 px with nine failing holes. `docs/decisions/e3-s7-feed.png` predates the fixed-height feed, and the `docs/decisions/e3-s10-*.png` screenshots were not retaken.
+  - Accept: a collapsed panel's issue text fits one line (a summary) so the strip below can win; a cut text never widens the panel; duplicate tees and issue boxes are told apart (for example "4a" and "4b", or the slot); the feed box hides until its first line; the E3-S10 Note's figure is corrected; the three screenshots are retaken.
+  - Test: `tests/test_hole_list.gd`: the collapsed panel's width is the same with long and short issue text, and its height stays under 185 px with two failing checks. Screenshots.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S28 Tell guest groups apart on the course. Every guest wears the same chalk shirt.
+  - Note: (found in E3 review) the golfer art spec notes this needs more palette entries. Two checks wait on E5-S3's final art (noted there): guest depth sorting against 10 yd trees, since "behind a tree" now means behind a raised trees tile, and a guest ball look of its own, not only a 0.7x size.
+  - Accept: each group's guests share a shirt from a small palette set in the art spec, neighbouring groups differ, and shirts still read in a grayscale screenshot.
+  - Test: `tests/test_guest_view.gd`: two groups on one hole draw different shirts. Screenshot.
+  - Touches: `art/`, `scenes/`
+- [ ] E3-S29 Bring the Claude Docs design doc up to E3. `docs/design.md` has moved on; fix the loser.
+  - Note: (found in E3 review) the design doc's "Guests." paragraph predates E3-S1: it says a guest leaves "a reaction at the last" hole, against D39 (one reaction per hole, at hole-out), and its example tastes ("loves water, hates blind shots, wants a long par 5") do not match D42 (Purist, Adventurer, Casual). Its open question "Guest readability" is answered by D44 (keep four checks), and it lacks the pace limits (now 3 to 12 s), `tee_clear_yd`, `play_clear_yd` and ready golf.
+  - Accept: the design doc's guests section matches `docs/design.md` Guests and reactions, and "Guest readability" is closed with D44.
+  - Test: by hand, the two read side by side.
+  - Touches: `docs/`
+- [ ] E3-S30 Put the E3 swarm's feel questions to the hand playtest. Questions E3-S5 to E3-S10 left for a person.
+  - Note: (found in E3 review) each item needs a person at the screen, or the user's call.
+  - Accept: the user has answered each item below in `docs/playtests/`, and each "no" is filed as a story or at the top of the Icebox with its pillar.
+    - `/playtest full` checklist item 3, watch three guests: in Play at 1x and 3x, do two groups sharing a par 4 (the next tees off once the group ahead is 250 yd out), ready golf and `play_clear`'s spacing read naturally? Does a pace complaint after a wait of a few seconds (limits 3 to 12 s) feel fair (E3-S8)? Pillar 3.
+    - Should the guests' day keep running, and stay visible, during Build, as in SimGolf? Build now holds it and hides them (E3-S5). Pillar 3.
+    - Should the player's own Play hole wait for or avoid guest groups? Today they share the course with no interaction (E3-S5). Pillar 3.
+    - Do the map tags standing over the back of other holes' greens hide guest figures badly? If so, a leader to the side or fading a tag with a guest under it is a new story (E3-S7). Pillar 3.
+    - Does 0.5x framing with the tee near the edge of the free view read well (`docs/decisions/e3-s9-frame-par5.png`, E3-S9)? Pillar 2.
+    - When a framed hole's cup is off the screen, does a neighbouring hole's flag in the free view read as this hole's cup (hole 8 shows hole 9's flag, hole 1 shows hole 4's)? Tagged pins now show their number, untagged ones do not. If it misreads, an edge marker naming the off-screen cup, numbered flags or dimmed flags is a new story (E3-S9, E3-S7). Pillar 2.
+    - Should the hole list collapse on its own while the camera frames a hole (`frame_hole`, jump-to-hole)? Today only a click collapses it (E3-S10). Pillar 2.
+  - Test: none. Review the playtest notes.
 
 ## E4: Economy — planned
 
@@ -725,6 +823,7 @@ Done when: 10 people outside the project have played a build with final art and 
 - [ ] E5-S3 Replace sprites and decor. Final golfer, ball, trees and decor that does nothing to the ball.
   - Accept: golfer sheet to spec (24 px, 8 directions, three animations), ball and shadow, trees drawn 10 yd tall (5 height steps, 80 px at 1x: the trees row `block_height`, so a tree reads as tall as the flight it blocks), tee markers and cup. Benches, flags and signs are placeable through the builder and ignored by the ball and validator. No placeholder sprites remain.
   - Test: `tests/test_decor.gd` shows decor has no effect on a seeded shot. Screenshot.
+  - Note: (E3 review) recheck guest depth sorting against the 10 yd trees (today "behind a tree" means behind a raised trees tile), and give guest balls a look of their own beside the player's ball, not only a 0.7x size.
   - Touches: `art/`, `course/`, `tests/`
 - [ ] E5-S4 Add audio. Sound that serves readability.
   - Accept: one ambient bed, a shot sound per surface, short stings for praise and complaint, one music loop that drops out during a swing. All audio assets are original or have a recorded license. Volume settings exist.
@@ -774,3 +873,4 @@ Things worth doing that are out of the MVP. Promote only through `/decision`, wh
 - Seed on the HUD (found in E6 review). New course always picks a random seed; `Main.land_seed` holds it if the player should see it or type one in.
 - More varied generated maps (found in E6 review). With the bisected radius factor, high ground is exactly 15.0% on every seed; a jitter on the target would vary maps more (`/balance`).
 - No ball on a course with no hole (found in E6 review). Play could show only the "No hole" panel instead of placing a ball; changes the sandbox and the fixture-course tests.
+- Guests read break on putts (found in E3 review). Guests aim every putt at the cup and nobody reads break in the MVP (`docs/design.md`, D41), so even a noise-free guest misses a breaking putt by the break. A putt line search for guests would need a `/decision`; weigh it once E3-S24 records three-putt rates on sloped greens. Pillar 3.
