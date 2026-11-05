@@ -31,6 +31,99 @@ func test_tuning_reads_data_guests_json() -> void:
 	assert_gt(errors.size(), 10, "an empty file names every missing number")
 
 
+## E3-S13: the shipped file holds every range.
+func test_the_shipped_file_passes_its_range_checks() -> void:
+	var errors: Array[String] = []
+	GuestTuning.from_dict(_shipped(), errors)
+	assert_eq(errors, [] as Array[String], "data/guests.json loads with no errors")
+
+
+## E3-S13: each min/max or best/worst pair swapped is an error that names both keys.
+func test_a_swapped_range_names_that_range() -> void:
+	var pairs := [
+		["full_sigma_best", "full_sigma_worst"],
+		["putt_aim_sigma_best", "putt_aim_sigma_worst"],
+		["putt_power_sigma_best", "putt_power_sigma_worst"],
+		["group_size_min", "group_size_max"],
+		["skill_min", "skill_max"],
+		["patience_min", "patience_max"],
+	]
+	for pair: Array in pairs:
+		var d := _shipped()
+		var a: Variant = d[pair[0]]
+		d[pair[0]] = d[pair[1]]
+		d[pair[1]] = a
+		var errors := _errors(d)
+		assert_eq(errors.size(), 1, "%s and %s swapped: one error (%s)" % [pair[0], pair[1], errors])
+		assert_true(_named(errors, pair[0]) and _named(errors, pair[1]),
+				"the error names %s and %s: %s" % [pair[0], pair[1], errors])
+
+
+## E3-S13: weights and per-second rates must be above 0; guest_min_power inside 0 to 1.
+func test_a_weight_or_rate_at_zero_and_min_power_outside_0_to_1_are_named() -> void:
+	for key: String in ["walk_yd_per_s", "guest_ticks_per_s", "sim_ticks_per_s",
+			"flight_draw_speed", "doubled_check_weight"]:
+		for bad: Variant in [0, -1]:
+			var d := _shipped()
+			d[key] = bad
+			if key == "guest_ticks_per_s":
+				d["sim_ticks_per_s"] = 4800
+			var errors := _errors(d)
+			assert_true(_named(errors, key), "%s = %s is named: %s" % [key, bad, errors])
+	for name: String in Guest.TASTE_NAMES:
+		for bad: Variant in [0, -1, "one"]:
+			var d := _shipped()
+			(d.taste_weights as Dictionary)[name] = bad
+			var errors := _errors(d)
+			assert_eq(errors.size(), 1, "taste_weights.%s = %s: %s" % [name, bad, errors])
+			assert_true(_named(errors, "taste_weights.%s" % name), str(errors))
+		var gone := _shipped()
+		(gone.taste_weights as Dictionary).erase(name)
+		assert_true(_named(_errors(gone), "taste_weights.%s" % name), "a missing weight is named")
+	for bad: float in [0.0, -0.1, 1.5]:
+		var d := _shipped()
+		d["guest_min_power"] = bad
+		var errors := _errors(d)
+		assert_eq(errors.size(), 1, "guest_min_power = %s: %s" % [bad, errors])
+		assert_true(_named(errors, "guest_min_power"), str(errors))
+	var full := _shipped()
+	full["guest_min_power"] = 1.0
+	assert_eq(_errors(full).size(), 0, "guest_min_power 1 (full power) is inside the range")
+
+
+## E3-S13 review: the day's clock keys are checked too, so a bad day_s edit (D46) fails loudly.
+func test_the_day_clock_keys_out_of_range_are_named() -> void:
+	var cases: Array = [["day_s", 0], ["day_s", -1], ["stroke_s", 0], ["stroke_s", -1],
+			["arrival_window", -0.1], ["arrival_window", 1.5], ["arrivals_per_day", -2]]
+	for c: Array in cases:
+		var d := _shipped()
+		d[c[0]] = c[1]
+		var errors := _errors(d)
+		assert_eq(errors.size(), 1, "%s = %s: %s" % [c[0], c[1], errors])
+		assert_true(_named(errors, c[0]), str(errors))
+	for ok: Array in [["arrival_window", 0.0], ["arrival_window", 1.0], ["arrivals_per_day", 0]]:
+		var d := _shipped()
+		d[ok[0]] = ok[1]
+		assert_eq(_errors(d).size(), 0, "%s = %s is inside the range" % [ok[0], ok[1]])
+
+
+func _shipped() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string(GuestTuning.PATH))
+
+
+func _errors(d: Dictionary) -> Array[String]:
+	var errors: Array[String] = []
+	GuestTuning.from_dict(d, errors)
+	return errors
+
+
+func _named(errors: Array[String], key: String) -> bool:
+	for e: String in errors:
+		if e.contains(key):
+			return true
+	return false
+
+
 func test_sigma_is_linear_in_skill_and_expected_score_runs_par_to_par_plus_2() -> void:
 	assert_almost_eq(tuning.full_sigma(10), tuning.full_sigma_best, 1e-9)
 	assert_almost_eq(tuning.full_sigma(1), tuning.full_sigma_worst, 1e-9)

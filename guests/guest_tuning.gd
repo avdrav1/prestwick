@@ -83,8 +83,9 @@ var sight_step_yd: float = 0.0
 static var _default: GuestTuning
 
 
-## The numbers in data/guests.json, read once per run. Fails an assert when the file is
-## missing or a number is missing or of the wrong kind.
+## The numbers in data/guests.json, read once per run. Fails an assert, and pushes an error
+## for each problem (so a release build says so too), when the file is missing, a number is
+## missing or of the wrong kind, or a range does not hold (E3-S13, _check_ranges).
 static func load_default() -> GuestTuning:
 	if _default == null:
 		_default = from_file(PATH)
@@ -98,6 +99,8 @@ static func from_file(path: String) -> GuestTuning:
 		return GuestTuning.new()
 	var errors: Array[String] = []
 	var t := from_dict(parsed, errors)
+	for e: String in errors:
+		push_error("%s: %s" % [path, e])
 	assert(errors.is_empty(), "%s: %s" % [path, errors])
 	return t
 
@@ -164,36 +167,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.eye_height_yd = _float(d, "eye_height_yd", errors)
 	t.mark_height_yd = _float(d, "mark_height_yd", errors)
 	t.sight_step_yd = _float(d, "sight_step_yd", errors)
-	if t.skill_max <= t.skill_min:
-		errors.append("skill_max must be above skill_min")
-	if t.guest_min_power <= 0.0 or t.guest_min_power > 1.0:
-		errors.append("guest_min_power must be above 0 and at most 1")
-	if t.tee_clear_yd <= 0.0:
-		errors.append("tee_clear_yd must be above 0")
-	if t.play_clear_yd < 0.0:
-		errors.append("play_clear_yd must be 0 or more")
-	if t.walk_yd_per_s <= 0.0:
-		errors.append("walk_yd_per_s must be above 0")
-	if t.cart_path_max_detour < 1.0:
-		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
-	if t.sim_ticks_per_s < t.guest_ticks_per_s:
-		errors.append("sim_ticks_per_s must be at least guest_ticks_per_s")
-	if t.group_size_min < 1 or t.group_size_max < t.group_size_min:
-		errors.append("group sizes must run from at least 1 up")
-	if t.max_steps_per_frame < 1:
-		errors.append("max_steps_per_frame must be at least 1")
-	if t.guest_ticks_per_s < 1:
-		errors.append("guest_ticks_per_s must be at least 1")
-	if t.praise_passes < 1 or t.praise_passes > 4:
-		errors.append("praise_passes must be 1 to 4 (the four checks)")
-	if t.complaint_fails < 1:
-		errors.append("complaint_fails must be at least 1")
-	if t.doubled_check_weight < 1:
-		errors.append("doubled_check_weight must be at least 1")
-	if t.sight_step_yd <= 0.0:
-		errors.append("sight_step_yd must be above 0")
-	if t.guest_putt_max_runs < 2:
-		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
+	_check_ranges(t, d, errors)
 	return t
 
 
@@ -227,6 +201,76 @@ func guest_swing_tuning(base: SwingTuning) -> SwingTuning:
 	var t := base.duplicate() as SwingTuning
 	t.putt_aim_max_runs = guest_putt_max_runs
 	return t
+
+
+## E3-S13: the ranges the numbers must hold, one error each, naming the keys, so a bad edit to
+## data/guests.json fails loudly instead of playing oddly. Each best sigma at most its worst,
+## each min at most its max (skill strictly below: skill_share divides by the span), weights
+## and per-second rates above 0, guest_min_power above 0 and at most 1; the day's clock
+## (day_s and stroke_s above 0, arrival_window 0 to 1 so no group arrives after dusk,
+## arrivals_per_day 0 or more); and the older checks (E3-S3 to E3-S8) the engine leans on.
+static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) -> void:
+	_at_most(errors, "full_sigma_best", t.full_sigma_best, "full_sigma_worst", t.full_sigma_worst)
+	_at_most(errors, "putt_aim_sigma_best", t.putt_aim_sigma_best,
+			"putt_aim_sigma_worst", t.putt_aim_sigma_worst)
+	_at_most(errors, "putt_power_sigma_best", t.putt_power_sigma_best,
+			"putt_power_sigma_worst", t.putt_power_sigma_worst)
+	if t.group_size_min < 1:
+		errors.append("group_size_min must be at least 1")
+	_at_most(errors, "group_size_min", t.group_size_min, "group_size_max", t.group_size_max)
+	if t.skill_max <= t.skill_min:
+		errors.append("skill_min (%s) must be below skill_max (%s)" % [t.skill_min, t.skill_max])
+	_at_most(errors, "patience_min", t.patience_min, "patience_max", t.patience_max)
+	if t.guest_min_power <= 0.0 or t.guest_min_power > 1.0:
+		errors.append("guest_min_power (%s) must be above 0 and at most 1" % t.guest_min_power)
+	_positive(errors, "day_s", t.day_s)
+	_positive(errors, "stroke_s", t.stroke_s)
+	if t.arrival_window < 0.0 or t.arrival_window > 1.0:
+		errors.append("arrival_window (%s) must be 0 to 1 (a share of day_s)" % t.arrival_window)
+	if t.arrivals_per_day < 0:
+		errors.append("arrivals_per_day (%s) must be 0 or more" % t.arrivals_per_day)
+	_positive(errors, "walk_yd_per_s", t.walk_yd_per_s)
+	_positive(errors, "guest_ticks_per_s", t.guest_ticks_per_s)
+	_positive(errors, "sim_ticks_per_s", t.sim_ticks_per_s)
+	_positive(errors, "flight_draw_speed", t.flight_draw_speed)
+	_positive(errors, "doubled_check_weight", t.doubled_check_weight)
+	var weights: Variant = d.get("taste_weights")
+	if typeof(weights) == TYPE_DICTIONARY:
+		for name: String in Guest.TASTE_NAMES:
+			var w: Variant = (weights as Dictionary).get(name)
+			if typeof(w) != TYPE_FLOAT and typeof(w) != TYPE_INT:
+				errors.append("taste_weights.%s is missing or not a number" % name)
+			else:
+				_positive(errors, "taste_weights.%s" % name, float(w))
+	if t.sim_ticks_per_s < t.guest_ticks_per_s:
+		errors.append("sim_ticks_per_s must be at least guest_ticks_per_s")
+	if t.tee_clear_yd <= 0.0:
+		errors.append("tee_clear_yd must be above 0")
+	if t.play_clear_yd < 0.0:
+		errors.append("play_clear_yd must be 0 or more")
+	if t.cart_path_max_detour < 1.0:
+		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
+	if t.max_steps_per_frame < 1:
+		errors.append("max_steps_per_frame must be at least 1")
+	if t.praise_passes < 1 or t.praise_passes > 4:
+		errors.append("praise_passes must be 1 to 4 (the four checks)")
+	if t.complaint_fails < 1:
+		errors.append("complaint_fails must be at least 1")
+	if t.sight_step_yd <= 0.0:
+		errors.append("sight_step_yd must be above 0")
+	if t.guest_putt_max_runs < 2:
+		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
+
+
+static func _at_most(errors: Array[String], low_key: String, low: float, high_key: String,
+		high: float) -> void:
+	if low > high:
+		errors.append("%s (%s) must be at most %s (%s)" % [low_key, low, high_key, high])
+
+
+static func _positive(errors: Array[String], key: String, v: float) -> void:
+	if v <= 0.0:
+		errors.append("%s (%s) must be above 0" % [key, v])
 
 
 static func _float(d: Dictionary, key: String, errors: Array[String]) -> float:
