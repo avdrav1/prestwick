@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -19,6 +19,7 @@
 [ext_resource type="Script" path="res://scenes/feed_panel.gd" id="17_feed_panel"]
 [ext_resource type="Script" path="res://scenes/reaction_tags.gd" id="18_tags"]
 [ext_resource type="Script" path="res://scenes/tag_clicks.gd" id="19_tag_clicks"]
+[ext_resource type="Script" path="res://scenes/green_view.gd" id="20_green_view"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -161,6 +162,10 @@ offset_top = 168.0
 offset_right = 196.0
 offset_bottom = 168.0
 script = ExtResource("17_feed_panel")
+
+[node name="GreenView" type="Control" parent="HUD"]
+visible = false
+script = ExtResource("20_green_view")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")

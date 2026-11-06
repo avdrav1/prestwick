@@ -47,6 +47,8 @@ var land_seed: int = -1
 @onready var reaction_tags: ReactionTags = $CourseView/ReactionTags
 ## After BuildTool and SwingControl, so a click on a map tag is hit-tested ahead of them (E3-S19).
 @onready var tag_clicks: TagClicks = $TagClicks
+## The overhead green view (E3-S52, D48): Play only, opened while the ball is on a green.
+@onready var green_view: GreenView = $HUD/GreenView
 
 
 func _ready() -> void:
@@ -62,6 +64,7 @@ func _ready() -> void:
 	land_panel.bind(build_tool)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
+	green_view.bind(swing_control, shot_view, aim_view)
 	swing_control.changed.connect(_refresh_label)
 	swing_control.struck.connect(_on_struck)
 	swing_control.hole_finished.connect(_on_hole_finished)
@@ -226,7 +229,9 @@ func frame_hole(number: int, slot: int = -1) -> bool:
 
 ## The HUD controls that sit over the view and are shown now, in three groups by the screen edge
 ## they hold: the left column (mode label, buttons, land panel), the right panels (hole panel,
-## score card) and the bottom panels (build palette, swing panel).
+## score card) and the bottom panels (build palette, swing panel). The green view (E3-S52) is not
+## one: it sits inside the free view, centred in it, not on an edge, and only in Play, where no
+## hole is framed.
 func hud_controls() -> Array[Control]:
 	var out: Array[Control] = []
 	for group: Array in _hud_groups():
@@ -360,6 +365,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if mode != Mode.PLAY:
 		return
+	# The green view opens, follows the putt and closes (E3-S52), centred in the free view.
+	green_view.follow(free_view_rect())
 	if shot_view.playing:
 		camera.clear_lead()
 		camera.set_focus(_ball_world())
@@ -471,6 +478,9 @@ func _apply_mode() -> void:
 	feed_panel.set_in_play(not building)
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
+	# The green view is Play's only (E3-S52); Main._process opens it there.
+	if building:
+		green_view.close()
 
 
 ## One batch per builder tiles_changed: each issue box is tested once per batch (E3-S16).
