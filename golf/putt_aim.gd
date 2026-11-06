@@ -20,7 +20,8 @@ extends RefCounted
 ## to the cup around the nearest, down to `putt_aim_refine_power`. Of every putt it ran it keeps the one resting nearest the cup
 ## (a holed putt rests on it), a dry rest before a drop. A warm start (the last solve's
 ## power, while the ball stays put) usually ends it in two or three runs while the player
-## sweeps the aim.
+## sweeps the aim. E3-S51 (D49): once a putt holes, dry putts (no cup) centre its pace so the
+## roll would run SwingTuning.putt_aim_past_yd past the cup, kept if that pace drops too.
 ##
 ## Spread over frames (E6-S12): `begin` sets the solve up and `advance` steps it by a budget
 ## of Ball ticks or time (SwingControl spends `putt_aim_frame_ticks` or `putt_aim_frame_usec`
@@ -29,7 +30,7 @@ extends RefCounted
 ## `done` says the solve has ended.
 ## `solve` runs it all at once (tests, guests), with the same result as any budget.
 
-## The power picked, 0 to 1 (the bar's share; the putter maps it linearly, Swing.putt_speed).
+## The power picked, 0 to 1 (the bar's share; the putter maps it along its curve, Club.putt_speed_at).
 var power: float = 1.0
 ## The putt at `power`: what the marker and dots show. Null until the first putt rests.
 var prediction: ShotPrediction
@@ -48,7 +49,7 @@ var start_power: float = 1.0
 ## True once the solve fell back to the coarse scan (a pin or a non-positive secant).
 var scanned: bool = false
 
-enum _Phase { FIRST, SECANT, SCAN, EDGE, GOLDEN }
+enum _Phase { FIRST, SECANT, SCAN, EDGE, GOLDEN, CENTRE, VERIFY }
 
 const _GOLDEN := 0.381966
 ## How often `advance` reads the clock under a time cap, in Ball ticks.
@@ -98,6 +99,10 @@ var _gf: float
 ## back.
 var _ea: float = NAN
 var _eb: float = NAN
+## The centring secant's last dry putt (E3-S51): its power and how far its reach missed
+## putt_aim_past_yd past the cup (NAN before the first).
+var _cp: float = NAN
+var _cm: float = NAN
 
 
 ## Solves the putt from `at` (yards) along `aim_deg` toward `cup_tile` on `course`, with the
@@ -133,7 +138,11 @@ static func begin(course: CourseData, field: HeightField, model: ShotModel, tuni
 	a._length = maxf((a._cup - at).dot(a._line), 0.0)
 	# Yards of roll per unit of power, for the first step: a full putt's flat roll.
 	a._slope_guess = model.clubs.full_putt_max_yd
-	var p0 := warm_power if warm_power >= 0.0 else a._length / a._slope_guess
+	# The flat-roll guess in speed, then onto the bar along the putter's curve (D49).
+	var putter := model.clubs.putter()
+	var guess := putter.putt_power_for(lerpf(putter.putt_min_speed, putter.putt_max_speed,
+			clampf(a._length / a._slope_guess, 0.0, 1.0)))
+	var p0 := warm_power if warm_power >= 0.0 else guess
 	a.start_power = clampf(p0, 0.0, 1.0)
 	a._launch(a.start_power)
 	return a
@@ -187,7 +196,9 @@ static func launch_at(model: ShotModel, tuning: SwingTuning, field: HeightField,
 func _launch(p: float) -> void:
 	_ball_power = p
 	_ball_shot = launch_at(_model, _tuning, _field, _at, _aim_deg, p)
-	_ball = ShotPrediction.launched(_course, _seed, _ball_shot, null, null, _cup_tile)
+	# The centring runs (E3-S51) are dry: no cup, so the roll's reach shows the pace.
+	_ball = ShotPrediction.launched(_course, _seed, _ball_shot, null, null,
+			Ball.NO_CUP if _phase == _Phase.CENTRE else _cup_tile)
 
 
 ## Reads the putt just run to rest, keeps it if it rests nearest the cup so far, returns its
@@ -196,6 +207,15 @@ func _launch(p: float) -> void:
 func _finish_run() -> float:
 	var pred := ShotPrediction.of_ball(_ball, _ball_shot.start)
 	runs += 1
+	if _phase == _Phase.CENTRE:
+		return _reach(pred) - _length - _tuning.putt_aim_past_yd
+	if _phase == _Phase.VERIFY:
+		if pred.holed:
+			power = _ball_power
+			prediction = pred
+			shot = _ball_shot
+			miss_yd = 0.0
+		return 0.0
 	var rest := Vector2(pred.rest.x, pred.rest.y)
 	var d := 0.0 if pred.holed else rest.distance_to(_cup)
 	var better := prediction == null \
@@ -210,9 +230,7 @@ func _finish_run() -> float:
 	_back = 0.0
 	if not pred.holed:
 		var along := (rest - _at).dot(_line)
-		var reach := along
-		for q in pred.path:
-			reach = maxf(reach, (Vector2(q.x, q.y) - _at).dot(_line))
+		var reach := _reach(pred)
 		m = reach - _length - _target
 		_back = reach - along
 	# A drop ranks behind every dry rest, as `better` ranks it.
@@ -220,10 +238,27 @@ func _finish_run() -> float:
 	return m
 
 
+## How far along the aim from the start the roll of `pred` got, yards.
+func _reach(pred: ShotPrediction) -> float:
+	var reach := (Vector2(pred.rest.x, pred.rest.y) - _at).dot(_line)
+	for q in pred.path:
+		reach = maxf(reach, (Vector2(q.x, q.y) - _at).dot(_line))
+	return reach
+
+
 ## The next power to run after a putt at `_ball_power` reached `m` past the cup, or NAN to
 ## stop.
 func _next(m: float) -> float:
+	if _phase == _Phase.CENTRE:
+		return _centre(m)
+	if _phase == _Phase.VERIFY:
+		return NAN
 	var reached := absf(m) <= _tuning.putt_aim_tolerance_yd
+	if prediction.holed and _tuning.putt_aim_past_yd > 0.0 \
+			and runs + 2 <= _tuning.putt_aim_max_runs:
+		# E3-S51 (D49): a holed putt is only the first pace that drops; centre it.
+		_phase = _Phase.CENTRE
+		return power
 	if prediction.holed or (reached and _back <= _tuning.putt_aim_tolerance_yd) \
 			or runs >= _tuning.putt_aim_max_runs:
 		return NAN
@@ -297,6 +332,34 @@ func _secant(m1: float) -> float:
 	_p0 = _p1
 	_m0 = m1
 	_p1 = p2
+	return p2
+
+
+## One step of the centring secant (E3-S51, D49), after the dry putt at `_ball_power` reached
+## `m` yards beyond putt_aim_past_yd past the cup. A holed putt is the first pace the solve
+## found that drops, often at the capture window's short edge; this aims the dry roll (no cup)
+## to run putt_aim_past_yd past the cup, within putt_aim_past_tolerance_yd, then strikes that
+## pace with the cup (VERIFY) and keeps it if it drops too. NAN to stop with the holed putt.
+func _centre(m: float) -> float:
+	var at_holed := is_nan(_cp)
+	if absf(m) <= _tuning.putt_aim_past_tolerance_yd:
+		if at_holed:
+			return NAN  # the holed pace is already centred
+		_phase = _Phase.VERIFY
+		return _ball_power
+	if runs + 2 > _tuning.putt_aim_max_runs:
+		return NAN
+	var p2: float
+	if at_holed or absf(m - _cm) < 1e-6:
+		p2 = _ball_power - m / _slope_guess
+	else:
+		var slope := (m - _cm) / (_ball_power - _cp)
+		p2 = _ball_power - m / slope if slope > 0.0 else _ball_power - m / _slope_guess
+	p2 = clampf(p2, 0.0, 1.0)
+	if is_equal_approx(p2, _ball_power):
+		return NAN
+	_cp = _ball_power
+	_cm = m
 	return p2
 
 

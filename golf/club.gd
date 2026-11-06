@@ -7,6 +7,8 @@ extends Resource
 ## Which legality rule the club follows (D13, ClubSet.is_legal). Every club but these three
 ## is FULL: legal anywhere but on green and in a bunker.
 enum Kind { FULL, DRIVER, SAND_WEDGE, PUTTER }
+## Bisection steps for putt_power_for: 2^-24 of the bar.
+const POWER_FOR_STEPS: int = 24
 
 ## Short id, as the club picker and the docs write it: "driver", "3w", "3i" .. "9i", "pw",
 ## "sw", "putter".
@@ -25,6 +27,12 @@ enum Kind { FULL, DRIVER, SAND_WEDGE, PUTTER }
 ## at most ClubSet.full_putt_max_yd.
 @export var putt_min_speed: float = 0.0
 @export var putt_max_speed: float = 0.0
+## Putter only (E3-S51, D49): how the bar's power maps onto that range. 0 is linear (the same
+## yd/s for every % of the bar), 1 geometric (the same share of the speed for every %:
+## `min × (max / min)^power`), and between them a blend of the two. Geometric gives a short
+## putt as much of the bar as a long one, so a click error costs about the same share of the
+## pace at any length, as a real stroke's does.
+@export_range(0.0, 1.0) var putt_bar_curve: float = 0.0
 
 
 func is_putter() -> bool:
@@ -35,3 +43,35 @@ func is_putter() -> bool:
 ## carry_yd, with no drag (`carry = v² sin(2θ) / g`).
 func full_speed(gravity: float) -> float:
 	return sqrt(carry_yd * gravity / sin(deg_to_rad(2.0 * launch_deg)))
+
+
+## Putter only: the starting ground speed, yd/s, of a putt struck at `power` (clamped to 0
+## to 1): putt_min_speed at 0, putt_max_speed at 1, along putt_bar_curve between.
+func putt_speed_at(power: float) -> float:
+	var p := clampf(power, 0.0, 1.0)
+	var linear := lerpf(putt_min_speed, putt_max_speed, p)
+	if putt_bar_curve <= 0.0 or putt_min_speed <= 0.0:
+		return linear
+	var geometric := putt_min_speed * pow(putt_max_speed / putt_min_speed, p)
+	return lerpf(linear, geometric, putt_bar_curve)
+
+
+## Putter only: the power, 0 to 1, whose putt starts at `speed` yd/s (clamped to the range);
+## the inverse of putt_speed_at, which rises with power.
+func putt_power_for(speed: float) -> float:
+	var v := clampf(speed, putt_min_speed, putt_max_speed)
+	if putt_bar_curve <= 0.0 or putt_min_speed <= 0.0:
+		return inverse_lerp(putt_min_speed, putt_max_speed, v)
+	if v <= putt_min_speed:
+		return 0.0
+	if v >= putt_max_speed:
+		return 1.0
+	var lo := 0.0
+	var hi := 1.0
+	for i in POWER_FOR_STEPS:
+		var mid := 0.5 * (lo + hi)
+		if putt_speed_at(mid) < v:
+			lo = mid
+		else:
+			hi = mid
+	return 0.5 * (lo + hi)

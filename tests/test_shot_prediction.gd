@@ -612,19 +612,21 @@ func _brute_nearest_every_percent(sc: SwingControl) -> Array:
 ## case strikes the one putt the full run found nearest, pinned as [percent, yards] below:
 ## the marker must be within 1 yd of it, and that putt must still rest where it was measured,
 ## so a physics change that moves it fails here and sends you to `--full` to re-pin. Only a
-## better putt somewhere else on the bar is left to `--full`.
+## better putt somewhere else on the bar is left to `--full`. Re-pinned in E3-S51 (D49: the
+## putter's bar curve moved every power, and cup_radius 0.3 holes the diagonal staircase's
+## first case at 100%); the percents and yards above E3-S51 in this note are the old bar's.
 func test_putter_marker_on_a_steep_bank_is_near_the_nearest_putt() -> void:
 	# [cup, ball at, on the diagonal staircase, aim turned (deg), [nearest percent, yards]]
 	for case: Array in [
-			[Vector2i(11, 6), Vector2(42.5, 32.5), false, 0.0, [83, 0.0]],
-			[Vector2i(11, 6), Vector2(45.0, 31.0), false, 0.0, [77, 0.0]],
-			[Vector2i(12, 6), Vector2(42.5, 32.5), false, 0.0, [42, 10.03]],
-			[Vector2i(13, 6), Vector2(35.0, 22.5), false, 0.0, [71, 15.81]],
-			[Vector2i(15, 6), Vector2(47.5, 32.5), false, 0.0, [23, 25.05]],
-			[Vector2i(13, 6), Vector2(80.0, 22.5), false, 0.0, [64, 0.0]],
-			[Vector2i(9, 6), Vector2(92.5, 31.0), false, 0.0, [93, 3.35]],
-			[Vector2i(11, 11), Vector2(41.0, 43.0), true, 0.0, [71, 3.88]],
-			[Vector2i(11, 11), Vector2(90.0, 70.0), true, 4.0, [95, 9.30]]]:
+			[Vector2i(11, 6), Vector2(42.5, 32.5), false, 0.0, [94, 0.0]],
+			[Vector2i(11, 6), Vector2(45.0, 31.0), false, 0.0, [91, 0.0]],
+			[Vector2i(12, 6), Vector2(42.5, 32.5), false, 0.0, [70, 10.11]],
+			[Vector2i(13, 6), Vector2(35.0, 22.5), false, 0.0, [88, 15.80]],
+			[Vector2i(15, 6), Vector2(47.5, 32.5), false, 0.0, [51, 25.07]],
+			[Vector2i(13, 6), Vector2(80.0, 22.5), false, 0.0, [84, 0.0]],
+			[Vector2i(9, 6), Vector2(92.5, 31.0), false, 0.0, [97, 3.35]],
+			[Vector2i(11, 11), Vector2(41.0, 43.0), true, 0.0, [100, 0.0]],
+			[Vector2i(11, 11), Vector2(90.0, 70.0), true, 4.0, [99, 10.18]]]:
 		var cup: Vector2i = case[0]
 		var at: Vector2 = case[1]
 		var diagonal: bool = case[2]
@@ -679,3 +681,31 @@ func test_putter_solve_over_frames_matches_the_solve_at_once() -> void:
 	assert_eq(spread.ticks, whole.ticks)
 	assert_eq(spread.prediction.rest, whole.prediction.rest)
 	assert_eq(spread.prediction.holed, whole.prediction.holed)
+
+
+## E3-S51 (D49): once a putt holes, the solve centres its pace: a dry roll (no cup) at the
+## solved power runs putt_aim_past_yd past the cup, within its tolerance, and still drops with
+## the cup, so a click a little soft or firm drops too. With putt_aim_past_yd 0 the solve stops
+## at the first pace that drops, softer than the centred one.
+func test_the_putter_solve_centres_a_holed_putts_pace() -> void:
+	var course := ShortGameHoles.flat_green()
+	var model := ShotModel.new()
+	var tuning := SwingTuning.load_default()
+	assert_gt(tuning.putt_aim_past_yd, 0.0)
+	var edge := tuning.duplicate() as SwingTuning
+	edge.putt_aim_past_yd = 0.0
+	var field := HeightField.new(course, model.params)
+	var cup_tile := ShortGameHoles.CUP
+	var cup := field.tile_center(cup_tile)
+	for d: float in [1.0, 3.0, 8.0]:
+		var at := cup - Vector2(d, 0.0)
+		var a := PuttAim.solve(course, field, model, tuning, at, 0.0, cup_tile, 1)
+		assert_true(a.prediction.holed, "%.0f yd: holed" % d)
+		assert_lte(a.runs, tuning.putt_aim_max_runs, "%.0f yd" % d)
+		var dry := ShotPrediction.run_launch(course, 1, PuttAim.launch_at(model, tuning, field, at, 0.0, a.power))
+		var past := dry.rest.x - cup.x
+		assert_almost_eq(past, tuning.putt_aim_past_yd, tuning.putt_aim_past_tolerance_yd + 0.01,
+				"%.0f yd: with no cup it runs out %.2f yd past" % [d, past])
+		var first := PuttAim.solve(course, field, model, edge, at, 0.0, cup_tile, 1)
+		assert_true(first.prediction.holed)
+		assert_lt(first.power, a.power, "%.0f yd: the first pace that drops is softer" % d)

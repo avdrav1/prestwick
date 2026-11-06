@@ -248,8 +248,9 @@ func test_the_scripted_player_does_not_hole_every_chip_from_80_yd_or_more() -> v
 
 
 ## The plans where the drawn noise would hole a chip and the plan falls back to the centre
-## (E6-S22): [strokes, yards from the cup].
-const NOISY_CHIP_HELD_BACK := [[1, 105.0], [5, 105.0]]
+## (E6-S22): [strokes, yards from the cup]. E3-S51 (cup_radius 0.3): [1, 105.0] no longer
+## falls back on the full grid.
+const NOISY_CHIP_HELD_BACK := [[5, 105.0]]
 
 
 func test_putts_hole_only_holds_for_noisy_chips_too() -> void:
@@ -257,7 +258,7 @@ func test_putts_hole_only_holds_for_noisy_chips_too() -> void:
 	# that hole, so a noisy chip could still hole. With putts_hole_only it never does.
 	# E6-S22: on the full grid (strokes 0, 1, 2, 4 and 5, every yard from 60 to 120 yd, 305
 	# plans, about 90 s) the noise drawn would hole at only two plans, 105 yd on strokes 1 and
-	# 5, where the plan falls back to the centre. By default strokes 1 and 5 every 10 yd from 65
+	# 5 (one since E3-S51, 105 yd on stroke 5), where the plan falls back to the centre. By default strokes 1 and 5 every 10 yd from 65
 	# (12 plans) take both in. Sweep.full() (scripts/run_tests.sh --full) runs the full grid,
 	# in parts at once (E6-S30); each part holds the fallbacks that fall in it.
 	var m := _main_on(_strip(60, 4))

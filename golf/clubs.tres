@@ -91,6 +91,7 @@ launch_deg = 0.0
 roll_factor = 1.0
 putt_min_speed = 1.0
 putt_max_speed = 18.0
+putt_bar_curve = 0.9
 
 [resource]
 script = ExtResource("2_cset")

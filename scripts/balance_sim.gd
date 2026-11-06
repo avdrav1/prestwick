@@ -524,6 +524,13 @@ func measure_reactions(runs: int, rng_seed: int, nine_days: int = ReactionField.
 	return ReactionField.new(model).measure(runs, rng_seed, nine_days)
 
 
+# --- putting (E3-S51) ---
+
+## /balance putting: PuttingSim.measure (scripts/putting_sim.gd), with this sim's bag.
+func measure_putting(runs: int, rng_seed: int) -> Array[Dictionary]:
+	return PuttingSim.new(model).measure(runs, rng_seed)
+
+
 # --- helpers ---
 
 func _tee_tile() -> Vector2i:

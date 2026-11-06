@@ -201,9 +201,34 @@ func test_putt_speed_maps_the_bar_across_the_putters_range() -> void:
 	var putter := ClubSet.load_default().putter()
 	var s := Swing.new(_t)
 	s.set_result(0.5, 0.0)
-	assert_almost_eq(s.putt_speed(putter), lerpf(putter.putt_min_speed, putter.putt_max_speed, 0.5), EPS)
+	# E3-S51 (D49): along putt_bar_curve, a blend of linear and geometric.
+	var lin := lerpf(putter.putt_min_speed, putter.putt_max_speed, 0.5)
+	var geo := sqrt(putter.putt_min_speed * putter.putt_max_speed)
+	assert_almost_eq(s.putt_speed(putter), lerpf(lin, geo, putter.putt_bar_curve), EPS)
+	assert_lt(s.putt_speed(putter), lin, "a short putt gets more of the bar than a linear map gives it")
+	s.set_result(0.0, 0.0)
+	assert_almost_eq(s.putt_speed(putter), putter.putt_min_speed, EPS)
 	s.set_result(1.0, 0.0)
 	assert_almost_eq(s.putt_speed(putter), putter.putt_max_speed, EPS)
+	s.set_result(1.1, 0.0)
+	assert_almost_eq(s.putt_speed(putter), putter.putt_max_speed, EPS, "overswing adds no speed")
+
+
+func test_the_putter_curve_inverts_and_rises_with_power() -> void:
+	var putter := ClubSet.load_default().putter()
+	var last := 0.0
+	for i in 21:
+		var p := i / 20.0
+		var v := putter.putt_speed_at(p)
+		assert_gt(v, last - EPS, "rises with power at %.2f" % p)
+		last = v
+		assert_almost_eq(putter.putt_power_for(v), p, 1e-5, "inverts at %.2f" % p)
+	assert_eq(putter.putt_power_for(0.0), 0.0, "below the range: 0%")
+	assert_eq(putter.putt_power_for(99.0), 1.0, "above it: 100%")
+	var linear := putter.duplicate() as Club
+	linear.putt_bar_curve = 0.0
+	assert_almost_eq(linear.putt_speed_at(0.25), lerpf(linear.putt_min_speed, linear.putt_max_speed, 0.25), EPS,
+			"curve 0 is the E2-S7 linear map")
 
 
 ## A perfect putt through the bar, and a predicted putt at 100% (the putter's marker with no

@@ -137,10 +137,11 @@ func effective_power() -> float:
 	return power * (tuning.shank_power if is_shank() else 1.0)
 
 
-## A putt's starting ground speed: the bar maps linearly across the putter's range, 0% the
-## slowest and 100% the fastest. Overswing adds no speed (a putt cannot go past the range).
+## A putt's starting ground speed: the bar maps across the putter's range along its
+## putt_bar_curve (Club.putt_speed_at; D49), 0% the slowest and 100% the fastest. Overswing
+## adds no speed (a putt cannot go past the range).
 func putt_speed(putter: Club) -> float:
-	return lerpf(putter.putt_min_speed, putter.putt_max_speed, clampf(effective_power(), 0.0, 1.0))
+	return putter.putt_speed_at(effective_power())
 
 
 ## The stroke this finished swing makes with `club` from the ball at `at`, aimed `aim_deg`.

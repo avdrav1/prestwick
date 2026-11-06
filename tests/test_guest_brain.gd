@@ -462,6 +462,8 @@ func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> 
 					var ball: Vector2 = Vector2(o.hole.ball_at.x, o.hole.ball_at.y) if og.index < me.index and o.hole != null else b[3]
 					if b[6] != GuestGroup.Phase.ON_HOLE or bool(b[4]) or og.hole_number != int(b[7]):
 						continue  # not out on another hole (a group moving on this second has left it)
+					if og.index < me.index and (o.is_done() or og.phase != GuestGroup.Phase.ON_HOLE):
+						continue  # E3-S51: it finished its last hole this second, before the striker moved
 					if GuestBrain.in_the_way(pos, at, rest, cup, tuning.cross_clear_yd, tuning.cross_clear_yd) \
 							or (not bool(b[5]) and GuestBrain.in_the_way(ball, at, rest, cup,
 									tuning.cross_clear_yd, tuning.cross_clear_yd)):

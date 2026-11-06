@@ -77,7 +77,7 @@ func test_trees_row_no_longer_copies_rough() -> void:
 
 
 func test_cup_and_scatter_tunables_come_from_the_resource() -> void:
-	assert_eq(params.cup_radius, 0.25)
+	assert_eq(params.cup_radius, 0.3, "E3-S51: 0.25 before")
 	assert_eq(params.cup_capture_speed, 2.0)
 	assert_eq(params.cup_clear_drop_yd, 2.4)
 	assert_eq(params.tree_scatter_min_yd, 5.0, "1 tile")
@@ -551,10 +551,11 @@ func test_capture_at_inside_and_outside_its_radius_and_speed() -> void:
 
 func test_a_ball_set_still_at_the_radius_is_holed_and_just_outside_is_not() -> void:
 	var cup := Vector2i(10, 5)
-	var at := _roll(_course(Surface.Type.GREEN), Vector2(52.75, ROW_Y), Vector2.ZERO, cup)
+	var r := params.cup_radius
+	var at := _roll(_course(Surface.Type.GREEN), Vector2(52.5 + r, ROW_Y), Vector2.ZERO, cup)
 	assert_true(at.holed, "rolls to rest at the radius: captured")
 	assert_eq(Vector2(at.position.x, at.position.y), Vector2(52.5, ROW_Y), "rests at the cup's centre")
-	var out := _roll(_course(Surface.Type.GREEN), Vector2(52.77, ROW_Y), Vector2.ZERO, cup)
+	var out := _roll(_course(Surface.Type.GREEN), Vector2(52.52 + r, ROW_Y), Vector2.ZERO, cup)
 	assert_false(out.holed)
 
 

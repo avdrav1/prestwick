@@ -40,6 +40,13 @@ const DEFAULT_PATH := "res://golf/swing_tuning.tres"
 ## this many predicted putts (the scan and its refining included, E6-S12).
 @export var putt_aim_tolerance_yd: float = 0.1
 @export var putt_aim_max_runs: int = 16
+## E3-S51 (D49): once the solve holes a putt, it centres the pace: dry putts (no cup) aim the
+## roll to run out this far past the cup (yards), within `putt_aim_past_tolerance_yd`, and
+## that pace is kept if it drops too. The first pace that drops often sits on the capture
+## window's short edge (cup_radius short), so a click a little soft missed. 0 is the E2-S20
+## solve.
+@export var putt_aim_past_yd: float = 0.0
+@export var putt_aim_past_tolerance_yd: float = 0.15
 ## E6-S12: when the solve pins at the bar's edge or its secant slope is not positive (a bank
 ## of about two steps per tile), it scans this many powers spread from 0 to 100%, then
 ## refines around the nearest until its power bracket is narrower than `putt_aim_refine_power`.
