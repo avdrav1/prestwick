@@ -7,6 +7,9 @@ extends Node2D
 ## The greens are built through CourseBuilder on a 40 x 32 plot of rough at height 2;
 ## tests/test_green_view.gd uses the same courses.
 ##
+## E3-S56: `nine_hole` above 0 shows that hole's green on the playtest nine instead
+## (PlaytestNine.course(), the ball on the green tile farthest from the cup).
+##
 ## Run: scripts/screenshot.sh tests/fixtures/green_view_shot_flat.tscn (and _contoured, _tiered)
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -22,14 +25,18 @@ const GREEN := Rect2i(18, 10, 9, 10)
 @export var putt_seconds: float = 0.0
 ## E3-S53: the aim turned this many degrees off the cup, as the cursor in the panel would.
 @export var aim_offset_deg: float = 0.0
+## E3-S56: a hole of the playtest nine whose green to show, or 0 for `kind`'s fixture green.
+@export var nine_hole: int = 0
 
 
 func _ready() -> void:
-	var made := course(kind)
+	var made := course(kind) if nine_hole <= 0 else nine_green(nine_hole)
 	var main := MAIN_SCENE.instantiate() as Main
 	main.course_path = FLAT_PATH
 	add_child(main)
 	main.show_course(made.course)
+	if nine_hole > 0:
+		main.build_tool.select_hole(nine_hole)
 	main.set_mode(Main.Mode.PLAY)
 	var sc := main.swing_control
 	sc.set_process(false)
@@ -105,6 +112,29 @@ static func course(p_kind: String) -> Dictionary:
 	b.place_cup(1, cup, 4)
 	var at := (Vector2(ball) + Vector2(0.5, 0.5)) * 5.0
 	return {"course": c, "ball": at, "cup": cup}
+
+
+## The playtest nine with hole `n`'s green: {course, ball (yards), cup (tile)}, the ball on the
+## green tile joined to the cup's farthest from it.
+static func nine_green(n: int) -> Dictionary:
+	var c := PlaytestNine.course()
+	var cup := Vector2i.ZERO
+	for h: HoleData in c.holes:
+		if h.number == n:
+			cup = h.cup
+	var far := cup
+	var seen := {cup: true}
+	var todo: Array[Vector2i] = [cup]
+	while not todo.is_empty():
+		var t: Vector2i = todo.pop_back()
+		if Vector2(t - cup).length() > Vector2(far - cup).length():
+			far = t
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nb: Vector2i = t + d
+			if not seen.has(nb) and c.in_bounds(nb.x, nb.y) and c.get_surface(nb.x, nb.y) == Surface.Type.GREEN:
+				seen[nb] = true
+				todo.append(nb)
+	return {"course": c, "ball": (Vector2(far) + Vector2(0.5, 0.5)) * 5.0, "cup": cup}
 
 
 static func _height(p_kind: String, cell: Vector2i) -> int:

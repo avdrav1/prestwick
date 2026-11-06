@@ -4,10 +4,12 @@ extends Control
 ## on a green in Play, this panel opens over the isometric view, centred in the free view
 ## (Main.free_view_rect), and draws that green and `fringe_tiles` of ground round its bounding
 ## box top-down, one square per tile: each tile's surface (its palette colour and pattern, the
-## colorblind rule of art/specs/surfaces.md), its height as a shade (lower is darker, by
-## value), and its slope, as an arrow pointing downhill on every tile the ground falls across
-## and an ink contour line on every tile edge with a step (two lines for two steps or more), so
-## the break reads in grayscale. Over them: the cup, the ball, the putt line's dots and the
+## colorblind rule of art/specs/surfaces.md), and over it a topographic map of the ground the
+## ball rolls on (E3-S56): its height as a smooth shade (lower is darker, by value, sampled from
+## HeightField.height_at below a tile), ink contour lines from ContourTracer every half step, a
+## heavier index line every whole step, short downhill ticks on each line's low side, and a fall
+## arrow only on a tile steep enough that a ball will not stop on it, so the break reads in
+## grayscale. Flat ground has no lines. Over them: the cup, the ball, the putt line's dots and the
 ## putter's marker, read from the AimView, which draws the same PuttAim solve in the isometric
 ## view (no second solve). Guests are not drawn in it.
 ##
@@ -72,6 +74,9 @@ var _field: HeightField
 var _window_for: Vector2 = Vector2(INF, INF)
 ## The window's highest tile, steps: the shade's top.
 var _top: int = 0
+## The contours of the window, traced when it opens: [level (steps), is an index line,
+## Array[PackedVector2Array] of polylines in yards] per level, lowest first.
+var contours: Array = []
 var _terrain: Control
 var _overlay: Control
 
@@ -175,7 +180,26 @@ func _open_at(c: CourseData, ball: Vector2) -> void:
 	for y: int in range(window.position.y, window.end.y):
 		for x: int in range(window.position.x, window.end.x):
 			_top = maxi(_top, c.get_height(x, y))
+	contours = trace_contours(_field, window, tuning)
 	_terrain.queue_redraw()
+
+
+## The contours of `window`: a level every contour_interval steps (from contour_offset; an index
+## line every index_interval from it) between its lowest and highest
+## ground (ContourTracer.levels_between over ContourTracer.height_range), each traced with
+## contour_subdiv, as [level, index line, polylines in yards]. Levels with no line are left out.
+static func trace_contours(field: HeightField, w: Rect2i, t: GreenViewTuning) -> Array:
+	var span := ContourTracer.height_range(field, w)
+	var levels := ContourTracer.levels_between(span.x, span.y, t.contour_interval, t.contour_offset)
+	var traced := ContourTracer.trace_levels(field, levels, w, t.contour_subdiv)
+	var out: Array = []
+	for i: int in levels.size():
+		if (traced[i] as Array).is_empty():
+			continue
+		var r := fposmod(levels[i] - t.contour_offset, t.index_interval)
+		var index := r < 0.001 or t.index_interval - r < 0.001
+		out.append([levels[i], index, traced[i]])
+	return out
 
 
 ## The tiles to draw for the green holding `tile`: the bounding box of the green tiles joined
@@ -251,6 +275,34 @@ static func fall_at(field: HeightField, cell: Vector2i) -> Vector2:
 	return -field.gradient_at(c.x, c.y) * (field.yards_per_tile / field.yards_per_step)
 
 
+## The steepest fall in tile `cell`, steps per tile, pointing downhill: of the height field's
+## slope a quarter tile from the centre toward each of its four sides (inside the tile, so in
+## each of the four cells round its centre, where the bilinear slope is one-sided), the
+## largest. A two-step bank to a neighbour reads 2 on both tiles beside it, where fall_at's
+## centred mean reads 1.
+static func steep_fall_at(field: HeightField, cell: Vector2i) -> Vector2:
+	var c := field.tile_center(cell)
+	var q := field.yards_per_tile * 0.25
+	var best := Vector2.ZERO
+	for d: Vector2 in [Vector2(q, 0), Vector2(-q, 0), Vector2(0, q), Vector2(0, -q)]:
+		var g := -field.gradient_at(c.x + d.x, c.y + d.y) * (field.yards_per_tile / field.yards_per_step)
+		if g.length() > best.length() + 1e-6:
+			best = g
+	return best
+
+
+## The tiles of the window that draw a fall arrow: steep_fall_at reaching arrow_steep_fall.
+func arrow_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if _field == null:
+		return out
+	for y: int in range(window.position.y, window.end.y):
+		for x: int in range(window.position.x, window.end.x):
+			if steep_fall_at(_field, Vector2i(x, y)).length() >= tuning.arrow_steep_fall - 1e-6:
+				out.append(Vector2i(x, y))
+	return out
+
+
 ## Where the ball is, yards: the rolling ball's point while a putt moves, else where it rests.
 func ball_point() -> Vector2:
 	if control.is_ball_moving() and shot_view != null and shot_view.ball != null:
@@ -318,9 +370,9 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_RIGHT, size.x - 2.0 * tuning.inset_px - 2.0, fs, Color8(168, 168, 176))
 
 
-## The shade of a tile `h` steps high: 1 at the window's top, height_shade_step darker per
+## The shade of ground `h` steps high: 1 at the window's top, height_shade_step darker per
 ## step below it, never under height_shade_min.
-func shade_of(h: int) -> float:
+func shade_of(h: float) -> float:
 	return maxf(1.0 - (_top - h) * tuning.height_shade_step, tuning.height_shade_min)
 
 
@@ -331,20 +383,69 @@ func _draw_terrain() -> void:
 	for y: int in range(window.position.y, window.end.y):
 		for x: int in range(window.position.x, window.end.x):
 			var cell := Vector2i(x, y)
-			_draw_tile(ci, tile_rect(cell), _field.surface_of(cell), shade_of(_course.get_height(x, y)))
-	# Contours on top of every tile, then the arrows over them.
-	for y: int in range(window.position.y, window.end.y):
-		for x: int in range(window.position.x, window.end.x):
-			_draw_contours(ci, Vector2i(x, y))
-	for y: int in range(window.position.y, window.end.y):
-		for x: int in range(window.position.x, window.end.x):
-			_draw_arrow(ci, Vector2i(x, y))
+			_draw_tile(ci, tile_rect(cell), _field.surface_of(cell))
+	_draw_shade(ci)
+	_draw_contours(ci)
+	for cell: Vector2i in arrow_cells():
+		_draw_arrow(ci, cell)
 
 
-func _draw_tile(ci: CanvasItem, r: Rect2, s: Surface.Type, shade: float) -> void:
+## The height shade over the tiles: ink at alpha 1 - shade_of(height_at), so each colour is
+## multiplied by the shade, on a grid of shade_subdiv a tile side with the alpha blended
+## between its points (smooth, by value).
+func _draw_shade(ci: CanvasItem) -> void:
+	var n := maxi(tuning.shade_subdiv, 1)
+	var ypt := _yards_per_tile()
+	var cols := window.size.x * n + 1
+	var rows := window.size.y * n + 1
+	var alpha := PackedFloat32Array()
+	alpha.resize(cols * rows)
+	for j: int in rows:
+		for i: int in cols:
+			var p := (Vector2(window.position) + Vector2(i, j) / n) * ypt
+			alpha[j * cols + i] = 1.0 - shade_of(_field.height_at(p.x, p.y) / _field.yards_per_step)
+	var pts := PackedVector2Array()
+	var colors := PackedColorArray()
+	var black := Color(0, 0, 0)
+	for j: int in rows - 1:
+		for i: int in cols - 1:
+			var a00 := alpha[j * cols + i]
+			var a10 := alpha[j * cols + i + 1]
+			var a01 := alpha[(j + 1) * cols + i]
+			var a11 := alpha[(j + 1) * cols + i + 1]
+			if a00 == 0.0 and a10 == 0.0 and a01 == 0.0 and a11 == 0.0:
+				continue
+			var p00 := to_panel((Vector2(window.position) + Vector2(i, j) / n) * ypt)
+			var p11 := to_panel((Vector2(window.position) + Vector2(i + 1, j + 1) / n) * ypt)
+			pts.append_array([p00, Vector2(p11.x, p00.y), p11, p00, p11, Vector2(p00.x, p11.y)])
+			colors.append_array([Color(black, a00), Color(black, a10), Color(black, a11),
+					Color(black, a00), Color(black, a11), Color(black, a01)])
+	if not pts.is_empty():
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), PackedInt32Array(), pts, colors)
+
+
+## The contour lines (contours) in ink, index lines heavier, each with its downhill ticks.
+func _draw_contours(ci: CanvasItem) -> void:
+	var ypt := _yards_per_tile()
+	var spacing := tuning.tick_spacing_px / tile_px * ypt
+	var length := tuning.tick_length_px / tile_px * ypt
+	for entry: Array in contours:
+		var index: bool = entry[1]
+		var w := tuning.index_width if index else tuning.contour_width
+		for line: PackedVector2Array in entry[2]:
+			var drawn := PackedVector2Array()
+			for p: Vector2 in line:
+				drawn.append(to_panel(p))
+			ci.draw_polyline(drawn, INK, w, true)
+			var t := ContourTracer.ticks(line, spacing, length)
+			for k: int in range(0, t.size(), 2):
+				ci.draw_line(to_panel(t[k]), to_panel(t[k + 1]), INK, tuning.contour_width, true)
+
+
+func _draw_tile(ci: CanvasItem, r: Rect2, s: Surface.Type) -> void:
 	var cols: Array = SURFACE_COLORS[s]
-	var base := _shaded(cols[0], shade)
-	var pat := _shaded(cols[1], shade)
+	var base: Color = cols[0]
+	var pat: Color = cols[1]
 	ci.draw_rect(r, base)
 	var p := r.position
 	var n := r.size.x
@@ -390,10 +491,6 @@ func _draw_tile(ci: CanvasItem, r: Rect2, s: Surface.Type, shade: float) -> void
 	ci.draw_line(Vector2(p.x, p.y + n - 0.5), Vector2(p.x + n, p.y + n - 0.5), pat, 1.0)
 
 
-func _shaded(c: Color, shade: float) -> Color:
-	return Color(c.r * shade, c.g * shade, c.b * shade, c.a)
-
-
 ## Diagonal lines `gap` apart across square `r`: "/" when `rising`, else "\".
 func _hatch(ci: CanvasItem, r: Rect2, gap: float, col: Color, width: float, rising: bool) -> void:
 	var n := r.size.x
@@ -415,47 +512,17 @@ func _hatch(ci: CanvasItem, r: Rect2, gap: float, col: Color, width: float, risi
 		k += gap
 
 
-## Ink lines on the edges of `cell` where its neighbour toward +x or +y is at another height:
-## one line for a step, two for two or more (the second inside the higher tile), so the step
-## count reads as the edge cue's does in the isometric view.
-func _draw_contours(ci: CanvasItem, cell: Vector2i) -> void:
-	var h := _course.get_height(cell.x, cell.y)
-	var r := tile_rect(cell)
-	for d: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
-		var n := cell + d
-		if not window.has_point(n):
-			continue
-		var diff := _course.get_height(n.x, n.y) - h
-		if diff == 0:
-			continue
-		var a := r.position + Vector2(d) * tile_px
-		var b := a + (Vector2(0, tile_px) if d.x == 1 else Vector2(tile_px, 0))
-		# Into the higher tile: toward -d when this one is higher, +d when the neighbour is.
-		var into := Vector2(d) * (1.0 if diff > 0 else -1.0)
-		var w := tuning.contour_width
-		ci.draw_line(a, b, INK, w)
-		if absi(diff) >= 2:
-			var o := into * (w + 2.0)
-			ci.draw_line(a + o, b + o, INK, w)
-
-
-## The slope arrow of `cell`: from its centre's fall (fall_at), pointing downhill, on a chalk
-## halo so it reads on every shade; a double head on a bank (2 steps a tile or more).
+## The fall arrow of `cell`: from its steepest fall (steep_fall_at), pointing downhill, on a
+## chalk halo so it reads on every shade, with a double head (a bank a ball will not stop on).
 func _draw_arrow(ci: CanvasItem, cell: Vector2i) -> void:
-	var fall := fall_at(_field, cell)
-	var m := fall.length()
-	if m < tuning.arrow_min_fall:
-		return
-	var dir := fall / m
-	var frac := lerpf(tuning.arrow_length, tuning.arrow_length_steep, clampf((m - 0.5) / 0.5, 0.0, 1.0))
-	var length := tile_px * frac
+	var fall := steep_fall_at(_field, cell)
+	var dir := fall.normalized()
+	var length := tile_px * tuning.arrow_length
 	var c := tile_rect(cell).get_center()
 	var tail := c - dir * length * 0.5
 	var tip := c + dir * length * 0.5
 	var head := maxf(5.0, length * 0.35)
-	var heads: Array[Vector2] = [tip]
-	if m >= 2.0:
-		heads.append(tip - dir * head * 0.6)
+	var heads: Array[Vector2] = [tip, tip - dir * head * 0.6]
 	var w := tuning.arrow_width
 	for pass_i: int in 2:
 		var col := CHALK if pass_i == 0 else INK

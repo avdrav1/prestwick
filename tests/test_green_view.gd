@@ -148,6 +148,62 @@ func test_a_tiles_slope_arrow_points_downhill_on_a_known_contour() -> void:
 	assert_almost_eq(f, Vector2(0.5, 0.5), Vector2(0.001, 0.001), "so it falls toward the front right")
 
 
+func test_fall_arrows_only_on_steep_tiles() -> void:
+	# E3-S56: an arrow only where the fall reaches arrow_steep_fall (2 steps a tile).
+	var m := _main("tiered")
+	var gv := m.green_view
+	var made := GreenViewShot.course("tiered")
+	_rest(m, made.ball, made.cup)
+	assert_true(gv.is_open)
+	assert_eq(gv.tuning.arrow_steep_fall, 2.0)
+	var arrows := gv.arrow_cells()
+	var field := m.swing_control.field
+	assert_true(Vector2i(22, 13) in arrows, "the top of the two-step bank")
+	assert_true(Vector2i(22, 14) in arrows, "and its foot")
+	assert_almost_eq(GreenView.steep_fall_at(field, Vector2i(22, 13)), Vector2(0, 2), Vector2(0.001, 0.001),
+			"pointing down the bank, toward +y")
+	assert_false(Vector2i(22, 16) in arrows, "no arrow on the one-step slope to the front tier")
+	assert_false(Vector2i(22, 11) in arrows, "none on the flat back tier")
+	for cell: Vector2i in arrows:
+		assert_gte(GreenView.steep_fall_at(field, cell).length(), 2.0 - 0.001)
+	# The contoured green falls one step at a time: no arrows at all, only lines.
+	var mc := _main("contoured")
+	var tilt := GreenViewShot.course("contoured")
+	_rest(mc, tilt.ball, tilt.cup)
+	assert_true(mc.green_view.is_open)
+	assert_eq(mc.green_view.arrow_cells().size(), 0)
+	assert_gt(mc.green_view.contours.size(), 0)
+
+
+func test_its_contours_follow_the_ground_and_a_flat_green_has_none() -> void:
+	# E3-S56: smooth lines every half step from ContourTracer, an index line every whole step.
+	var m := _main("flat")
+	var made := GreenViewShot.course("flat")
+	_rest(m, made.ball, made.cup)
+	assert_true(m.green_view.is_open)
+	assert_eq(m.green_view.contours.size(), 0, "a flat green and its flat fringe: no lines")
+	assert_eq(m.green_view.arrow_cells().size(), 0)
+	var mt := _main("tiered")
+	var gv := mt.green_view
+	var tiered := GreenViewShot.course("tiered")
+	_rest(mt, tiered.ball, tiered.cup)
+	var field := mt.swing_control.field
+	var levels: Array[float] = []
+	var area := Rect2(Vector2(gv.window.position) * 5.0, Vector2(gv.window.size) * 5.0).grow(0.001)
+	for entry: Array in gv.contours:
+		var level: float = entry[0]
+		levels.append(level)
+		var off := gv.tuning.contour_offset
+		assert_eq(entry[1], is_equal_approx(level - off, roundf(level - off)),
+				"an index line every whole step from the offset")
+		for line: PackedVector2Array in entry[2]:
+			for p: Vector2 in line:
+				assert_almost_eq(field.height_at(p.x, p.y) / field.yards_per_step, level, 0.001)
+				assert_true(area.has_point(p), "inside the window")
+	# The tiers 5, 3 and 2 (and the rough at 2 round them): every half step from 2.5 to 5.
+	assert_eq(levels, [2.5, 3.0, 3.5, 4.0, 4.5, 5.0] as Array[float])
+
+
 func test_the_marker_is_the_putt_aims_rest_in_the_panel() -> void:
 	var m := _main("contoured")
 	var gv := m.green_view
