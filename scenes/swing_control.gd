@@ -7,7 +7,7 @@ extends Node2D
 ##
 ## Input: the `swing` action (Space) or a left click on the map is a swing click (the click
 ## does not re-aim; the motion before it already did). The mouse aims at the tile the player
-## sees under it (TilePicker, the same top-surface pick Build uses) while no swing is in
+## sees under it (TilePicker, the same pick on the drawn ground Build uses) while no swing is in
 ## progress; `aim_left` and `aim_right` (arrow keys) turn the aim by
 ## SwingTuning.aim_key_step_deg, and after a key turn the mouse takes the aim back only once
 ## it moves SwingTuning.mouse_reaim_px from where it was; `club_prev` and
@@ -342,18 +342,16 @@ func _key_turn(deg: float) -> void:
 
 
 ## The ground point (yards) the player sees under the screen point `local` (CourseView
-## space): the tile TilePicker picks, unprojected at that tile's height for the point inside
-## its top (a riser face aims at the tile's centre). Off the map, read at the ball's height.
+## space): where TilePicker's ray meets the drawn ground (E3-S58). Off the map, read at the
+## ball's height.
 func _ground_under(local: Vector2) -> Vector2:
-	var cell := TilePicker.pick(course, local)
+	var hit: Variant = TilePicker.ground_point(course, local)
 	var t: Vector2
-	if cell == TilePicker.NONE:
+	if hit == null:
 		var steps := field.height_at(ball_at.x, ball_at.y) / field.yards_per_step
 		t = Iso.screen_to_tile(local, steps)
 	else:
-		t = Iso.screen_to_tile(local, course.get_height(cell.x, cell.y))
-		if absf(t.x - cell.x) > 0.5 or absf(t.y - cell.y) > 0.5:
-			t = Vector2(cell)
+		t = Vector2((hit as Vector3).x, (hit as Vector3).y)
 	return (t + Vector2(0.5, 0.5)) * field.yards_per_tile
 
 

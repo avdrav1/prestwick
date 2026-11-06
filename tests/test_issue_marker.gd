@@ -96,23 +96,9 @@ func _snapshot(v: CourseView) -> Array:
 	return out
 
 
-## Every drawn cell of every layer, as [layer, cell, source, atlas, alternative].
+## What the view's ground draws (CourseView.terrain_digest), to compare two views.
 func _layers(v: CourseView) -> Array:
-	var layers: Array[TileMapLayer] = []
-	for h: int in CourseData.MAX_HEIGHT + 1:
-		layers.append(v.top_layer(h))
-		layers.append(v.edge_layer(h))
-		layers.append(v.land_layer(h))
-		if h < CourseData.MAX_HEIGHT:
-			layers.append(v.riser_layer(h))
-	var out: Array = []
-	for i: int in layers.size():
-		var used: Array[Vector2i] = layers[i].get_used_cells()
-		used.sort()
-		for cell: Vector2i in used:
-			out.append([i, cell, layers[i].get_cell_source_id(cell), layers[i].get_cell_atlas_coords(cell),
-				layers[i].get_cell_alternative_tile(cell)])
-	return out
+	return v.terrain_digest()
 
 
 func _holed(ground: int = 2) -> CourseData:

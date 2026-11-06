@@ -67,13 +67,18 @@ func test_height_shifts_the_tile_under_a_screen_point() -> void:
 func test_renderer_places_cells_where_the_helper_says() -> void:
 	var view := CourseView.new()
 	add_child_autofree(view)
-	view.show_course(HeightsFixture.build())
-	for h: int in CourseData.MAX_HEIGHT + 1:
-		var layer: TileMapLayer = view.top_layer(h)
-		for cell: Vector2i in [Vector2i(0, 0), Vector2i(7, 3), Vector2i(19, 19)]:
-			var drawn: Vector2 = layer.position + layer.map_to_local(cell)
-			assert_eq(drawn, Iso.tile_to_screen(Vector2(cell), h), "top %s at h %d" % [cell, h])
-	for k: int in CourseData.MAX_HEIGHT:
-		var layer: TileMapLayer = view.riser_layer(k)
-		assert_eq(layer.position + layer.map_to_local(Vector2i(2, 9)),
-				Iso.tile_to_screen(Vector2(2, 9), k), "riser step %d shares the tile anchor" % k)
+	var c := HeightsFixture.build()
+	view.show_course(c)
+	# Every tile's centre point (the ground there is the tile's own height) is drawn where
+	# Iso.tile_to_screen puts it, chunk position included.
+	for cell: Vector2i in [Vector2i(0, 0), Vector2i(7, 3), Vector2i(19, 19), Vector2i(5, 5), Vector2i(2, 9)]:
+		var ch := view.chunk_at(cell)
+		var pts: PackedVector3Array = view.terrain.tile_geometry(cell)[0]
+		var screen: PackedVector2Array = ch.parts[cell][0]
+		var found: bool = false
+		for i: int in pts.size():
+			if Vector2(pts[i].x, pts[i].y) == Vector2(cell):
+				found = true
+				assert_eq(ch.position + screen[i], Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y)),
+						"centre of %s" % cell)
+		assert_true(found, "%s has a centre point" % cell)

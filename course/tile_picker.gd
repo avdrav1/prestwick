@@ -1,14 +1,20 @@
 class_name TilePicker
 extends RefCounted
-## Screen-to-tile picking on raised ground: which tile the player sees under the cursor.
+## Screen-to-tile picking on the drawn ground: which tile the player sees under the cursor.
 ## A reader only. Uses the one projection in course/iso.gd.
 ##
-## A tile at height h is drawn as a solid column: its top diamond at h plus the risers below
-## it, which together are exactly what the diamond sweeps rising from 0 to h. Riser faces the
-## renderer skips are hidden behind a nearer neighbor's column, so testing whole columns
-## front to back (by depth i + j) gives the frontmost drawn piece. The pick is that piece's
-## tile: a top face picks its tile, and a wall picks the hill it belongs to. A tile partly
-## hidden behind a nearer hill is picked only where its top still shows.
+## The ground is drawn as a smooth surface (E3-S58, D50), and the pick reads exactly what is
+## drawn: each tile's own ground (TerrainMesh.ground_in: the mesh's triangles over the bilinear
+## ground, water flat at its level) and the vertical faces where two tiles' ground does not meet
+## (a water bank, the map's two front edges). A screen point is a ray: rising one step moves a
+## point's tile coordinates by (+0.5, +0.5) at the same screen point, and the camera sees from
+## +x +y, so the ray's highest point is nearest the camera. The pick walks the ray down from
+## above the highest ground, from one mesh grid line to the next (tile edges among them): the
+## ray runs along the grid squares' diagonals, so between two lines it stays over one flat
+## triangle and meets it at most once, exactly. It takes the first point at or under the ground
+## of the tile it is over: the frontmost drawn ground there. Coming over a tile's edge already
+## under its ground is a hit on that tile's face (a water bank, the map's side) or edge. A tile
+## partly hidden behind a nearer hill is picked only where its ground still shows.
 
 ## Returned when no tile of the course is under the point.
 const NONE: Vector2i = Vector2i(-1, -1)
@@ -17,30 +23,57 @@ const NONE: Vector2i = Vector2i(-1, -1)
 ## The tile drawn frontmost at `screen` (CourseView local space), or NONE. `heights` overrides
 ## the course height of the tiles it holds (tile -> height), to pick against ground as it was.
 static func pick(course: CourseData, screen: Vector2, heights: Dictionary = {}) -> Vector2i:
-	# Rising one step moves a point's tile coordinates by (+0.5, +0.5), so only tiles on the
-	# diagonal from the height-0 tile up to MAX_HEIGHT / 2 tiles further can hold the point.
-	var t0: Vector2 = Iso.screen_to_tile(screen, 0.0)
-	var reach: float = CourseData.MAX_HEIGHT * 0.5
-	var best := NONE
-	var best_depth: int = -1
-	for y: int in range(maxi(floori(t0.y - 0.5), 0), mini(ceili(t0.y + reach + 0.5), course.height - 1) + 1):
-		for x: int in range(maxi(floori(t0.x - 0.5), 0), mini(ceili(t0.x + reach + 0.5), course.width - 1) + 1):
-			if x + y <= best_depth:
-				continue
-			var cell := Vector2i(x, y)
-			var h: int = heights.get(cell, course.get_height(x, y))
-			if column_contains(cell, h, screen):
-				best = Vector2i(x, y)
-				best_depth = x + y
-	return best
+	var hit: Array = cast(course, screen, heights)
+	return NONE if hit.is_empty() else hit[0]
 
 
-## True when `screen` lies in the column of tile `cell` standing at `h`: the union of its
-## diamond raised to every height from 0 to h.
-static func column_contains(cell: Vector2i, h: int, screen: Vector2) -> bool:
-	# At height t the point sits at tile position t0 + (t, t) / 2. It is in the cell's diamond
-	# while both coordinates are within half a tile of the center; solve that for t in [0, h].
+## The ground point drawn frontmost at `screen`: tile x, tile y (integer = tile centre) and
+## height in steps, or null off the map. On a face it is the point on that face.
+static func ground_point(course: CourseData, screen: Vector2, heights: Dictionary = {}) -> Variant:
+	var hit: Array = cast(course, screen, heights)
+	return null if hit.is_empty() else hit[1]
+
+
+## [tile, ground point] drawn frontmost at `screen`, or [] off the map.
+static func cast(course: CourseData, screen: Vector2, heights: Dictionary = {}) -> Array:
 	var t0: Vector2 = Iso.screen_to_tile(screen, 0.0)
-	var lo: float = maxf(0.0, maxf(2.0 * (cell.x - 0.5 - t0.x), 2.0 * (cell.y - 0.5 - t0.y)))
-	var hi: float = minf(float(h), minf(2.0 * (cell.x + 0.5 - t0.x), 2.0 * (cell.y + 0.5 - t0.y)))
-	return lo <= hi
+	var hi_edge := Vector2(course.width - 0.5, course.height - 0.5)
+	var tuning := TerrainTuning.load_default()
+	var base: float = minf(0.0, tuning.base_steps)
+	var n: int = tuning.subdiv
+	var top: float = CourseData.MAX_HEIGHT + 0.5
+	# Every height where the ray crosses a grid line of the mesh (tile edges among them), highest
+	# first: between two, the ray stays over one triangle of one tile.
+	var zs := PackedFloat64Array([top, base])
+	for axis: int in 2:
+		var size: int = course.width if axis == 0 else course.height
+		for j: int in size * n + 1:
+			var ze: float = 2.0 * (float(j) / n - 0.5 - t0[axis])
+			if ze > base and ze < top:
+				zs.append(ze)
+	zs.sort()
+	zs.reverse()
+	for k: int in zs.size() - 1:
+		var hi: float = zs[k]
+		var lo: float = zs[k + 1]
+		if hi - lo <= 0.0:
+			continue
+		var mid: float = 0.5 * (hi + lo)
+		var tm: Vector2 = t0 + Vector2(mid, mid) * 0.5
+		if tm.x < -0.5 or tm.y < -0.5:
+			return []  # behind the map's back edges: lower only goes further back
+		if tm.x > hi_edge.x or tm.y > hi_edge.y:
+			continue  # in front of the map
+		var cell := Vector2i(floori(tm.x + 0.5), floori(tm.y + 0.5))
+		var th: Vector2 = t0 + Vector2(hi, hi) * 0.5
+		var above: float = TerrainMesh.ground_in(course, cell, th, heights, n) - hi
+		if above >= 0.0:
+			# Under the ground where the ray came over this tile's edge: its face or its edge.
+			return [cell, Vector3(th.x, th.y, hi)]
+		var tl: Vector2 = t0 + Vector2(lo, lo) * 0.5
+		var below: float = TerrainMesh.ground_in(course, cell, tl, heights, n) - lo
+		if below >= 0.0:
+			var z: float = hi + (lo - hi) * above / (above - below)
+			var tz: Vector2 = t0 + Vector2(z, z) * 0.5
+			return [cell, Vector3(tz.x, tz.y, z)]
+	return []

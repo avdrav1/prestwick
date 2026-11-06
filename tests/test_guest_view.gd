@@ -90,9 +90,8 @@ func test_a_guest_sorts_on_its_tile_top_and_under_a_raised_tile_in_front() -> vo
 	var h := c.get_height(10, 10)
 	var key := Iso.object_sort_key(Vector2(10, 10) + view.place_offset(guest.place) / 5.0, h)
 	assert_almost_eq(f.sprite.position.y, key, 0.01, "Iso.object_sort_key on its tile top")
-	assert_gt(f.sprite.position.y, float(Iso.top_sort_key(Vector2i(10, 10), h)), "over its own top")
-	assert_lt(f.sprite.position.y, float(Iso.top_sort_key(Vector2i(11, 11), 4)), "under the raised tile in front")
-	assert_lt(f.sprite.position.y, float(Iso.riser_sort_key(Vector2i(11, 11), 2)), "and its risers")
+	assert_gt(f.sprite.position.y, float(Iso.depth_key(Vector2i(10, 10))), "over its own row of ground")
+	assert_lt(f.sprite.position.y, float(Iso.depth_key(Vector2i(11, 10))), "under the ground in front")
 	var feet := view.figure_screen(f)
 	assert_almost_eq(feet, Iso.tile_to_screen(Vector2(10, 10) + view.place_offset(guest.place) / 5.0, h),
 			Vector2.ONE * 0.01, "feet on the tile top (D17)")

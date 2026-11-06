@@ -49,7 +49,7 @@ func test_main_new_sandbox_shows_a_blank_plot_with_a_fresh_builder() -> void:
 	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(128, 128))
 	assert_same(m.build_tool.builder.course, m.course, "the tool builds the new plot")
 	assert_false(m.build_tool.builder.can_undo(), "a new sandbox starts with an empty undo stack")
-	assert_eq(m.course_view.top_layer(2).get_cell_atlas_coords(Vector2i(127, 127)), Vector2i(Surface.Type.ROUGH, 0),
+	assert_true(m.course_view.chunk_at(Vector2i(127, 127)).parts.has(Vector2i(127, 127)),
 			"the view shows the whole plot")
 	assert_true(m.new_sandbox_button.visible, "New sandbox is on the Build HUD")
 

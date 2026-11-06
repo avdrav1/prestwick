@@ -1,7 +1,7 @@
 extends GutTest
 ## E1-S5: paint terrain through course/builder.gd, the only writer. Surface palette for the
 ## 9 surfaces (`oob` joined in E2-S3, D9), raise and lower, brush 1/3/5, undo stack, heights clamp at 0 and 7, and the
-## tile under the cursor is picked correctly on raised ground (TilePicker).
+## tile under the cursor is picked correctly on raised ground (TilePicker, on the drawn ground).
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
@@ -190,7 +190,8 @@ func test_tiles_changed_reports_every_written_tile() -> void:
 	assert_eq((seen[1] as Array).size(), 4)
 
 
-# --- picking ---
+# --- picking (the drawn ground, E3-S58: tests/test_terrain_mesh.gd has the slope, the faces
+# and a check against the mesh as drawn) ---
 
 ## Screen point of tile `cell` at `h`, nudged by `offset` px.
 func _at(cell: Vector2i, h: int, offset: Vector2 = Vector2.ZERO) -> Vector2:
@@ -206,80 +207,27 @@ func test_pick_on_flat_ground_matches_the_projection() -> void:
 
 func test_pick_on_raised_ground() -> void:
 	var c := _flat(12, 0)
-	c.set_tile(8, 8, 4, Surface.Type.GREEN)
+	for y: int in range(7, 10):
+		for x: int in range(7, 10):
+			c.set_tile(x, y, 4, Surface.Type.GREEN)
 	var p: Vector2 = _at(Vector2i(8, 8), 4, Vector2(1.5, 0.5))
 	assert_eq(Iso.screen_to_cell(p, 0), Vector2i(6, 6), "a height-0 pick would miss")
-	assert_eq(TilePicker.pick(c, p), Vector2i(8, 8), "the raised top is picked")
-	# The tile whose ground the raised top now covers is hidden, so it is not picked.
-	assert_eq(TilePicker.pick(c, _at(Vector2i(6, 6), 0, Vector2(0.5, 0.5))), Vector2i(8, 8))
+	assert_eq(TilePicker.pick(c, p), Vector2i(8, 8), "the raised ground is picked")
+	# The tile whose ground the raised plateau now covers is hidden, so it is not picked.
+	assert_ne(TilePicker.pick(c, _at(Vector2i(6, 6), 0, Vector2(0.5, 0.5))), Vector2i(6, 6))
 
 
 func test_pick_a_tile_partly_hidden_by_a_nearer_hill() -> void:
-	# (5, 5) at 2 stands behind (6, 6) at 3. The top half of (5, 5)'s diamond shows; the
-	# bottom half is behind the nearer hill's top.
+	# A plateau of 2 (3..5 square) stands behind a ridge of 7 along x = 7. Its back shows; its
+	# front, two tiles from the ridge, is hidden behind the ridge's slope.
 	var c := _flat(12, 0)
-	c.set_tile(5, 5, 2, Surface.Type.GREEN)
-	c.set_tile(6, 6, 3, Surface.Type.FAIRWAY)
-	assert_eq(TilePicker.pick(c, _at(Vector2i(5, 5), 2, Vector2(0.5, -8.5))), Vector2i(5, 5), "visible part")
-	assert_eq(TilePicker.pick(c, _at(Vector2i(5, 5), 2, Vector2(18.5, -2.5))), Vector2i(5, 5), "visible right corner")
-	assert_eq(TilePicker.pick(c, _at(Vector2i(5, 5), 2, Vector2(0.5, 8.5))), Vector2i(6, 6), "hidden part")
-	# The nearer hill's wall belongs to the hill.
-	assert_eq(TilePicker.pick(c, _at(Vector2i(6, 6), 0, Vector2(-10.5, 0.5))), Vector2i(6, 6), "its wall")
-
-
-## What the renderer draws frontmost at `p`: every drawn piece (top at h, visible riser faces)
-## tested by its own shape, winner by Iso sort key. Independent of TilePicker's math.
-func _reference_pick(c: CourseData, p: Vector2) -> Vector2i:
-	var best := TilePicker.NONE
-	var best_key: float = -INF
-	for y: int in c.height:
-		for x: int in c.width:
-			var cell := Vector2i(x, y)
-			var h: int = c.get_height(x, y)
-			var top: Vector2 = Iso.tile_to_screen(Vector2(cell), h)
-			if absf(p.x - top.x) / Iso.HALF_W + absf(p.y - top.y) / Iso.HALF_H <= 1.0:
-				if Iso.top_sort_key(cell, h) > best_key:
-					best_key = Iso.top_sort_key(cell, h)
-					best = cell
-			for k: int in h:
-				var frame: StringName = CourseView.riser_frame(c, x, y, k)
-				if frame.is_empty() or Iso.riser_sort_key(cell, k) <= best_key:
-					continue
-				# The band between the bottom edges of the diamond at k + 1 and at k.
-				var ctr: Vector2 = Iso.tile_to_screen(Vector2(cell), k + 1)
-				var dx: float = p.x - ctr.x
-				if absf(dx) > Iso.HALF_W:
-					continue
-				if dx < 0.0 and frame == &"right" or dx >= 0.0 and frame == &"left":
-					continue
-				var edge_y: float = ctr.y + Iso.HALF_H - absf(dx) * 0.5
-				if p.y >= edge_y and p.y <= edge_y + Iso.STEP_PX:
-					best_key = Iso.riser_sort_key(cell, k)
-					best = cell
-	return best
-
-
-func test_pick_matches_what_is_drawn_frontmost() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 5
-	var c := CourseData.create(8, 8)
-	for y: int in 8:
-		for x: int in 8:
-			c.set_tile(x, y, rng.randi_range(0, 7), Surface.Type.ROUGH)
-	var r := Rect2(Iso.tile_to_screen(Vector2(-0.5, 7.5), 7) - Vector2(0, 0), Vector2.ZERO)
-	r = r.expand(Iso.tile_to_screen(Vector2(7.5, -0.5), 7)).expand(Iso.tile_to_screen(Vector2(7.5, 7.5), 0))
-	var misses: Array[String] = []
-	var hits: int = 0
-	for n: int in 1500:
-		var p := Vector2(rng.randf_range(r.position.x, r.end.x), rng.randf_range(r.position.y, r.end.y))
-		var want: Vector2i = _reference_pick(c, p)
-		var got: Vector2i = TilePicker.pick(c, p)
-		if want != TilePicker.NONE:
-			hits += 1
-		if want != got:
-			misses.append("%s: drawn %s, picked %s" % [p, want, got])
-	assert_gt(hits, 800, "most samples land on the course")
-	assert_eq(misses.size(), 0, "\n".join(misses.slice(0, 5)))
+	for y: int in range(3, 6):
+		for x: int in range(3, 6):
+			c.set_tile(x, y, 2, Surface.Type.GREEN)
+	for y: int in 12:
+		c.set_tile(7, y, 7, Surface.Type.FAIRWAY)
+	assert_eq(TilePicker.pick(c, _at(Vector2i(4, 4), 2)), Vector2i(4, 4), "the plateau's back shows")
+	assert_eq(TilePicker.pick(c, _at(Vector2i(5, 5), 2)), Vector2i(7, 7), "its front is behind the ridge")
 
 
 # --- the build tool in the main scene ---
@@ -301,13 +249,16 @@ func test_main_paints_through_the_builder_in_build_mode() -> void:
 	tool.press_at(_at(Vector2i(4, 4), 0, Vector2(0.5, 0.5)))
 	tool.release()
 	assert_eq(m.course.get_surface(5, 5), Surface.Type.WATER)
-	assert_eq(m.course_view.top_layer(0).get_cell_atlas_coords(Vector2i(5, 5)), Vector2i(Surface.Type.WATER, 0),
-			"the view redraws edited tiles")
+	var water: Array = m.course_view.chunk_at(Vector2i(5, 5)).parts[Vector2i(5, 5)]
+	var fresh := CourseView.new()
+	add_child_autofree(fresh)
+	fresh.show_course(m.course)
+	assert_eq(water, fresh.chunk_at(Vector2i(5, 5)).parts[Vector2i(5, 5)], "the view redraws edited tiles")
 	tool.select_tool(BuildTool.Tool.RAISE)
 	tool.press_at(_at(Vector2i(4, 4), 0, Vector2(0.5, 0.5)))
 	tool.release()
 	assert_eq(m.course.get_height(4, 4), 1)
-	assert_eq(m.course_view.top_layer(1).get_cell_source_id(Vector2i(4, 4)), CourseView.SURFACE_SOURCE)
+	assert_eq(m.course_view.terrain.tile_geometry(Vector2i(4, 4))[0][0].z, 1.0, "the raised tile's ground at 1")
 	tool.undo()
 	tool.undo()
 	assert_eq(m.course.get_height(4, 4), 0)

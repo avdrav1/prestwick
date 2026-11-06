@@ -10,11 +10,13 @@ purchase would go (D26, D27; pillar 2). Built in E6-S5.
 
 Two things, so the colorblind rule holds (a pattern as well as a shade):
 
-- A shade: `CourseView` draws every top, riser and edge cue of an unowned tile through an
-  alternative tile modulated by `BuilderTuning.unowned_tint`, so the ground underneath keeps
-  its own surface pattern, only darker. A land surface's top (rough, water, trees, oob)
+- A shade: `CourseView` draws the ground of an unowned tile (and its side face) with its vertex
+  colours times `BuilderTuning.unowned_tint` (E3-S58: the smooth ground mesh,
+  `course/terrain_mesh.gd`; before it, an alternative tile on every top, riser and edge cue), so
+  the ground underneath keeps its own surface pattern, only darker. A land surface's top (rough, water, trees, oob)
   takes that tint times its height's shade (`BuilderTuning.height_shade`, E6-S18, `art/specs/surfaces.md`).
-- A pattern, this sheet: a screen-diagonal hatch over the top, 2 px of `ink` every 8 px, plus
+- A pattern, this sheet: a screen-diagonal hatch over the top (since E3-S58 mapped onto the
+  tile's sloped ground the way its surface frame is), 2 px of `ink` every 8 px, plus
   a 2 px dashed line just inside each edge of the top that lies on a parcel edge: `chalk`
   then `ink`, 8 px of screen x each (a survey-stake line). Where an unowned parcel meets
   owned land the line is the boundary; between two unowned parcels the lines of both sides

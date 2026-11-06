@@ -64,6 +64,12 @@ fill (its most common colour, what is left at 0.5x once the speckle is gone; E6-
 lighter rough or a darker fairway or tee means retuning the ramp. The tee's fill (139 of 255
 luminance) is the tight one: rough's fill (119) may rise at most to about 1.12.
 
+
+Smooth ground (E3-S58, D50): the course view maps each frame's diamond onto its tile's sloped
+ground (`course/terrain_mesh.gd`), pulled in by 1 px so the transparent corners are never
+sampled, so a slope takes the flat frame with no new art. The height shade is read at the
+ground's own height, blended between the whole steps, and the slope light multiplies it,
+under the same headroom cap. Risers and the edge cue are no longer drawn.
 ## Anchor
 
 Pixel (32, 16) of a frame, the diamond's center, sits on the screen point the isometric

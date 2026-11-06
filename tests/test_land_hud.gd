@@ -79,7 +79,8 @@ func test_buy_waits_for_the_confirm() -> void:
 	assert_eq(_panel.budget_label.text, "Land budget: %s" % LandPrices.money(5000 - cost))
 	assert_false(_panel.confirm_box.visible)
 	var cell: Vector2i = _tile_in(BUYABLE)
-	assert_eq(_main.course_view.land_layer(2).get_cell_source_id(cell), -1, "bought land draws as owned")
+	assert_true((_main.course_view.chunk_at(cell).parts[cell][4] as PackedVector2Array).is_empty(),
+			"bought land draws as owned: no hatch")
 
 
 func test_cancel_buys_nothing() -> void:
@@ -163,7 +164,8 @@ func test_undo_gives_the_parcel_back_on_the_hud() -> void:
 	assert_true(_tool.undo())
 	assert_false(_main.course.is_parcel_owned(BUYABLE))
 	assert_eq(_panel.budget_label.text, "Land budget: $5,000")
-	assert_eq(_main.course_view.land_layer(2).get_cell_source_id(_tile_in(BUYABLE)), CourseView.LAND_SOURCE)
+	var cell: Vector2i = _tile_in(BUYABLE)
+	assert_false((_main.course_view.chunk_at(cell).parts[cell][4] as PackedVector2Array).is_empty(), "hatched again")
 
 
 func test_palette_has_buy_land() -> void:

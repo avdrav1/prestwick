@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="TerrainTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://course/terrain_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+subdiv = 2
+light_dir = Vector2(-1, -0.8)
+light_strength = 0.9
+light_min = 0.55
+light_max = 1.25
+side_color = Color(0.478431, 0.337255, 0.227451, 1)
+base_steps = 0.0
+chunk_tiles = 32

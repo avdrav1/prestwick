@@ -1,5 +1,10 @@
 # Art spec: edge cue
 
+> Status (E3-S58, D50): not drawn. The smooth ground's slope light (`course/terrain_mesh.gd`,
+> light from behind the hills) now shows rises that face away from the camera, so the lip is
+> gone from the map. `edges_placeholder.png` is unused by the game and kept only for
+> `art/tiles/tile_preview.tscn`; final art (E5) needs no edge cue frames.
+
 ## Purpose
 
 Rises that face away from the camera (toward x - 1 or y - 1) have no visible riser, so

@@ -14,6 +14,8 @@ extends Node2D
 ## placement and offset to compare (`ground`, `level`, `ground-half`, `level-half`), and
 ## PLAYTEST_GRAY=1 draws the screen in luminance only.
 ##   PLAYTEST_SHOT=play:4 PLAYTEST_ZOOM=1 scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn
+## E3-S58: PLAYTEST_ZOOM also sets the zoom of `course`, `green` and `corner` in Build, and
+## PLAYTEST_GRAY=1 works there too.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const FLAT_PATH: String = "res://tests/fixtures/flat_20x20.json"
@@ -29,6 +31,9 @@ func _ready() -> void:
 	var spec: PackedStringArray = OS.get_environment("PLAYTEST_SHOT").split(":")
 	var view: String = spec[0] if not spec.is_empty() and spec[0] != "" else "open"
 	var n: int = spec[1].to_int() if spec.size() == 2 else 1
+	var zs := OS.get_environment("PLAYTEST_ZOOM")
+	if OS.get_environment("PLAYTEST_GRAY") == "1" and view != "play":
+		_gray()
 	if view == "open":
 		return
 	if view == "play":
@@ -37,7 +42,7 @@ func _ready() -> void:
 	if view == "course":
 		# The list collapsed to hole 1's row, so the east corner of the map shows.
 		main.hole_panel.set_collapsed(true)
-		main.camera.set_zoom_level(0.175)
+		main.camera.set_zoom_level(zs.to_float() if zs != "" else 0.175)
 		main.camera.centre_on(main.course_view.screen_bounds().get_center())
 		main.camera.position = main.course_view.screen_bounds().get_center()
 		return
@@ -54,7 +59,7 @@ func _ready() -> void:
 			if turn != null:
 				cell = Vector2i((turn as Vector2).round())
 		at = main.tile_world(cell)
-	main.camera.set_zoom_level(1.0 if view == "green" else 0.5)
+	main.camera.set_zoom_level(zs.to_float() if zs != "" else 1.0 if view == "green" else 0.5)
 	# Centre the cup in the view the HUD leaves free, not under the hole list.
 	var free: Rect2 = main.free_view_rect()
 	var shift: Vector2 = (main.camera.view_size() * 0.5 - free.get_center()) / main.camera.zoom.x
@@ -76,22 +81,31 @@ func _play(main: Main, c: CourseData, n: int) -> void:
 		topo.tuning = t
 		topo.mark_dirty()
 	if OS.get_environment("PLAYTEST_GRAY") == "1":
-		var layer := CanvasLayer.new()
-		layer.layer = 10
-		var rect := ColorRect.new()
-		rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var mat := ShaderMaterial.new()
-		var sh := Shader.new()
-		sh.code = "shader_type canvas_item;\nuniform sampler2D screen: hint_screen_texture;\nvoid fragment() {\n\tvec3 c = texture(screen, SCREEN_UV).rgb;\n\tfloat l = dot(c, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(l, l, l, 1.0);\n}\n"
-		mat.shader = sh
-		rect.material = mat
-		layer.add_child(rect)
-		add_child(layer)
+		_gray()
 	var zs := OS.get_environment("PLAYTEST_ZOOM")
 	var z: float = zs.to_float() if zs != "" else 0.5
 	main.camera.tracking = false
 	main.camera.set_zoom_level(z)
+	_frame_play(main, c, n, z)
+
+
+## Draws the screen in luminance only (PLAYTEST_GRAY).
+func _gray() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nuniform sampler2D screen: hint_screen_texture;\nvoid fragment() {\n\tvec3 c = texture(screen, SCREEN_UV).rgb;\n\tfloat l = dot(c, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(l, l, l, 1.0);\n}\n"
+	mat.shader = sh
+	rect.material = mat
+	layer.add_child(rect)
+	add_child(layer)
+
+
+func _frame_play(main: Main, c: CourseData, n: int, z: float) -> void:
 	var at := main.course_view.screen_bounds().get_center()
 	if z > 0.2:
 		var hole: HoleData = null

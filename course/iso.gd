@@ -46,34 +46,31 @@ static func screen_to_cell(screen: Vector2, height: float = 0.0) -> Vector2i:
 
 ## Painter's order. Godot Y-sorts every child of CourseView by `position.y + y_sort_origin`,
 ## so all sort keys below are in that unit: screen pixels at height 0. A tile's depth row is
-## (i + j) * HALF_H. Inside one row, a per-layer bias orders the tile's pieces bottom up:
-## riser step k gets 2k, the top at height h gets 2h + 1, and an object resting on height h
-## gets 2h + 1.5 (after that top, before the next riser step). The largest bias (15.5, an
-## object on height 7) stays below one row (HALF_H = 16), so a nearer row always draws later.
-## Equal-depth tiles never overlap, so ties across tiles in one row do not matter.
+## (i + j) * HALF_H, and the ground (E3-S58) draws one chunk of each depth row at that key, back
+## to front, which is exact for a height field seen from +x +y. Things on a tile sort after its
+## row by a bias under one row: a top-level overlay at 2h + 1 (TopoOverlay), an object resting
+## on height h at 2h + 1.5. The largest bias (15.5, an object on height 7) stays below one row
+## (HALF_H = 16), so a nearer row always draws later. Equal-depth tiles never overlap, so ties
+## across tiles in one row do not matter.
 const BIAS_PER_STEP: int = 2
 
 
-## Sort key of the depth row holding `cell`, before any layer bias.
+## Sort key of the depth row holding `cell`, before any bias: where its ground draws.
 static func depth_key(cell: Vector2i) -> int:
 	return roundi((cell.x + cell.y) * HALF_H)
 
 
-## Sort key of riser step `k` (the wall between height k and k + 1) of `cell`.
-static func riser_sort_key(cell: Vector2i, k: int) -> int:
-	return depth_key(cell) + BIAS_PER_STEP * k
-
-
-## Sort key of the surface top of `cell` at height `h`.
+## Sort key of something drawn on the ground of `cell` at height `h`, after its row's ground and
+## before an object on it (TopoOverlay's lines).
 static func top_sort_key(cell: Vector2i, h: int) -> int:
 	return depth_key(cell) + BIAS_PER_STEP * h + 1
 
 
 ## Sort key of an object (ball, guest, flag) at fractional tile position `tile` whose ground
-## is height `ground` steps: it draws over that tile's top and under anything nearer. Use the
-## ground under the object, not its height in the air. The key is not the object's screen y;
-## a sprite gets it by sitting under a Y-sorted Node2D placed at y = key and offsetting itself
-## back to Iso.tile_to_screen.
+## is height `ground` steps: it draws over that tile's row of ground and under anything nearer.
+## Use the ground under the object, not its height in the air. The key is not the object's
+## screen y; a sprite gets it by sitting under a Y-sorted Node2D placed at y = key and
+## offsetting itself back to Iso.tile_to_screen.
 static func object_sort_key(tile: Vector2, ground: float) -> float:
 	var cell := Vector2i(floori(tile.x + 0.5), floori(tile.y + 0.5))
 	return depth_key(cell) + BIAS_PER_STEP * ground + 1.5

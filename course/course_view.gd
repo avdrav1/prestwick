@@ -2,27 +2,19 @@ class_name CourseView
 extends Node2D
 ## Draws a CourseData isometrically (E1-S4). A reader only: it never writes the course.
 ##
-## One TileMapLayer per height for surface tops (0 to 7) and one per step for risers (the wall
-## between height k and k + 1, k = 0 to 6). Each layer sits at its height's screen offset, so
-## every cell lands where Iso.tile_to_screen says. All layers are Y-sorted together under this
-## node. Each layer's y_sort_origin moves its sort key back to the tile's ground point plus a
-## small per-layer bias, so every cell sorts at Iso.riser_sort_key / Iso.top_sort_key. That is
-## the painter's order of art/specs/risers.md: tiles back to front by depth (i + j), and within
-## one tile the risers bottom up, then the top. Objects use Iso.object_sort_key to join it.
-##
-## Faces hidden by a neighbor at equal or greater height are skipped (`left` / `right` frames).
-## Off-map neighbors read as height 0, so the map edge shows its walls.
-##
-## Edge cues (E1-S10, D5, art/specs/edge_cue.md): a rise toward x - 1 or y - 1 faces away
-## from the camera and has no riser, so the higher tile draws a lip line along that back edge
-## instead, one line for one step and two for two or more. One cue layer per height, at the
-## same sort key as that height's tops; Y-sort breaks the tie by tree order, so the cue layers
-## are added after every top and draw over their tile's top, still under objects on it.
-## A back edge on the map border gets no cue.
+## The ground (E3-S58, D50) is a mesh over the bilinear surface the ball rolls on, textured
+## from the surface sheets and lit by its slope (course/terrain_mesh.gd, TerrainMesh, numbers
+## in course/terrain_tuning.tres): a hill reads as a hill, not a cliff, and no risers are
+## drawn. CourseData does not change: heights stay whole steps. The mesh is cut into chunks,
+## a depth row (i + j) and chunk_tiles tiles along it each, every one a Y-sorted child at its
+## row's Iso.depth_key, so the ground draws back to front and every object on a tile
+## (Iso.object_sort_key) draws over its row and under the rows in front: a hill in front hides
+## what stands behind it. It is built once per course (show_course); an edit rebuilds only the
+## chunks round the tiles it changed (refresh_cells), a purchase its parcel's (refresh_parcel).
 ##
 ## Hole markers (E2-S2): a HoleMarker tee marker and pin for every placed tee and cup in
 ## CourseData, under one Y-sorted child at the origin, so each sorts with the terrain at
-## Iso.object_sort_key on its tile's top (course/hole_marker.gd).
+## Iso.object_sort_key on its tile (course/hole_marker.gd).
 ##
 ## Issue highlights (E2-S3): an IssueMarker on every tile where a hole rule fails, with its
 ## one-line reasons (course/issue_marker.gd), from show_issues, under a Y-sorted child at the
@@ -36,79 +28,55 @@ extends Node2D
 ## leader foot covered by a tile in front draws dashed and faded (IssueMarker.foot_hidden).
 ## Main shows them in Build only.
 ##
-## Unowned land (E6-S5, D26, art/specs/land.md): every top, riser and edge cue of a tile on a
-## parcel the player does not own draws through the DIM_ALT alternative tile, modulated by
-## BuilderTuning.unowned_tint (the shade), and one Land layer per height lays the land sheet's
-## hatch and parcel lines over its top (the pattern; land_frame), at the top's sort key and
-## after the cue layers, so it draws over the top and cue and a hill in front hides it. Fully
-## owned land (New sandbox, every older file) draws exactly as before. Shown in Build and Play:
-## the line is the OB boundary (D29). refresh_parcel redraws a parcel after a purchase or its
-## undo.
+## Unowned land (E6-S5, D26, art/specs/land.md): the ground of a tile on a parcel the player
+## does not own is modulated by BuilderTuning.unowned_tint (the shade), and the land sheet's
+## hatch and parcel lines are drawn over it (the pattern; land_frame), following the slope.
+## Fully owned land (New sandbox, every older file) draws without either. Shown in Build and
+## Play: the line is the OB boundary (D29). refresh_parcel redraws a parcel after a purchase or
+## its undo.
 ##
-## Height shade (E6-S18, art/specs/surfaces.md): every surface top draws through the
-## alternative tile top_alt(h, owned). On the land surfaces in BuilderTuning.height_shaded
-## (rough, water, trees, oob) it is modulated by the grey BuilderTuning.height_shade[h] (times
-## unowned_tint off owned land), a value step per height: low ground darker, high ground
-## lighter. So a plateau reads from a lowland, and across a rise that faces away from the
-## camera, where no riser shows, the lighter side is the higher one. Course surfaces (fairway,
-## green, tee, bunker, cart path) keep shade 1 at every height so their colour still names the
-## lie. Above 1 a frame's shade is capped at its frame_headroom, so no coloured pixel clips
-## and the shade stays value, not hue. Risers and edge cues keep their own values. The shade
-## at the D10 plot's height is 1, so a New sandbox draws as before. A modulate, not new
-## frames: the draw count and the tile sheet do not change.
+## Height shade (E6-S18, art/specs/surfaces.md): the land surfaces in BuilderTuning.height_shaded
+## (rough, water, trees, oob) take the grey BuilderTuning.height_shade for their height, low
+## ground darker, high ground lighter; between whole steps the ground's height blends the two
+## (TerrainMesh.shade). Course surfaces (fairway, green, tee, bunker, cart path) keep 1 so their
+## colour still names the lie. Above 1 a frame's shade is capped at its frame_headroom, so no
+## coloured pixel clips and the shade stays value, not hue. The slope light multiplies it, under
+## the same cap.
 ##
-## Play art (E3-S55): with play_art on (Main sets it in Play) every atlas source draws its
-## sheet's TileSheet.texture_for(true), the placeholder's label-free sheet, so the two-letter
-## labels show in Build only. Only the sources' textures change: the cells, frames and
-## alternatives stay, so the toggle never redraws the map. A sheet with no play_texture (final
-## art, the edge cue and land sheets) draws the same in both modes.
+## Play art (E3-S55): with play_art on (Main sets it in Play) the ground draws its sheets'
+## TileSheet.texture_for(true), the placeholder's label-free sheets, so the two-letter labels
+## show in Build only. Only the chunks' textures change, not their geometry.
 ##
 ## Contours (E3-S57): `topo`, a TopoOverlay, draws contour lines Y-sorted into the terrain in
 ## Play (course/topo_overlay.gd); it traces again when a height changes.
 
-## Atlas source ids in the shared TileSet.
-const SURFACE_SOURCE: int = 0
-const RISER_SOURCE: int = 1
-const EDGE_SOURCE: int = 2
-const LAND_SOURCE: int = 3
-## The alternative tile id of every riser and edge frame drawn on unowned land, and the bit
-## that marks unowned land in a surface top's alternative id (top_alt).
-const DIM_ALT: int = 1
-## frame_headroom: a pixel less saturated than this counts as grey (label chalk and ink), and
-## may clip toward white without a hue shift.
-const HUE_MIN_SAT: float = 0.1
 ## land_frame bits: the tile's edge toward x - 1, y - 1, x + 1, y + 1 lies on a parcel edge.
 const LAND_EDGE_W: int = 1
 const LAND_EDGE_N: int = 2
 const LAND_EDGE_E: int = 4
 const LAND_EDGE_S: int = 8
-## Rises of this many steps or more share one cue (two lines). Matches the art's frame names.
-const EDGE_MAX_STEPS: int = 2
+## frame_headroom: a pixel less saturated than this counts as grey (label chalk and ink), and
+## may clip toward white without a hue shift.
+const HUE_MIN_SAT: float = 0.1
 ## Screen px left between two issue text boxes when one is pushed up past the other.
 const ISSUE_BOX_GAP: float = 4.0
-## _drawn's value for a tile not drawn since the layers were cleared.
-const NOT_DRAWN: int = 255
+## A changed tile's chunks are rebuilt this many tiles round it: its height moves the ground of
+## the tiles beside it, and whether those are sloped moves the fans of the tiles beside them.
+const REBUILD_REACH: int = 2
 
 var course: CourseData:
 	get:
 		return _course
 
+## The ground's mesh builder (E3-S58).
+var terrain: TerrainMesh
+
 var _course: CourseData
-var _art: TileArt
-var _tile_set: TileSet
-var _tops: Array[TileMapLayer] = []
-var _risers: Array[TileMapLayer] = []
-var _edges: Array[TileMapLayer] = []
-var _lands: Array[TileMapLayer] = []
-var _riser_atlas: Dictionary = {}
-## The height each tile was last drawn at (NOT_DRAWN after a clear), so a redraw erases only
-## the layers that hold it (E3-S16).
-var _drawn: PackedByteArray = PackedByteArray()
-## The height each tile had when its four neighbours were last drawn for it (show_course or
-## refresh_cells on that tile), so a surface-only change skips them (E3-S16). Drawing a tile
-## as another's neighbour leaves its entry, so its own refresh still reaches its neighbours.
-var _neighbours_saw: PackedByteArray = PackedByteArray()
-var _edge_atlas: Dictionary = {}
+## Chunk key (TerrainMesh.chunk_key) -> TerrainMesh.Chunk.
+var _chunks: Dictionary = {}
+## Every tile's height when its chunks were last built, so an edit knows whether a height moved.
+var _heights_seen: PackedByteArray = PackedByteArray()
+var _ground_root: Node2D
 var _holes_root: Node2D
 var _markers: Array[HoleMarker] = []
 var _issues_root: Node2D
@@ -126,13 +94,15 @@ var issue_max_side: float = 0.0
 ## marker_min_screen_scale, D45).
 var marker_min_screen_scale: float = 0.5
 
-## Whether the tiles draw their sheets' Play textures (TileSheet.texture_for, E3-S55).
+## Whether the ground draws its sheets' Play textures (TileSheet.texture_for, E3-S55).
 var play_art: bool = false:
 	set(value):
 		play_art = value
-		var sheets: Array[TileSheet] = _art.course_sheets()
-		for id: int in sheets.size():
-			(_tile_set.get_source(id) as TileSetAtlasSource).texture = sheets[id].texture_for(value)
+		terrain.play = value
+		for ch: TerrainMesh.Chunk in _chunks.values():
+			ch.texture = terrain.surface_texture()
+			ch.land_texture = terrain.land_texture()
+			ch.queue_redraw()
 
 ## The contour overlay (E3-S57): Main enables it in Play.
 var topo: TopoOverlay
@@ -150,19 +120,12 @@ func _init() -> void:
 	issue_max_stack = tuning.issue_box_max_stack
 	issue_max_side = tuning.issue_box_max_side
 	marker_min_screen_scale = tuning.marker_min_screen_scale
-	_art = TileArt.load_default()
-	_tile_set = _make_tile_set(_art, tuning.unowned_tint, top_shades(_art.surfaces, tuning.height_shade, tuning.height_shaded))
-	for k: int in CourseData.MAX_HEIGHT + 1:
-		if k < CourseData.MAX_HEIGHT:
-			_risers.append(_make_layer("Risers%d" % k, k, Iso.riser_sort_key(Vector2i.ZERO, k)))
-		_tops.append(_make_layer("Tops%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k)))
-	# After every top, so a cue wins its sort-key tie with its own top.
-	var edge_shift: int = _art.edges.anchor.y - _art.edges.frame_size.y / 2
-	for k: int in CourseData.MAX_HEIGHT + 1:
-		_edges.append(_make_layer("Edges%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k), edge_shift))
-	# After every cue, so the hatch and parcel lines draw over their own top and cue.
-	for k: int in CourseData.MAX_HEIGHT + 1:
-		_lands.append(_make_layer("Land%d" % k, k, Iso.top_sort_key(Vector2i.ZERO, k)))
+	terrain = TerrainMesh.new(TerrainTuning.load_default(), TileArt.load_default(), tuning)
+	# The ground's chunks Y-sort with everything else through this Y-sorted child at the origin.
+	_ground_root = Node2D.new()
+	_ground_root.name = "Ground"
+	_ground_root.y_sort_enabled = true
+	add_child(_ground_root)
 	_holes_root = Node2D.new()
 	_holes_root.name = "Holes"
 	_holes_root.y_sort_enabled = true
@@ -173,26 +136,27 @@ func _init() -> void:
 	_issues_root.name = "Issues"
 	_issues_root.y_sort_enabled = true
 	add_child(_issues_root)
-	for frame: String in _art.risers.frames:
-		_riser_atlas[StringName(frame)] = Vector2i(_art.risers.frame_index(StringName(frame)), 0)
-	for frame: String in _art.edges.frames:
-		_edge_atlas[StringName(frame)] = Vector2i(_art.edges.frame_index(StringName(frame)), 0)
 
 
 ## Draws `c` from scratch. Pass null to clear.
 func show_course(c: CourseData) -> void:
 	_course = c
-	for layer: TileMapLayer in _tops + _risers + _edges + _lands:
-		layer.clear()
-	_drawn = PackedByteArray()
-	_neighbours_saw = PackedByteArray()
+	terrain.course = c
+	for ch: TerrainMesh.Chunk in _chunks.values():
+		_ground_root.remove_child(ch)
+		ch.free()
+	_chunks.clear()
+	_heights_seen = PackedByteArray()
 	if c != null:
-		_drawn.resize(c.width * c.height)
-		_drawn.fill(NOT_DRAWN)
+		_heights_seen.resize(c.width * c.height)
 		for y: int in c.height:
 			for x: int in c.width:
-				_draw_cell(Vector2i(x, y))
-		_neighbours_saw = _drawn.duplicate()
+				_heights_seen[y * c.width + x] = c.get_height(x, y)
+		terrain.sync()
+		for key: Vector2i in terrain.all_chunk_keys():
+			var ch := terrain.make_chunk(key)
+			_ground_root.add_child(ch)
+			_chunks[key] = ch
 	topo.show_course(c)
 	refresh_holes()
 	show_issues({})
@@ -451,27 +415,51 @@ func issue_markers() -> Array[IssueMarker]:
 	return _issue_markers.duplicate()
 
 
-## Redraws one tile after an edit, plus, when its height changed, the two back neighbors whose
-## walls it may now hide or reveal and the two front neighbors whose edge cues depend on its
-## height. Call from
-## the builder after it writes a tile (E1-S5). A hole marker on the tile moves to its new top.
+## Every ground chunk drawn, in no set order.
+func chunks() -> Array[TerrainMesh.Chunk]:
+	var out: Array[TerrainMesh.Chunk] = []
+	for ch: TerrainMesh.Chunk in _chunks.values():
+		out.append(ch)
+	return out
+
+
+## The chunk drawing `cell`'s ground, or null.
+func chunk_at(cell: Vector2i) -> TerrainMesh.Chunk:
+	if _course == null or not _course.in_bounds(cell.x, cell.y):
+		return null
+	return _chunks.get(terrain.chunk_key(cell))
+
+
+## What the ground draws now, chunk by chunk in key order: [key, sort y, points, colours, uvs,
+## triangles, land points, land uvs, land triangles, face points, face colours, face
+## triangles]. Two views drawing the same course give equal digests (tests compare an edited
+## view against one drawn from scratch).
+func terrain_digest() -> Array:
+	var keys: Array = _chunks.keys()
+	keys.sort()
+	var out: Array = []
+	for key: Vector2i in keys:
+		var ch: TerrainMesh.Chunk = _chunks[key]
+		out.append([key, ch.position.y, ch.pts, ch.cols, ch.uvs, ch.idx, ch.land_pts, ch.land_uvs,
+				ch.land_idx, ch.face_pts, ch.face_cols, ch.face_idx])
+	return out
+
+
+## Redraws one tile after an edit (E1-S5). A hole marker on the tile moves to its new ground.
 func refresh_cell(cell: Vector2i) -> void:
 	refresh_cells([cell])
 
 
-## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16):
-## each tile is drawn once however many changed tiles share it, its neighbours only when its
-## height changed, a surface-only change sets just its top, and each hole marker and issue box
-## is tested once per batch, not once per tile, so an undo of a big drag costs in proportion to
-## its tiles. Leaves the view as
-## refresh_cell on each tile would. Main calls it with each tiles_changed.
+## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16): every
+## chunk within REBUILD_REACH tiles of a changed tile is rebuilt once however many changed tiles
+## share it, and each hole marker and issue box is tested once per batch, so an undo of a big
+## drag costs in proportion to its tiles. Leaves the view as show_course would. Main calls it
+## with each tiles_changed.
 func refresh_cells(cells: Array[Vector2i]) -> void:
 	if _course == null or cells.is_empty():
 		return
-	# A neighbour's walls and cues read only this tile's height, so a tile whose height its
-	# neighbours were last drawn with (a surface-only change) redraws alone.
 	var changed := {}
-	var draw := {}
+	var dirty := {}
 	var moved: bool = false
 	for cell: Vector2i in cells:
 		changed[cell] = true
@@ -479,25 +467,22 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 			continue
 		var i: int = cell.y * _course.width + cell.x
 		var h: int = _course.get_height(cell.x, cell.y)
-		if _drawn[i] != h:
-			draw[cell] = true
-		if _neighbours_saw[i] != h:
-			_neighbours_saw[i] = h
+		if _heights_seen[i] != h:
+			_heights_seen[i] = h
 			moved = true
-			for c: Vector2i in [cell + Vector2i(-1, 0), cell + Vector2i(0, -1),
-					cell + Vector2i(1, 0), cell + Vector2i(0, 1)]:
+		for dy: int in range(-REBUILD_REACH, REBUILD_REACH + 1):
+			for dx: int in range(-REBUILD_REACH, REBUILD_REACH + 1):
+				var c := cell + Vector2i(dx, dy)
 				if _course.in_bounds(c.x, c.y):
-					draw[c] = true
-	for c: Vector2i in draw:
-		_draw_cell(c)
+					var key := terrain.chunk_key(c)
+					if not dirty.has(key):
+						dirty[key] = {}
+					dirty[key][c] = true
+	terrain.sync(cells)
+	for key: Vector2i in dirty:
+		terrain.build_chunk(_chunks[key], dirty[key])
 	if moved:
 		topo.mark_dirty()
-	# A changed tile still at the height it was drawn at, with no neighbour's height moved in
-	# this batch, has risers, edge cue and land frame as drawn (they read only heights and
-	# parcels, and refresh_parcel redraws a parcel): only its surface top is set (E3-S16 review).
-	for cell: Vector2i in changed:
-		if not draw.has(cell) and _course.in_bounds(cell.x, cell.y):
-			_draw_top(cell)
 	for m: HoleMarker in _markers:
 		if changed.has(m.cell):
 			m.place(_course)
@@ -517,29 +502,15 @@ func refresh_parcel(parcel: Vector2i) -> void:
 	if _course == null:
 		return
 	var r: Rect2i = _course.parcel_rect(parcel)
+	var dirty := {}
 	for y: int in range(r.position.y, r.end.y):
 		for x: int in range(r.position.x, r.end.x):
-			_draw_cell(Vector2i(x, y))
-
-
-## The layer holding surface tops at height `h`.
-func top_layer(h: int) -> TileMapLayer:
-	return _tops[h]
-
-
-## The layer holding riser step `k` (the wall between height k and k + 1).
-func riser_layer(k: int) -> TileMapLayer:
-	return _risers[k]
-
-
-## The layer holding edge cues on tiles at height `h`.
-func edge_layer(h: int) -> TileMapLayer:
-	return _edges[h]
-
-
-## The layer holding the unowned-land hatch and parcel lines on tiles at height `h`.
-func land_layer(h: int) -> TileMapLayer:
-	return _lands[h]
+			var key := terrain.chunk_key(Vector2i(x, y))
+			if not dirty.has(key):
+				dirty[key] = {}
+			dirty[key][Vector2i(x, y)] = true
+	for key: Vector2i in dirty:
+		terrain.build_chunk(_chunks[key], dirty[key])
 
 
 ## Screen rectangle (local to this node) covering every tile at every height.
@@ -553,39 +524,6 @@ func screen_bounds() -> Rect2:
 		r = r.expand(Iso.tile_to_screen(corner, 0.0))
 	r = r.expand(Iso.tile_to_screen(Vector2(-0.5, -0.5), CourseData.MAX_HEIGHT))
 	return r
-
-
-## Which riser frame tile (x, y) shows at step k: &"both", &"left", &"right", or &"" when
-## both faces are hidden or the tile is not that tall. Left face looks at (x, y + 1),
-## right face at (x + 1, y).
-static func riser_frame(c: CourseData, x: int, y: int, k: int) -> StringName:
-	if k >= c.get_height(x, y):
-		return &""
-	var left: bool = c.get_height(x, y + 1) <= k
-	var right: bool = c.get_height(x + 1, y) <= k
-	if left and right:
-		return &"both"
-	if left:
-		return &"left"
-	if right:
-		return &"right"
-	return &""
-
-
-## Which edge cue frame tile (x, y) shows: &"" for none, else "l<n>" for a rise from its
-## back-left neighbor (x - 1, y), "r<n>" from its back-right neighbor (x, y - 1), or both
-## ("l1r2"). n is the rise in steps, capped at EDGE_MAX_STEPS. Lower or level neighbors and
-## off-map ones give no cue; a higher neighbor's riser already shows that step.
-static func edge_cue_frame(c: CourseData, x: int, y: int) -> StringName:
-	var h: int = c.get_height(x, y)
-	var frame: String = ""
-	var left: int = _rise(c, h, x - 1, y)
-	var right: int = _rise(c, h, x, y - 1)
-	if left > 0:
-		frame += "l%d" % left
-	if right > 0:
-		frame += "r%d" % right
-	return StringName(frame)
 
 
 ## Which land frame tile (x, y) shows: -1 on an owned tile, else the mask of its edges that
@@ -605,130 +543,6 @@ static func land_frame(c: CourseData, x: int, y: int) -> int:
 	if c.parcel_of(x, y + 1) != p or not c.in_bounds(x, y + 1):
 		mask |= LAND_EDGE_S
 	return mask
-
-
-## The alternative tile id of a surface top at height `h`, on owned land or not: one per
-## height and ownership, each modulated by its height's shade (and the unowned tint).
-static func top_alt(h: int, owned: bool) -> int:
-	return h * 2 + (0 if owned else DIM_ALT)
-
-
-static func _rise(c: CourseData, h: int, x: int, y: int) -> int:
-	if not c.in_bounds(x, y):
-		return 0
-	return clampi(h - c.get_height(x, y), 0, EDGE_MAX_STEPS)
-
-
-## Sets only the surface top of `cell`, drawn at its current height (refresh_cells).
-func _draw_top(cell: Vector2i) -> void:
-	var h: int = _course.get_height(cell.x, cell.y)
-	_tops[h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
-			top_alt(h, _course.is_owned(cell.x, cell.y)))
-
-
-func _draw_cell(cell: Vector2i) -> void:
-	var h: int = _course.get_height(cell.x, cell.y)
-	var land: int = land_frame(_course, cell.x, cell.y)
-	var alt: int = 0 if land < 0 else DIM_ALT
-	# Only the layers this cell was last drawn on can hold it (E3-S16): its old height's top,
-	# cue and land layers, and its risers below the old height.
-	var i: int = cell.y * _course.width + cell.x
-	var old: int = _drawn[i]
-	_drawn[i] = h
-	if old != NOT_DRAWN and old != h:
-		_tops[old].erase_cell(cell)
-		_edges[old].erase_cell(cell)
-		_lands[old].erase_cell(cell)
-	_tops[h].set_cell(cell, SURFACE_SOURCE, Vector2i(_course.get_surface(cell.x, cell.y), 0),
-			top_alt(h, land < 0))
-	# riser_frame for every step below h, from the two front neighbours read once.
-	var left_h: int = _course.get_height(cell.x, cell.y + 1)
-	var right_h: int = _course.get_height(cell.x + 1, cell.y)
-	for k: int in h:
-		var frame: StringName = (&"both" if left_h <= k and right_h <= k else &"left" if left_h <= k
-				else &"right" if right_h <= k else &"")
-		if frame.is_empty():
-			if old != NOT_DRAWN:
-				_risers[k].erase_cell(cell)
-		else:
-			_risers[k].set_cell(cell, RISER_SOURCE, _riser_atlas[frame], alt)
-	if old != NOT_DRAWN:
-		for k: int in range(h, mini(old, _risers.size())):
-			_risers[k].erase_cell(cell)
-	var cue: StringName = edge_cue_frame(_course, cell.x, cell.y)
-	if not cue.is_empty():
-		_edges[h].set_cell(cell, EDGE_SOURCE, _edge_atlas[cue], alt)
-	elif old != NOT_DRAWN:
-		_edges[h].erase_cell(cell)
-	if land >= 0:
-		_lands[h].set_cell(cell, LAND_SOURCE, Vector2i(land, 0))
-	elif old != NOT_DRAWN:
-		_lands[h].erase_cell(cell)
-
-
-## `shift` moves the layer up by that many pixels and its sort origin down by as many, for a
-## sheet whose anchor sits below its frame's center; the sort key stays the same.
-func _make_layer(layer_name: String, h: int, bias: int, shift: int = 0) -> TileMapLayer:
-	var layer := TileMapLayer.new()
-	layer.name = layer_name
-	layer.tile_set = _tile_set
-	layer.y_sort_enabled = true
-	# Godot puts cell (0, 0)'s center at (HALF_W, HALF_H); shift it onto Iso's origin, then up
-	# by the height. The sort origin undoes the height shift and adds the bias.
-	layer.position = Vector2(-Iso.HALF_W, -Iso.HALF_H - h * Iso.STEP_PX - shift)
-	layer.y_sort_origin = h * Iso.STEP_PX + bias + shift
-	add_child(layer)
-	return layer
-
-
-## `tint` is the modulate of the DIM_ALT alternative of every riser and edge frame; each
-## surface frame gets a top_alt alternative per height and ownership, modulated by that
-## frame's `shades` entry for the height (top_shades; times `tint` off owned land).
-static func _make_tile_set(art: TileArt, tint: Color, shades: Array[PackedFloat32Array]) -> TileSet:
-	var ts := TileSet.new()
-	ts.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
-	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
-	ts.tile_size = Vector2i(Iso.TILE_W, Iso.TILE_H)
-	ts.add_source(_make_surface_source(art.surfaces, tint, shades), SURFACE_SOURCE)
-	ts.add_source(_make_source(art.risers, tint), RISER_SOURCE)
-	ts.add_source(_make_source(art.edges, tint), EDGE_SOURCE)
-	ts.add_source(_make_source(art.land), LAND_SOURCE)
-	# play_art indexes the sources by their sheet's place in TileArt.course_sheets.
-	var sheets: Array[TileSheet] = art.course_sheets()
-	for id: int in sheets.size():
-		assert((ts.get_source(id) as TileSetAtlasSource).texture == sheets[id].texture, "source %d is course_sheets()[%d]" % [id, id])
-	return ts
-
-
-## One atlas source per sheet, a tile per frame; with a `tint`, each frame also gets the
-## DIM_ALT alternative modulated by it.
-static func _make_source(sheet: TileSheet, tint: Variant = null) -> TileSetAtlasSource:
-	var src := TileSetAtlasSource.new()
-	src.texture = sheet.texture
-	src.texture_region_size = sheet.frame_size
-	src.separation = Vector2i(sheet.gutter, 0)
-	for i: int in sheet.frame_count():
-		src.create_tile(Vector2i(i, 0))
-		if tint != null:
-			src.create_alternative_tile(Vector2i(i, 0), DIM_ALT)
-			src.get_tile_data(Vector2i(i, 0), DIM_ALT).modulate = tint
-	return src
-
-
-## The surface sheet's source: every frame i gets top_alt(h, owned) for each height h,
-## modulated by the grey shades[i][h], times `tint` when not owned.
-static func _make_surface_source(sheet: TileSheet, tint: Color, shades: Array[PackedFloat32Array]) -> TileSetAtlasSource:
-	var src := _make_source(sheet)
-	for i: int in sheet.frame_count():
-		var coords := Vector2i(i, 0)
-		for h: int in CourseData.MAX_HEIGHT + 1:
-			var shade := Color(shades[i][h], shades[i][h], shades[i][h])
-			for owned: bool in [true, false]:
-				var alt: int = top_alt(h, owned)
-				if alt != 0:
-					src.create_alternative_tile(coords, alt)
-				src.get_tile_data(coords, alt).modulate = shade if owned else shade * tint
-	return src
 
 
 ## The grey shade each surface frame's top draws with at height 0 to 7, indexed [frame][h]:
