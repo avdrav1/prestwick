@@ -21,115 +21,129 @@ extends RefCounted
 ##   is dug one step below the lowest ground round it, as the land's own ponds are.
 ## - clear: [polyline, width] painted rough: a chute cut through a tree stand.
 ##
-## Build order: heights first (greens, tees and ponds set, the land's own ponds kept, the
-## ground round them eased so neighbours differ by one step and at most one riser every 2
-## tiles along an axis, the land generator's slope rule), then every hole's trees and clears,
-## then each hole's fairway, bunkers, water, tee box and green, then the tees, cups and pars,
-## and last every hole is opened, so no edit lands in an open hole's footprint.
+## The routing (E3-S50 rework): four doglegs of about 90 degrees, legs along the tile axes so
+## their edges run straight on screen, each a straight leg of about 240 yd to the corner and a
+## clearly separate second leg, the inside of the corner blocked by a hill, trees or water;
+## every hole's fairway at least 3 tiles of rough or trees from every other hole's. Hole 1
+## opens the game framed (Main.frame_first_hole), so it is a dogleg in the north-west whose
+## corner points up the screen, clear of the HUD, and the nine finishes beside its tee.
+## FILLS are the land's ponds a hole needs the ground of: their water is painted rough and
+## raised one step, to the ground round them.
+##
+## Build order: heights first (greens, tees and ponds set, FILLS raised, the land's other ponds
+## kept, the ground round them eased so neighbours differ by one step and at most one riser
+## every 2 tiles along an axis, the land generator's slope rule), then FILLS painted rough,
+## every hole's trees and clears, then each hole's fairway, bunkers, water, tee box and green,
+## then the tees, cups and pars, and last every hole is opened, so no edit lands in an open
+## hole's footprint.
 
 const LAND_SEED: int = 7
 const PATH: String = "res://courses/playtest_nine.json"
 const COURSE_NAME: String = "Playtest Nine"
 const COURSE_AUTHOR: String = "E3-S50"
 
+## Land ponds filled (Rect2i, only their water tiles): the pond across hole 1's first leg.
+const FILLS: Array[Rect2i] = [Rect2i(0, 32, 21, 14)]
+
 const HOLES: Array = [
 	{
-		"n": 1, "par": 5, "tee": Vector2i(121, 5), "cup": Vector2i(120, 112), "tee_lift": 1,
-		"fairway": [Vector2(121, 16), Vector2(118, 40), Vector2(122, 66), Vector2(119, 92),
-				Vector2(120, 106)],
+		# Dogleg right, the opening hole: north up the west edge, then right along the north
+		# flank of the hill, which with its trees fills the inside corner.
+		"n": 1, "par": 4, "tee": Vector2i(10, 56), "cup": Vector2i(44, 8), "tee_lift": 1,
+		"fairway": [Vector2(10, 51), Vector2(10, 8), Vector2(38, 8)],
+		"width": 5.0,
+		"green": [Vector2(44, 8), 4.5, 3.2, 0.0, 0, Vector2(-1, 0.3), 2, 1, -1.0],
+		"bunkers": [[Vector2(5, 4), 1.5, 2.5, 0.0], [Vector2(41, 12), 1.5, 1.2, 0.0],
+				[Vector2(49, 11), 1.2, 1.2, 0.0]],
+		"water": [],
+		"trees": [[Vector2(19, 18), 5.0, 2.5, 55.0], [Vector2(27, 13), 3.0, 1.5, 0.0],
+				[Vector2(16, 49), 1.5, 9.0, 0.0]],
+		"clear": [],
+	},
+	{
+		"n": 2, "par": 3, "tee": Vector2i(50, 4), "cup": Vector2i(78, 4), "tee_lift": 0,
+		"fairway": [],
+		"width": 5.0,
+		"green": [Vector2(78, 4), 4.0, 3.0, 0.0, 0, Vector2(-1, -0.4), 1, 1, 0.5],
+		"bunkers": [[Vector2(73, 8), 1.5, 1.2, 0.0]],
+		"water": [],
+		"trees": [],
+		"clear": [],
+	},
+	{
+		# Dogleg right round a pond and the trees inside the corner.
+		"n": 3, "par": 4, "tee": Vector2i(70, 12), "cup": Vector2i(118, 52), "tee_lift": 0,
+		"fairway": [Vector2(75, 12), Vector2(118, 12), Vector2(118, 46)],
+		"width": 5.0,
+		"green": [Vector2(118, 52), 4.5, 3.2, 90.0, 0, Vector2(0.3, -1), 2, 1, -1.0],
+		"bunkers": [[Vector2(122, 8), 1.5, 2.5, 0.0], [Vector2(113, 55), 1.2, 2.0, 0.0]],
+		"water": [[Vector2(110, 20), 4.5, 3.5, 0.0]],
+		"trees": [[Vector2(107, 36), 2.5, 6.0, 0.0], [Vector2(124, 30), 1.5, 8.0, 0.0]],
+		"clear": [],
+	},
+	{
+		"n": 4, "par": 3, "tee": Vector2i(122, 64), "cup": Vector2i(122, 96), "tee_lift": 0,
+		"fairway": [],
+		"width": 5.0,
+		"green": [Vector2(122, 96), 4.0, 3.0, 90.0, 1, Vector2(-1, 0.3), 1, 1, 0.5],
+		"bunkers": [[Vector2(117, 93), 1.2, 1.5, 0.0]],
+		"water": [],
+		"trees": [],
+		"clear": [],
+	},
+	{
+		# Dogleg right, the par 5: west between two of the land's ponds, then north up the hill.
+		"n": 5, "par": 5, "tee": Vector2i(126, 112), "cup": Vector2i(76, 52), "tee_lift": 0,
+		"fairway": [Vector2(121, 112), Vector2(76, 112), Vector2(76, 60)],
+		"width": 5.0,
+		"green": [Vector2(76, 52), 4.5, 3.0, 0.0, 0, Vector2(0, -1), 1, 1, 0.5],
+		"bunkers": [[Vector2(81, 116), 2.5, 1.2, 0.0], [Vector2(82, 55), 1.5, 1.2, 0.0]],
+		"water": [],
+		"trees": [],
+		"clear": [],
+	},
+	{
+		# Dogleg left, the other par 5: west through the trees, then south past the pond.
+		"n": 6, "par": 5, "tee": Vector2i(71, 46), "cup": Vector2i(22, 108), "tee_lift": 0,
+		"fairway": [Vector2(66, 46), Vector2(22, 46), Vector2(22, 102)],
+		"width": 5.0,
+		"green": [Vector2(22, 108), 4.5, 3.2, 90.0, 0, Vector2(-1, -0.3), 1, 2, 0.0],
+		"bunkers": [[Vector2(17, 80), 1.2, 2.5, 0.0], [Vector2(27, 105), 1.2, 2.0, 0.0]],
+		"water": [],
+		"trees": [[Vector2(30, 56), 3.0, 3.0, 0.0]],
+		"clear": [],
+	},
+	{
+		"n": 7, "par": 3, "tee": Vector2i(30, 100), "cup": Vector2i(60, 98), "tee_lift": 1,
+		"fairway": [],
+		"width": 5.0,
+		"green": [Vector2(60, 98), 4.5, 3.0, 0.0, 0, Vector2(-1, 0), 2, 2, -1.0],
+		"bunkers": [[Vector2(64, 102), 1.5, 1.2, 0.0]],
+		"water": [],
+		"trees": [],
+		"clear": [],
+	},
+	{
+		# Straight along the crest of the south hill.
+		"n": 8, "par": 4, "tee": Vector2i(70, 118), "cup": Vector2i(6, 118), "tee_lift": 0,
+		"fairway": [Vector2(64, 118), Vector2(12, 118)],
 		"width": 6.0,
-		"green": [Vector2(120, 112), 4.5, 3.2, 90.0, 0, Vector2(-1, 0.3), 2, 1, -1.0],
-		"bunkers": [[Vector2(115, 45), 2.5, 1.5, 70.0], [Vector2(125, 72), 2.5, 1.5, 100.0],
-				[Vector2(115, 110), 1.5, 2.5, 0.0], [Vector2(125, 115), 1.5, 2.0, 0.0]],
+		"green": [Vector2(6, 118), 4.5, 3.0, 0.0, 0, Vector2(0, -1), 1, 1, 0.0],
+		"bunkers": [[Vector2(44, 122), 2.0, 1.2, 0.0], [Vector2(11, 113), 1.5, 1.2, 0.0]],
 		"water": [],
-		"trees": [[Vector2(112, 30), 3.0, 2.0, 80.0], [Vector2(126, 42), 1.5, 3.5, 0.0],
-				[Vector2(113, 86), 2.5, 2.0, 0.0]],
+		"trees": [[Vector2(40, 112), 12.0, 1.5, 0.0], [Vector2(36, 125), 10.0, 1.5, 0.0]],
 		"clear": [],
 	},
 	{
-		"n": 2, "par": 3, "tee": Vector2i(116, 121), "cup": Vector2i(88, 114), "tee_lift": 1,
+		# Long par 3 up the west edge over the land's pond, finishing beside the first tee.
+		"n": 9, "par": 3, "tee": Vector2i(8, 108), "cup": Vector2i(8, 62), "tee_lift": 0,
 		"fairway": [],
 		"width": 5.0,
-		"green": [Vector2(88, 114), 4.0, 3.0, 20.0, 1, Vector2(-1, 0.3), 1, 1, 0.5],
-		"bunkers": [[Vector2(92, 110), 1.5, 2.0, 0.0]],
+		"green": [Vector2(8, 62), 4.0, 3.0, 90.0, 0, Vector2(0.2, -1), 1, 2, 0.0],
+		"bunkers": [[Vector2(13, 65), 1.2, 1.5, 0.0]],
 		"water": [],
 		"trees": [],
-		"clear": [[[Vector2(114, 120), Vector2(104, 118)], 5.0]],
-	},
-	{
-		"n": 3, "par": 4, "tee": Vector2i(80, 108), "cup": Vector2i(14, 104), "tee_lift": 0,
-		"fairway": [Vector2(70, 108), Vector2(56, 106), Vector2(40, 107), Vector2(22, 104)],
-		"width": 5.0,
-		"green": [Vector2(14, 104), 4.0, 3.0, 100.0, 0, Vector2(-1, 0), 2, 2, -1.0],
-		"bunkers": [[Vector2(44, 103), 2.0, 1.2, 0.0], [Vector2(18, 99), 1.5, 1.2, 0.0],
-				[Vector2(19, 108), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [[Vector2(60, 112), 4.0, 2.0, 0.0], [Vector2(52, 101), 3.0, 1.5, 0.0]],
-		"clear": [],
-	},
-	{
-		"n": 4, "par": 4, "tee": Vector2i(20, 96), "cup": Vector2i(54, 44), "tee_lift": 0,
-		"fairway": [Vector2(20, 88), Vector2(19, 70), Vector2(20, 54), Vector2(26, 47),
-				Vector2(40, 45), Vector2(50, 44)],
-		"width": 5.0,
-		"green": [Vector2(54, 44), 4.5, 3.0, 30.0, 0, Vector2(0, -1), 1, 1, 0.5],
-		"bunkers": [[Vector2(15, 50), 1.5, 2.5, 0.0], [Vector2(50, 40), 1.5, 1.2, 0.0],
-				[Vector2(58, 48), 1.5, 1.2, 0.0]],
-		"water": [[Vector2(30, 54), 3.5, 2.5, 0.0]],
-		"trees": [[Vector2(25, 80), 2.0, 3.0, 0.0], [Vector2(14, 62), 1.5, 3.0, 0.0]],
-		"clear": [],
-	},
-	{
-		"n": 5, "par": 3, "tee": Vector2i(50, 36), "cup": Vector2i(28, 20), "tee_lift": 0,
-		"fairway": [],
-		"width": 5.0,
-		"green": [Vector2(28, 20), 3.5, 3.0, 35.0, 0, Vector2(-0.6, -1), 1, 1, 0.5],
-		"bunkers": [[Vector2(32, 25), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [],
-		"clear": [],
-	},
-	{
-		"n": 6, "par": 4, "tee": Vector2i(22, 12), "cup": Vector2i(88, 3), "tee_lift": 0,
-		"fairway": [Vector2(30, 15), Vector2(50, 16), Vector2(70, 16), Vector2(84, 14),
-				Vector2(88, 8)],
-		"width": 5.0,
-		"green": [Vector2(88, 3), 4.0, 2.6, 0.0, 0, Vector2(0, -1), 2, 1, -1.5],
-		"bunkers": [[Vector2(82, 6), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [[Vector2(52, 21), 4.0, 1.5, 0.0], [Vector2(74, 9), 2.5, 2.0, 0.0]],
-		"clear": [],
-	},
-	{
-		"n": 7, "par": 4, "tee": Vector2i(94, 12), "cup": Vector2i(108, 72), "tee_lift": 0,
-		"fairway": [Vector2(93, 20), Vector2(92, 40), Vector2(93, 58), Vector2(100, 66),
-				Vector2(104, 70)],
-		"width": 5.0,
-		"green": [Vector2(108, 72), 4.0, 3.0, 30.0, 0, Vector2(0.4, -1), 1, 1, 0.5],
-		"bunkers": [[Vector2(89, 58), 1.2, 2.0, 0.0], [Vector2(106, 76), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [[Vector2(86, 32), 2.0, 4.0, 0.0]],
-		"clear": [],
-	},
-	{
-		"n": 8, "par": 3, "tee": Vector2i(101, 80), "cup": Vector2i(56, 76), "tee_lift": 1,
-		"fairway": [],
-		"width": 5.0,
-		"green": [Vector2(56, 76), 5.0, 3.5, 0.0, 0, Vector2(-1, 0), 2, 1, 0.0],
-		"bunkers": [[Vector2(62, 72), 1.5, 1.2, 0.0], [Vector2(61, 80), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [],
-		"clear": [],
-	},
-	{
-		"n": 9, "par": 4, "tee": Vector2i(34, 94), "cup": Vector2i(100, 96), "tee_lift": 0,
-		"fairway": [Vector2(44, 95), Vector2(64, 96), Vector2(80, 93), Vector2(94, 95)],
-		"width": 5.0,
-		"green": [Vector2(100, 96), 4.5, 3.2, 0.0, 0, Vector2(0.2, -1), 1, 2, 0.0],
-		"bunkers": [[Vector2(72, 98), 2.0, 1.2, 0.0], [Vector2(104, 92), 1.5, 1.2, 0.0]],
-		"water": [],
-		"trees": [[Vector2(58, 100), 4.0, 1.5, 0.0], [Vector2(78, 89), 3.0, 1.5, 0.0]],
-		"clear": [],
+		"clear": [[[Vector2(8, 106), Vector2(8, 96)], 5.0]],
 	},
 ]
 
@@ -154,7 +168,9 @@ static func course() -> CourseData:
 ## Builds the course on `b`'s course. Returns the numbers that opened.
 static func build(b: CourseBuilder) -> Array[int]:
 	var course: CourseData = b.course
-	_shape(b, course)
+	var filled := _filled(course)
+	_shape(b, course, filled)
+	_paint(b, course, filled, Surface.Type.ROUGH)
 	for spec: Dictionary in HOLES:
 		for e: Array in spec["trees"]:
 			_paint(b, course, ellipse(e), Surface.Type.TREES)
@@ -240,7 +256,18 @@ static func tee_tiles(spec: Dictionary) -> Array[Vector2i]:
 
 # --- heights ---
 
-static func _shape(b: CourseBuilder, course: CourseData) -> void:
+## The land's water tiles inside FILLS.
+static func _filled(course: CourseData) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for r: Rect2i in FILLS:
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				if course.in_bounds(x, y) and course.get_surface(x, y) == Surface.Type.WATER:
+					out.append(Vector2i(x, y))
+	return out
+
+
+static func _shape(b: CourseBuilder, course: CourseData, filled: Array[Vector2i]) -> void:
 	var w: int = course.width
 	var h: int = course.height
 	var target := PackedInt32Array()
@@ -248,11 +275,15 @@ static func _shape(b: CourseBuilder, course: CourseData) -> void:
 	for y: int in h:
 		for x: int in w:
 			target[y * w + x] = course.get_height(x, y)
-	# The land's own ponds keep their level.
+	# The land's own ponds keep their level, but for the filled ones, raised to their banks.
+	var fill := {}
+	for t: Vector2i in filled:
+		fill[t] = true
+		target[t.y * w + t.x] = mini(course.get_height(t.x, t.y) + 1, CourseData.MAX_HEIGHT)
 	var locked := {}
 	for y: int in h:
 		for x: int in w:
-			if course.get_surface(x, y) == Surface.Type.WATER:
+			if course.get_surface(x, y) == Surface.Type.WATER and not fill.has(Vector2i(x, y)):
 				locked[Vector2i(x, y)] = true
 	for spec: Dictionary in HOLES:
 		var g: Array = spec["green"]

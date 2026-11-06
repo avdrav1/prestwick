@@ -1,8 +1,10 @@
 extends GutTest
 ## E3-S50: the playtest nine, courses/playtest_nine.json, rebuilt by
 ## tests/fixtures/playtest_nine.gd (PlaytestNine). Nine open holes on generated land, every
-## rule passing, at least three doglegs whose line of play (D47) sets their par, contoured
-## greens D7 holds a ball on, and the file in step with the fixture.
+## rule passing, at least four doglegs (hole 1, the hole the game opens on, among them) that
+## turn at least 50 degrees and whose line of play (D47) sets their par, every hole's fairway
+## at least 3 tiles from every other hole's, contoured greens D7 holds a ball on, and the file
+## in step with the fixture.
 
 var _v: CourseValidator
 var _c: CourseData
@@ -115,7 +117,11 @@ func test_doglegs_measure_round_the_corner() -> void:
 			lefts += 1
 		if _water_near(b, 8.0):
 			watered += 1
-	assert_gte(doglegs, 3, "doglegs")
+		# A dogleg that reads as one: the second leg turns well away from the first.
+		var turn_deg := rad_to_deg((b - Vector2(h.tee)).angle_to(Vector2(h.cup) - b))
+		assert_gte(absf(turn_deg), 50.0, "hole %d turns %.0f degrees at the corner" % [h.number, turn_deg])
+	assert_gte(doglegs, 4, "doglegs")
+	assert_not_null(_v.turn_point(_c, _hole(1)), "hole 1, the hole the game opens on, is a dogleg")
 	assert_gte(lefts, 1, "a dogleg left")
 	assert_gte(rights, 1, "a dogleg right")
 	assert_gte(watered, 1, "a dogleg with water on the corner")
@@ -129,6 +135,29 @@ func _water_near(p: Vector2, r: float) -> bool:
 					and Vector2(x, y).distance_to(p) <= r:
 				return true
 	return false
+
+
+## Every fairway tile belongs to exactly one hole's fairway (its spec's strip), and no two
+## holes' fairways come within 3 tiles of each other (8 neighbours), so no fairways merge.
+func test_fairways_are_separate() -> void:
+	var owner := {}
+	for spec: Dictionary in PlaytestNine.HOLES:
+		for t: Vector2i in PlaytestNine.strip(spec["fairway"], spec["width"]):
+			if _c.in_bounds(t.x, t.y) and _c.get_surface(t.x, t.y) == Surface.Type.FAIRWAY:
+				assert_false(owner.has(t), "fairway %s is in two holes' strips" % t)
+				owner[t] = spec["n"]
+	for y: int in _c.height:
+		for x: int in _c.width:
+			if _c.get_surface(x, y) == Surface.Type.FAIRWAY:
+				assert_true(owner.has(Vector2i(x, y)), "fairway %d, %d belongs to a hole" % [x, y])
+	var close := {}
+	for t: Vector2i in owner:
+		for dy: int in range(-3, 4):
+			for dx: int in range(-3, 4):
+				var n: Vector2i = t + Vector2i(dx, dy)
+				if owner.has(n) and owner[n] != owner[t]:
+					close[Vector2i(mini(owner[t], owner[n]), maxi(owner[t], owner[n]))] = true
+	assert_eq(close.keys(), [], "pairs of holes whose fairways are under 3 tiles apart")
 
 
 func test_fairways_with_bunkers_and_trees() -> void:
