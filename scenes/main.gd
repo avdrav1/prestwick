@@ -481,6 +481,8 @@ func _apply_mode() -> void:
 	# The placeholder tiles' two-letter labels are for Build; Play draws the label-free sheets
 	# (E3-S55). A texture swap, not a redraw.
 	course_view.play_art = not building
+	# The contour overlay is Play's (E3-S57), on unless the player hid it (toggle_topo, T).
+	course_view.topo.enabled = not building
 	# The green view is Play's only (E3-S52); Main._process opens it there.
 	if building:
 		green_view.close()

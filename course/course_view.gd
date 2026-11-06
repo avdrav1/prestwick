@@ -62,6 +62,9 @@ extends Node2D
 ## labels show in Build only. Only the sources' textures change: the cells, frames and
 ## alternatives stay, so the toggle never redraws the map. A sheet with no play_texture (final
 ## art, the edge cue and land sheets) draws the same in both modes.
+##
+## Contours (E3-S57): `topo`, a TopoOverlay, draws contour lines Y-sorted into the terrain in
+## Play (course/topo_overlay.gd); it traces again when a height changes.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
@@ -131,6 +134,9 @@ var play_art: bool = false:
 		for id: int in sheets.size():
 			(_tile_set.get_source(id) as TileSetAtlasSource).texture = sheets[id].texture_for(value)
 
+## The contour overlay (E3-S57): Main enables it in Play.
+var topo: TopoOverlay
+
 ## Whether the issue highlights show (Build mode).
 var issues_visible: bool = true:
 	set(value):
@@ -161,6 +167,8 @@ func _init() -> void:
 	_holes_root.name = "Holes"
 	_holes_root.y_sort_enabled = true
 	add_child(_holes_root)
+	topo = TopoOverlay.new()
+	add_child(topo)
 	_issues_root = Node2D.new()
 	_issues_root.name = "Issues"
 	_issues_root.y_sort_enabled = true
@@ -185,6 +193,7 @@ func show_course(c: CourseData) -> void:
 			for x: int in c.width:
 				_draw_cell(Vector2i(x, y))
 		_neighbours_saw = _drawn.duplicate()
+	topo.show_course(c)
 	refresh_holes()
 	show_issues({})
 
@@ -481,6 +490,8 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 					draw[c] = true
 	for c: Vector2i in draw:
 		_draw_cell(c)
+	if moved:
+		topo.mark_dirty()
 	# A changed tile still at the height it was drawn at, with no neighbour's height moved in
 	# this batch, has risers, edge cue and land frame as drawn (they read only heights and
 	# parcels, and refresh_parcel redraws a parcel): only its surface top is set (E3-S16 review).

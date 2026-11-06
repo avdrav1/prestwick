@@ -8,6 +8,12 @@ extends Node2D
 ## leaves the camera where Main.show_course put it: hole 1 framed by Main.frame_first_hole,
 ## the game's opening frame.
 ##   PLAYTEST_SHOT=green:3 scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn out.png
+## E3-S57: `play:<n>` starts Play on hole n (the contour overlay on) at PLAYTEST_ZOOM (0.175,
+## 0.5, 1 or 2; default 0.5), centred on PLAYTEST_AT, `tee`, `cup` or `mid` (the default, half
+## way from tee to cup), or the whole course at 0.175x. PLAYTEST_TOPO picks the overlay's
+## placement and offset to compare (`ground`, `level`, `ground-half`, `level-half`), and
+## PLAYTEST_GRAY=1 draws the screen in luminance only.
+##   PLAYTEST_SHOT=play:4 PLAYTEST_ZOOM=1 scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const FLAT_PATH: String = "res://tests/fixtures/flat_20x20.json"
@@ -24,6 +30,9 @@ func _ready() -> void:
 	var view: String = spec[0] if not spec.is_empty() and spec[0] != "" else "open"
 	var n: int = spec[1].to_int() if spec.size() == 2 else 1
 	if view == "open":
+		return
+	if view == "play":
+		_play(main, c, n)
 		return
 	if view == "course":
 		# The list collapsed to hole 1's row, so the east corner of the map shows.
@@ -51,3 +60,54 @@ func _ready() -> void:
 	var shift: Vector2 = (main.camera.view_size() * 0.5 - free.get_center()) / main.camera.zoom.x
 	main.camera.centre_on(at + shift)
 	main.camera.position = at + shift
+
+
+## E3-S57: Play on hole `n` with the contour overlay, framed as the PLAYTEST_ env vars say.
+func _play(main: Main, c: CourseData, n: int) -> void:
+	main.build_tool.select_hole(n)
+	main.set_mode(Main.Mode.PLAY)
+	main.swing_control.set_process(false)
+	var topo := main.course_view.topo
+	var opt := OS.get_environment("PLAYTEST_TOPO")
+	if opt != "":
+		var t: TopoTuning = topo.tuning.duplicate()
+		t.placement = TopoTuning.Placement.LEVEL if opt.begins_with("level") else TopoTuning.Placement.GROUND
+		t.offset = 0.5 if opt.ends_with("-half") else 0.0
+		topo.tuning = t
+		topo.mark_dirty()
+	if OS.get_environment("PLAYTEST_GRAY") == "1":
+		var layer := CanvasLayer.new()
+		layer.layer = 10
+		var rect := ColorRect.new()
+		rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+		rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mat := ShaderMaterial.new()
+		var sh := Shader.new()
+		sh.code = "shader_type canvas_item;\nuniform sampler2D screen: hint_screen_texture;\nvoid fragment() {\n\tvec3 c = texture(screen, SCREEN_UV).rgb;\n\tfloat l = dot(c, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(l, l, l, 1.0);\n}\n"
+		mat.shader = sh
+		rect.material = mat
+		layer.add_child(rect)
+		add_child(layer)
+	var zs := OS.get_environment("PLAYTEST_ZOOM")
+	var z: float = zs.to_float() if zs != "" else 0.5
+	main.camera.tracking = false
+	main.camera.set_zoom_level(z)
+	var at := main.course_view.screen_bounds().get_center()
+	if z > 0.2:
+		var hole: HoleData = null
+		for h: HoleData in c.holes:
+			if h.number == n:
+				hole = h
+		var tee := main.tile_world(hole.tee)
+		var cup := main.tile_world(hole.cup)
+		match OS.get_environment("PLAYTEST_AT"):
+			"tee":
+				at = tee
+			"cup":
+				at = cup
+			_:
+				at = (tee + cup) * 0.5
+	# Hold the camera there: Main's Play camera would frame the ball and its aim marker.
+	main.set_process(false)
+	main.camera.tracking = false
+	main.camera.position = at

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="TopoTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://course/topo_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+interval = 1.0
+offset = 0.0
+placement = 0
+subdiv = 2
+line_width_px = 2.0
+halo_width_px = 0.0
+line_alpha = 0.8
+tick_spacing_px = 36.0
+tick_length_px = 5.0
+margin_tiles = 24

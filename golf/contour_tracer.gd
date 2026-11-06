@@ -80,7 +80,6 @@ static func trace_levels(field: HeightField, levels: PackedFloat32Array, window:
 		return out
 	var sub := maxi(subdiv, 1)
 	var ypt := field.yards_per_tile
-	var yps := field.yards_per_step
 	# Node lines, yards: the tile centres, and the map's edge where the grid meets it (past the
 	# outer centre the edge height holds, so that strip is flat across and still bilinear).
 	var xs := _node_lines(nodes.position.x, nodes.end.x, c.width, ypt)
@@ -89,12 +88,15 @@ static func trace_levels(field: HeightField, levels: PackedFloat32Array, window:
 	var nh := ys.size()
 	if nw < 2 or nh < 2:
 		return out
-	# Node values in steps: height_at at each node (whole steps).
+	# Node values in steps: height_at at each node, which is the height of the tile under it
+	# (whole steps; at the map edge the edge tile's, as height_at holds it), read straight off
+	# the course (height_at's own sum costs four reads a node).
 	var node := PackedFloat32Array()
 	node.resize(nw * nh)
 	for j: int in nh:
+		var ty := clampi(floori(ys[j] / ypt), 0, c.height - 1)
 		for i: int in nw:
-			node[j * nw + i] = field.height_at(xs[i], ys[j]) / yps
+			node[j * nw + i] = c.get_height(clampi(floori(xs[i] / ypt), 0, c.width - 1), ty)
 	var sw := (nw - 1) * sub + 1  # samples a row
 	var sx := _sample_lines(xs, sub)
 	var sy := _sample_lines(ys, sub)
