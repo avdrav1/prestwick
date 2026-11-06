@@ -1,5 +1,6 @@
 extends GutTest
-## E3-S57: the contour overlay over the whole course in Play (course/topo_overlay.gd).
+## E3-S57: the contour overlay over the whole course in Play (course/topo_overlay.gd); since
+## E3-S59 drawn at its own heights, on the smooth ground (D50).
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
@@ -72,16 +73,17 @@ func test_its_lines_are_the_tracers_for_the_visible_window() -> void:
 		assert_eq(topo.line_count(), want, "the tracer's line count at %.3fx" % z)
 
 
-func test_whole_step_lines_lie_on_their_terrace_so_they_sit_on_the_ground() -> void:
-	# At the default whole-step levels a line runs on top of the tiles at its own level (the
-	# terrace's falling edge) wherever the ground rises one step at a time, so drawing it on the
-	# tile top (D17) is drawing it at its own height, unbroken.
+func test_every_line_is_drawn_at_its_own_height_on_the_ground() -> void:
+	# E3-S59 (D50): the course view draws the bilinear ground the tracer follows, so each line is
+	# drawn at its level, which is the ground's height where it runs: every drawn point, read
+	# back off the screen at one of the levels, lands where the ground stands at that level.
 	var m := _main()
 	var c := CourseData.create(30, 30, Surface.Type.ROUGH, 2)
 	for y: int in c.height:
 		for x: int in c.width:
 			var d := maxi(absi(x - 15), absi(y - 13))
 			c.set_tile(x, y, 2 + clampi(4 - d / 2, 0, 4), Surface.Type.ROUGH)
+	c.set_tile(3, 3, 2, Surface.Type.WATER)
 	m.set_mode(Main.Mode.BUILD)
 	m.show_course(c)
 	m.set_mode(Main.Mode.PLAY)
@@ -91,68 +93,86 @@ func test_whole_step_lines_lie_on_their_terrace_so_they_sit_on_the_ground() -> v
 	m.camera.position = m.tile_world(Vector2i(15, 13))
 	var topo := m.course_view.topo
 	topo.refresh()
-	assert_eq(topo.tuning.placement, TopoTuning.Placement.GROUND)
-	assert_eq(topo.tuning.offset, 0.0)
-	var field := m.swing_control.field
+	assert_eq(topo.tuning.offset, 0.5, "a line half way up each step")
 	var levels: Array[float] = []
-	var count := 0
 	for entry: Array in topo.lines:
-		var level: float = entry[0]
-		levels.append(level)
+		levels.append(entry[0])
+	assert_eq(levels, [2.5, 3.5, 4.5, 5.5] as Array[float])
+	var count := 0
+	var off := 0
+	for row: Node2D in topo.rows():
+		var pts := PackedVector2Array((row as TopoOverlay.Row).segs)
+		# Each tick's first point is on its line; its foot runs downhill on the ground.
+		var ticks := (row as TopoOverlay.Row).ticks
+		for k: int in range(0, ticks.size(), 2):
+			pts.append(ticks[k])
+		for q: Vector2 in pts:
+			var screen := q + row.position
+			var best := INF
+			for level: float in levels:
+				var t := Iso.screen_to_tile(screen, level)
+				best = minf(best, absf(TerrainMesh.bilinear(c, t) - level))
+			count += 1
+			# A piece cut at a tile edge ends on the tracer's chord, which stays within 0.05 steps
+			# of the level (tests/test_contours.gd), and a tick starts on it: a pixel at most at 1x.
+			if best > 0.08:
+				off += 1
+	assert_gt(count, 100)
+	assert_eq(off, 0, "every point on the ground at its level")
+	# Lines are unbroken: the pieces of one line meet end to end on screen.
+	for entry: Array in topo.lines:
 		for line: PackedVector2Array in entry[1]:
 			for i: int in range(1, line.size()):
-				var mid := (line[i - 1] + line[i]) * 0.5
-				var t := field.tile_at(mid.x, mid.y)
-				assert_eq(float(c.get_height(t.x, t.y)), level, "the piece at %s on its terrace" % mid)
-				count += 1
-	assert_eq(levels, [3.0, 4.0, 5.0, 6.0] as Array[float])
-	assert_gt(count, 40)
-	# Down a multi-step bank the levels between fall between the centres, off any terrace of
-	# their own: drawn on the tile under them, at the bank's top or its foot.
-	var tiered := _main()
-	tiered.course_view.topo.refresh()
-	var tc := tiered.course
-	var tf := tiered.swing_control.field
-	for entry: Array in tiered.course_view.topo.lines:
-		var level: float = entry[0]
-		for line: PackedVector2Array in entry[1]:
-			for i: int in range(1, line.size()):
-				var mid := (line[i - 1] + line[i]) * 0.5
-				var t := tf.tile_at(mid.x, mid.y)
-				var h := tc.get_height(t.x, t.y)
-				if h == level:
-					continue
-				var bank := false
-				# (A piece cut at a tile's corner may meet the bank across the diagonal.)
-				for dy: int in range(-1, 2):
-					for dx: int in range(-1, 2):
-						var n := t + Vector2i(dx, dy)
-						if tc.in_bounds(n.x, n.y) and absi(tc.get_height(n.x, n.y) - h) >= 2:
-							bank = true
-				assert_true(bank, "off its terrace only beside a bank, at %s" % mid)
+				var a := Iso.tile_to_screen(line[i - 1] / 5.0 - Vector2(0.5, 0.5), entry[0])
+				var b := Iso.tile_to_screen(line[i] / 5.0 - Vector2(0.5, 0.5), entry[0])
+				assert_lt(a.distance_to(b), float(Iso.TILE_W), "a chord, not a jump")
 
 
-func test_rows_sort_after_the_tops_and_before_objects() -> void:
+func test_no_line_is_drawn_over_water() -> void:
+	var m := _main()
+	var topo := m.course_view.topo
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 2)
+	for y: int in range(5, 15):
+		for x: int in range(5, 15):
+			c.set_tile(x, y, 1, Surface.Type.WATER)
+	m.set_mode(Main.Mode.BUILD)
+	m.show_course(c)
+	m.set_mode(Main.Mode.PLAY)
+	m.set_process(false)
+	m.camera.tracking = false
+	m.camera.set_zoom_level(0.5)
+	m.camera.position = m.tile_world(Vector2i(10, 10))
+	topo.refresh()
+	assert_gt(topo.line_count(), 0, "the bank round the pond is traced")
+	for row: Node2D in topo.rows():
+		var key := row.position.y - TopoOverlay.SORT_BIAS
+		var r := roundi(key / Iso.HALF_H)
+		# A row inside the pond's rows: every piece on it is on its land, not over the water.
+		for q: Vector2 in (row as TopoOverlay.Row).segs:
+			var t := Iso.screen_to_tile(q + row.position, 1.0)
+			var cell := Vector2i(floori(t.x + 0.5), floori(t.y + 0.5))
+			if cell.x + cell.y == r:
+				assert_ne(c.get_surface(cell.x, cell.y), Surface.Type.WATER, "no piece at %s" % t)
+
+
+func test_rows_sort_after_their_ground_and_before_objects() -> void:
 	var m := _main()
 	var topo := m.course_view.topo
 	topo.refresh()
 	assert_true(topo.y_sort_enabled)
 	assert_eq(topo.get_parent(), m.course_view, "Y-sorted with the terrain")
-	var c := m.course
 	for row: Node2D in topo.rows():
 		var key := row.position.y
 		var base := key - TopoOverlay.SORT_BIAS
-		# A top's key (Iso.top_sort_key): depth (a multiple of 16) plus 2h + 1, an odd remainder.
+		# A row of ground's key (Iso.depth_key): a multiple of 16.
 		assert_almost_eq(base, float(roundi(base)), 0.0001)
-		assert_eq(roundi(base) % 16 % 2, 1, "a top's key")
-		assert_gt(key, base, "over the top")
-		assert_lt(key, base + 0.5, "under an object on that tile (Iso.object_sort_key: the top's + 0.5)")
-	assert_gt(TopoOverlay.SORT_BIAS, 0.0)
-	assert_lt(TopoOverlay.SORT_BIAS, 0.5, "objects sort at the top's key + 0.5")
+		assert_eq(roundi(base) % roundi(Iso.HALF_H), 0, "a row of ground's key")
+	assert_gt(TopoOverlay.SORT_BIAS, 0.0, "over the row's ground")
+	assert_lt(TopoOverlay.SORT_BIAS, 1.5, "under an object on it (Iso.object_sort_key: the row's + 1.5 or more)")
 	# The flag on the cup and the ball sort after the rows of their own tiles.
 	var cup := m.swing_control.cup_tile()
-	var flag_key := Iso.object_sort_key(Vector2(cup), c.get_height(cup.x, cup.y))
-	assert_gt(flag_key, Iso.top_sort_key(cup, c.get_height(cup.x, cup.y)) + TopoOverlay.SORT_BIAS)
+	var flag_key := Iso.object_sort_key(Vector2(cup), m.course.get_height(cup.x, cup.y))
+	assert_gt(flag_key, Iso.depth_key(cup) + TopoOverlay.SORT_BIAS)
 
 
 func test_it_does_not_trace_or_lay_out_again_each_frame() -> void:

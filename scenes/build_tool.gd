@@ -37,6 +37,8 @@ signal hover_changed
 signal buy_requested(parcel: Vector2i)
 
 const UNDO_ACTION: StringName = &"ui_undo"
+## Points along each tile edge of a parcel outline, so it lies on the sloped ground (E3-S59).
+const PARCEL_EDGE_POINTS: int = 4
 
 ## Brush outline colors (art/palette.gpl `ink` and `sand_light` would be the final pick).
 @export var outline_color: Color = Color(1.0, 0.97, 0.8, 0.95)
@@ -372,20 +374,26 @@ func _draw() -> void:
 	var line: Color = refuse_color if refused else outline_color
 	var fill: Color = Color(refuse_color, fill_color.a) if refused else fill_color
 	for cell: Vector2i in builder.brush_cells(_hover, 1 if _places_hole() else brush_size):
-		var center: Vector2 = Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))
-		var pts := PackedVector2Array([
-			center + Vector2(0, -Iso.HALF_H), center + Vector2(Iso.HALF_W, 0),
-			center + Vector2(0, Iso.HALF_H), center + Vector2(-Iso.HALF_W, 0),
-		])
-		draw_colored_polygon(pts, fill)
-		pts.append(pts[0])
-		draw_polyline(pts, line, 1.0)
+		# On the drawn ground round the tile (E3-S59), filled as a fan from its centre: the ring
+		# may fold where the ground climbs steeply away from the camera, which a polygon fill
+		# would refuse.
+		var ring := TerrainMesh.ring_screen(c, cell)
+		var pts := PackedVector2Array([Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))])
+		pts.append_array(ring)
+		var idx := PackedInt32Array()
+		for i: int in ring.size() - 1:
+			idx.append_array([0, 1 + i, 2 + i])
+		var cols := PackedColorArray()
+		cols.resize(pts.size())
+		cols.fill(fill)
+		RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), idx, pts, cols)
+		draw_polyline(ring, line, 1.0)
 
 
-## Outlines parcel `parcel`: each border tile's outer edges, at that tile's height, 3 px.
+## Outlines parcel `parcel`: each border tile's outer edges, on its drawn ground, 3 px.
 func _draw_parcel(c: CourseData, parcel: Vector2i, color: Color) -> void:
 	var r: Rect2i = c.parcel_rect(parcel)
-	# Each side: the neighbour step, and the two corners of the tile's top on that side.
+	# Each side: the neighbour step, and the two corners of the tile on that side.
 	var sides: Array = [
 		[Vector2i.LEFT, Vector2(-0.5, -0.5), Vector2(-0.5, 0.5)],
 		[Vector2i.UP, Vector2(-0.5, -0.5), Vector2(0.5, -0.5)],
@@ -398,9 +406,11 @@ func _draw_parcel(c: CourseData, parcel: Vector2i, color: Color) -> void:
 			for side: Array in sides:
 				if r.has_point(cell + (side[0] as Vector2i)):
 					continue
-				var h: int = c.get_height(x, y)
-				draw_line(Iso.tile_to_screen(Vector2(cell) + (side[1] as Vector2), h),
-						Iso.tile_to_screen(Vector2(cell) + (side[2] as Vector2), h), color, 3.0)
+				var line := PackedVector2Array()
+				for i: int in PARCEL_EDGE_POINTS + 1:
+					var t: Vector2 = Vector2(cell) + (side[1] as Vector2).lerp(side[2], float(i) / PARCEL_EDGE_POINTS)
+					line.append(Iso.tile_to_screen(t, TerrainMesh.ground_in(c, cell, t)))
+				draw_polyline(line, color, 3.0)
 
 
 func _apply(cell: Vector2i) -> void:

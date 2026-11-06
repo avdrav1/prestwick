@@ -25,20 +25,28 @@ func test_a_foot_on_flat_ground_is_not_hidden() -> void:
 	assert_false(m.foot_hidden, "nothing in front stands higher")
 
 
-func test_a_higher_tile_in_front_hides_the_foot() -> void:
-	for front: Vector2i in [Vector2i(9, 9), Vector2i(9, 8), Vector2i(8, 9)]:
-		var c := _flat()
-		c.set_tile(front.x, front.y, 3, Surface.Type.ROUGH)
-		var m := _one(_view(c), Vector2i(8, 8))
-		assert_true(m.foot_hidden, "a one-step rise at %s covers the foot" % front)
+func test_a_higher_tile_in_front_hides_the_foot_only_once_its_slope_covers_it() -> void:
+	# E3-S59 (D50): the ground in front is a slope, not a wall, so the tile straight in front
+	# must climb past the line of sight to the foot (one step up every half tile of depth).
+	var c := _flat()
+	c.set_tile(9, 9, 3, Surface.Type.ROUGH)
+	assert_false(_one(_view(c), Vector2i(8, 8)).foot_hidden, "a one-step rise in front: its slope shows the foot")
+	c.set_tile(9, 9, 5, Surface.Type.ROUGH)
+	assert_true(_one(_view(c), Vector2i(8, 8)).foot_hidden, "three steps up in front covers it")
+	for beside: Vector2i in [Vector2i(9, 8), Vector2i(8, 9)]:
+		var b := _flat()
+		b.set_tile(beside.x, beside.y, 4, Surface.Type.ROUGH)
+		assert_false(_one(_view(b), Vector2i(8, 8)).foot_hidden, "%s beside the line of sight stays under it" % beside)
+		b.set_tile(beside.x, beside.y, 7, Surface.Type.ROUGH)
+		assert_true(_one(_view(b), Vector2i(8, 8)).foot_hidden, "%s at 7 lifts the ground in front past it" % beside)
 
 
 func test_a_far_hill_hides_the_foot_only_when_tall_enough() -> void:
 	var c := _flat()
-	c.set_tile(10, 10, 4, Surface.Type.ROUGH)
-	assert_false(_one(_view(c), Vector2i(8, 8)).foot_hidden, "two rows ahead, two steps up is level with the foot")
 	c.set_tile(10, 10, 5, Surface.Type.ROUGH)
-	assert_true(_one(_view(c), Vector2i(8, 8)).foot_hidden, "three steps up two rows ahead covers it")
+	assert_false(_one(_view(c), Vector2i(8, 8)).foot_hidden, "two rows ahead, three steps up stays under the sight line")
+	c.set_tile(10, 10, 7, Surface.Type.ROUGH)
+	assert_true(_one(_view(c), Vector2i(8, 8)).foot_hidden, "five steps up two rows ahead covers it")
 
 
 func test_a_higher_tile_behind_or_beside_does_not_hide_the_foot() -> void:
@@ -53,12 +61,28 @@ func test_an_edit_in_front_updates_the_foot() -> void:
 	var v := _view(c)
 	var m := _one(v, Vector2i(8, 8))
 	assert_false(m.foot_hidden)
-	c.set_tile(9, 9, 3, Surface.Type.ROUGH)
+	c.set_tile(9, 9, 5, Surface.Type.ROUGH)
 	v.refresh_cell(Vector2i(9, 9))
 	assert_true(m.foot_hidden, "raising the tile in front hides the foot")
 	c.set_tile(9, 9, 2, Surface.Type.ROUGH)
 	v.refresh_cell(Vector2i(9, 9))
 	assert_false(m.foot_hidden, "and lowering it shows it again")
+
+
+func test_the_diamond_lies_on_the_ground_round_its_tile() -> void:
+	var c := _flat()
+	c.set_tile(9, 8, 5, Surface.Type.ROUGH)
+	var m := _one(_view(c), Vector2i(8, 8))
+	var ring := TerrainMesh.ring(c, Vector2i(8, 8))
+	assert_gt(ring.size(), 8)
+	var lifted := 0
+	for p: Vector3 in ring:
+		assert_almost_eq(p.z, TerrainMesh.ground_in(c, Vector2i(8, 8), Vector2(p.x, p.y)), 0.0001)
+		if p.z > 2.0 + 0.01:
+			lifted += 1
+	assert_gt(lifted, 0, "its edge toward the raised tile climbs the slope")
+	assert_eq(m._outer.size(), ring.size(), "drawn through the ring")
+	assert_almost_eq(m._outer[0] + m.position, Iso.point_to_screen(ring[0]), Vector2.ONE * 0.001)
 
 
 # --- a batch of tiles (E3-S16) ---
@@ -185,6 +209,10 @@ func test_a_brush_edit_reaches_the_view_as_one_batch() -> void:
 	b.tiles_changed.connect(v.refresh_cells)
 	b.raise(Vector2i(10, 9), 3)
 	assert_eq(calls[0], 1, "a 3 x 3 brush is one batch")
+	# Three steps up, the plateau's slope in front of (8, 8) climbs past its line of sight.
+	b.raise(Vector2i(10, 9), 3)
+	b.raise(Vector2i(10, 9), 3)
+	assert_eq(calls[0], 3, "one batch a raise")
 	assert_true(v.issue_markers().any(func(m: IssueMarker) -> bool: return m.foot_hidden),
 		"the raised brush covers a foot")
 

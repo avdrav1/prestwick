@@ -6,12 +6,11 @@ extends Node2D
 ## A full club: dots on the straight chord, as the screen shows it, from the drawn ball to
 ## the predicted first touchdown of a perfect swing (the ball flies straight, D14), and the
 ## marker there. So from a raised tee the line starts at the ball and does not hug the hill.
-## The putter: dots along the predicted roll at its true (bilinear) ground height, so the
-## break shows smoothly and does not jump 16 px at every tile edge; the marker sits at the
-## predicted rest point.
+## The putter: dots along the predicted roll on the drawn ground (the bilinear ground the ball
+## rolls on), so the break shows smoothly; the marker sits at the predicted rest point.
 ##
-## The marker stands on the top of the tile under it (D17), as the ball and the struck
-## ball's landing cross do. Everything draws over the terrain (z_index), so a hill never
+## The marker stands on the drawn ground under it (D50; D17's tile top before E3-S59), as the
+## ball and the struck ball's landing cross do. Everything draws over the terrain (z_index), so a hill never
 ## hides where the shot goes. Sits at the CourseView's origin. A
 ## reader only. Drawn in code with art/palette.gpl colours until the final art (E5-S3).
 ## Shape and colour both say what it is: dots for the line, a ring with a centre dot and
@@ -25,7 +24,7 @@ extends Node2D
 ## The club picker says "blocked" too.
 ##
 ## The land line (D29, E6-S7): with the aim it draws every edge between owned and unowned
-## land (LandBoundary), on the higher tile top either side, as chalk dashes on a solid ink
+## land (LandBoundary), on the drawn ground (the higher of the two sides at a water bank), as chalk dashes on a solid ink
 ## line, a boundary of white stakes, so the player sees where a shot goes OB before striking.
 ## Pattern and shade both read it, and dashes are not the aim's dots. A fully owned course
 ## (New sandbox) has no line, so its aim is unchanged. Each tile edge carries a short tick
@@ -77,7 +76,7 @@ var dots: PackedVector2Array = PackedVector2Array()
 ## The marker's point in yards (the first touchdown, the putt's rest point, or for a
 ## blocked club where the flight is stopped).
 var marker_point: Vector3 = Vector3.ZERO
-## Its screen point, on the top of the tile under it.
+## Its screen point, on the drawn ground under it.
 var marker_screen: Vector2 = Vector2.ZERO
 ## The land line in the CourseView's space: points 2k and 2k + 1 end one tile edge
 ## (LandBoundary.segments, projected). Empty on a fully owned course.
@@ -87,7 +86,7 @@ var land_line: PackedVector2Array = PackedVector2Array()
 var land_ticks: PackedVector2Array = PackedVector2Array()
 var land_hidden: Array[bool] = []
 ## The hazard the shot ends in (Ball.Hazard.NONE when none, or the club is blocked), and
-## the screen point of its cue (prediction.hazard_position, on its tile's top).
+## the screen point of its cue (prediction.hazard_position, on the drawn ground).
 var hazard_cue: Ball.Hazard = Ball.Hazard.NONE
 var hazard_screen: Vector2 = Vector2.ZERO
 ## False when the cue takes the ring's place (a putt, or a landing in the hazard).
@@ -101,6 +100,9 @@ var _field: HeightField
 var _cue_tuning: ShotViewTuning = ShotViewTuning.load_default()
 ## The canvas scale the shapes were last drawn for.
 var _view_scale: float = 1.0
+## The course and its revision the land line was built for (_build_land_line).
+var _land_course: CourseData
+var _land_revision: int = -1
 
 
 func _init() -> void:
@@ -169,13 +171,20 @@ func clear() -> void:
 	land_line = PackedVector2Array()
 	land_ticks = PackedVector2Array()
 	land_hidden = []
+	_land_course = null
 	hazard_cue = Ball.Hazard.NONE
 	visible = false
 	queue_redraw()
 
 
-## The land line, its unowned-side ticks and which edges terrain hides, in screen space.
+## The land line, its unowned-side ticks and which edges terrain hides, in screen space. Built
+## again only when the course or its tiles or ownership changed (CourseData.revision): which
+## edges the ground hides is a ray cast per edge (E3-S59), too dear for every aim move.
 func _build_land_line(course: CourseData) -> void:
+	if course == _land_course and course.revision == _land_revision:
+		return
+	_land_course = course
+	_land_revision = course.revision
 	land_line = PackedVector2Array()
 	land_ticks = PackedVector2Array()
 	land_hidden = []
@@ -192,13 +201,13 @@ func _build_land_line(course: CourseData) -> void:
 		land_hidden.append(LandBoundary.covered(course, a, b))
 
 
-## Screen point of the ground point `p` (yards), on the top of the tile under it (D17).
+## Screen point of the ground point `p` (yards), on the drawn ground under it (D50).
 func ground_screen(p: Vector3) -> Vector2:
-	return _field.tile_top_screen(p)
+	return _field.ground_screen(p)
 
 
 ## A flight: dots every `dot_spacing_yd` (measured on the ground) on the screen segment from
-## the drawn ball (tile top under `start`) to the marker, the chord the ball's straight
+## the drawn ball (the ground under `start`) to the marker, the chord the ball's straight
 ## heading takes between them.
 func _dots_along_chord(start: Vector3, end: Vector3) -> void:
 	var from := ground_screen(start)
@@ -224,8 +233,7 @@ func _dots_along_roll(points: PackedVector3Array) -> void:
 		var seg := a.distance_to(b)
 		while carry <= seg:
 			var p := a.lerp(b, carry / seg)
-			var ground := Vector3(p.x, p.y, _field.height_at(p.x, p.y))
-			dots.append(Iso.point_to_screen(_field.iso_point(ground)))
+			dots.append(_field.ground_screen(Vector3(p.x, p.y, 0.0)))
 			carry += dot_spacing_yd
 		carry -= seg
 

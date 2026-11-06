@@ -6,9 +6,10 @@ extends Node2D
 ## day (the same seed gives the same day).
 ##
 ## Y-sort: a child of CourseView, Y-sorted like ShotView. Each figure and ball is a node at
-## y = Iso.object_sort_key on the top of the tile under it, drawn offset back to its screen
-## point, so the terrain sorts it: a hill or a raised tile in front hides it, the tiles behind
-## do not, and it sorts with the ball and the hole markers by the same rule.
+## y = Iso.object_sort_key on the ground under it, drawn offset back to its screen point on the
+## drawn ground (HeightField.ground_screen, D50), so the terrain sorts it: a hill in front
+## hides it, the ground behind does not, and it sorts with the ball and the hole markers by the
+## same rule.
 ##
 ## Walks: the brain moves a guest once per simulated second (up to `walk_yd_per_s` 40 yd), so
 ## the view slides each figure from where it stood at the last step to where it stands now,
@@ -47,7 +48,7 @@ extends Node2D
 ## its ball's start is on screen (within GuestViewTuning.on_screen_margin_px of the view), the
 ## view replays the stroke's recorded path (GuestHole.stroke_path) from the impact frame,
 ## `flight_draw_speed` (D38; 7.5 since E3-S20) times faster than real, times the sim's speed:
-## the ball at its height with a shadow under it in flight, on the tile top (D17) on the ground. Off screen there is no replay: the ball
+## the ball at its height with a shadow under it in flight, on the drawn ground (D50) on the ground. Off screen there is no replay: the ball
 ## shows again where it rests. A ball at rest shows where it lies until the hole is finished.
 
 ## Ball look: ShotView's placeholder (art/palette.gpl chalk, ink), until E5-S3's sprite, drawn
@@ -290,7 +291,7 @@ func _update_ball(f: Figure, delta: float, speed: float) -> void:
 		f.strokes_seen = h.strokes.size()
 		f.replay_hole = null
 		var start: Vector3 = h.strokes[-1].start
-		if on_screen(_field.tile_top_screen(start)):
+		if on_screen(_field.ground_screen(start)):
 			f.replay_hole = h
 			f.replay_stroke = h.strokes.size()
 			f.replay_head = 0.0
@@ -346,27 +347,26 @@ func on_screen(p: Vector2) -> bool:
 	return rect.grow(tuning.on_screen_margin_px).has_point(s)
 
 
-## Puts `piece` at the sort key of the ground under `p` (yards): the tile top under it.
+## Puts `piece` at the sort key of the ground under `p` (yards), on the drawn ground.
 func _place(piece: Node2D, p: Vector3) -> void:
 	piece.visible = true
 	var iso := _field.iso_point(p)
-	var top := float(_field.tile_top_steps(p.x, p.y))
-	var screen := _field.tile_top_screen(p)
-	piece.position = Vector2(screen.x, Iso.object_sort_key(Vector2(iso.x, iso.y), top))
+	var screen := _field.ground_screen(p)
+	piece.position = Vector2(screen.x, Iso.object_sort_key(Vector2(iso.x, iso.y), _field.drawn_steps(p.x, p.y)))
 	piece.queue_redraw()
 
 
 ## Where figure `f`'s feet are drawn, CourseView space.
 func figure_screen(f: Figure) -> Vector2:
-	return _field.tile_top_screen(Vector3(f.at.x, f.at.y, 0.0))
+	return _field.ground_screen(Vector3(f.at.x, f.at.y, 0.0))
 
 
-## Where `f`'s ball is drawn, CourseView space: at its height in the air, on the tile top on
-## the ground (D17).
+## Where `f`'s ball is drawn, CourseView space: at its height in the air, on the drawn ground
+## on the ground (D50).
 func ball_screen(f: Figure) -> Vector2:
 	if f.ball_flying:
 		return Iso.point_to_screen(_field.iso_point(f.ball_at))
-	return _field.tile_top_screen(f.ball_at)
+	return _field.ground_screen(f.ball_at)
 
 
 func _draw_figure(piece: Node2D, f: Figure) -> void:
@@ -397,7 +397,7 @@ func _draw_ball(piece: Node2D, f: Figure) -> void:
 		return
 	var k := _cue_k()
 	if f.ball_flying:
-		var shadow := _field.tile_top_screen(f.ball_at) - piece.position
+		var shadow := _field.ground_screen(f.ball_at) - piece.position
 		piece.draw_set_transform(shadow, 0.0, Vector2(1.0, 0.5))
 		piece.draw_circle(Vector2.ZERO, ball_radius * tuning.ball_scale * 1.4, shadow_color)
 		piece.draw_set_transform(Vector2.ZERO)

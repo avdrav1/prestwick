@@ -73,7 +73,7 @@ func _run(sim: GuestSim, view: GuestView, pred: Callable, max_frames: int = 3000
 
 # --- Y-sort ---
 
-func test_a_guest_sorts_on_its_tile_top_and_under_a_raised_tile_in_front() -> void:
+func test_a_guest_stands_on_the_ground_and_sorts_under_a_raised_tile_in_front() -> void:
 	var c := GuestCourse.course()
 	# A two-step block just in front of (nearer the camera than) tile (10, 10).
 	c.set_tile(11, 11, 4, Surface.Type.TREES)
@@ -87,14 +87,16 @@ func test_a_guest_sorts_on_its_tile_top_and_under_a_raised_tile_in_front() -> vo
 	view.update_view(FRAME, 0.0)
 	var f := view.figure(guest)
 	assert_not_null(f)
-	var h := c.get_height(10, 10)
-	var key := Iso.object_sort_key(Vector2(10, 10) + view.place_offset(guest.place) / 5.0, h)
-	assert_almost_eq(f.sprite.position.y, key, 0.01, "Iso.object_sort_key on its tile top")
+	var at := Vector2(10, 10) + view.place_offset(guest.place) / 5.0
+	var yd := (at + Vector2(0.5, 0.5)) * 5.0
+	var field := sim.brain.field
+	var h: float = field.height_at(yd.x, yd.y) / field.yards_per_step
+	var key := Iso.object_sort_key(at, h)
+	assert_almost_eq(f.sprite.position.y, key, 0.01, "Iso.object_sort_key on the ground under it")
 	assert_gt(f.sprite.position.y, float(Iso.depth_key(Vector2i(10, 10))), "over its own row of ground")
 	assert_lt(f.sprite.position.y, float(Iso.depth_key(Vector2i(11, 10))), "under the ground in front")
 	var feet := view.figure_screen(f)
-	assert_almost_eq(feet, Iso.tile_to_screen(Vector2(10, 10) + view.place_offset(guest.place) / 5.0, h),
-			Vector2.ONE * 0.01, "feet on the tile top (D17)")
+	assert_almost_eq(feet, Iso.tile_to_screen(at, h), Vector2.ONE * 0.01, "feet on the ground at height_at (D50)")
 
 
 # --- flights ---
@@ -117,7 +119,7 @@ func test_an_on_screen_stroke_is_replayed_in_the_air() -> void:
 			if f.ball_flying and view.is_replaying(f):
 				assert_true(f.ball.visible)
 				var ground := view.ball_screen(f)
-				assert_lt(ground.y, view._field.tile_top_screen(f.ball_at).y, "drawn above its shadow")
+				assert_lt(ground.y, view._field.ground_screen(f.ball_at).y, "drawn above its shadow")
 				return true
 		return false
 	assert_true(_run(sim, view, watch), "an on-screen tee shot is drawn in flight")

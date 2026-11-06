@@ -5,17 +5,12 @@ extends Resource
 
 const PATH: String = "res://course/topo_tuning.tres"
 
-## Where a line is drawn in the isometric view (D17 draws everything on the ground on the flat
-## top of the tile under it): GROUND, on the top of the tile under each piece of the line
-## (HeightField.tile_top_screen's rule), so a line crossing a riser breaks there; LEVEL, at the
-## line's own height (the bilinear ground's height there, which is the level).
-enum Placement { GROUND, LEVEL }
-
-## A line every `interval` steps, counted from `offset`: at offset 0 every whole step, each
-## line along its terrace's falling edge through the edge tiles' centres (ContourTracer).
+## A line every `interval` steps, counted from `offset`. At 0.5 (E3-S59) each line runs along the
+## middle of the slopes it crosses, where the drawn ground is at that level; at 0 every whole
+## step, each line along its terrace's falling edge through the edge tiles' centres
+## (ContourTracer), which outlined the terraces while the ground was drawn as terraces (E3-S57).
 @export var interval: float = 1.0
-@export var offset: float = 0.0
-@export var placement: Placement = Placement.GROUND
+@export var offset: float = 0.5
 ## Sub-cells a side per tile-centre cell (ContourTracer subdiv).
 @export var subdiv: int = 2
 ## Ink line width and its chalk halo's, screen px at every zoom, and the ink's opacity.

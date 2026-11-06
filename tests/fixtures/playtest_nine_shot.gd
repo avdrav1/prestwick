@@ -11,7 +11,7 @@ extends Node2D
 ## E3-S57: `play:<n>` starts Play on hole n (the contour overlay on) at PLAYTEST_ZOOM (0.175,
 ## 0.5, 1 or 2; default 0.5), centred on PLAYTEST_AT, `tee`, `cup` or `mid` (the default, half
 ## way from tee to cup), or the whole course at 0.175x. PLAYTEST_TOPO picks the overlay's
-## placement and offset to compare (`ground`, `level`, `ground-half`, `level-half`), and
+## offset to compare (`whole`, `half`; E3-S57's placements went with D17 in E3-S59), and
 ## PLAYTEST_GRAY=1 draws the screen in luminance only.
 ##   PLAYTEST_SHOT=play:4 PLAYTEST_ZOOM=1 scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn
 ## E3-S58: PLAYTEST_ZOOM also sets the zoom of `course`, `green` and `corner` in Build, and
@@ -76,8 +76,7 @@ func _play(main: Main, c: CourseData, n: int) -> void:
 	var opt := OS.get_environment("PLAYTEST_TOPO")
 	if opt != "":
 		var t: TopoTuning = topo.tuning.duplicate()
-		t.placement = TopoTuning.Placement.LEVEL if opt.begins_with("level") else TopoTuning.Placement.GROUND
-		t.offset = 0.5 if opt.ends_with("-half") else 0.0
+		t.offset = 0.5 if opt.ends_with("half") else 0.0
 		topo.tuning = t
 		topo.mark_dirty()
 	if OS.get_environment("PLAYTEST_GRAY") == "1":

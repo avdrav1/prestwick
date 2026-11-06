@@ -201,26 +201,38 @@ func test_the_land_line_runs_along_each_owned_edge_that_meets_unowned_land() -> 
 	# (tile coordinates x 15.5 and 31.5 in Iso space); the map's own edges are not drawn.
 	var c := _course(3, [1])
 	var s := LandBoundary.segments(c)
-	assert_eq(s.size(), 2 * 2 * CourseData.PARCEL_TILES, "32 tile edges, two points each")
+	assert_eq(s.size(), 2 * 2 * 2 * CourseData.PARCEL_TILES, "32 tile edges, two halves each, two points a half")
 	var xs: Dictionary = {}
 	for k in range(0, s.size(), 2):
 		assert_eq(s[k].x, s[k + 1].x, "each edge runs along y")
-		assert_almost_eq(absf(s[k + 1].y - s[k].y), 1.0, EPS, "one tile long")
+		assert_almost_eq(absf(s[k + 1].y - s[k].y), 0.5, EPS, "half a tile long (E3-S59: the ground bends at the middle)")
 		xs[s[k].x] = true
 	assert_eq(xs.keys().size(), 2)
 	assert_true(xs.has(15.5) and xs.has(31.5), "at the two land lines: %s" % [xs.keys()])
 
 
-func test_the_land_line_sits_on_the_higher_top_of_the_two_tiles() -> void:
+func test_the_land_line_lies_on_the_ground() -> void:
+	# E3-S59 (D50): on the drawn ground at every point, and on the higher side at a water bank.
 	var c := _course(2, [1])
 	c.set_tile(15, 3, 2, Surface.Type.FAIRWAY)
 	c.set_tile(16, 5, 4, Surface.Type.FAIRWAY)
+	c.set_tile(16, 8, 3, Surface.Type.WATER)
 	var s := LandBoundary.segments(c)
+	var raised := 0
 	for k in range(0, s.size(), 2):
-		var row := int(roundf((s[k].y + s[k + 1].y) * 0.5))
-		var want := 2.0 if row == 3 else (4.0 if row == 5 else 0.0)
-		assert_eq(s[k].z, want, "row %d" % row)
-		assert_eq(s[k + 1].z, want)
+		var row := floori((s[k].y + s[k + 1].y) * 0.5 + 0.5)
+		for p: Vector3 in [s[k], s[k + 1]]:
+			var at := Vector2(p.x, p.y)
+			var want := maxf(TerrainMesh.ground_in(c, Vector2i(15, row), at), TerrainMesh.ground_in(c, Vector2i(16, row), at))
+			assert_almost_eq(p.z, want, EPS, "at %s" % p)
+			if p.z > 0.0:
+				raised += 1
+	assert_gt(raised, 6, "it climbs the slopes of the raised tiles")
+	var mid := Vector3.ZERO
+	for p: Vector3 in s:
+		if is_equal_approx(p.y, 5.0):
+			mid = p
+	assert_almost_eq(mid.z, 2.0, EPS, "half way up the step at the middle of the raised tile's edge")
 
 
 func test_the_land_line_follows_a_corner_and_both_axes() -> void:
@@ -230,7 +242,7 @@ func test_the_land_line_follows_a_corner_and_both_axes() -> void:
 	c.set_parcel_owned(Vector2i(0, 1), false)
 	c.set_parcel_owned(Vector2i(1, 1), false)
 	var s := LandBoundary.segments(c)
-	assert_eq(s.size(), 2 * 2 * CourseData.PARCEL_TILES)
+	assert_eq(s.size(), 2 * 2 * 2 * CourseData.PARCEL_TILES)
 	var along_y := 0
 	var along_x := 0
 	for k in range(0, s.size(), 2):
@@ -240,8 +252,8 @@ func test_the_land_line_follows_a_corner_and_both_axes() -> void:
 		else:
 			assert_eq(s[k].y, 15.5)
 			along_x += 1
-	assert_eq(along_y, 16)
-	assert_eq(along_x, 16, "a diagonal neighbour alone draws nothing")
+	assert_eq(along_y, 32)
+	assert_eq(along_x, 32, "a diagonal neighbour alone draws nothing")
 
 
 func test_the_aim_view_draws_the_land_line_with_the_aim() -> void:
@@ -318,7 +330,7 @@ func test_the_aim_marker_shows_the_ob_cue_for_a_putt_over_the_line() -> void:
 	assert_eq(view.hazard_cue, Ball.Hazard.OB)
 	assert_false(view.show_ring, "the cue, not the rest ring at the drop")
 	assert_eq(view.marker_point, p.hazard_position, "where the dots end")
-	assert_eq(view.hazard_screen, field.tile_top_screen(p.hazard_position))
+	assert_eq(view.hazard_screen, field.ground_screen(p.hazard_position))
 
 
 func test_the_aim_marker_keeps_the_landing_ring_for_a_roll_over_the_line() -> void:

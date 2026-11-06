@@ -136,7 +136,8 @@ func test_debug_shot_on_main_course_lands_on_prediction() -> void:
 
 func test_sprite_follows_projected_path_and_shadow_shows_height() -> void:
 	# In flight the sprite is at the projected 3D point; on the ground it and the shadow are
-	# on the top of the tile under the ball (D17, E2-S7), in flight the shadow too.
+	# on the drawn ground under the ball (D50, E3-S59; D17's tile top before), in flight the
+	# shadow too.
 	var course := _hill()
 	var view := ShotView.new()
 	add_child_autofree(view)
@@ -151,9 +152,10 @@ func test_sprite_follows_projected_path_and_shadow_shows_height() -> void:
 		var p := view.ball.position
 		var iso := field.iso_point(p)
 		var cell := field.tile_at(p.x, p.y)
-		var top := float(course.get_height(cell.x, cell.y))
+		var top := field.drawn_steps(p.x, p.y)
+		assert_almost_eq(top, field.height_at(p.x, p.y) / field.yards_per_step, 0.0001, "no water here: height_at")
 		assert_almost_eq(view.shadow_screen(), Iso.tile_to_screen(Vector2(iso.x, iso.y), top),
-				Vector2.ONE * EPS, "shadow on the top of the tile below")
+				Vector2.ONE * EPS, "shadow on the ground below")
 		# The shadow picks back to the tile the ball is over.
 		assert_eq(Iso.screen_to_cell(view.shadow_screen(), top), cell)
 		if view.ball.state == Ball.State.FLYING:
@@ -161,11 +163,11 @@ func test_sprite_follows_projected_path_and_shadow_shows_height() -> void:
 					"in flight the sprite is at the projected 3D position")
 			var gap := view.shadow_screen().y - view.ball_screen().y
 			assert_almost_eq(gap, (p.z / field.yards_per_step - top) * Iso.STEP_PX, EPS,
-					"shadow sits below the ball by its height over the tile top")
+					"shadow sits below the ball by its height over the ground")
 			max_gap = maxf(max_gap, gap)
 		else:
 			assert_almost_eq(view.ball_screen(), view.shadow_screen(), Vector2.ONE * EPS,
-					"on the ground the ball sits on the tile top")
+					"on the ground the ball sits on its shadow, on the ground")
 			on_ground += 1
 		checked += 1
 	assert_gt(checked, 10)
@@ -182,27 +184,25 @@ func test_ball_sorts_as_an_object_on_its_ground_tile() -> void:
 	view.advance(0.8)
 	var p := view.ball.position
 	var iso := view.ball.field.iso_point(p)
-	var ground_steps := view.ball.field.height_at(p.x, p.y) / view.ball.field.yards_per_step
+	var ground_steps := view.ball.field.drawn_steps(p.x, p.y)
 	var tile := Vector2(iso.x, iso.y)
 	assert_true(view.y_sort_enabled, "joins CourseView's painter's order")
-	assert_almost_eq(view.sprite.position.y,
-			Iso.object_sort_key(tile, view.sort_ground(tile, ground_steps)), EPS)
+	assert_almost_eq(view.sprite.position.y, Iso.object_sort_key(tile, ground_steps), EPS)
 	var landing := view.ball.field.iso_point(view.prediction.landing)
 	var landing_tile := Vector2(landing.x, landing.y)
-	assert_almost_eq(view.marker.position.y,
-			Iso.object_sort_key(landing_tile, view.sort_ground(landing_tile, landing.z)), EPS,
+	var landing_ground := view.ball.field.drawn_steps(view.prediction.landing.x, view.prediction.landing.y)
+	assert_almost_eq(view.marker.position.y, Iso.object_sort_key(landing_tile, landing_ground), EPS,
 			"predicted landing marker sorts on its own tile")
 
 
-## Sort key of the drawn top of the cell holding iso point `iso`.
-func _own_top_key(course: CourseData, iso: Vector3) -> int:
-	var cell := Vector2i(floori(iso.x + 0.5), floori(iso.y + 0.5))
-	return Iso.top_sort_key(cell, course.get_height(cell.x, cell.y))
+## Sort key of the row of ground (E3-S58) holding iso point `iso`.
+func _own_row_key(iso: Vector3) -> int:
+	return Iso.depth_key(Vector2i(floori(iso.x + 0.5), floori(iso.y + 0.5)))
 
 
-func test_ball_and_marker_sort_over_their_own_tile_top_along_the_debug_shot() -> void:
-	# The debug shot leaves a 7-step pillar and rolls past tiles with lower neighbours, where
-	# the bilinear ground sits under the drawn top. The pieces must still draw over that top.
+func test_ball_and_marker_sort_over_their_own_row_of_ground_along_the_debug_shot() -> void:
+	# The debug shot leaves a 7-step pillar and rolls down its slopes. The pieces must draw over
+	# the row of ground they stand on, and under the next.
 	var main := MAIN_SCENE.instantiate() as Main
 	main.course_path = HEIGHTS_PATH
 	add_child_autofree(main)
@@ -210,21 +210,21 @@ func test_ball_and_marker_sort_over_their_own_tile_top_along_the_debug_shot() ->
 	main.set_mode(Main.Mode.PLAY)
 	main.fire_debug_shot()
 	var view := main.shot_view
-	var course := main.course
 	var landing := view.ball.field.iso_point(view.prediction.landing)
-	assert_gt(view.marker.position.y, float(_own_top_key(course, landing)),
-			"landing marker draws over its tile's top")
+	assert_gt(view.marker.position.y, float(_own_row_key(landing)), "landing marker draws over its row")
+	assert_lt(view.marker.position.y, float(_own_row_key(landing) + Iso.HALF_H), "and under the next")
 	var ticks := 0
 	var under := 0
 	while view.playing and ticks < 100000:
 		var p := view.ball.position
 		var ground := view.ball.field.iso_point(view._ground_below(p))
-		if view.sprite.position.y <= float(_own_top_key(course, ground)):
+		var key := float(_own_row_key(ground))
+		if view.sprite.position.y <= key or view.sprite.position.y >= key + Iso.HALF_H:
 			under += 1
 		view.advance(1.0 / Ball.TICK_HZ)
 		ticks += 1
 	assert_gt(ticks, 100, "the shot ran")
-	assert_eq(under, 0, "the ball never sorts under its own tile's top")
+	assert_eq(under, 0, "the ball always sorts over its own row and under the next")
 
 
 func test_live_ball_steps_at_60_hz_whatever_the_frame_rate() -> void:

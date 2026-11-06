@@ -1,8 +1,9 @@
 class_name RestOnSlopeShot
 extends Node2D
-## Screenshot fixture for E2-S7 (D17): the E1-S9 green contour in Play at 2x, a 6 yd/s
-## uphill putt from the front tier at rest partway up a one-step slope, drawn on the tile
-## top, with the putter's aim (dots along the predicted roll, and its rest point) from there.
+## Screenshot fixture for E2-S7 (D17; since E3-S59, D50): the E1-S9 green contour in Play at
+## 2x, a 6 yd/s uphill putt from the front tier at rest partway up a one-step slope, drawn on
+## the slope where it rests, with the putter's aim (dots along the predicted roll, and its rest
+## point) from there.
 ## Run: scripts/screenshot.sh tests/fixtures/rest_on_slope_shot.tscn (2x), or
 ## tests/fixtures/rest_on_slope_shot_1x.tscn for the same putt at 1x.
 

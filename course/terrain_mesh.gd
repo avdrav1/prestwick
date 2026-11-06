@@ -67,6 +67,8 @@ var caps: PackedFloat32Array = PackedFloat32Array()
 var rise_per_step: float = 0.4
 
 var _light: Vector2 = Vector2(-1.0, 0.0)
+## TerrainTuning's subdiv for the static readers (_default_subdiv).
+static var _subdiv_cache: int = 0
 var _uv_scale: float = 1.0
 var _inv_tex: Vector2 = Vector2.ONE
 var _inv_land: Vector2 = Vector2.ONE
@@ -184,17 +186,16 @@ static func ground_at(c: CourseData, t: Vector2, heights: Dictionary = {}, subdi
 ## Tile `cell`'s own drawn ground at `t` (held inside the tile), in steps: ground_at, but on a
 ## tile edge it is this tile's side, so at a water bank the two tiles differ (TilePicker).
 static func ground_in(c: CourseData, cell: Vector2i, t: Vector2, heights: Dictionary = {}, subdiv: int = 0) -> float:
-	var h: int = tile_height(c, cell.x, cell.y, heights)
 	if c.get_surface(cell.x, cell.y) == Surface.Type.WATER:
-		return h
-	var flat: bool = true
-	for dy: int in range(-1, 2):
-		for dx: int in range(-1, 2):
-			if tile_height(c, cell.x + dx, cell.y + dy, heights) != h:
-				flat = false
-	if flat:
-		return h
-	var n: int = subdiv if subdiv > 0 else TerrainTuning.load_default().subdiv
+		return tile_height(c, cell.x, cell.y, heights)
+	# All the tile's ground reads its 3 x 3 heights, clamped at the map edge. On a flat tile every
+	# grid corner is its height, so the triangles below give it too.
+	var hh := PackedFloat32Array()
+	hh.resize(9)
+	for dy: int in 3:
+		for dx: int in 3:
+			hh[dy * 3 + dx] = tile_height(c, cell.x + dx - 1, cell.y + dy - 1, heights)
+	var n: int = subdiv if subdiv > 0 else _default_subdiv()
 	# The grid square holding t (clamped into the tile), and its corner heights.
 	var u: float = clampf(t.x - cell.x + 0.5, 0.0, 1.0) * n
 	var v: float = clampf(t.y - cell.y + 0.5, 0.0, 1.0) * n
@@ -202,17 +203,62 @@ static func ground_in(c: CourseData, cell: Vector2i, t: Vector2, heights: Dictio
 	var b: int = mini(floori(v), n - 1)
 	var fx: float = u - a
 	var fy: float = v - b
-	var x0: float = cell.x - 0.5 + float(a) / n
-	var y0: float = cell.y - 0.5 + float(b) / n
+	var x0: float = float(a) / n - 0.5
+	var y0: float = float(b) / n - 0.5
 	var s: float = 1.0 / n
-	var h00: float = bilinear(c, Vector2(x0, y0), heights)
-	var h11: float = bilinear(c, Vector2(x0 + s, y0 + s), heights)
+	var h00: float = _local(hh, x0, y0)
+	var h11: float = _local(hh, x0 + s, y0 + s)
 	# The square's diagonal runs from its (0, 0) corner to its (1, 1) corner (tile_geometry).
 	if fx >= fy:
-		var h10: float = bilinear(c, Vector2(x0 + s, y0), heights)
+		var h10: float = _local(hh, x0 + s, y0)
 		return h00 + fx * (h10 - h00) + fy * (h11 - h10)
-	var h01: float = bilinear(c, Vector2(x0, y0 + s), heights)
+	var h01: float = _local(hh, x0, y0 + s)
 	return h00 + fy * (h01 - h00) + fx * (h11 - h01)
+
+
+## The bilinear ground at tile-local point (u, v) (centre 0, edges +-0.5) from the tile's 3 x 3
+## heights `hh` (row-major, the tile at index 4).
+static func _local(hh: PackedFloat32Array, u: float, v: float) -> float:
+	var xa: int = 0 if u < 0.0 else 1
+	var ya: int = 0 if v < 0.0 else 1
+	var fx: float = u + 1.0 if u < 0.0 else u
+	var fy: float = v + 1.0 if v < 0.0 else v
+	var r0: int = ya * 3 + xa
+	var top: float = lerpf(hh[r0], hh[r0 + 1], fx)
+	var bot: float = lerpf(hh[r0 + 3], hh[r0 + 4], fx)
+	return lerpf(top, bot, fy)
+
+
+## The outline of `cell`'s diamond scaled by `k` about its centre, `per_edge` points a side, each
+## on the tile's drawn ground (ground_in): tile x, tile y, steps, from its back corner round
+## clockwise on screen, closed (the first point repeated). A highlight drawn through it lies on
+## the slope instead of floating over it or sinking under it (E3-S59).
+static func ring(c: CourseData, cell: Vector2i, k: float = 1.0, per_edge: int = 8) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var corners: Array[Vector2] = [Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)]
+	for e: int in 4:
+		var a: Vector2 = Vector2(cell) + corners[e] * k
+		var b: Vector2 = Vector2(cell) + corners[(e + 1) % 4] * k
+		for i: int in per_edge:
+			var t: Vector2 = a.lerp(b, float(i) / per_edge)
+			out.append(Vector3(t.x, t.y, ground_in(c, cell, t)))
+	out.append(out[0])
+	return out
+
+
+## The points of `ring`, projected (CourseView space).
+static func ring_screen(c: CourseData, cell: Vector2i, k: float = 1.0, per_edge: int = 8) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p: Vector3 in ring(c, cell, k, per_edge):
+		out.append(Iso.point_to_screen(p))
+	return out
+
+
+## TerrainTuning's subdiv, read once.
+static func _default_subdiv() -> int:
+	if _subdiv_cache <= 0:
+		_subdiv_cache = TerrainTuning.load_default().subdiv
+	return _subdiv_cache
 
 
 ## The bilinear ground's slope at `t`, steps per tile along x and y. On a tile centre line,

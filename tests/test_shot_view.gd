@@ -1,7 +1,8 @@
 extends GutTest
-## E2-S7 (D17): on the ground the ball and its shadow are drawn on the top of the tile under
-## them, never at the bilinear physics height, so a ball the green holds partway up a
-## one-step slope sits on a tile top, not on the riser.
+## E3-S59 (D50, replacing E2-S7's D17): on the ground the ball and its shadow are drawn on the
+## ground the course view draws (HeightField.ground_screen: the bilinear ground the ball rolls
+## on, water flat at its level), so a ball the green holds partway up a slope sits on that
+## slope, and a ball rolling down a bank follows it with no step.
 
 const EPS := 0.001
 
@@ -17,15 +18,14 @@ func _view() -> ShotView:
 	return view
 
 
-## Projected screen y of the top of the tile under the ball.
-func _top_y(view: ShotView) -> float:
+## Projected screen point of the ground (height_at) under the ball.
+func _ground(view: ShotView) -> Vector2:
 	var p := view.ball.position
-	var cell := view.ball.field.tile_at(p.x, p.y)
-	var iso := view.ball.field.iso_point(p)
-	return Iso.tile_to_screen(Vector2(iso.x, iso.y), view.ball.field.course.get_height(cell.x, cell.y)).y
+	var field := view.ball.field
+	return Iso.point_to_screen(field.iso_point(Vector3(p.x, p.y, field.height_at(p.x, p.y))))
 
 
-func test_ball_resting_on_a_one_step_green_slope_is_drawn_on_its_tile_top() -> void:
+func test_ball_resting_on_a_one_step_green_slope_is_drawn_on_the_slope() -> void:
 	# The E1-S12 case: an uphill putt at 6 yd/s from the contour's front tier stops short
 	# partway up a one-step slope, and the green holds it there (D7).
 	var course := GridHeightEvidence.green_contour()
@@ -38,27 +38,29 @@ func test_ball_resting_on_a_one_step_green_slope_is_drawn_on_its_tile_top() -> v
 	assert_false(view.playing, "the putt came to rest")
 	var p := view.ball.position
 	assert_between(p.x, 27.5, 32.5, "on the step's slope")
-	var physics_y := Iso.point_to_screen(field.iso_point(p)).y
-	assert_gt(absf(physics_y - _top_y(view)), 2.0, "where the physics height is off the tile top")
-	assert_almost_eq(view.ball_screen().y, _top_y(view), EPS, "the ball is drawn on the tile top")
-	assert_almost_eq(view.shadow_screen().y, _top_y(view), EPS, "and so is its shadow")
-	assert_almost_eq(view.ball_screen().x, Iso.point_to_screen(field.iso_point(p)).x, EPS,
-			"straight above or below its true point")
+	var cell := field.tile_at(p.x, p.y)
+	var iso := field.iso_point(p)
+	var top_y := Iso.tile_to_screen(Vector2(iso.x, iso.y), course.get_height(cell.x, cell.y)).y
+	assert_gt(absf(_ground(view).y - top_y), 2.0, "where the ground is off the old tile top")
+	assert_almost_eq(view.ball_screen(), _ground(view), Vector2(EPS, EPS), "the ball is drawn on the slope")
+	assert_almost_eq(view.shadow_screen(), _ground(view), Vector2(EPS, EPS), "and so is its shadow")
+	assert_almost_eq(view.ball_screen(), Iso.point_to_screen(field.iso_point(p)), Vector2(EPS, EPS),
+			"which is where the physics has it")
 
 
-func test_a_ball_set_at_rest_is_drawn_on_its_tile_top() -> void:
+func test_a_ball_set_at_rest_is_drawn_on_the_ground() -> void:
 	var course := GridHeightEvidence.green_contour()
 	var view := _view()
 	for x: float in [21.0, 24.0, 27.4, 27.6, 31.0]:
 		view.show_at_rest(course, Vector2(x, 27.5))
 		assert_true(view.visible)
 		assert_false(view.playing)
-		assert_almost_eq(view.ball_screen().y, _top_y(view), EPS, "x %.1f: on the tile top" % x)
+		assert_almost_eq(view.ball_screen(), _ground(view), Vector2(EPS, EPS), "x %.1f: on the ground" % x)
 
 
-func test_a_rolling_ball_steps_16_px_at_a_riser() -> void:
-	# A putt down the contour (mirrored, so it runs downhill along +x) crosses risers; each
-	# tile edge it crosses moves the drawn ball by a whole number of steps, never between.
+func test_a_ball_rolling_down_a_bank_follows_it_with_no_step() -> void:
+	# A putt down the contour (mirrored, so it runs downhill along +x) rolls down its slopes:
+	# every tick it is drawn on the ground, and it never jumps a step at a tile edge.
 	var course := GridHeightEvidence.green_contour(true)
 	var model := ShotModel.new()
 	var field := HeightField.new(course, model.params)
@@ -66,11 +68,20 @@ func test_a_rolling_ball_steps_16_px_at_a_riser() -> void:
 	var view := _view()
 	view.fire_launch(course, shot, 1)
 	var cells := {}
+	var last := view.ball_screen()
+	var worst := 0.0
 	while view.playing:
 		view.advance(1.0 / 60.0)
-		assert_almost_eq(view.ball_screen().y, _top_y(view), EPS, "rolling, on the tile top")
+		assert_almost_eq(view.ball_screen(), _ground(view), Vector2(EPS, EPS), "rolling, on the ground")
+		worst = maxf(worst, absf(view.ball_screen().y - last.y))
+		last = view.ball_screen()
 		cells[view.ball.field.tile_at(view.ball.position.x, view.ball.position.y)] = true
 	assert_gt(cells.size(), 2, "it crossed tiles")
+	assert_lt(worst, Iso.STEP_PX * 0.5, "no 16 px step at a tile edge: %.2f px in a tick at most" % worst)
+	var heights := {}
+	for cell: Vector2i in cells:
+		heights[course.get_height(cell.x, cell.y)] = true
+	assert_gt(heights.size(), 1, "and it went down a bank")
 
 
 ## E2-S13: a fairway strip along +x with water from tile 20 to 24 on every row.
@@ -103,8 +114,12 @@ func test_a_water_ball_is_shown_where_it_went_in_before_the_drop() -> void:
 	assert_true(view.playing, "the shot is not over the tick the ball is dropped")
 	assert_true(rests.is_empty(), "no rest yet")
 	assert_eq(view.drawn_position(), ball.hazard_position, "drawn where it went in")
-	assert_almost_eq(view.ball_screen(), ball.field.tile_top_screen(ball.hazard_position),
-			Vector2(EPS, EPS), "on the water's tile top")
+	assert_almost_eq(view.ball_screen(), ball.field.ground_screen(ball.hazard_position),
+			Vector2(EPS, EPS), "on the water, at its level")
+	var level: float = ball.field.course.get_height(22, 5)
+	var iso := ball.field.iso_point(ball.hazard_position)
+	assert_almost_eq(view.ball_screen(), Iso.tile_to_screen(Vector2(iso.x, iso.y), level), Vector2(EPS, EPS),
+			"the water lies flat at its level")
 	assert_false(view.marker.visible, "the landing cross does not cover the ball in the water")
 	assert_true(view.hazard_cue.visible, "a hazard cue marks the water stroke")
 	assert_eq(view.hazard_cue.position, view.sprite.position, "the cue sorts with the ball")
@@ -127,8 +142,8 @@ func test_a_water_ball_is_shown_where_it_went_in_before_the_drop() -> void:
 	assert_false(view.marker.visible, "until the next shot")
 	view.fire(course, ball.drop_point, Ball.launch_velocity(10.0, 30.0, 180.0), 3)
 	assert_true(view.marker.visible, "the next shot shows its own landing cross")
-	assert_almost_eq(view.ball_screen(), ball.field.tile_top_screen(ball.drop_point),
-			Vector2(EPS, EPS), "on the drop tile's top")
+	assert_almost_eq(view.ball_screen(), ball.field.ground_screen(ball.drop_point),
+			Vector2(EPS, EPS), "on the ground at the drop")
 
 
 func test_a_dry_ball_rests_at_once() -> void:

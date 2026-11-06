@@ -28,8 +28,8 @@ extends Node2D
 ## Text size, screen px at every zoom, and the padding inside each segment.
 @export var font_size: int = 13
 @export var padding: float = 3.0
-## The tag's foot sits this far above the cup's tile top, canvas units (above HoleMarker's
-## 30 px pole), so it never covers the pennant.
+## The tag's foot sits this far above the ground at the cup's centre (its tile's height there),
+## canvas units (above HoleMarker's 30 px pole), so it never covers the pennant.
 @export var lift: float = 40.0
 ## A stem from the tag's foot down toward the pole's top, canvas units.
 @export var stem: float = 10.0
@@ -93,8 +93,8 @@ func anchor_of(number: int) -> Variant:
 	return anchor_at(ReactionFeed.resolve_slot(course, -1, number))
 
 
-## Where the tag of the hole in slot `slot` stands (its cup's tile top, CourseView space,
-## lifted), or null.
+## Where the tag of the hole in slot `slot` stands (the ground at its cup's centre, CourseView
+## space, lifted), or null.
 func anchor_at(slot: int) -> Variant:
 	if course == null or slot < 0 or slot >= course.holes.size():
 		return null

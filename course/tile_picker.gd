@@ -18,6 +18,9 @@ extends RefCounted
 
 ## Returned when no tile of the course is under the point.
 const NONE: Vector2i = Vector2i(-1, -1)
+## How much nearer the camera (in i + j, which along a ray is height) a drawn point must be to
+## hide another (hidden).
+const HIDE_EPS: float = 0.02
 
 
 ## The tile drawn frontmost at `screen` (CourseView local space), or NONE. `heights` overrides
@@ -34,20 +37,32 @@ static func ground_point(course: CourseData, screen: Vector2, heights: Dictionar
 	return null if hit.is_empty() else hit[1]
 
 
-## [tile, ground point] drawn frontmost at `screen`, or [] off the map.
-static func cast(course: CourseData, screen: Vector2, heights: Dictionary = {}) -> Array:
+## Whether the ground point `p` (tile x, tile y, steps) is hidden: something drawn nearer the
+## camera (a hill in front) covers its screen point. Issue markers' leader feet and the land
+## line use it (E3-S59).
+static func hidden(course: CourseData, p: Vector3) -> bool:
+	var hit: Array = cast(course, Iso.point_to_screen(p), {}, p.z + HIDE_EPS)
+	return not hit.is_empty()
+
+
+## [tile, ground point] drawn frontmost at `screen`, or [] off the map. With `floor`, the ray is
+## walked only down to that height (so [] when nothing above it is drawn there).
+static func cast(course: CourseData, screen: Vector2, heights: Dictionary = {}, floor: float = -INF) -> Array:
 	var t0: Vector2 = Iso.screen_to_tile(screen, 0.0)
 	var hi_edge := Vector2(course.width - 0.5, course.height - 0.5)
 	var tuning := TerrainTuning.load_default()
-	var base: float = minf(0.0, tuning.base_steps)
+	var base: float = maxf(minf(0.0, tuning.base_steps), floor)
 	var n: int = tuning.subdiv
 	var top: float = CourseData.MAX_HEIGHT + 0.5
 	# Every height where the ray crosses a grid line of the mesh (tile edges among them), highest
 	# first: between two, the ray stays over one triangle of one tile.
 	var zs := PackedFloat64Array([top, base])
 	for axis: int in 2:
+		# Grid line j lies at j / n - 0.5 tiles; the ray is over it at ze = 2 (that - t0).
 		var size: int = course.width if axis == 0 else course.height
-		for j: int in size * n + 1:
+		var j0: int = maxi(0, ceili((t0[axis] + base * 0.5 + 0.5) * n))
+		var j1: int = mini(size * n, floori((t0[axis] + top * 0.5 + 0.5) * n))
+		for j: int in range(j0, j1 + 1):
 			var ze: float = 2.0 * (float(j) / n - 0.5 - t0[axis])
 			if ze > base and ze < top:
 				zs.append(ze)

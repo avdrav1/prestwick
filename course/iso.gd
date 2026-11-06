@@ -48,8 +48,8 @@ static func screen_to_cell(screen: Vector2, height: float = 0.0) -> Vector2i:
 ## so all sort keys below are in that unit: screen pixels at height 0. A tile's depth row is
 ## (i + j) * HALF_H, and the ground (E3-S58) draws one chunk of each depth row at that key, back
 ## to front, which is exact for a height field seen from +x +y. Things on a tile sort after its
-## row by a bias under one row: a top-level overlay at 2h + 1 (TopoOverlay), an object resting
-## on height h at 2h + 1.5. The largest bias (15.5, an object on height 7) stays below one row
+## row by a bias under one row: a contour line at + 0.25 (TopoOverlay), an object resting on
+## ground h steps high at 2h + 1.5. The largest bias (15.5, an object on height 7) stays below one row
 ## (HALF_H = 16), so a nearer row always draws later. Equal-depth tiles never overlap, so ties
 ## across tiles in one row do not matter.
 const BIAS_PER_STEP: int = 2
@@ -58,12 +58,6 @@ const BIAS_PER_STEP: int = 2
 ## Sort key of the depth row holding `cell`, before any bias: where its ground draws.
 static func depth_key(cell: Vector2i) -> int:
 	return roundi((cell.x + cell.y) * HALF_H)
-
-
-## Sort key of something drawn on the ground of `cell` at height `h`, after its row's ground and
-## before an object on it (TopoOverlay's lines).
-static func top_sort_key(cell: Vector2i, h: int) -> int:
-	return depth_key(cell) + BIAS_PER_STEP * h + 1
 
 
 ## Sort key of an object (ball, guest, flag) at fractional tile position `tile` whose ground

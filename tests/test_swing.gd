@@ -543,7 +543,8 @@ func test_a_putt_line_follows_the_ground_without_tile_edge_jumps() -> void:
 	var dots := view.dots
 	assert_gt(dots.size(), 4)
 	assert_lt(_max_turn(dots), Iso.STEP_PX * 0.5, "the dots run smoothly: no tier jumps")
-	# The same roll sampled on the tile tops (the old rule), for comparison.
+	# The same roll sampled on the ground (E3-S59: each dot is there) and on the tile tops (D17's
+	# old rule), for comparison.
 	var path := sc.aim_prediction.path
 	var tops := PackedVector2Array()
 	var carry := view.dot_spacing_yd
@@ -553,7 +554,11 @@ func test_a_putt_line_follows_the_ground_without_tile_edge_jumps() -> void:
 		var seg := a.distance_to(b)
 		while carry <= seg:
 			var q := a.lerp(b, carry / seg)
-			tops.append(sc.field.tile_top_screen(Vector3(q.x, q.y, 0.0)))
+			assert_almost_eq(dots[tops.size()], sc.field.ground_screen(Vector3(q.x, q.y, 0.0)), Vector2.ONE * 0.001,
+					"dot %d on the ground" % tops.size())
+			var cell := sc.field.tile_at(q.x, q.y)
+			var iso := sc.field.iso_point(Vector3(q.x, q.y, 0.0))
+			tops.append(Iso.tile_to_screen(Vector2(iso.x, iso.y), course.get_height(cell.x, cell.y)))
 			carry += view.dot_spacing_yd
 		carry -= seg
 	assert_eq(tops.size(), dots.size())

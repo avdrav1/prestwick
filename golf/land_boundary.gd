@@ -13,16 +13,16 @@ extends RefCounted
 ## For drawing (E6-S7 review): unowned_side says which side of an edge is out of bounds, so
 ## the line can mark it, and covered says whether terrain in front of an edge hides it, so a
 ## line behind a hill draws faded and does not read as running over the hill's top (the
-## issue-marker rule, E2-S17).
-
-## Step along the view line, in tile units of (i + j), when testing whether an edge is covered.
-const COVER_STEP: float = 0.125
+## issue-marker rule, E2-S17). Since E3-S59 (D50) the line lies on the drawn ground
+## (TerrainMesh.ground_in) and covered reads the drawn ground (TilePicker.hidden).
 
 
 ## The land line as pairs of Iso points (x, y in tiles, integer = tile centre; z in height
-## steps): points 2k and 2k + 1 are the ends of one tile edge, at the higher top of the two
-## tiles either side, so the line sits on the lip of any step between them. Iso.point_to_screen
-## takes each point. Order: parcels row-major, then east, south, west, north, then along the edge.
+## steps): points 2k and 2k + 1 are the ends of one half of a tile edge (corner to middle, middle
+## to corner: the drawn ground bends where the edge crosses the tiles' centre line), each on the
+## drawn ground, the higher of the two tiles' sides where they differ (a water bank), so the
+## line lies on the ground and on the lip of a bank. Iso.point_to_screen takes each point.
+## Order: parcels row-major, then east, south, west, north, then along the edge.
 static func segments(course: CourseData) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for q: int in course.parcels_high:
@@ -52,9 +52,9 @@ static func _edge_along_y(course: CourseData, out: PackedVector3Array, x: int, d
 		y0: int, y1: int) -> void:
 	var ex := x + 0.5 * dir
 	for y in range(y0, y1):
-		var h := float(maxi(course.get_height(x, y), course.get_height(x + dir, y)))
-		out.append(Vector3(ex, y - 0.5, h))
-		out.append(Vector3(ex, y + 0.5, h))
+		for half: float in [-0.5, 0.0]:
+			out.append(_on_edge(course, Vector2i(x, y), Vector2i(x + dir, y), Vector2(ex, y + half)))
+			out.append(_on_edge(course, Vector2i(x, y), Vector2i(x + dir, y), Vector2(ex, y + half + 0.5)))
 
 
 ## The edges between owned row `y` and row `y + dir`, columns x0 to x1 - 1.
@@ -62,9 +62,17 @@ static func _edge_along_x(course: CourseData, out: PackedVector3Array, y: int, d
 		x0: int, x1: int) -> void:
 	var ey := y + 0.5 * dir
 	for x in range(x0, x1):
-		var h := float(maxi(course.get_height(x, y), course.get_height(x, y + dir)))
-		out.append(Vector3(x - 0.5, ey, h))
-		out.append(Vector3(x + 0.5, ey, h))
+		for half: float in [-0.5, 0.0]:
+			out.append(_on_edge(course, Vector2i(x, y), Vector2i(x, y + dir), Vector2(x + half, ey)))
+			out.append(_on_edge(course, Vector2i(x, y), Vector2i(x, y + dir), Vector2(x + half + 0.5, ey)))
+
+
+## The point `t` on the edge between tiles `a` and `b`, on the higher of their drawn grounds.
+static func _on_edge(course: CourseData, a: Vector2i, b: Vector2i, t: Vector2) -> Vector3:
+	var h := TerrainMesh.ground_in(course, a, t)
+	if course.in_bounds(b.x, b.y):
+		h = maxf(h, TerrainMesh.ground_in(course, b, t))
+	return Vector3(t.x, t.y, h)
 
 
 ## Unit direction, in tiles (x, y), from the middle of the edge `a`-`b` (two points of
@@ -79,20 +87,7 @@ static func unowned_side(course: CourseData, a: Vector3, b: Vector3) -> Vector2:
 	return n
 
 
-## True when a tile nearer the camera stands high enough to hide the middle of the edge
-## `a`-`b` (two points of segments): its column, from height 0 to its top, crosses the line
-## of sight from the camera to that point. Along that line, the point at depth t (i + j) is
-## at height z = t - (i + j of the edge) + the edge's height, so it walks t forward from the
-## edge until z passes CourseData.MAX_HEIGHT.
+## True when ground nearer the camera hides the middle of the segment `a`-`b` (two points of
+## segments): the drawn ground in front covers its screen point (TilePicker.hidden).
 static func covered(course: CourseData, a: Vector3, b: Vector3) -> bool:
-	var m := (a + b) * 0.5
-	var d := m.x - m.y
-	var t0 := m.x + m.y
-	var z := m.z + COVER_STEP
-	while z <= CourseData.MAX_HEIGHT:
-		var t := t0 + z - m.z
-		var tile := Vector2i(floori((t + d) * 0.5 + 0.5), floori((t - d) * 0.5 + 0.5))
-		if course.in_bounds(tile.x, tile.y) and course.get_height(tile.x, tile.y) >= z:
-			return true
-		z += COVER_STEP
-	return false
+	return TilePicker.hidden(course, (a + b) * 0.5)

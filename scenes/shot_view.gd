@@ -3,8 +3,10 @@ extends Node2D
 ## Shows one shot on the isometric map (E1-S7): the ball sprite at its projected 3D position,
 ## a ground shadow straight below it so its height reads, and a marker on the predicted
 ## landing point. A reader only: it never writes the course. On the ground the ball and its
-## shadow are drawn on the top of the tile under them (D17, E2-S7); in flight the ball is at
-## its true height and the shadow on that tile top.
+## shadow are drawn on the ground the course view draws under them (D50, E3-S59:
+## HeightField.ground_screen, the bilinear ground the ball rolls on, water flat at its level;
+## D17's tile top before it); in flight the ball is at its true height and the shadow on the
+## ground below it.
 ##
 ## The live ball is a golf/ball.gd Ball stepped at a fixed 60 Hz from frame time (never per
 ## frame), so it follows the ShotPrediction made at fire time tick for tick.
@@ -212,18 +214,18 @@ func drawn_position() -> Vector3:
 
 
 ## Screen point (in this node's parent space) of the ball. In flight it is the projected 3D
-## point. On the ground (rolling or at rest) it is the top of the tile under the ball (D17):
-## the physics height between tile centres would draw it off the flat top, or on a riser.
+## point. On the ground (rolling or at rest) it is the drawn ground under the ball (D50), so a
+## ball rolling down a bank follows the slope.
 func ball_screen() -> Vector2:
 	if on_ground():
 		return shadow_screen()
 	return Iso.point_to_screen(ball.field.iso_point(drawn_position()))
 
 
-## Screen point of the shadow: straight below the ball, on the top of the tile under it
-## (D17), in flight too.
+## Screen point of the shadow: straight below the ball, on the drawn ground (D50), in flight
+## too.
 func shadow_screen() -> Vector2:
-	return ball.field.tile_top_screen(drawn_position())
+	return ball.field.ground_screen(drawn_position())
 
 
 ## True while the ball is on the ground: rolling, at rest, or not yet struck.
@@ -231,30 +233,18 @@ func on_ground() -> bool:
 	return ball.state != Ball.State.FLYING
 
 
-## Drawn height, in steps, of the top of the tile under the ground point `p` (yards). Past
-## the map edge the edge tile's height holds, as it does for the ball (HeightField).
-func tile_top_steps(p: Vector3) -> float:
-	return float(ball.field.tile_top_steps(p.x, p.y))
-
-
+## The drawn ground (yards) under the point `p` (HeightField.drawn_steps).
 func _ground_below(p: Vector3) -> Vector3:
-	return Vector3(p.x, p.y, ball.field.height_at(p.x, p.y))
+	return Vector3(p.x, p.y, ball.field.drawn_steps(p.x, p.y) * ball.field.yards_per_step)
 
 
-## Moves `piece` to the sort key of the ground point `ground` (yards).
+## Moves `piece` to the sort key of the ground point `ground` (yards): an object on its tile's
+## row of ground (Iso.object_sort_key), so the rows in front hide it.
 func _sort_at(piece: Node2D, ground: Vector3) -> void:
 	var iso := ball.field.iso_point(ground)
 	var tile := Vector2(iso.x, iso.y)
-	piece.position = Vector2(Iso.point_to_screen(iso).x, Iso.object_sort_key(tile, sort_ground(tile, iso.z)))
+	piece.position = Vector2(Iso.point_to_screen(iso).x, Iso.object_sort_key(tile, iso.z))
 	piece.queue_redraw()
-
-
-## Ground height (steps) a piece at `tile` sorts on: the bilinear ground, but never below the
-## drawn top of the cell it stands in. Bilinear ground dips under that top wherever the cell
-## has a lower neighbour, and sorting on it would paint the cell's own top over the ball.
-func sort_ground(tile: Vector2, ground_steps: float) -> float:
-	var cell := Vector2i(floori(tile.x + 0.5), floori(tile.y + 0.5))
-	return maxf(ground_steps, float(ball.field.course.get_height(cell.x, cell.y)))
 
 
 func _refresh() -> void:
@@ -272,16 +262,15 @@ func _refresh() -> void:
 		_sort_at(hazard_slash, _ground_below(drawn_position()))
 
 
-## The landing cross stands on the tile top under the landing point (D17's rule), like the
-## aim ring, so a perfect swing's cross sits exactly on the ring the player aimed with.
+## The landing cross stands on the drawn ground at the landing point (D50), like the aim
+## ring, so a perfect swing's cross sits exactly on the ring the player aimed with.
 func _place_marker() -> void:
-	var p := prediction.landing
-	_sort_at(marker, Vector3(p.x, p.y, tile_top_steps(p) * ball.field.yards_per_step))
+	_sort_at(marker, _ground_below(prediction.landing))
 
 
-## Screen point of the landing cross, on the tile top under the predicted landing.
+## Screen point of the landing cross, on the drawn ground at the predicted landing.
 func marker_screen() -> Vector2:
-	return ball.field.tile_top_screen(prediction.landing)
+	return ball.field.ground_screen(prediction.landing)
 
 
 func _draw_ball(piece: Node2D) -> void:

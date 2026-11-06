@@ -1,6 +1,7 @@
 class_name HeightField
 extends RefCounted
-## Reads a CourseData as continuous ground in yards, for the ball, its shadow and guests.
+## Reads a CourseData as continuous ground in yards, for the ball, its shadow and guests. The
+## course view draws the same ground (E3-S58, D50), so ground_screen puts a thing on it.
 ## Land the player does not own reads as `oob` (surface_at, D29).
 ## Height is interpolated bilinearly between tile centres, so a one-step rise between two
 ## tiles becomes a slope from one centre to the next. Past the map edge the edge height holds.
@@ -33,19 +34,24 @@ func iso_point(p: Vector3) -> Vector3:
 	return Vector3(p.x / yards_per_tile - 0.5, p.y / yards_per_tile - 0.5, p.z / yards_per_step)
 
 
-## Drawn height, in steps, of the top of the tile under the ground point (x, y). Past the map
-## edge the edge tile's height holds, as it does for height_at.
-func tile_top_steps(x: float, y: float) -> int:
+## Drawn height, in steps, of the ground at (x, y) (E3-S59, D50): the height the course view
+## draws there, which is height_at, except on a water tile, which lies flat at its level (its
+## tile's height). Past the map edge the edge holds, as it does for height_at.
+func drawn_steps(x: float, y: float) -> float:
 	var cell := tile_at(x, y)
-	return course.get_height(clampi(cell.x, 0, course.width - 1), clampi(cell.y, 0, course.height - 1))
+	cell = Vector2i(clampi(cell.x, 0, course.width - 1), clampi(cell.y, 0, course.height - 1))
+	if course.get_surface(cell.x, cell.y) == Surface.Type.WATER:
+		return course.get_height(cell.x, cell.y)
+	return height_at(x, y) / yards_per_step
 
 
-## Screen point (CourseView space) of the ground point `p` drawn on the top of the tile under
-## it, never at the bilinear height (D17): the ball and shadow on the ground, the aim marker
-## and the struck ball's landing cross all use this one rule, so they sit on each other.
-func tile_top_screen(p: Vector3) -> Vector2:
+## Screen point (CourseView space) of the ground point `p` drawn on the ground under it, at
+## drawn_steps (D50, replacing D17's tile top): the ball and its shadow on the ground, the aim
+## marker, the struck ball's landing cross, golfers and their balls all use this one rule, so
+## they sit on the ground the course view draws, and on each other.
+func ground_screen(p: Vector3) -> Vector2:
 	var iso := iso_point(p)
-	return Iso.tile_to_screen(Vector2(iso.x, iso.y), tile_top_steps(p.x, p.y))
+	return Iso.tile_to_screen(Vector2(iso.x, iso.y), drawn_steps(p.x, p.y))
 
 
 ## Surface the ball plays under (x, y). Off the map is Surface.Type.OOB, and so is every tile

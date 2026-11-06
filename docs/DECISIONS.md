@@ -48,6 +48,7 @@ Why: pillar 2 (shots are readable) needs every slope to be visible and putts tha
 Pays for it: drops ramp tiles, option c, from the art backlog and from `art/specs/risers.md`.
 Inconclusive: 0.075 is a starting number from one what-if run (0.15 yd per step on a green), not a tuned value. That run fired only moving putts. It did not set balls down still or check that short putts roll back, which is how the friction conflict in option d's cost was missed at first. `/balance` sets it once the putter exists. Whether the edge cue reads at 0.5x is unverified until E1-S10 takes its screenshot.
 Affects: docs/design.md Grid and terrain, art/specs/risers.md, docs/BACKLOG.md (E1-S10, E1-S11, filed and not built here), golf/ball.gd, course/surfaces.tres and course/course_view.gd once those stories land
+Drawing replaced by D50 (2026-11-06): the ground is drawn as smooth slopes over the same bilinear surface (E3-S58); heights stay whole steps.
 
 ## D6: Does the edge cue read at 0.5x? (2026-11-02)
 Question: D5's open point, "whether the edge cue reads at 0.5x is unverified until E1-S10 takes its screenshot". Settled by E1-S10.
@@ -179,6 +180,7 @@ Options:
 Choice: snap the drawn ball and its shadow to the top of the tile under them while on the ground (user, 2026-11-03), built in E2-S7. In flight the ball is drawn at its true height. The shadow follows the tile-top rule in flight too; that part is E2-S1's default, since the shadow is always on the ground.
 Why: pillar 2: a resting ball is always on the top you read its lie from, and the physics stays as it is.
 Affects: docs/design.md Ball (Drawn rest height), scenes/shot_view.gd (E2-S7), tests/test_shot_view.gd (E2-S7)
+Replaced by D50 (2026-11-06): everything on the ground is drawn at height_at, on the smooth ground (E3-S59).
 
 ## D18: Which `/balance` targets change for E2? (2026-11-03)
 Question: three of the five target lines in `.claude/skills/balance/SKILL.md` cannot be measured as written in E2: "putter never leaves the green", "at 100% for a skill-10 golfer" (no guest skill until E3) and "about one club".

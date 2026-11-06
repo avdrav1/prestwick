@@ -4,20 +4,21 @@ extends Node2D
 ## A reader only. CourseView owns one per tile at fault and shows them in Build mode.
 ##
 ## Shape and colour both say what it is (colorblind rule): a doubled diamond outline round the
-## tile's top, ink outside and flag_red inside, a warning badge with "!" on its right corner,
+## tile, on its ground, ink outside and flag_red inside, a warning badge with "!" on its right corner,
 ## and one line per failing rule, "rule <n>: <reason>", in chalk on an ink box above the
 ## tile, clear of a pin standing there, joined to the tile centre by a leader line. Lines wrap
 ## at `text_width`. Colours are art/palette.gpl entries.
 ##
 ## Depth: the diamond Y-sorts with the terrain like a HoleMarker (the node sits at
-## Iso.object_sort_key on its tile's top), so ground nearer the camera hides it and a fault
-## behind a hill does not read as being on the hill. The badge, leader and text box are a
+## Iso.object_sort_key on its tile), so ground nearer the camera hides it and a fault behind a
+## hill does not read as being on the hill. Since E3-S59 (D50) the diamond follows the drawn
+## ground round the tile's edges (TerrainMesh.ring), so on a slope it lies on it. The badge, leader and text box are a
 ## child drawn over everything (`label`, z_index 2), so the fault still shows.
 ##
-## The leader's foot (the dot on the tile centre) draws over everything too, so when a tile
-## in front stands high enough to cover the tile centre (`foot_hidden`, E2-S17) the leader
-## draws dashed, the foot as a faded ring and the badge faded, so the fault does not read
-## as being on the hill.
+## The leader's foot (the dot on the tile centre) draws over everything too, so when ground in
+## front stands high enough to cover the tile centre (`foot_hidden`, E2-S17; since E3-S59 the
+## drawn ground, TilePicker.hidden) the leader draws dashed, the foot as a faded ring and the
+## badge faded, so the fault does not read as being on the hill.
 ##
 ## The text keeps its screen size at every zoom step, so a reason reads at 0.5x. CourseView
 ## lays the boxes out in screen space (`text_scale`, `stack`, `shift`) so neighbouring boxes
@@ -42,6 +43,9 @@ extends Node2D
 var cell: Vector2i = Vector2i.ZERO
 ## The whole height of the tile it stands on.
 var ground: int = 0
+## The diamond's outline and its inner line, on the ground, in the node's space (place).
+var _outer := PackedVector2Array()
+var _inner := PackedVector2Array()
 ## Whether a tile in front covers this tile's centre, so the leader's foot is hidden (E2-S17).
 var foot_hidden: bool = false:
 	set(value):
@@ -119,33 +123,26 @@ func shows(p_rules: PackedInt32Array, p_reasons: PackedStringArray, p_holes: Pac
 	return rules == p_rules and reasons == p_reasons and holes == p_holes and names == p_names
 
 
-## Stands the marker on its tile's top in `course`.
+## Stands the marker on its tile in `course`: its diamond on the ground round the tile.
 func place(course: CourseData) -> void:
 	ground = course.get_height(cell.x, cell.y)
 	var at: Vector2 = draw_point()
 	position = Vector2(at.x, Iso.object_sort_key(Vector2(cell), ground))
 	label.position = at - position
 	foot_hidden = covered(course, cell)
+	_outer = _ring(course, 1.0)
+	_inner = _ring(course, 0.7)
 	queue_redraw()
 	label.queue_redraw()
 
 
-## Whether a tile in front of `at` (nearer the camera) stands high enough to cover the centre
-## of `at`'s top, or touch it, so a dot drawn there would sit on that tile's art. A tile k rows
-## straight in front (at + (k, k)) covers it from `ground + 2k - 1` steps; one beside the
-## straight line (at + (k, k - 1) or at + (k - 1, k)) from the same height, by its corner.
+## Whether ground in front of `at` (nearer the camera) covers the centre of `at`, where the
+## leader's foot is drawn (TilePicker.hidden on the drawn ground, E3-S59).
 static func covered(course: CourseData, at: Vector2i) -> bool:
-	var h: int = course.get_height(at.x, at.y)
-	var k: int = 1
-	while h + 2 * k - 1 <= CourseData.MAX_HEIGHT:
-		for c: Vector2i in [at + Vector2i(k, k), at + Vector2i(k, k - 1), at + Vector2i(k - 1, k)]:
-			if course.in_bounds(c.x, c.y) and course.get_height(c.x, c.y) >= h + 2 * k - 1:
-				return true
-		k += 1
-	return false
+	return TilePicker.hidden(course, Vector3(at.x, at.y, course.get_height(at.x, at.y)))
 
 
-## Where it is drawn, in the CourseView's space: its tile's centre on its top.
+## Where it is drawn, in the CourseView's space: its tile's centre, on the ground (its height).
 func draw_point() -> Vector2:
 	return Iso.tile_to_screen(Vector2(cell), ground)
 
@@ -218,19 +215,21 @@ func _wrapped(font: Font) -> PackedStringArray:
 	return text
 
 
-## The diamond, on the tile's top, sorted with the terrain.
+## The diamond round the tile scaled by `k`, on the drawn ground, relative to the node.
+func _ring(course: CourseData, k: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p: Vector2 in TerrainMesh.ring_screen(course, cell, k):
+		out.append(p - position)
+	return out
+
+
+## The diamond, on the ground round the tile, sorted with the terrain.
 func _draw() -> void:
-	var off: Vector2 = draw_point() - position
-	var d := PackedVector2Array()
-	for p: Vector2 in [Vector2(0, -Iso.HALF_H), Vector2(Iso.HALF_W, 0), Vector2(0, Iso.HALF_H),
-			Vector2(-Iso.HALF_W, 0), Vector2(0, -Iso.HALF_H)]:
-		d.append(off + p)
-	draw_polyline(d, ink_color, outline_width * 2.0 + 2.0)
-	draw_polyline(d, line_color, outline_width)
-	var inner := PackedVector2Array()
-	for p: Vector2 in d:
-		inner.append(off + (p - off) * 0.7)
-	draw_polyline(inner, line_color, 1.0)
+	if _outer.is_empty():
+		return
+	draw_polyline(_outer, ink_color, outline_width * 2.0 + 2.0)
+	draw_polyline(_outer, line_color, outline_width)
+	draw_polyline(_inner, line_color, 1.0)
 
 
 ## The badge, leader line and text box, over everything; drawn on `label`, at the tile centre.

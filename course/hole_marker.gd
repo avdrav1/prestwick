@@ -3,9 +3,11 @@ extends Node2D
 ## A hole's tee marker or pin on the course view (E2-S2), drawn in code until the final art
 ## (E5-S1, E5-S3). A reader only. CourseView owns one per placed tee and cup.
 ##
-## It stands on the top of its tile: the shape is drawn at Iso.tile_to_screen(cell, h), h the
-## tile's whole height, and the node sits at y = Iso.object_sort_key(cell, h), so it Y-sorts
-## with the terrain like the ball: over its own tile's top, under anything nearer the camera.
+## It stands on the ground at its tile's centre (E3-S59, D50: the drawn ground there is the
+## tile's own whole height h): the shape is drawn at Iso.tile_to_screen(cell, h), the tee's two
+## blocks each on the ground under it, and the node sits at y = Iso.object_sort_key(cell, h),
+## so it Y-sorts with the terrain like the ball: over its own tile's row, under anything nearer
+## the camera.
 ##
 ## Shape and colour both say what it is (colorblind rule): the tee marker is two
 ## square blocks either side of the tile centre, the pin a dark cup with a pole and a pennant.
@@ -36,8 +38,11 @@ var hole_number: int = 0
 ## share it (E3-S27). Empty shows hole_number.
 var hole_label: String = ""
 var cell: Vector2i = Vector2i.ZERO
-## The whole height of the tile it stands on.
+## The whole height of the tile it stands on: the ground's height at its centre.
 var ground: int = 0
+## How far the ground under each tee block (left, right) stands above the centre's, screen px
+## (a block on a slope sits on it).
+var block_lift: Vector2 = Vector2.ZERO
 ## Local units per screen pixel (1 / zoom) for the hole number, set by CourseView when the zoom
 ## changes, so the number keeps number_font_size screen px at 0.5x and 2x alike (E3-S2 review).
 var text_scale: float = 1.0:
@@ -68,15 +73,21 @@ func _init(p_kind: Kind = Kind.TEE, p_hole_number: int = 0, p_cell: Vector2i = V
 	name = "%s%d" % ["Tee" if kind == Kind.TEE else "Pin", hole_number]
 
 
-## Stands the marker on its tile's top in `course`.
+## Stands the marker on its tile's ground in `course`.
 func place(course: CourseData) -> void:
 	ground = course.get_height(cell.x, cell.y)
+	# A block tee_block_offset px either side on screen is (+-o, -+o) tiles from the centre.
+	var o: float = tee_block_offset / Iso.TILE_W
+	for i: int in 2:
+		var side: float = -1.0 if i == 0 else 1.0
+		var t := Vector2(cell) + Vector2(side * o, -side * o)
+		block_lift[i] = (TerrainMesh.ground_at(course, t) - ground) * Iso.STEP_PX
 	var at: Vector2 = draw_point()
 	position = Vector2(at.x, Iso.object_sort_key(Vector2(cell), ground))
 	queue_redraw()
 
 
-## Where its shape is drawn, in the CourseView's space: its tile's centre on its top.
+## Where its shape is drawn, in the CourseView's space: its tile's centre, on the ground.
 func draw_point() -> Vector2:
 	return Iso.tile_to_screen(Vector2(cell), ground)
 
@@ -105,8 +116,9 @@ func _draw() -> void:
 	var k: float = shape_scale
 	if kind == Kind.TEE:
 		draw_set_transform(at, 0.0, Vector2.ONE * k)
-		for side: float in [-1.0, 1.0]:
-			var c: Vector2 = Vector2(side * tee_block_offset, -tee_block_radius)
+		for i: int in 2:
+			var side: float = -1.0 if i == 0 else 1.0
+			var c: Vector2 = Vector2(side * tee_block_offset, -tee_block_radius - block_lift[i] / k)
 			var r := Vector2(tee_block_radius, tee_block_radius)
 			draw_rect(Rect2(c - r - Vector2.ONE, (r + Vector2.ONE) * 2.0), ink_color)
 			draw_rect(Rect2(c - r, r * 2.0), tee_color)

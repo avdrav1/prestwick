@@ -5,17 +5,16 @@ extends Node2D
 ## the course.
 ##
 ## Lines every TopoTuning.interval steps over the visible land, with short downhill ticks on
-## each line's low side, in ink. Where a line is drawn (TopoTuning.placement): GROUND puts each
-## piece of it on the top of the tile under it (D17's rule for everything on the ground,
-## HeightField.tile_top_screen), so a line crossing a riser breaks there; LEVEL draws it at its
-## own height. At the default whole-step levels from 0 the two agree: a whole-step line runs
-## along its terrace's falling edge through the centres of the edge tiles, on their tops.
+## each line's low side, in ink. Since E3-S59 (D50) a line is drawn at its own height, which is
+## the ground's there: the course view draws the same bilinear ground the tracer follows (E3-S58),
+## so every line lies on the slope it marks, unbroken, and each downhill tick runs on the ground. Water lies flat at its level, not on the
+## bilinear ground, so no piece is drawn over a water tile.
 ##
 ## Drawing order: each line is cut at tile edges and every piece Y-sorts with the terrain at its
-## tile's top sort key plus SORT_BIAS, after that top, its edge cue and land hatch and before an
-## object on the tile (Iso.object_sort_key, + 1.5), so a hill in front hides a line behind it and
-## the ball, golfers, flags, tags and aim all draw over the lines. The pieces of one sort key
-## share one Row node, which draws them in one call.
+## tile's row key (Iso.depth_key) plus SORT_BIAS, after that row's ground and before an object
+## on the tile (Iso.object_sort_key, + 1.5 or more), so a hill in front hides a line behind it
+## and the ball, golfers, flags, tags and aim all draw over the lines. The pieces of one sort
+## key share one Row node, which draws them in one call.
 ##
 ## It traces only when the course changes or the visible window leaves the traced one (the
 ## visible tiles grown by margin_tiles), and lays its pieces out again (ticks and line widths
@@ -24,7 +23,8 @@ extends Node2D
 ## on by default, and the choice holds until it is pressed again. Never drawn in Build.
 
 const TOGGLE_ACTION: StringName = &"toggle_topo"
-## A piece's sort key past its tile's top key: after the top (+0) and before an object (+0.5).
+## A piece's sort key past its tile's row key: after the row's ground (+0) and before an object
+## on it (+1.5 or more).
 const SORT_BIAS: float = 0.25
 const INK := Color8(26, 28, 34)
 const CHALK := Color8(240, 236, 224)
@@ -220,11 +220,13 @@ func _layout(z: float) -> void:
 			var t := ContourTracer.ticks(line, spacing, length)
 			for k: int in range(0, t.size(), 2):
 				var cell := _field.tile_at(t[k].x, t[k].y)
-				var h := _height_for(cell, level)
+				if _water(cell):
+					continue
 				var key := _key(cell)
 				var rec: Array = _rec(build, key)
-				(rec[1] as Array).append(_screen(t[k], h) - Vector2(0, key))
-				(rec[1] as Array).append(_screen(t[k + 1], h) - Vector2(0, key))
+				# A tick starts on its line and runs downhill on the ground, so its foot sits on it.
+				(rec[1] as Array).append(_screen(t[k], level) - Vector2(0, key))
+				(rec[1] as Array).append(_screen(t[k + 1], _field.drawn_steps(t[k + 1].x, t[k + 1].y)) - Vector2(0, key))
 	var col := Color(INK, tuning.line_alpha)
 	for key: float in build:
 		var row := Row.new()
@@ -255,23 +257,19 @@ func _cut(a: Vector2, b: Vector2, level: float, build: Dictionary) -> void:
 			ts.append((k * ypt - a[axis]) / d[axis])
 			k += 1.0
 	ts.sort()
-	var uphill := Vector2(d.y, -d.x).normalized() * (ypt * 0.02)
 	for i: int in range(1, ts.size()):
 		if ts[i] - ts[i - 1] <= 1e-6:
 			continue
 		var p := a + d * ts[i - 1]
 		var q := a + d * ts[i]
 		var mid := (p + q) * 0.5
-		# LEVEL files a piece on a tile edge under the higher tile, so it draws after that tile's
-		# riser (a rise facing the camera) or over its top (one facing away).
-		if tuning.placement == TopoTuning.Placement.LEVEL:
-			mid += uphill
 		var cell := _field.tile_at(mid.x, mid.y)
-		var h := _height_for(cell, level)
+		if _water(cell):
+			continue
 		var key := _key(cell)
 		var rec: Array = _rec(build, key)
-		(rec[0] as Array).append(_screen(p, h) - Vector2(0, key))
-		(rec[0] as Array).append(_screen(q, h) - Vector2(0, key))
+		(rec[0] as Array).append(_screen(p, level) - Vector2(0, key))
+		(rec[0] as Array).append(_screen(q, level) - Vector2(0, key))
 
 
 func _rec(build: Dictionary, key: float) -> Array:
@@ -280,18 +278,16 @@ func _rec(build: Dictionary, key: float) -> Array:
 	return build[key]
 
 
-## The height, steps, a piece over `cell` at `level` is drawn at.
-func _height_for(cell: Vector2i, level: float) -> float:
-	if tuning.placement == TopoTuning.Placement.LEVEL:
-		return level
+## Whether `cell` (clamped onto the map) is water, which lies flat at its level: no line there.
+func _water(cell: Vector2i) -> bool:
 	var c := cell.clamp(Vector2i.ZERO, Vector2i(_course.width - 1, _course.height - 1))
-	return _course.get_height(c.x, c.y)
+	return _course.get_surface(c.x, c.y) == Surface.Type.WATER
 
 
-## The sort key of the row of `cell`: its top's, plus SORT_BIAS.
+## The sort key of the row of `cell`: its row's, plus SORT_BIAS.
 func _key(cell: Vector2i) -> float:
 	var c := cell.clamp(Vector2i.ZERO, Vector2i(_course.width - 1, _course.height - 1))
-	return Iso.top_sort_key(c, _course.get_height(c.x, c.y)) + SORT_BIAS
+	return Iso.depth_key(c) + SORT_BIAS
 
 
 ## The CourseView point of ground point `p` (yards) at `h` steps.
