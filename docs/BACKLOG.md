@@ -911,6 +911,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Test: `tests/test_balance_reactions.gd` keeps passing.
   - Touches: `data/`, `docs/`
 
+- [ ] E3-S55 Hide the placeholder tile labels in Play. The course reads as a course, not a chart.
+  - Note: (user, E3-S30 hand playtest, 2026-11-06) "remove the tile labels when in play mode". The two-letter corner labels (FW, RO, ...) are baked into the placeholder surface and riser sheets (`scripts/placeholder.py`, `art/specs/surfaces.md`); at 0.5x and below they read as white specks over every tile.
+  - Accept: `scripts/placeholder.py` also writes label-free sheets (same layout, frames and patterns); `TileArt` names them; the course view draws the labelled sheets in Build and the label-free ones in Play, switching with the mode toggle without rebuilding the map. The palette buttons keep their labels. Final art (no labels, per the spec) needs no change: when the play sheet is unset, the one sheet is used in both modes.
+  - Test: `tests/test_tile_art.gd`: the label-free sheet matches the labelled one's size and frame layout and differs only where labels were; `tests/test_course_view.gd`: Play uses the label-free textures and Build the labelled ones. Screenshot of Play at 0.5x and 1x looked at.
+  - Touches: `art/`, `course/` (view only), `scenes/`, `tests/`
+
 ## E4: Economy — planned
 
 Ships as 0.5.0 (D19). Gives building a budget and reactions a consequence. Serves pillar 3, and stays deliberately thin: one input, one output.
