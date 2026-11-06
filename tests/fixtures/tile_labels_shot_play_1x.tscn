@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/fixtures/tile_labels_shot.gd" id="1_shot"]
+
+[node name="TileLabelsShot" type="Node2D"]
+script = ExtResource("1_shot")
+play = true
+zoom_level = 1.0

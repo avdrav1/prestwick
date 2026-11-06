@@ -615,3 +615,43 @@ func test_bunker_at_height_7_does_not_clip_to_white() -> void:
 		assert_lt(minf(fill.r, minf(fill.g, fill.b)), 0.8, "sand keeps its tint at 7, shade %.3f" % s)
 		assert_gt(maxf(fill.r, maxf(fill.g, fill.b)) - minf(fill.r, minf(fill.g, fill.b)), 0.2, "sand, not white")
 
+
+
+# E3-S55: Play draws the sheets' label-free textures, Build the labelled ones, by swapping the
+# atlas sources' textures: the map's cells stay as they are.
+func _source_texture(id: int) -> Texture2D:
+	return (_view.top_layer(0).tile_set.get_source(id) as TileSetAtlasSource).texture
+
+
+func test_play_art_swaps_the_source_textures_without_redrawing() -> void:
+	var art := TileArt.load_default()
+	var sheets: Array[TileSheet] = art.course_sheets()
+	assert_not_null(art.surfaces.play_texture, "the placeholder surfaces name a label-free sheet")
+	assert_not_null(art.risers.play_texture, "the placeholder risers name a label-free sheet")
+	var c := HeightsFixture.build()
+	_view.show_course(c)
+	for id: int in sheets.size():
+		assert_eq(_source_texture(id), sheets[id].texture, "Build: source %d is labelled" % id)
+	var before: Array = []
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		before.append(_view.top_layer(h).get_used_cells())
+	_view.play_art = true
+	assert_eq(_source_texture(CourseView.SURFACE_SOURCE), art.surfaces.play_texture)
+	assert_eq(_source_texture(CourseView.RISER_SOURCE), art.risers.play_texture)
+	assert_eq(_source_texture(CourseView.EDGE_SOURCE), art.edges.texture, "no play sheet: the one sheet")
+	assert_eq(_source_texture(CourseView.LAND_SOURCE), art.land.texture, "no play sheet: the one sheet")
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		assert_eq(_view.top_layer(h).get_used_cells(), before[h], "height %d's tops stay drawn" % h)
+	_view.play_art = false
+	for id: int in sheets.size():
+		assert_eq(_source_texture(id), sheets[id].texture, "Build again: source %d is labelled" % id)
+
+
+func test_a_sheet_without_a_play_texture_draws_the_same_in_both_modes() -> void:
+	var sheet := TileSheet.new()
+	sheet.texture = TileArt.load_default().edges.texture
+	assert_eq(sheet.texture_for(true), sheet.texture, "final art: no play sheet, the one sheet in Play")
+	assert_eq(sheet.texture_for(false), sheet.texture)
+	sheet.play_texture = TileArt.load_default().surfaces.play_texture
+	assert_eq(sheet.texture_for(true), sheet.play_texture)
+	assert_eq(sheet.texture_for(false), sheet.texture)

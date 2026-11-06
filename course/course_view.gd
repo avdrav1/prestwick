@@ -56,6 +56,12 @@ extends Node2D
 ## and the shade stays value, not hue. Risers and edge cues keep their own values. The shade
 ## at the D10 plot's height is 1, so a New sandbox draws as before. A modulate, not new
 ## frames: the draw count and the tile sheet do not change.
+##
+## Play art (E3-S55): with play_art on (Main sets it in Play) every atlas source draws its
+## sheet's TileSheet.texture_for(true), the placeholder's label-free sheet, so the two-letter
+## labels show in Build only. Only the sources' textures change: the cells, frames and
+## alternatives stay, so the toggle never redraws the map. A sheet with no play_texture (final
+## art, the edge cue and land sheets) draws the same in both modes.
 
 ## Atlas source ids in the shared TileSet.
 const SURFACE_SOURCE: int = 0
@@ -116,6 +122,14 @@ var issue_max_side: float = 0.0
 ## The smallest a hole marker shows on screen, times its 1x size (BuilderTuning
 ## marker_min_screen_scale, D45).
 var marker_min_screen_scale: float = 0.5
+
+## Whether the tiles draw their sheets' Play textures (TileSheet.texture_for, E3-S55).
+var play_art: bool = false:
+	set(value):
+		play_art = value
+		var sheets: Array[TileSheet] = _art.course_sheets()
+		for id: int in sheets.size():
+			(_tile_set.get_source(id) as TileSetAtlasSource).texture = sheets[id].texture_for(value)
 
 ## Whether the issue highlights show (Build mode).
 var issues_visible: bool = true:
@@ -668,6 +682,10 @@ static func _make_tile_set(art: TileArt, tint: Color, shades: Array[PackedFloat3
 	ts.add_source(_make_source(art.risers, tint), RISER_SOURCE)
 	ts.add_source(_make_source(art.edges, tint), EDGE_SOURCE)
 	ts.add_source(_make_source(art.land), LAND_SOURCE)
+	# play_art indexes the sources by their sheet's place in TileArt.course_sheets.
+	var sheets: Array[TileSheet] = art.course_sheets()
+	for id: int in sheets.size():
+		assert((ts.get_source(id) as TileSetAtlasSource).texture == sheets[id].texture, "source %d is course_sheets()[%d]" % [id, id])
 	return ts
 
 

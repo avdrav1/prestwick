@@ -478,6 +478,9 @@ func _apply_mode() -> void:
 	feed_panel.set_in_play(not building)
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
+	# The placeholder tiles' two-letter labels are for Build; Play draws the label-free sheets
+	# (E3-S55). A texture swap, not a redraw.
+	course_view.play_art = not building
 	# The green view is Play's only (E3-S52); Main._process opens it there.
 	if building:
 		green_view.close()

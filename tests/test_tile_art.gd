@@ -114,8 +114,9 @@ func test_every_surface_has_its_own_pattern() -> void:
 func test_sheets_use_only_palette_colors() -> void:
 	var palette: Dictionary = _palette()
 	assert_eq(palette.size(), 32, "palette has 32 colors")
-	for sheet: TileSheet in [_art.surfaces, _art.risers, _art.edges, _art.land]:
-		var img: Image = sheet.texture.get_image()
+	for tex: Texture2D in [_art.surfaces.texture, _art.risers.texture, _art.edges.texture,
+			_art.land.texture, _art.surfaces.play_texture, _art.risers.play_texture]:
+		var img: Image = tex.get_image()
 		var bad: Dictionary = {}
 		for y: int in img.get_height():
 			for x: int in img.get_width():
@@ -124,7 +125,7 @@ func test_sheets_use_only_palette_colors() -> void:
 					continue
 				if c.a != 1.0 or not palette.has(c.to_html(false)):
 					bad[c.to_html()] = true
-		assert_eq(bad.size(), 0, "off-palette colors in %s: %s" % [sheet.texture.resource_path, bad.keys()])
+		assert_eq(bad.size(), 0, "off-palette colors in %s: %s" % [tex.resource_path, bad.keys()])
 
 
 func test_riser_faces_reach_the_corner_columns() -> void:
@@ -241,3 +242,65 @@ func test_land_edge_band_is_not_an_edge_cue_band() -> void:
 	assert_eq(cue_chalk, cue_total, "the edge cue lip is one solid chalk line")
 	assert_gt(land_chalk, 0, "the parcel line has chalk dashes")
 	assert_gt(land_ink, land_chalk / 2, "and ink dashes between them, so it is not solid")
+
+
+# E3-S55: the label-free play sheets (scripts/placeholder.py). Same size and frame layout as the
+# labelled sheet, and the same pixels everywhere but where the label was drawn: the label box in
+# a surface frame's left corner, the 3x5 glyphs in a riser frame's upper corner.
+const SURFACE_LABEL_BOX := Rect2i(7, 13, 9, 7)
+const RISER_LABEL_LEFT := Rect2i(6, 9, 7, 5)
+const RISER_LABEL_RIGHT := Rect2i(50, 9, 7, 5)
+
+
+func _label_rect(sheet: TileSheet, frame: String) -> Rect2i:
+	if sheet == _art.surfaces:
+		return SURFACE_LABEL_BOX
+	return RISER_LABEL_RIGHT if frame == "right" else RISER_LABEL_LEFT
+
+
+func test_play_sheets_differ_only_where_the_labels_were() -> void:
+	for sheet: TileSheet in [_art.surfaces, _art.risers]:
+		assert_not_null(sheet.play_texture, "%s has a play sheet" % sheet.texture.resource_path)
+		assert_eq(sheet.play_texture.get_size(), sheet.texture.get_size(), "same size and layout")
+		var labelled: Image = sheet.texture.get_image()
+		var play: Image = sheet.play_texture.get_image()
+		for i: int in sheet.frame_count():
+			var r: Rect2i = sheet.region(i)
+			var box: Rect2i = _label_rect(sheet, sheet.frames[i])
+			box.position += r.position
+			var inside: int = 0
+			var outside: int = 0
+			var face: Dictionary = {}
+			for y: int in range(r.position.y, r.end.y):
+				for x: int in range(r.position.x, r.end.x):
+					var p: Color = play.get_pixel(x, y)
+					var l: Color = labelled.get_pixel(x, y)
+					if not box.has_point(Vector2i(x, y)):
+						face[p.to_html()] = true
+					# Two clear pixels are the same pixel: the importer's fix_alpha_border bleeds
+					# neighbouring colour into clear ones, so their RGB may differ.
+					if p == l or (p.a == 0.0 and l.a == 0.0):
+						continue
+					if box.has_point(Vector2i(x, y)):
+						inside += 1
+					else:
+						outside += 1
+			assert_gt(inside, 0, "%s %s: the label is gone" % [sheet.texture.resource_path, sheet.frames[i]])
+			assert_eq(outside, 0, "%s %s: nothing else changed" % [sheet.texture.resource_path, sheet.frames[i]])
+			# Where the label was, only the frame's own pattern colours: no leftover label box.
+			var stray: int = 0
+			for y: int in range(box.position.y, box.end.y):
+				for x: int in range(box.position.x, box.end.x):
+					if not face.has(play.get_pixel(x, y).to_html()):
+						stray += 1
+			assert_eq(stray, 0, "%s %s: the pattern runs under the label" % [sheet.texture.resource_path, sheet.frames[i]])
+		# The gutters stay clear.
+		for i: int in range(1, sheet.frame_count()):
+			var gx: int = i * (sheet.frame_size.x + sheet.gutter) - 1
+			for y: int in sheet.frame_size.y:
+				assert_eq(play.get_pixel(gx, y).a, 0.0, "play gutter at x=%d y=%d" % [gx, y])
+
+
+func test_label_free_sheets_only_for_the_labelled_ones() -> void:
+	assert_null(_art.edges.play_texture, "the edge cues have no labels, so one sheet")
+	assert_null(_art.land.play_texture, "the land sheet has no labels, so one sheet")

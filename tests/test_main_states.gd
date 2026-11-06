@@ -58,3 +58,15 @@ func test_mode_label_follows_mode() -> void:
 	assert_eq(_main.mode_label.text, "BUILD")
 	_main.toggle_mode()
 	assert_eq(_main.mode_label.text, "PLAY")
+
+
+# E3-S55: the placeholder tile labels draw in Build only; the palette buttons keep theirs.
+func test_play_draws_the_label_free_tiles() -> void:
+	var art := TileArt.load_default()
+	assert_false(_main.course_view.play_art, "Build draws the labelled sheets")
+	_main.toggle_mode()
+	assert_true(_main.course_view.play_art, "Play draws the label-free sheets")
+	for b: Button in _main.build_palette.surface_buttons:
+		assert_eq((b.icon as AtlasTexture).atlas, art.surfaces.texture, "%s icon keeps its label" % b.text)
+	_main.toggle_mode()
+	assert_false(_main.course_view.play_art, "back in Build, the labels return")

@@ -13,7 +13,9 @@ surface is a flat, unmistakable field; no texture noise that competes with the b
 
 ## Sheet
 
-- File: `art/tiles/surfaces_<state>.png`. Placeholder: `art/tiles/surfaces_placeholder.png`.
+- File: `art/tiles/surfaces_<state>.png`. Placeholder: `art/tiles/surfaces_placeholder.png`,
+  and its label-free Play copy `art/tiles/surfaces_play_placeholder.png` (E3-S55): the same
+  frames and patterns, the pattern running under where the label box was.
 - One row of 9 frames, each 64x32, no padding, 1 px transparent gutter. Sheet is 584x32.
 - Frame order is the surface enum from `/course-file`, so frame index == surface value.
 - Frame shape: the 2:1 diamond, pixel-center rasterized. Rows widen by 4 px per row,
@@ -71,6 +73,9 @@ projection returns for the tile's center at its height. Tile at grid (i, j), hei
 ## Code that reads it
 
 - `art/tiles/surfaces.tres` (`TileArt`), field `surfaces` (`TileSheet`).
+- The sheet's `play_texture` is the label-free copy; the course view draws it in Play
+  (`CourseView.play_art`, E3-S55) and the labelled `texture` in Build. Unset, `texture` is
+  drawn in both modes.
 - `TileArt.load_default().surface_texture(&"green")` returns an `AtlasTexture`;
   `TileSheet.region(index)` returns the pixel rect for a TileSet atlas.
 - The course renderer (E1-S4) and the builder's surface palette (E1-S5).
@@ -82,6 +87,9 @@ projection returns for the tile's center at its height. Tile at grid (i, j), hei
   above. Point `surfaces.tres` at the new file; nothing else changes.
 - Keep the anchor at (32, 16) and the diamond rasterization above, or tiles will gap.
 - Keep one pattern per surface; it can be subtler, but it must survive a grayscale
-  screenshot. Drop the corner labels.
+  screenshot. Drop the corner labels: the labels are a placeholder aid for Build, and Play
+  already hides them (E3-S55). With final art, leave `play_texture` unset in `surfaces.tres`
+  (and delete the play placeholder), so the one sheet draws in both modes; the Build palette's
+  icons come from the same sheet.
 - Only colors from `art/palette.gpl`.
 - Regenerate the placeholder with `python3 scripts/placeholder.py surfaces`.

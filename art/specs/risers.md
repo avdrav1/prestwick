@@ -13,7 +13,9 @@ counted. Clear and blocky, like Mean 18's terrain edges; no grass overhang yet.
 
 ## Sheet
 
-- File: `art/tiles/risers_<state>.png`. Placeholder: `art/tiles/risers_placeholder.png`.
+- File: `art/tiles/risers_<state>.png`. Placeholder: `art/tiles/risers_placeholder.png`,
+  and its label-free Play copy `art/tiles/risers_play_placeholder.png` (E3-S55, the same
+  frames without the labels; `play_texture` in `surfaces.tres`).
 - One row of 3 frames, each 64x32, no padding, 1 px transparent gutter. Sheet is 194x32.
 
 | # | Frame | Contents | Label |
@@ -53,5 +55,6 @@ height; `both` is the common case.
   edge for tiles next to water. Rises that face away from the camera have no riser; their
   lip line is its own sheet, `art/specs/edge_cue.md` (E1-S10). There are no ramp frames:
   D5 dropped ramp tiles.
-- Only colors from `art/palette.gpl`. Drop the labels.
+- Only colors from `art/palette.gpl`. Drop the labels, and leave `play_texture` unset for the
+  risers in `surfaces.tres` (delete the play placeholder): Play draws the one sheet then.
 - Regenerate the placeholder with `python3 scripts/placeholder.py risers`.

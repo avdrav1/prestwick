@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="TileArt" load_steps=10 format=3]
+[gd_resource type="Resource" script_class="TileArt" load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://art/tiles/tile_art.gd" id="1_art"]
 [ext_resource type="Script" path="res://art/tiles/tile_sheet.gd" id="2_sheet"]
@@ -6,10 +6,13 @@
 [ext_resource type="Texture2D" path="res://art/tiles/risers_placeholder.png" id="4_riser"]
 [ext_resource type="Texture2D" path="res://art/tiles/edges_placeholder.png" id="5_edge"]
 [ext_resource type="Texture2D" path="res://art/tiles/land_placeholder.png" id="6_land"]
+[ext_resource type="Texture2D" path="res://art/tiles/surfaces_play_placeholder.png" id="7_surf_play"]
+[ext_resource type="Texture2D" path="res://art/tiles/risers_play_placeholder.png" id="8_riser_play"]
 
 [sub_resource type="Resource" id="Resource_surfaces"]
 script = ExtResource("2_sheet")
 texture = ExtResource("3_surf")
+play_texture = ExtResource("7_surf_play")
 frame_size = Vector2i(64, 32)
 gutter = 1
 frames = PackedStringArray("fairway", "rough", "green", "tee", "bunker", "water", "trees", "cart_path", "oob")
@@ -18,6 +21,7 @@ anchor = Vector2i(32, 16)
 [sub_resource type="Resource" id="Resource_risers"]
 script = ExtResource("2_sheet")
 texture = ExtResource("4_riser")
+play_texture = ExtResource("8_riser_play")
 frame_size = Vector2i(64, 32)
 gutter = 1
 frames = PackedStringArray("both", "left", "right")

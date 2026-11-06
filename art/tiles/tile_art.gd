@@ -4,6 +4,10 @@ extends Resource
 ## Surface frames are named and ordered by the surface enum (fairway 0 .. cart_path 7, oob 8),
 ## so frame index == surface value. See art/specs/surfaces.md, art/specs/risers.md,
 ## art/specs/edge_cue.md and art/specs/land.md.
+##
+## Play art (E3-S55): a sheet's play_texture is what the course view draws in Play. The
+## placeholder surfaces and risers name a label-free version there (the two-letter labels are
+## for Build); the Build palette's icons keep the labelled `texture`. Final art leaves it unset.
 
 const PATH: String = "res://art/tiles/surfaces.tres"
 
@@ -24,6 +28,12 @@ const PATH: String = "res://art/tiles/surfaces.tres"
 
 static func load_default() -> TileArt:
 	return load(PATH) as TileArt
+
+
+## Every sheet the course view draws, in its atlas source order (CourseView.SURFACE_SOURCE ..
+## LAND_SOURCE).
+func course_sheets() -> Array[TileSheet]:
+	return [surfaces, risers, edges, land]
 
 
 func surface_texture(surface_name: StringName) -> AtlasTexture:

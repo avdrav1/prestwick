@@ -3,7 +3,9 @@
 
 Usage:
   scripts/placeholder.py surfaces            -> art/tiles/surfaces_placeholder.png
+                                                and surfaces_play_placeholder.png (E3-S55)
   scripts/placeholder.py risers              -> art/tiles/risers_placeholder.png
+                                                and risers_play_placeholder.png (E3-S55)
   scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
   scripts/placeholder.py land                -> art/tiles/land_placeholder.png
   scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
@@ -15,6 +17,10 @@ Usage:
 Sheets follow the art-spec constants: PNG, no padding, 1 px transparent gutter
 between frames, one row. Every pixel is a palette color or fully transparent.
 Placeholders are never final; the spec in art/specs/ is the handoff.
+
+The labelled course sheets (surfaces, risers) also come in a label-free "play" version (E3-S55):
+the same frames, layout and patterns with the two-letter labels left out, which the course view
+draws in Play. The edge cue and land sheets have no labels, so they have no play version.
 """
 from __future__ import annotations
 
@@ -225,7 +231,7 @@ EDGE = {
 }
 
 
-def surface_frame(name: str, label: str, p: dict[str, Color]) -> Image:
+def surface_frame(name: str, label: str, p: dict[str, Color], labelled: bool = True) -> Image:
     img = Image(TILE_W, TILE_H)
     for y in range(TILE_H):
         for x in range(TILE_W):
@@ -236,6 +242,8 @@ def surface_frame(name: str, label: str, p: dict[str, Color]) -> Image:
                 img.set(x, y, p[EDGE[name]])
             else:
                 img.set(x, y, surface_pixel(name, x, y, p))
+    if not labelled:  # the play sheet (E3-S55): the pattern runs under where the label was
+        return img
     # Label in the left corner, clear of the pattern's center.
     lx, ly = 8, 14
     for yy in range(ly - 1, ly + 6):
@@ -245,10 +253,10 @@ def surface_frame(name: str, label: str, p: dict[str, Color]) -> Image:
     return img
 
 
-def build_surfaces(p: dict[str, Color]) -> Image:
+def build_surfaces(p: dict[str, Color], labelled: bool = True) -> Image:
     p = dict(p)
     p["tree_light_px"] = p["rough"]
-    return sheet([surface_frame(n, lbl, p) for n, lbl in SURFACES])
+    return sheet([surface_frame(n, lbl, p, labelled) for n, lbl in SURFACES])
 
 
 # --- risers ----------------------------------------------------------------
@@ -256,7 +264,7 @@ def build_surfaces(p: dict[str, Color]) -> Image:
 RISERS = [("both", "RB"), ("left", "RL"), ("right", "RR")]
 
 
-def riser_frame(which: str, label: str, p: dict[str, Color]) -> Image:
+def riser_frame(which: str, label: str, p: dict[str, Color], labelled: bool = True) -> Image:
     img = Image(TILE_W, TILE_H)
     for y in range(TILE_H):
         for x in range(TILE_W):
@@ -275,6 +283,8 @@ def riser_frame(which: str, label: str, p: dict[str, Color]) -> Image:
             if x in (TILE_W // 2 - 1, TILE_W // 2) and which == "both":  # front corner
                 c = p["earth_light"]
             img.set(x, y, c)
+    if not labelled:  # the play sheet (E3-S55)
+        return img
     if which in ("both", "left"):
         draw_label(img, label, 6, 9, p["chalk"])
     else:
@@ -282,8 +292,8 @@ def riser_frame(which: str, label: str, p: dict[str, Color]) -> Image:
     return img
 
 
-def build_risers(p: dict[str, Color]) -> Image:
-    return sheet([riser_frame(w, lbl, p) for w, lbl in RISERS])
+def build_risers(p: dict[str, Color], labelled: bool = True) -> Image:
+    return sheet([riser_frame(w, lbl, p, labelled) for w, lbl in RISERS])
 
 
 # --- edge cue (E1-S10) -----------------------------------------------------
@@ -533,8 +543,10 @@ def main(argv: list[str]) -> int:
     jobs: list[tuple[Path, Image]] = []
     if args.thing in ("surfaces", "all"):
         jobs.append((ROOT / "art/tiles/surfaces_placeholder.png", build_surfaces(p)))
+        jobs.append((ROOT / "art/tiles/surfaces_play_placeholder.png", build_surfaces(p, labelled=False)))
     if args.thing in ("risers", "all"):
         jobs.append((ROOT / "art/tiles/risers_placeholder.png", build_risers(p)))
+        jobs.append((ROOT / "art/tiles/risers_play_placeholder.png", build_risers(p, labelled=False)))
     if args.thing in ("edges", "all"):
         jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
     if args.thing in ("land", "all"):
