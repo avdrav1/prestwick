@@ -1,10 +1,10 @@
 extends GutTest
 ## E3-S50: the playtest nine, courses/playtest_nine.json, rebuilt by
 ## tests/fixtures/playtest_nine.gd (PlaytestNine). Nine open holes on generated land, every
-## rule passing, at least four doglegs (hole 1, the hole the game opens on, among them) that
-## turn at least 50 degrees and whose line of play (D47) sets their par, every hole's fairway
-## at least 3 tiles from every other hole's, contoured greens D7 holds a ball on, and the file
-## in step with the fixture.
+## rule passing, at least four doglegs (hole 1, the hole the game opens on, among them) whose
+## fairways sweep 35 to 75 degrees in smooth arcs, no sharp corner, and whose line of play
+## (D47) sets their par, every hole's fairway at least 3 tiles from every other hole's,
+## contoured greens D7 holds a ball on, and the file in step with the fixture.
 
 var _v: CourseValidator
 var _c: CourseData
@@ -93,39 +93,64 @@ func test_a_mix_of_lengths() -> void:
 	assert_gte(fives, 1, "a par 5")
 
 
-func test_doglegs_measure_round_the_corner() -> void:
-	var doglegs := 0
+func test_doglegs_sweep_in_smooth_arcs() -> void:
+	var doglegs: Array[int] = []
 	var lefts := 0
 	var rights := 0
 	var watered := 0
 	var par_moved := 0
-	for h: HoleData in _c.holes:
+	for spec: Dictionary in PlaytestNine.HOLES:
+		var h := _hole(spec["n"])
+		var line := _centre_line(h, spec)
+		if line.size() < 3:
+			continue
+		# The painted fairway's heading changes a little at a time: no corner.
+		var bend := 0.0
+		for i: int in range(1, line.size() - 1):
+			var step := rad_to_deg((line[i] - line[i - 1]).angle_to(line[i + 1] - line[i]))
+			assert_lte(absf(step), 30.0, "hole %d bends %.0f degrees between samples %d and %d" % [h.number, step, i, i + 1])
+			bend += step
+		if absf(bend) < 35.0:
+			continue
+		doglegs.append(h.number)
+		# A sweep, not a hairpin: 35 to 75 degrees from the tee's heading to the green's.
+		assert_between(absf(bend), 35.0, 75.0, "hole %d turns %.0f degrees tee to green" % [h.number, bend])
+		# Tile y runs down the map, so a positive angle turns right.
+		if bend > 0.0:
+			rights += 1
+		else:
+			lefts += 1
+		# D47: the bend still reads as one, so the hole is measured along its line of play.
 		var turn: Variant = _v.turn_point(_c, h)
+		assert_not_null(turn, "hole %d is measured round its bend" % h.number)
 		if turn == null:
 			continue
-		doglegs += 1
-		var b: Vector2 = turn
 		var yd := _v.hole_yardage(_c, h)
-		assert_eq(h.par, _v.par_for_yardage(yd), "hole %d: par from %d yd round the corner" % [h.number, yd])
+		assert_eq(h.par, _v.par_for_yardage(yd), "hole %d: par from %d yd round the bend" % [h.number, yd])
 		if _v.par_for_yardage(CourseValidator.yardage(h.tee, h.cup)) != h.par:
 			par_moved += 1
-		# Tile y runs down the map, so a positive cross product turns right.
-		var cross := (b - Vector2(h.tee)).cross(Vector2(h.cup) - b)
-		if cross > 0.0:
-			rights += 1
-		elif cross < 0.0:
-			lefts += 1
-		if _water_near(b, 8.0):
+		if _water_near(turn, 8.0):
 			watered += 1
-		# A dogleg that reads as one: the second leg turns well away from the first.
-		var turn_deg := rad_to_deg((b - Vector2(h.tee)).angle_to(Vector2(h.cup) - b))
-		assert_gte(absf(turn_deg), 50.0, "hole %d turns %.0f degrees at the corner" % [h.number, turn_deg])
-	assert_gte(doglegs, 4, "doglegs")
-	assert_not_null(_v.turn_point(_c, _hole(1)), "hole 1, the hole the game opens on, is a dogleg")
+	assert_gte(doglegs.size(), 4, "doglegs %s" % [doglegs])
+	assert_has(doglegs, 1, "hole 1, the hole the game opens on, is a dogleg")
 	assert_gte(lefts, 1, "a dogleg left")
 	assert_gte(rights, 1, "a dogleg right")
-	assert_gte(watered, 1, "a dogleg with water on the corner")
+	assert_gte(watered, 1, "a dogleg with water inside the bend")
 	assert_gte(par_moved, 1, "a dogleg whose straight line would be another par")
+
+
+## The centre line `h`'s fairway is painted along (PlaytestNine.centre_line, the Bezier sweep
+## on a dogleg), a sample every 2 tiles, each checked to sit on fairway the course holds, so
+## the bend measured is the one on the map.
+func _centre_line(h: HoleData, spec: Dictionary) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for p: Vector2 in PlaytestNine.centre_line(spec):
+		if out.is_empty() or p.distance_to(out[-1]) >= 2.0:
+			out.append(p)
+	for p: Vector2 in out:
+		var t := Vector2i(p.round())
+		assert_eq(_c.get_surface(t.x, t.y), Surface.Type.FAIRWAY, "hole %d centre line %s on fairway" % [h.number, t])
+	return out
 
 
 func _water_near(p: Vector2, r: float) -> bool:
@@ -142,7 +167,7 @@ func _water_near(p: Vector2, r: float) -> bool:
 func test_fairways_are_separate() -> void:
 	var owner := {}
 	for spec: Dictionary in PlaytestNine.HOLES:
-		for t: Vector2i in PlaytestNine.strip(spec["fairway"], spec["width"]):
+		for t: Vector2i in PlaytestNine.fairway_tiles(spec):
 			if _c.in_bounds(t.x, t.y) and _c.get_surface(t.x, t.y) == Surface.Type.FAIRWAY:
 				assert_false(owner.has(t), "fairway %s is in two holes' strips" % t)
 				owner[t] = spec["n"]

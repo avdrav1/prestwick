@@ -8,9 +8,11 @@ extends RefCounted
 ##
 ## Each hole is a spec in HOLES (tile coordinates, 5 yd a tile):
 ## - tee: the tee marker, on a 3 x 3 tee box (`tee_lift` steps above the ground it sits on).
-## - fairway: a polyline of points, painted `width` tiles wide (4 to 7). On a dogleg the
-##   fairway bends away from the straight tee-to-cup line, so rule 4 (D47) measures the hole
-##   round the corner (CourseValidator.turn_point) and the line of play sets its par.
+## - fairway: a polyline of points, painted `width` tiles wide (4 to 7); with `curve` the
+##   points control a Bezier curve instead (centre_line), sampled densely so the strip sweeps
+##   with no notches. On a dogleg the curve bows far enough from the straight tee-to-cup line
+##   that rule 4's disc 240 yd out holds no fairway, so D47 measures the hole round the bend
+##   (CourseValidator.turn_point) and the line of play sets its par.
 ## - green: [centre, half length, half width, angle in degrees, lift, contour direction,
 ##   steps, run, offset]: an ellipse of 25 to 60 tiles, `lift` steps above the mean ground
 ##   under it, rising `steps` one-step contours along `contour direction`, one every `run`
@@ -21,12 +23,13 @@ extends RefCounted
 ##   is dug one step below the lowest ground round it, as the land's own ponds are.
 ## - clear: [polyline, width] painted rough: a chute cut through a tree stand.
 ##
-## The routing (E3-S50 rework): four doglegs of about 90 degrees, legs along the tile axes so
-## their edges run straight on screen, each a straight leg of about 240 yd to the corner and a
-## clearly separate second leg, the inside of the corner blocked by a hill, trees or water;
-## every hole's fairway at least 3 tiles of rough or trees from every other hole's. Hole 1
-## opens the game framed (Main.frame_first_hole), so it is a dogleg in the north-west whose
-## corner points up the screen, clear of the HUD, and the nine finishes beside its tee.
+## The routing (E3-S50 rework, curved): four doglegs whose fairways sweep 50 to 70 degrees in
+## one smooth arc from tee to green, two each way, the inside of each bend blocked by a hill,
+## trees or water so cutting it is a visible risk; hole 4 sweeps gently and hole 8 runs
+## straight. Every hole's fairway is at least 3 tiles of rough or trees from every other
+## hole's. Hole 1 opens the game framed (Main.frame_first_hole), so it is a dogleg in the
+## north-west whose bend bows up the screen, clear of the HUD, and the nine finishes beside
+## its tee.
 ## FILLS are the land's ponds a hole needs the ground of: their water is painted rough and
 ## raised one step, to the ground round them.
 ##
@@ -41,76 +44,81 @@ const LAND_SEED: int = 7
 const PATH: String = "res://courses/playtest_nine.json"
 const COURSE_NAME: String = "Playtest Nine"
 const COURSE_AUTHOR: String = "E3-S50"
+## A curved fairway's centre line is sampled at least this often, in tiles.
+const CURVE_STEP: float = 0.25
 
-## Land ponds filled (Rect2i, only their water tiles): the pond across hole 1's first leg.
-const FILLS: Array[Rect2i] = [Rect2i(0, 32, 21, 14)]
+## Land ponds filled (Rect2i, only their water tiles): the pond across hole 1's first leg and
+## the one across the end of hole 5's sweep.
+const FILLS: Array[Rect2i] = [Rect2i(0, 32, 21, 14), Rect2i(72, 37, 13, 11)]
 
 const HOLES: Array = [
 	{
-		# Dogleg right, the opening hole: north up the west edge, then right along the north
-		# flank of the hill, which with its trees fills the inside corner.
-		"n": 1, "par": 4, "tee": Vector2i(10, 56), "cup": Vector2i(44, 8), "tee_lift": 1,
-		"fairway": [Vector2(10, 51), Vector2(10, 8), Vector2(38, 8)],
+		# Dogleg right, the opening hole: north up the west edge, sweeping right round the hill,
+		# whose trees fill the inside of the bend, to a green east of the hill.
+		"n": 1, "par": 4, "tee": Vector2i(10, 56), "cup": Vector2i(50, 8), "tee_lift": 1,
+		"fairway": [Vector2(10, 51), Vector2(12, 16), Vector2(44, 7)], "curve": true,
 		"width": 5.0,
-		"green": [Vector2(44, 8), 4.5, 3.2, 0.0, 0, Vector2(-1, 0.3), 2, 1, -1.0],
-		"bunkers": [[Vector2(5, 4), 1.5, 2.5, 0.0], [Vector2(41, 12), 1.5, 1.2, 0.0],
-				[Vector2(49, 11), 1.2, 1.2, 0.0]],
+		"green": [Vector2(50, 8), 4.5, 3.2, 0.0, 0, Vector2(-1, 0.3), 2, 1, -1.0],
+		"bunkers": [[Vector2(5, 14), 1.5, 2.5, 0.0], [Vector2(47, 12), 1.5, 1.2, 0.0],
+				[Vector2(55, 11), 1.2, 1.2, 0.0]],
 		"water": [],
-		"trees": [[Vector2(19, 18), 5.0, 2.5, 55.0], [Vector2(27, 13), 3.0, 1.5, 0.0],
-				[Vector2(16, 49), 1.5, 9.0, 0.0]],
+		"trees": [[Vector2(30, 24), 5.0, 3.0, -40.0], [Vector2(36, 15), 3.0, 1.5, 0.0],
+				[Vector2(18, 44), 1.5, 8.0, 0.0]],
 		"clear": [],
 	},
 	{
-		"n": 2, "par": 3, "tee": Vector2i(50, 4), "cup": Vector2i(78, 4), "tee_lift": 0,
+		"n": 2, "par": 3, "tee": Vector2i(58, 4), "cup": Vector2i(84, 4), "tee_lift": 0,
 		"fairway": [],
 		"width": 5.0,
-		"green": [Vector2(78, 4), 4.0, 3.0, 0.0, 0, Vector2(-1, -0.4), 1, 1, 0.5],
-		"bunkers": [[Vector2(73, 8), 1.5, 1.2, 0.0]],
+		"green": [Vector2(84, 4), 4.0, 3.0, 0.0, 0, Vector2(-1, -0.4), 1, 1, 0.5],
+		"bunkers": [[Vector2(79, 8), 1.5, 1.2, 0.0]],
 		"water": [],
 		"trees": [],
 		"clear": [],
 	},
 	{
-		# Dogleg right round a pond and the trees inside the corner.
-		"n": 3, "par": 4, "tee": Vector2i(70, 12), "cup": Vector2i(118, 52), "tee_lift": 0,
-		"fairway": [Vector2(75, 12), Vector2(118, 12), Vector2(118, 46)],
+		# Dogleg right, sweeping round a pond and the trees inside the bend.
+		"n": 3, "par": 4, "tee": Vector2i(66, 12), "cup": Vector2i(118, 50), "tee_lift": 0,
+		"fairway": [Vector2(71, 10), Vector2(108, 14), Vector2(117, 44)], "curve": true,
 		"width": 5.0,
-		"green": [Vector2(118, 52), 4.5, 3.2, 90.0, 0, Vector2(0.3, -1), 2, 1, -1.0],
-		"bunkers": [[Vector2(122, 8), 1.5, 2.5, 0.0], [Vector2(113, 55), 1.2, 2.0, 0.0]],
-		"water": [[Vector2(110, 20), 4.5, 3.5, 0.0]],
-		"trees": [[Vector2(107, 36), 2.5, 6.0, 0.0], [Vector2(124, 30), 1.5, 8.0, 0.0]],
+		"green": [Vector2(118, 50), 4.5, 3.2, 90.0, 0, Vector2(0.3, -1), 2, 1, -1.0],
+		"bunkers": [[Vector2(123, 24), 1.5, 2.5, 0.0], [Vector2(113, 53), 1.2, 2.0, 0.0]],
+		"water": [[Vector2(103, 27), 4.0, 3.0, 30.0]],
+		"trees": [[Vector2(100, 38), 6.0, 2.5, 35.0], [Vector2(124, 36), 1.5, 7.0, 0.0]],
 		"clear": [],
 	},
 	{
-		"n": 4, "par": 3, "tee": Vector2i(122, 64), "cup": Vector2i(122, 96), "tee_lift": 0,
-		"fairway": [],
+		# A gentle sweep down the east edge.
+		"n": 4, "par": 4, "tee": Vector2i(123, 59), "cup": Vector2i(116, 124), "tee_lift": 0,
+		"fairway": [Vector2(123, 64), Vector2(125, 92), Vector2(117, 118)], "curve": true,
 		"width": 5.0,
-		"green": [Vector2(122, 96), 4.0, 3.0, 90.0, 1, Vector2(-1, 0.3), 1, 1, 0.5],
-		"bunkers": [[Vector2(117, 93), 1.2, 1.5, 0.0]],
+		"green": [Vector2(116, 124), 4.0, 3.0, 0.0, 1, Vector2(-1, -0.3), 1, 1, 0.5],
+		"bunkers": [[Vector2(119, 88), 1.2, 2.0, 0.0], [Vector2(111, 121), 1.2, 1.5, 0.0]],
 		"water": [],
-		"trees": [],
+		"trees": [[Vector2(115, 76), 1.5, 8.0, 0.0]],
 		"clear": [],
 	},
 	{
-		# Dogleg right, the par 5: west between two of the land's ponds, then north up the hill.
-		"n": 5, "par": 5, "tee": Vector2i(126, 112), "cup": Vector2i(76, 52), "tee_lift": 0,
-		"fairway": [Vector2(121, 112), Vector2(76, 112), Vector2(76, 60)],
-		"width": 5.0,
-		"green": [Vector2(76, 52), 4.5, 3.0, 0.0, 0, Vector2(0, -1), 1, 1, 0.5],
-		"bunkers": [[Vector2(81, 116), 2.5, 1.2, 0.0], [Vector2(82, 55), 1.5, 1.2, 0.0]],
+		# Dogleg left, the par 5: north past the pond, sweeping left round the big hill and the
+		# trees on it, then north-west to a green below the first green.
+		"n": 5, "par": 5, "tee": Vector2i(108, 114), "cup": Vector2i(62, 24), "tee_lift": 0,
+		"fairway": [Vector2(106, 109), Vector2(106, 50), Vector2(66, 29)], "curve": true,
+		"width": 6.0,
+		"green": [Vector2(62, 24), 4.5, 3.0, 28.0, 0, Vector2(-1, -0.3), 1, 1, 0.5],
+		"bunkers": [[Vector2(100, 80), 1.2, 2.5, 0.0], [Vector2(67, 20), 1.5, 1.2, 0.0]],
 		"water": [],
-		"trees": [],
+		"trees": [[Vector2(90, 70), 5.0, 3.0, 60.0]],
 		"clear": [],
 	},
 	{
-		# Dogleg left, the other par 5: west through the trees, then south past the pond.
-		"n": 6, "par": 5, "tee": Vector2i(71, 46), "cup": Vector2i(22, 108), "tee_lift": 0,
-		"fairway": [Vector2(66, 46), Vector2(22, 46), Vector2(22, 102)],
+		# Dogleg left: south-west off the hill, sweeping left past the pond inside the bend.
+		"n": 6, "par": 4, "tee": Vector2i(52, 26), "cup": Vector2i(22, 108), "tee_lift": 0,
+		"fairway": [Vector2(50, 31), Vector2(18, 62), Vector2(22, 102)], "curve": true,
 		"width": 5.0,
 		"green": [Vector2(22, 108), 4.5, 3.2, 90.0, 0, Vector2(-1, -0.3), 1, 2, 0.0],
 		"bunkers": [[Vector2(17, 80), 1.2, 2.5, 0.0], [Vector2(27, 105), 1.2, 2.0, 0.0]],
 		"water": [],
-		"trees": [[Vector2(30, 56), 3.0, 3.0, 0.0]],
+		"trees": [[Vector2(33, 72), 3.0, 2.5, 0.0]],
 		"clear": [],
 	},
 	{
@@ -236,6 +244,42 @@ static func strip(points: Array, width: float) -> Array[Vector2i]:
 					seen[t] = true
 					out.append(t)
 	return out
+
+
+## The fairway's centre line of a spec: its `fairway` points as a polyline, or with `curve`
+## the Bezier curve they control (three points quadratic, four cubic), sampled every
+## CURVE_STEP tiles of the control polygon or closer, so the strip painted along it is a
+## smooth sweep with no one-tile notches.
+static func centre_line(spec: Dictionary) -> Array[Vector2]:
+	var pts: Array[Vector2] = []
+	for p: Vector2 in spec["fairway"]:
+		pts.append(p)
+	if not spec.get("curve", false) or pts.size() < 3:
+		return pts
+	var span := 0.0
+	for i: int in pts.size() - 1:
+		span += pts[i].distance_to(pts[i + 1])
+	var n: int = maxi(ceili(span / CURVE_STEP), 1)
+	var out: Array[Vector2] = []
+	for i: int in n + 1:
+		out.append(bezier(pts, float(i) / n))
+	return out
+
+
+## The point at `t` (0 to 1) on the Bezier curve of control points `pts` (de Casteljau).
+static func bezier(pts: Array[Vector2], t: float) -> Vector2:
+	var p: Array[Vector2] = pts.duplicate()
+	while p.size() > 1:
+		var next: Array[Vector2] = []
+		for i: int in p.size() - 1:
+			next.append(p[i].lerp(p[i + 1], t))
+		p = next
+	return p[0]
+
+
+## A spec's fairway tiles: `width` wide along its centre_line.
+static func fairway_tiles(spec: Dictionary) -> Array[Vector2i]:
+	return strip(centre_line(spec), spec["width"])
 
 
 ## The green's tiles of a spec.
@@ -392,7 +436,7 @@ static func _min_height(course: CourseData, cells: Array[Vector2i], margin: int)
 # --- surfaces ---
 
 static func _paint_hole(b: CourseBuilder, course: CourseData, spec: Dictionary) -> void:
-	_paint(b, course, strip(spec["fairway"], spec["width"]), Surface.Type.FAIRWAY)
+	_paint(b, course, fairway_tiles(spec), Surface.Type.FAIRWAY)
 	for e: Array in spec["bunkers"]:
 		_paint(b, course, ellipse(e), Surface.Type.BUNKER)
 	for e: Array in spec["water"]:
