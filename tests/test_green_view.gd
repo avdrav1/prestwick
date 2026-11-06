@@ -176,3 +176,152 @@ func test_it_only_reads_the_course() -> void:
 	await get_tree().process_frame
 	assert_true(m.green_view.is_open)
 	assert_eq(m.course.content_hash(), before)
+
+
+# --- E3-S53: aim and putt in the green view ---
+
+## Counts the mouse buttons that reach unhandled input (where TagClicks, BuildTool,
+## SwingControl and the camera take them).
+class ClickProbe:
+	extends Node
+	var seen: int = 0
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			seen += 1
+
+
+## GUT's own output panel sits over the middle of the root viewport and would take the mouse
+## events these tests push there: hidden while a test runs.
+func before_each() -> void:
+	_gut_layer(false)
+
+
+func after_each() -> void:
+	_gut_layer(true)
+
+
+func _gut_layer(shown: bool) -> void:
+	var layer := get_tree().root.get_node_or_null("GutRunner/GutLayer") as CanvasLayer
+	if layer != null:
+		layer.visible = shown
+
+
+## Sends a mouse event to the viewport at screen point `at`, as the real mouse does.
+func _push(m: Main, ev: InputEventMouse, at: Vector2) -> void:
+	ev.position = at
+	ev.global_position = at
+	m.get_viewport().push_input(ev, true)
+
+
+func _move(m: Main, at: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	_push(m, ev, at)
+
+
+func _click(m: Main, at: Vector2, pressed: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = pressed
+	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	_push(m, ev, at)
+
+
+## The screen point of panel point `local`.
+func _screen(gv: GreenView, local: Vector2) -> Vector2:
+	return gv.get_global_transform_with_canvas() * local
+
+
+func test_a_cursor_on_the_panel_aims_at_the_tile_under_it() -> void:
+	var m := _main("contoured")
+	var gv := m.green_view
+	var sc := m.swing_control
+	var made := GreenViewShot.course("contoured")
+	_rest(m, made.ball, made.cup)
+	await get_tree().process_frame
+	for target: Vector2i in [Vector2i(25, 11), Vector2i(19, 12), Vector2i(23, 18)]:
+		_move(m, _screen(gv, gv.tile_rect(target).get_center()))
+		var to := sc.field.tile_center(target) - sc.ball_at
+		assert_almost_eq(sc.aim_deg, fposmod(rad_to_deg(to.angle()), 360.0), 0.01,
+				"the heading from the ball to tile %s" % target)
+	# The isometric aim line follows the same heading once its solve catches up.
+	sc._refresh_aim()
+	sc.settle_aim()
+	assert_almost_eq(sc.aim_prediction_deg, sc.aim_deg, 0.001, "the aim line is along it")
+	assert_same(m.aim_view.prediction, sc.aim_putt.prediction)
+	# The aim keys still turn it, and the mouse takes it back only once it moves on.
+	var before := sc.aim_deg
+	var key := InputEventAction.new()
+	key.action = SwingControl.AIM_RIGHT
+	key.pressed = true
+	m.get_viewport().push_input(key, true)
+	assert_almost_eq(sc.aim_deg, fposmod(before + sc.tuning.aim_key_step_deg, 360.0), 0.001,
+			"an aim key turns it")
+	var turned := sc.aim_deg
+	var still := m.get_viewport().get_mouse_position()
+	_move(m, still)
+	assert_almost_eq(sc.aim_deg, turned, 0.001, "a mouse that has not moved keeps the key's aim")
+
+
+func test_a_click_on_the_panel_swings_and_never_reaches_the_map() -> void:
+	var m := _main()
+	var gv := m.green_view
+	var made := GreenViewShot.course("flat")
+	_rest(m, made.ball, made.cup)
+	await get_tree().process_frame
+	var probe := ClickProbe.new()
+	m.add_child(probe)
+	var at := _screen(gv, gv.tile_rect(gv.window.position + Vector2i(1, 1)).get_center())
+	assert_true(gv.get_global_rect().has_point(at), "the click is on the panel")
+	var before := m.course.content_hash()
+	_click(m, at, true)
+	_click(m, at, false)
+	assert_eq(probe.seen, 0, "neither the press nor the release reaches TagClicks or the map")
+	assert_false(m.tag_clicks._held)
+	assert_eq(m.mode, Main.Mode.PLAY, "no Build switch")
+	assert_true(m.swing_control.swing.in_progress(), "the click is a swing click")
+	assert_eq(m.course.content_hash(), before)
+	# The wheel and the middle button go on to the camera (zoom, drag), so a drag let go over
+	# the panel never sticks.
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_MIDDLE
+	wheel.pressed = false
+	_push(m, wheel, at)
+	assert_eq(probe.seen, 1, "a middle button release on the panel reaches the camera")
+	probe.seen = 0
+	# A click off the panel still reaches the map, as before.
+	m.swing_control.swing.reset()
+	var off := Vector2(gv.get_global_rect().position.x - 20.0, gv.get_global_rect().get_center().y)
+	assert_false(gv.get_global_rect().has_point(off))
+	_click(m, off, true)
+	_click(m, off, false)
+	assert_gt(probe.seen, 0, "a click on the map goes on to it")
+
+
+func test_the_ball_in_the_panel_follows_the_putt_each_frame() -> void:
+	var m := _main("contoured")
+	var gv := m.green_view
+	var sc := m.swing_control
+	var made := GreenViewShot.course("contoured")
+	_rest(m, made.ball, made.cup)
+	assert_almost_eq(gv.ball_panel().distance_to(gv.to_panel(made.ball)), 0.0, 0.001)
+	sc.swing.set_result(sc.aim_power, 0.0)
+	sc._strike()
+	assert_true(sc.is_ball_moving())
+	var frames := 0
+	var moved := 0.0
+	var last := gv.ball_panel()
+	while sc.is_ball_moving() and frames < 2000:
+		m.shot_view.advance(1.0 / 60.0)
+		gv.follow(m.free_view_rect())
+		if not sc.is_ball_moving():
+			break
+		var p := m.shot_view.drawn_position()
+		assert_true(gv.is_open, "open while the putt rolls")
+		assert_almost_eq(gv.ball_panel().distance_to(gv.to_panel(Vector2(p.x, p.y))), 0.0, 0.001)
+		moved += gv.ball_panel().distance_to(last)
+		last = gv.ball_panel()
+		frames += 1
+	assert_gt(frames, 30, "the roll took frames")
+	assert_gt(moved, gv.tile_px * 2.0, "and the drawn ball crossed the panel")
+	assert_eq(gv.dot_points().size(), 0, "no aim line while it rolls")

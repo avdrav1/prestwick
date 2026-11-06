@@ -15,6 +15,16 @@ extends Control
 ## putt rolls (the ball is drawn where it is each frame). `toggle_green_view` (G) hides and
 ## shows it; the choice holds until it is pressed again. It only reads CourseData.
 ##
+## Aiming and putting in it (E3-S53): while it shows, the mouse over the panel aims (the heading
+## from the ball to the ground point under the cursor, in the panel's top-down space,
+## SwingControl.aim_at), so the isometric aim line turns with it; the aim keys still turn the
+## aim (SwingControl takes them, and the mouse takes the aim back only once it moves
+## SwingTuning.mouse_reaim_px, as on the map). A left click on the panel is a swing click
+## (SwingControl.press), as one on the map is, and the swing bar runs as ever. The panel takes
+## the mouse motion and the left and right buttons over it, so no click on it reaches the map: no
+## tag click (TagClicks), no Build switch, no paint, and the cursor over it never aims at the
+## isometric ground behind it. The middle button and the wheel go on to the camera.
+##
 ## Drawn in code with art/palette.gpl colours until the final art (E5-S3). Numbers in
 ## scenes/green_view_tuning.tres.
 
@@ -69,7 +79,9 @@ var _overlay: Control
 func _init() -> void:
 	tuning = GreenViewTuning.load_default()
 	visible = false
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# PASS, not STOP: the panel accepts the motion and left button itself (_gui_input), and the
+	# middle button and wheel go on to the camera, so a drag let go over it never sticks.
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	clip_contents = true
 	_terrain = Control.new()
 	_terrain.name = "Terrain"
@@ -135,6 +147,23 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(TOGGLE_ACTION):
 		toggle()
 		get_viewport().set_input_as_handled()
+
+
+func _gui_input(event: InputEvent) -> void:
+	if control == null:
+		return
+	var motion := event as InputEventMouseMotion
+	if motion != null:
+		if control.active and not control.swing.in_progress() \
+				and control.mouse_takes_aim(motion.global_position):
+			control.aim_at(to_yards(motion.position))
+		accept_event()
+		return
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
+			control.press()
+		accept_event()
 
 
 func _open_at(c: CourseData, ball: Vector2) -> void:
@@ -230,6 +259,11 @@ func ball_point() -> Vector2:
 	return control.ball_at
 
 
+## The ball's panel point, as drawn (ball_point).
+func ball_panel() -> Vector2:
+	return to_panel(ball_point())
+
+
 ## The marker's panel point (the AimView's marker: the putt's rest, PuttAim), or null when no
 ## aim is shown.
 func marker_panel() -> Variant:
@@ -280,7 +314,7 @@ func _draw() -> void:
 	var fs := 13
 	draw_string(font, Vector2(tuning.inset_px + 2.0, tuning.inset_px + fs), "Green view",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, CHALK)
-	draw_string(font, Vector2(tuning.inset_px, tuning.inset_px + fs), "G hides",
+	draw_string(font, Vector2(tuning.inset_px, tuning.inset_px + fs), "Mouse aims, click swings, G hides",
 			HORIZONTAL_ALIGNMENT_RIGHT, size.x - 2.0 * tuning.inset_px - 2.0, fs, Color8(168, 168, 176))
 
 
@@ -453,7 +487,7 @@ func _draw_overlay() -> void:
 	var mp: Variant = marker_panel()
 	if mp != null and not control.is_ball_moving():
 		_draw_marker(ci, mp as Vector2)
-	var ball := to_panel(ball_point())
+	var ball := ball_panel()
 	ci.draw_circle(ball, tuning.ball_radius_px + 1.5, INK)
 	ci.draw_circle(ball, tuning.ball_radius_px, CHALK)
 

@@ -17,6 +17,11 @@ const GREEN := Rect2i(18, 10, 9, 10)
 @export var kind: String = "flat"
 ## Grayscale: the whole screen drawn in luminance only (the colorblind check).
 @export var gray: bool = false
+## E3-S53: above 0, the putt is struck at the shown power and drawn this many seconds into
+## its roll (the ball in the panel mid-putt).
+@export var putt_seconds: float = 0.0
+## E3-S53: the aim turned this many degrees off the cup, as the cursor in the panel would.
+@export var aim_offset_deg: float = 0.0
 
 
 func _ready() -> void:
@@ -30,9 +35,16 @@ func _ready() -> void:
 	sc.set_process(false)
 	sc.place_ball(made.ball)
 	sc.aim_at(sc.field.tile_center(made.cup))
+	sc.rotate_aim(aim_offset_deg)
 	sc._refresh_aim()
 	sc.settle_aim()
 	main.swing_panel.refresh()
+	if putt_seconds > 0.0:
+		main.shot_view.set_process(false)
+		main.green_view.follow(main.free_view_rect())  # open before the strike, as in play
+		sc.swing.set_result(sc.aim_power, 0.0)
+		sc._strike()
+		main.shot_view.advance(putt_seconds)
 	if gray:
 		var layer := CanvasLayer.new()
 		layer.layer = 10
@@ -46,7 +58,8 @@ func _ready() -> void:
 		rect.material = mat
 		layer.add_child(rect)
 		add_child(layer)
-	print("green view %s: power %.2f, miss %.2f yd" % [kind, sc.aim_power, sc.aim_putt.miss_yd])
+	if sc.aim_putt != null:
+		print("green view %s: power %.2f, miss %.2f yd" % [kind, sc.aim_power, sc.aim_putt.miss_yd])
 
 
 ## The fixture course of `kind` with hole 1 on it: {course, ball (yards), cup (tile)}.
