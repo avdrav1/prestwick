@@ -880,6 +880,27 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Test: `tests/test_feed.gd`: an edit before the first stroke keeps the hole's reaction; an edit after drops it.
   - Touches: `guests/`, `tests/`
 
+- [ ] E3-S50 Build a playtest nine with doglegs and sloped greens. The hand playtest plays a course worth playing.
+  - Note: (found in the E3-S30 hand playtest, 2026-11-06) the `nine_holes` fixtures are straight 3-wide strips with flat 5 x 5 greens, built for tests and perf, so the user saw "only straight holes" and "no slopes on the greens".
+  - Accept: `courses/playtest_nine.json` (format 2, every parcel owned, New sandbox rules) holds nine open holes, par 34 to 37, built through CourseBuilder by a script (`tests/fixtures/playtest_nine.gd`, so it can be rebuilt): at least three doglegs (one each way, one with water on the corner) whose D47 line of play sets their par; fairways 4 to 7 tiles wide with bunkers and trees; greens of 25 to 60 tiles, not square, every one with slope or a tier (one-step contours D7 holds a ball on, at least two greens with a two-step tier); a mix of lengths (two par 3s under 180 yd, one over 220; a par 5 reachable in two only by two perfect swings). `scripts/play_course.gd -- playtest` opens it. `/course-file validate` passes. A screenshot of each green at 1x (`docs/decisions/e3-s50-*.png`) is looked at before closing.
+  - Test: `tests/test_playtest_nine.gd`: nine open holes, every rule passes, the dogleg count, each green's tile count and height range, and the file round-trips through CourseSave.
+  - Touches: `tests/fixtures/`, `courses/`, `scripts/`
+- [ ] E3-S51 Make putts that roll at the cup drop at a fair rate. A putt struck at the right pace drops more often than it rolls over.
+  - Note: (found in the E3-S30 hand playtest) the user's putts roll over or past the cup. `cup_radius` 0.25 yd and `cup_capture_speed` 2.0 yd/s capture a putt finishing up to about 1.3 yd past on a flat green, but the bar maps 1 to 18 yd/s across it, so 1% of the bar is 0.17 yd/s and a 5 yd putt's pace window is a few percent of the bar.
+  - Accept: a putting target is added to docs/design.md Balance targets (a human-like click error, `power_sigma` and `accuracy_sigma` set from a skill-7 guest's D40 putt sigmas): made from 1 yd at least 90%, 3 yd 55 to 75%, 8 yd 15 to 30%, on a flat green and on a one-step contour, with three-putts from 8 yd under 15%; `/balance putting` (a new `--table putting` in `scripts/sim.gd`) measures it, and the tune (capture speed, capture radius, the putter's speed range or a distance-scaled bar, whichever moves least) meets it. Any change to putting numbers reruns `/balance reactions` and E3-S24's scoring edges and keeps them in target.
+  - Test: `tests/test_balance_putting.gd` asserts the target at `--runs 200`; `tests/test_ball.gd` keeps the capture rule's cases.
+  - Touches: `golf/`, `scripts/`, `tests/`
+- [ ] E3-S52 Draw the overhead green view. Once the player's ball rests on a green, a top-down panel shows that green (D48).
+  - Note: D48 (user, 2026-11-06). Mean 18's green view: a top-down grid of the green and a fringe round it.
+  - Accept: in Play, when the player's ball rests on a green tile, a panel (`scenes/green_view.gd`, `GreenView`, numbers in a `.tres`) opens over the isometric view, centred in the free view, drawing the green's bounding box plus `fringe_tiles` 2 tiles round it top-down, square tiles, at least 24 px a tile and the whole green in the panel: each tile's surface colour and pattern (the colorblind rule), its height as a shade, and its slope as an arrow or contour line readable in grayscale; the cup, the ball, the putt line's dots and the putter's marker (the same `PuttAim` solve, no second solve). It closes when the ball leaves the green or the hole ends, and a key (`toggle_green_view`) hides and shows it. Guests are not drawn in it. Only reads CourseData.
+  - Test: `tests/test_green_view.gd`: opens on a green rest and not off it, its window bounds, a tile's slope arrow direction on a known contour, and the marker's panel position matches the PuttAim rest. Screenshots on a flat, a contoured and a tiered green (`docs/decisions/e3-s52-*.png`) are looked at.
+  - Touches: `scenes/`, `tests/`
+- [ ] E3-S53 Aim and putt in the green view. The player sets the putt's line in the top-down panel.
+  - Note: D48. Depends on E3-S52.
+  - Accept: while the green view is open, the mouse over the panel sets the aim (the heading from the ball to the cursor, in the panel's top-down space) and the aim keys rotate it as they do now; the isometric aim line follows the same heading; the swing bar works unchanged and the ball's roll is drawn in the panel as it happens, then the view closes or stays as E3-S52 says. Clicks on the panel never reach the map (no tag click, no Build switch).
+  - Test: `tests/test_green_view.gd`: a cursor at a panel point gives the heading to that tile; a click on the panel does not reach `tag_clicks`; the ball drawn in the panel follows the Ball's position each frame of a putt.
+  - Touches: `scenes/`, `tests/`
+
 ## E4: Economy — planned
 
 Ships as 0.5.0 (D19). Gives building a budget and reactions a consequence. Serves pillar 3, and stays deliberately thin: one input, one output.
