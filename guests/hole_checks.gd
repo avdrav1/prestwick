@@ -52,6 +52,37 @@ var _cache: Dictionary = {}
 var _terrain_key: String = ""
 ## hazard_grid of that terrain (empty until a hole with a hazard on its line needs it).
 var _hazard := PackedByteArray()
+## E3-S34: route_parts of that hazard grid, labelled once per terrain (null until needed), so
+## each hole's safe route is a lookup, not a flood: a step judging several freshly measured
+## holes floods the map once, not once a hole.
+var _parts: Parts = null
+## The hazard grids and labellings made (tests and the perf script read it).
+var parted: int = 0
+
+
+## E3-S34: the 4-connected parts of a map's non-hazard tiles, as row runs (Hoshen-Kopelman):
+## each row's runs of non-hazard tiles, found with PackedByteArray.find, joined to the runs of
+## the row above they touch. Two tiles are joined by a safe route exactly when they lie in runs
+## of the same part, which is what the breadth-first search finds.
+class Parts:
+	extends RefCounted
+	var width: int = 0
+	## The first run of each row, and one past the last row's last run (height + 1 entries).
+	var row_first := PackedInt32Array()
+	## Each run's first x and one past its last x.
+	var x0 := PackedInt32Array()
+	var x1 := PackedInt32Array()
+	## Each run's part (the root run of its union-find tree, after labelling).
+	var part := PackedInt32Array()
+
+	## The part of tile (x, y), or -1 on a hazard tile.
+	func part_of(x: int, y: int) -> int:
+		for r: int in range(row_first[y], row_first[y + 1]):
+			if x < x0[r]:
+				return -1
+			if x < x1[r]:
+				return part[r]
+		return -1
 
 
 func _init(p_tuning: GuestTuning = null, p_params: BallParams = null,
@@ -81,6 +112,7 @@ func statics(course: CourseData, hole: HoleData, key: String = "") -> Statics:
 	if key != _terrain_key:
 		_cache.clear()
 		_hazard = PackedByteArray()
+		_parts = null
 		_terrain_key = key
 	var k := Vector4i(hole.tee.x, hole.tee.y, hole.cup.x, hole.cup.y)
 	if not _cache.has(k):
@@ -100,9 +132,11 @@ func measure(course: CourseData, hole: HoleData, cached: bool = false) -> Static
 			s.hazard_on_line = true
 			break
 	if s.hazard_on_line:
-		if not cached or _hazard.is_empty():
+		if not cached or _parts == null:
 			_hazard = hazard_grid(course)
-		s.safe_route = _route(course, _hazard, hole.tee, hole.cup)
+			_parts = route_parts(course, _hazard)
+			parted += 1
+		s.safe_route = joined(course, _parts, hole.tee, hole.cup)
 	return s
 
 
@@ -173,6 +207,75 @@ static func hazard_grid(course: CourseData) -> PackedByteArray:
 	return out
 
 
+## E3-S34: labels the parts of `hazard`'s non-hazard tiles (Parts). Its cost goes with the
+## runs, not the tiles: about a run a row on open land.
+static func route_parts(course: CourseData, hazard: PackedByteArray) -> Parts:
+	var p := Parts.new()
+	var w := course.width
+	p.width = w
+	p.row_first.resize(course.height + 1)
+	var parent := PackedInt32Array()
+	var prev_first := 0
+	for y: int in course.height:
+		var first := p.x0.size()
+		p.row_first[y] = first
+		var base := y * w
+		var end := base + w
+		var x := base
+		while x < end:
+			var s0 := hazard.find(0, x)
+			if s0 < 0 or s0 >= end:
+				break
+			var e0 := hazard.find(1, s0)
+			if e0 < 0 or e0 > end:
+				e0 = end
+			p.x0.append(s0 - base)
+			p.x1.append(e0 - base)
+			parent.append(parent.size())
+			x = e0
+		# Join this row's runs to the runs of the row above that share a column with them.
+		var i := prev_first
+		var j := first
+		var last := p.x0.size()
+		while i < first and j < last:
+			if p.x0[i] < p.x1[j] and p.x0[j] < p.x1[i]:
+				# Roots, halving the paths on the way (inline: a packed array passed to a
+				# function is a copy once written).
+				var a := i
+				while parent[a] != a:
+					parent[a] = parent[parent[a]]
+					a = parent[a]
+				var b := j
+				while parent[b] != b:
+					parent[b] = parent[parent[b]]
+					b = parent[b]
+				if a != b:
+					parent[maxi(a, b)] = mini(a, b)
+			if p.x1[i] <= p.x1[j]:
+				i += 1
+			else:
+				j += 1
+		prev_first = first
+	p.row_first[course.height] = p.x0.size()
+	# Every run's parent is an earlier run, so one pass in order labels each with its root.
+	p.part.resize(parent.size())
+	for r: int in parent.size():
+		var q: int = parent[r]
+		p.part[r] = r if q == r else p.part[q]
+	return p
+
+
+## True when a safe route joins `from` and `to` on the parts `parts` (route_parts): both are
+## non-hazard tiles of one part. The same answer as the breadth-first search (_route).
+static func joined(course: CourseData, parts: Parts, from: Vector2i, to: Vector2i) -> bool:
+	if not course.in_bounds(from.x, from.y) or not course.in_bounds(to.x, to.y):
+		return false
+	var a := parts.part_of(from.x, from.y)
+	return a >= 0 and a == parts.part_of(to.x, to.y)
+
+
+## The breadth-first search that route_parts replaced in measure (E3-S34); kept for the
+## static safe_route and as the tests' reference.
 static func _route(course: CourseData, hazard: PackedByteArray, from: Vector2i, to: Vector2i) -> bool:
 	if not course.in_bounds(from.x, from.y) or not course.in_bounds(to.x, to.y):
 		return false

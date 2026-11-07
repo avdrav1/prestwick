@@ -17,7 +17,7 @@ extends RefCounted
 ## its need (E3-S14): the share of the second gone by, times the most the second can spend
 ## (`guest_ticks_per_s` for each guest with work when it began, at most the sim's cap; work
 ## only starts in a step, so no second spends more), and never more than `frame_ticks_max` in
-## one frame. A step that is due waits, frame by frame, until its second's work is served
+## one frame (a putt solve's tick counting `putt_tick_weight` there, E3-S34). A step that is due waits, frame by frame, until its second's work is served
 ## (`held_frames`), and `step` itself first finishes whatever that second still owes, so a day
 ## plays the same however it is sliced into frames: the same seed gives the same day. No clock
 ## is read and every random number comes from the day's seed. A long frame (a hitch) runs at
@@ -159,7 +159,7 @@ func advance_real(delta: float, speed: float) -> int:
 	if not day_over and left > 0:
 		var due := ceili(minf(_clock, 1.0) * _need)
 		if due > _sim_used:
-			left -= serve(mini(due - _sim_used, left))
+			left -= serve(left, due - _sim_used)
 	frame_ticks = tuning.frame_ticks_max - left
 	max_frame_ticks = maxi(max_frame_ticks, frame_ticks)
 	return stepped
@@ -216,11 +216,16 @@ func _measure_need() -> void:
 
 
 ## Spends up to `max_ticks` (below 0: all that is owed) of this second's Ball work, guests in
-## fixed order, each up to its own budget and all within the sim's. Returns the ticks spent.
+## fixed order, each up to its own budget and all within the sim's. Returns the ticks spent,
+## as the frame budget counts them: a putt solve's tick as `putt_tick_weight` (E3-S34), every
+## other as 1; a guest's and the sim's budgets for the second count every tick as 1.
+## `max_raw` (below 0: no cap) caps the ticks themselves, each counted as 1 (advance_real's
+## share of the second's need).
 ## Guests with nothing to do are passed over even with no ticks left to give, so a second
 ## whose work is done reads as served (second_served).
-func serve(max_ticks: int) -> int:
-	var used := 0
+func serve(max_ticks: int, max_raw: int = -1) -> int:
+	var cost := 0.0
+	var raw := 0
 	while _cursor < guests.size():
 		var sim_left := tuning.sim_ticks_per_s - _sim_used
 		if sim_left <= 0:
@@ -234,19 +239,28 @@ func serve(max_ticks: int) -> int:
 		if give <= 0:
 			_cursor += 1
 			continue
+		var w := 1.0
+		if g.hole.state == GuestHole.State.PLANNING and g.hole.plan != null and g.hole.plan.is_putt():
+			w = tuning.putt_tick_weight
 		if max_ticks >= 0:
-			if used >= max_ticks:
+			var room := floori((max_ticks - cost) / w + 1e-6)
+			if room <= 0:
 				break
-			give = mini(give, max_ticks - used)
+			give = mini(give, room)
+		if max_raw >= 0:
+			if raw >= max_raw:
+				break
+			give = mini(give, max_raw - raw)
 		var n := g.hole.advance(give)
 		g.second_ticks += n
 		g.ticks += n
 		_sim_used += n
-		used += n
+		cost += n * w
+		raw += n
 		ticks += n
 		if n < give:
 			_cursor += 1  # no more work this second (READY, or its ball waits on a turn)
-	return used
+	return ceili(cost - 1e-6)
 
 
 ## The guests on the course now.

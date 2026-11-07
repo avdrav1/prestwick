@@ -46,9 +46,9 @@ extends SceneTree
 ## route on a map whose trees walls make it flood, each with whole guest days running at 3x.
 ## Each day counts its frames past `frame_guest_ms_max`, as _time_guest_frames does; the run
 ## fails (exit 1) when a lattice frame passes it (the cart path search is bounded so it does
-## not). The flooded map's are counted and printed but do not fail the run: a step that
-## measures a hole's statics afresh there runs HoleChecks.measure in one frame (5 to 7 ms a
-## hole), so a step measuring two can pass 10 ms (a followup: spread or defer the measure).
+## not). E3-S34: the flooded map's fail it too: Interesting's safe route reads the map's parts,
+## labelled once per terrain (HoleChecks.route_parts), so a step that judges several freshly
+## measured holes floods once, not once a hole (5 to 7 ms each before).
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
@@ -107,7 +107,7 @@ var _undo_guest_ms: Array[float] = []
 ## _guest_ms in Play, whether each frame ran a step.
 var _play_over: int = 0
 ## E3-S15 review: lattice guest-day frames (3x, 60 fps) whose guest work passed
-## frame_guest_ms_max.
+## frame_guest_ms_max; since E3-S34 the flooded map's too.
 var _search_over: int = 0
 var _guest_stepped: Array[bool] = []
 
@@ -240,7 +240,7 @@ func _time_guest_frames() -> int:
 ## and 2) runs at 3x in frames of 1/60 s with a click edit off every line every
 ## SEARCH_EDIT_FRAMES frames (untimed), so the terrain changes as it does in Build; each
 ## frame's guest work is timed, and the frames past 16.7 ms and past `frame_guest_ms_max`
-## counted (the lattice's past `frame_guest_ms_max` go to _search_over and fail the run). Then each search alone,
+## counted (past `frame_guest_ms_max` they go to _search_over and fail the run). Then each search alone,
 ## RUNS times: the walks the day's groups make between holes and along them (no cache), and
 ## each hole's statics measured afresh (HoleChecks.measure).
 func _time_searches() -> void:
@@ -261,8 +261,9 @@ func _time_searches() -> void:
 		SEARCH_WALL_X, fl.height - 1, fl_open])
 	_time_search_statics(fl)
 	var fl_over := _time_search_day("flooded map", fl, fb)
-	print("E3-S15 3x guest frames over %.1f ms: cart path lattice %d (any fails the run), flooded map %d (reported only)" % [
+	print("E3-S15 3x guest frames over %.1f ms: cart path lattice %d, flooded map %d (any fails the run)" % [
 		_guest_tuning.frame_guest_ms_max, _search_over, fl_over])
+	_search_over += fl_over
 
 
 ## Paints cart path on every tile of `b`'s course whose x or y is a multiple of 3 (9,159 tiles
@@ -410,8 +411,32 @@ func _time_search_statics(c: CourseData) -> void:
 		runs.sort()
 		each.append(runs[runs.size() / 2])
 		floods += 1 if s.hazard_on_line else 0
-	print("E3-S15 flooded map: one hole's statics measured afresh (hazard grid and safe route; median of %d runs each; %d holes, %d with a hazard on the line): %s" % [
+	print("E3-S15 flooded map: one hole's statics measured afresh (hazard grid, its parts and safe route; median of %d runs each; %d holes, %d with a hazard on the line): %s" % [
 		RUNS / 4, c.holes.size(), floods, _stats(each)])
+	# E3-S34: the parts of one terrain, then each hole's statics on them (as a step after an edit
+	# judges them), against the breadth-first search each hole ran before.
+	var grid_ms: Array[float] = []
+	var parts_ms: Array[float] = []
+	var cached_ms: Array[float] = []
+	var bfs_ms: Array[float] = []
+	for i: int in RUNS / 4:
+		var t0 := Time.get_ticks_usec()
+		var hazard := HoleChecks.hazard_grid(c)
+		var t1 := Time.get_ticks_usec()
+		HoleChecks.route_parts(c, hazard)
+		var t2 := Time.get_ticks_usec()
+		grid_ms.append((t1 - t0) / 1000.0)
+		parts_ms.append((t2 - t1) / 1000.0)
+		var key := "perf %d" % i
+		for h: HoleData in c.holes:
+			var t3 := Time.get_ticks_usec()
+			checks.statics(c, h, key)
+			cached_ms.append((Time.get_ticks_usec() - t3) / 1000.0)
+			t3 = Time.get_ticks_usec()
+			HoleChecks._route(c, hazard, h.tee, h.cup)
+			bfs_ms.append((Time.get_ticks_usec() - t3) / 1000.0)
+	print("E3-S34 flooded map: hazard grid %s; its parts labelled %s; each hole's statics after (the first of a terrain labels the parts) %s; the breadth-first safe route a hole, as before %s" % [
+		_stats(grid_ms), _stats(parts_ms), _stats(cached_ms), _stats(bfs_ms)])
 
 
 func _q(a: Array[float], q: float) -> int:
@@ -723,7 +748,7 @@ func _process(_delta: float) -> bool:
 				print("every hole but hole 1 failing: frame holding a click edit, 1x: %s" % _stats(_edit_samples))
 				_print_guests("every hole but hole 1 failing")
 				print("3x guest frames over %.1f ms in Play: %d" % [_guest_tuning.frame_guest_ms_max, _play_over])
-				print("3x guest frames over %.1f ms on the cart path lattice: %d" % [_guest_tuning.frame_guest_ms_max, _search_over])
+				print("3x guest frames over %.1f ms on the cart path lattice and the flooded map: %d" % [_guest_tuning.frame_guest_ms_max, _search_over])
 				quit(0 if _play_over == 0 and _search_over == 0 else 1)
 	return false
 

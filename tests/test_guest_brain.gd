@@ -893,6 +893,62 @@ func test_a_day_run_in_sliced_frames_gives_the_same_records_as_one_run_a_step_at
 	assert_eq(_day_log(9, 1.0, 1.0 / 60.0, tight, brains), direct, "1x under the tight budget")
 
 
+## E3-S34: Interesting's safe route reads the parts of the map's non-hazard tiles, labelled
+## once per terrain (HoleChecks.route_parts), not a flood a hole: on random hazard maps,
+## serpentine walls included, every pair of tiles is joined exactly when the breadth-first
+## search joins them.
+func test_route_parts_join_the_tiles_the_breadth_first_search_joins() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 34
+	var checked := 0
+	var joined := 0
+	var kinds: Array[Surface.Type] = [Surface.Type.WATER, Surface.Type.BUNKER, Surface.Type.TREES,
+			Surface.Type.OOB]
+	for k in 12:
+		var c: CourseData = NineHoles.land(7)
+		var b := CourseBuilder.new(c)
+		b.begin_stroke()
+		var density := 0.2 + 0.05 * k
+		for y in range(40, 64):
+			for x in range(30, 60 + k):
+				if k % 3 == 0 and x % 4 == 2 and y != (40 if x % 8 == 2 else 63):
+					b.paint(Vector2i(x, y), Surface.Type.TREES, 1)  # a serpentine
+				elif rng.randf() < density:
+					b.paint(Vector2i(x, y), kinds[rng.randi() % 4], 1)
+		b.end_stroke()
+		var hazard := HoleChecks.hazard_grid(c)
+		var parts := HoleChecks.route_parts(c, hazard)
+		for i in 250:
+			var from := Vector2i(30 + rng.randi() % (30 + k), 40 + rng.randi() % 24)
+			var to := Vector2i(30 + rng.randi() % (30 + k), 40 + rng.randi() % 24)
+			if i % 5 == 0:
+				to = Vector2i(rng.randi() % c.width, rng.randi() % c.height)
+			var want := HoleChecks._route(c, hazard, from, to)
+			assert_eq(HoleChecks.joined(c, parts, from, to), want, "map %d %s to %s" % [k, from, to])
+			checked += 1
+			joined += 1 if want else 0
+	assert_gt(joined, 100, "many pairs joined")
+	assert_lt(joined, checked - 100, "many apart")
+	var c0: CourseData = NineHoles.land(7)
+	var p0 := HoleChecks.route_parts(c0, HoleChecks.hazard_grid(c0))
+	assert_false(HoleChecks.joined(c0, p0, Vector2i(-1, 0), Vector2i(0, 0)), "off the map")
+
+
+## E3-S34: on the nine-hole fixture walled with trees (Interesting's search floods round the
+## walls' far ends, `scripts/nine_holes_perf.gd`), a day run at 3x in 60 fps frames, with
+## edits that change the terrain between steps, gives the same records and reactions as the
+## same day stepped directly, and no frame labels the map's parts more than once (a step that
+## judges several freshly measured holes floods once, not once a hole).
+func test_a_walled_day_in_frames_judges_as_the_day_stepped_directly_one_flood_a_frame() -> void:
+	var short := _tuning({"day_s": 240})
+	var direct := _walled_day(short, -1.0)
+	var framed := _walled_day(short, 3.0)
+	assert_gt((direct[0] as PackedStringArray).size(), 20, "holes were judged")
+	assert_eq(framed[0], direct[0], "the same records and reactions")
+	assert_gt(int(direct[1]), 1, "the map's parts were labelled again after an edit")
+	assert_eq(int(framed[2]), 1, "at most one labelling a frame")
+
+
 func test_ball_work_is_paced_by_need_not_spent_up_to_the_cap_at_once() -> void:
 	# A lone guest needs at most guest_ticks_per_s a second: at 3x and 60 fps a frame spends
 	# about a twentieth of that, not 240 (a twentieth of the sim's cap) until it runs out.
@@ -1086,6 +1142,44 @@ func _day_log(day_seed: int, speed: float, frame: float = 1.0 / 60.0, t: GuestTu
 			continue
 		out.append("%d %s" % [brain.second, _snapshot(brain)])
 	return out
+
+
+## E3-S34: the walled nine's day 1 (`speed` below 0 steps directly, else 1/60 s frames at that
+## speed), a tile off every line painted every 20 simulated seconds, between steps. Returns
+## [its records and reactions, labellings of the map's parts, the most in one frame].
+func _walled_day(t: GuestTuning, speed: float) -> Array:
+	var c: CourseData = NineHoles.land(7)
+	var b := CourseBuilder.new(c)
+	NineHoles.build(b)
+	b.begin_stroke()
+	for x: int in [37, 106]:
+		for y: int in c.height - 1:
+			b.paint(Vector2i(x, y), Surface.Type.TREES, 1)
+	b.end_stroke()
+	for spec: Array in NineHoles.HOLES:
+		b.open_hole(spec[0])
+	var brain := GuestBrain.new(c, 1, t, model)
+	var out := PackedStringArray()
+	brain.reacted.connect(func(g: Guest, r: GuestReaction) -> void:
+		var rec: Guest.HoleRecord = g.records[-1]
+		out.append("%d hole %d score %d wait %d at %d: %s %s interesting %s blind %s" % [g.id,
+				rec.number, rec.score, rec.wait_s, rec.end_s, r.kind_name(), r.passed,
+				r.statics.interesting(), r.statics.blind]))
+	var edits := 0
+	var most := 0
+	while not brain.day_over:
+		var before := brain.checks.parted
+		var stepped := 1
+		if speed < 0.0:
+			brain.step()
+		else:
+			stepped = brain.advance_real(1.0 / 60.0, speed)
+		most = maxi(most, brain.checks.parted - before)
+		if stepped > 0 and brain.second % 20 == 0:
+			b.paint(Vector2i(64 + edits % 3, 100), Surface.Type.FAIRWAY if edits % 2 == 0
+					else Surface.Type.ROUGH, 1)
+			edits += 1
+	return [out, brain.checks.parted, most]
 
 
 ## Seconds any guest stood on a cart path tile during a pair's day.

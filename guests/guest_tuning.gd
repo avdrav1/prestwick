@@ -88,6 +88,12 @@ var frame_ticks_max: int = 0
 ## E3-S14: the guest work one 3x frame at 60 fps may take, ms: a target that
 ## scripts/nine_holes_perf.gd measures against. The sim never reads a clock.
 var frame_guest_ms_max: float = 0.0
+## E3-S34: what one putt-solve tick counts against `frame_ticks_max` (1 for every other
+## tick): a putt solve's tick costs about 1.5 times a club-pick prediction's or a ball's
+## (34 us against 22, headless), so a frame of putt solves stays inside frame_guest_ms_max. Only
+## the frame budget reads it; a second's ticks (guest_ticks_per_s, sim_ticks_per_s) count
+## every tick as 1, so the day is the same.
+var putt_tick_weight: float = 1.0
 ## PuttAim's putt_aim_max_runs for guests (the player keeps golf/swing_tuning.tres's).
 var guest_putt_max_runs: int = 0
 
@@ -185,6 +191,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.frame_ticks_max = CourseData.read_int(d, "frame_ticks_max", errors)
 	t.frame_guest_ms_max = _float(d, "frame_guest_ms_max", errors)
 	t.guest_putt_max_runs = CourseData.read_int(d, "guest_putt_max_runs", errors)
+	t.putt_tick_weight = _float(d, "putt_tick_weight", errors)
 	t.patience_min = CourseData.read_int(d, "patience_min", errors)
 	t.patience_max = CourseData.read_int(d, "patience_max", errors)
 	t.wait_base_s = _float(d, "wait_base_s", errors)
@@ -298,6 +305,7 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "max_steps_per_frame", t.max_steps_per_frame, 1)
 	_at_least(errors, "frame_ticks_max", t.frame_ticks_max, 1)
 	_positive(errors, "frame_guest_ms_max", t.frame_guest_ms_max)
+	_at_least(errors, "putt_tick_weight", t.putt_tick_weight, 1.0, " (a putt tick costs no less than another)")
 	if t.praise_passes < 1 or t.praise_passes > 4:
 		errors.append("praise_passes (%s) must be 1 to 4 (the four checks)" % t.praise_passes)
 	_at_least(errors, "complaint_fails", t.complaint_fails, 1)
