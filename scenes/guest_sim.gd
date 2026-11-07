@@ -19,7 +19,8 @@ extends Node
 ## (E3-S17): watch(builder) hands the feed every hole and tile change the builder makes, so a
 ## hole's tally is cleared when its tee, cup, par or the terrain on its line changes, and a hole
 ## undone away takes its tally and links with it. A guest playing the hole when it is edited
-## judges the old version: its reaction comes in uncounted (E3-S17 review, _on_slot_edited).
+## judges the old version: its reaction comes in uncounted (E3-S17 review, _on_slot_edited),
+## unless its group had not struck there yet: it replans on the new version and counts (E3-S49).
 
 signal day_started(day: int)
 signal speed_changed(speed: float)
@@ -110,14 +111,15 @@ func _on_tiles_changed(cells: Array[Vector2i]) -> void:
 	feed.cells_edited(_watched.course, cells, _watched.validator)
 
 
-## Build edited the hole in slot `slot`: every guest playing it now, its verdict not yet
-## given, is judging a version of the hole that is gone, so its reaction counts for none.
+## Build edited the hole in slot `slot`: a guest whose group has struck there, its verdict not
+## yet given, is judging a version of the hole that is gone, so its reaction counts for none.
+## A group that has not struck yet replans on the new version and counts (E3-S49,
+## GuestBrain.slot_edited).
 func _on_slot_edited(slot: int) -> void:
 	if brain == null:
 		return
-	for guest: Guest in brain.guests:
-		if guest.hole != null and not guest.hole_recorded and guest.hole.slot == slot:
-			_stale[guest.hole] = true
+	for play: GuestHole in brain.slot_edited(slot):
+		_stale[play] = true
 
 
 static func _copy_holes(c: CourseData) -> Array[HoleData]:

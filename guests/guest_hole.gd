@@ -153,6 +153,17 @@ func hole_still_stands() -> bool:
 	return false
 
 
+## E3-S49: Build edited the terrain before this guest struck: its ball goes back on the tee
+## marker at the tee's height now and the first stroke is planned afresh (HeightField and the
+## plan's predictions read the live CourseData, so the new plan sees the new terrain). Only
+## before the first stroke (a struck hole judges the old terrain and is dropped instead).
+func replan() -> void:
+	assert(strokes.is_empty() and state != State.FLYING, "replan only before the first stroke")
+	var tee := field.tile_center(hole.tee)
+	ball_at = Vector3(tee.x, tee.y, field.height_at(tee.x, tee.y))
+	_begin_plan()
+
+
 ## Spends up to `max_ticks` Ball ticks (below 0: no limit) on whatever work there is: the plan
 ## of the next stroke, or the ball in flight. `flight_ticks` (below 0: no limit) caps the
 ## ticks the ball in flight gets this call, for a view drawing it (on screen); off screen it

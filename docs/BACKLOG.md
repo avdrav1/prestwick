@@ -884,11 +884,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Accept: the nine-hole field runs on nine_holes_hazards with its figures in `docs/design.md`; `/balance reactions` and its test run in under half today's time without changing their figures (fewer runs where the band allows, or parallel seeds); hole 1's crest cut has a screenshot.
   - Test: `tests/test_balance_reactions.gd` timing in the commit.
   - Touches: `scripts/`, `tests/`, `docs/`
-- [ ] E3-S49 Keep an unstruck play rated across an edit. One group's hole is dropped from the rating.
+- [x] E3-S49 Keep an unstruck play rated across an edit. One group's hole is dropped from the rating.
   - Note: (found in E3 review) a play under way when its terrain is edited is dropped from the rating, even when the group had not yet struck and then played the whole hole on the new terrain; it costs at most one group an edit (E3-S17). Exempting plays that have not struck needs to know whether `GuestHole`'s plan and `HeightField` read the live terrain.
   - Accept: a play whose group had not struck when the edit landed, and whose plan was rebuilt on the new terrain, keeps its reaction counting; any other play under way is still dropped.
   - Test: `tests/test_feed.gd`: an edit before the first stroke keeps the hole's reaction; an edit after drops it.
   - Touches: `guests/`, `tests/`
+  - Done 2026-11-07: `GuestHole` keeps no terrain of its own: `HeightField` reads CourseData live (`get_height`), the plan's predictions run a Ball on the live course and the statics are measured at the verdict keyed by terrain; only the ball's tee height and the plan in progress were from the old version. `GuestBrain.slot_edited(slot)` now replans every unstruck group's play there (`GuestHole.replan`: ball back on the tee at its height now, a fresh first plan) and returns the struck groups' plays, which `GuestSim._on_slot_edited` drops as before. A moved tee, cup or par already restarted an unstruck group's hole with a fresh play. `tests/test_feed.gd` `test_an_edit_before_the_first_stroke_keeps_the_holes_reaction`: a bunker painted on hole 1's line before the first stroke rebuilds each plan and both reactions count on slot 0; the same edit after a stroke drops the play. `docs/design.md` Feed and map tags says so.
 
 - [x] E3-S50 Build a playtest nine with doglegs and sloped greens. The hand playtest plays a course worth playing.
   - Note: (found in the E3-S30 hand playtest, 2026-11-06) the `nine_holes` fixtures are straight 3-wide strips with flat 5 x 5 greens, built for tests and perf, so the user saw "only straight holes" and "no slopes on the greens".

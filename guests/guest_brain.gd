@@ -475,6 +475,23 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 			guest.waiting_for = Guest.Wait.TURN
 
 
+## E3-S49: Build edited the hole in slot `slot` (its tee, cup or par, or the terrain on its
+## line) while guests play it. A group that has not struck there yet replans its first stroke
+## on the course as it is now (GuestHole.replan; a moved tee, cup or par also makes the next
+## step start the hole afresh), so it plays and judges the new version. Returns the plays of
+## groups that have struck: they judge a version that is gone (GuestSim drops their verdicts).
+func slot_edited(slot: int) -> Array[GuestHole]:
+	var stale: Array[GuestHole] = []
+	for guest: Guest in guests:
+		if guest.hole == null or guest.hole_recorded or guest.hole.slot != slot or guest.is_done():
+			continue
+		if group_of(guest).struck:
+			stale.append(guest.hole)
+		else:
+			guest.hole.replan()
+	return stale
+
+
 ## True when `guest` stands at its ball, ready to swing in second `t` (E3-S20): not walking,
 ## not waiting for its last ball to rest on screen (`ball_moved`), and not just arrived: a
 ## walk that ended this second is drawn over it (at walk speed, to `leg_end`), so the guest

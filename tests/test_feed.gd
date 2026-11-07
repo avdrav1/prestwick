@@ -602,6 +602,46 @@ func test_a_verdict_on_terrain_edited_mid_hole_counts_for_no_hole() -> void:
 	assert_true(counted[0], "a play started after the edit counts on its hole")
 
 
+## E3-S49: terrain edited on a hole whose group has teed off but not yet struck: each guest's
+## plan is rebuilt on the new terrain and its reaction counts on the hole; once the group has
+## struck, the same edit still drops the play (test above).
+func test_an_edit_before_the_first_stroke_keeps_the_holes_reaction() -> void:
+	var m := _main_mid_hole_1(false)
+	var b: GuestBrain = m.guest_sim.brain
+	var group: GuestGroup = b.group_of(b.guests[0])
+	var plays: Array[GuestHole] = []
+	var plans: Array = []
+	for guest: Guest in group.guests:
+		plays.append(guest.hole)
+		plans.append(guest.hole.plan)
+		assert_true(guest.hole.strokes.is_empty(), "nobody has struck yet")
+	var builder: CourseBuilder = m.build_tool.builder
+	m.set_mode(Main.Mode.BUILD)
+	builder.paint(Vector2i(12, 6), Surface.Type.BUNKER, 3)  # on hole 1's line
+	builder.open_hole(1)
+	m.set_mode(Main.Mode.PLAY)
+	for i: int in plays.size():
+		assert_eq(group.guests[i].hole, plays[i], "the same play goes on")
+		assert_ne(group.guests[i].hole.plan, plans[i], "its plan is rebuilt on the new terrain")
+		assert_false(m.guest_sim._stale.has(plays[i]), "and it is not dropped")
+	var got := _first_group_reactions(m)
+	assert_eq(got.size(), 2, "the group finishes hole 1")
+	for each: Array in got:
+		assert_eq((each[0] as GuestReaction).hole_number, 1)
+		assert_eq(each[1], 0, "played whole on the new terrain: it counts on hole 1")
+	assert_true(m.guest_sim.feed.slot_tallies(m.course).has(0) \
+			or got.all(func(e: Array) -> bool: return (e[0] as GuestReaction).kind == GuestReaction.Kind.NEUTRAL),
+			"hole 1's tally holds its verdicts")
+	# The same edit once the group has struck drops the play.
+	var m2 := _main_mid_hole_1(true)
+	var b2: GuestBrain = m2.guest_sim.brain
+	var struck_play: GuestHole = b2.guests[0].hole
+	m2.set_mode(Main.Mode.BUILD)
+	m2.build_tool.builder.paint(Vector2i(12, 6), Surface.Type.BUNKER, 3)
+	m2.build_tool.builder.open_hole(1)
+	assert_true(m2.guest_sim._stale.has(struck_play), "struck before the edit: dropped")
+
+
 func test_a_renumber_mid_hole_keeps_the_verdict_on_the_hole_played() -> void:
 	# Not yet struck: the group heads for the hole numbered 1 now (slot 2) and plays it.
 	var m := _main_mid_hole_1(false)
