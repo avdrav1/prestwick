@@ -510,3 +510,101 @@ func test_a_sheet_without_a_play_texture_draws_the_same_in_both_modes() -> void:
 	sheet.play_texture = TileArt.load_default().surfaces.play_texture
 	assert_eq(sheet.texture_for(true), sheet.play_texture)
 	assert_eq(sheet.texture_for(false), sheet.texture)
+
+
+## E3-S46 (D47): Build draws a dogleg's line of play tee -> turn -> cup, on the ground.
+func test_a_doglegs_line_of_play_passes_through_its_turn_point() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var v := CourseValidator.new()
+	var turn: Variant = v.turn_point(c, c.holes[0])
+	assert_not_null(turn, "the fixture is a dogleg")
+	_view.show_course(c)
+	_view.show_play_lines(LineOfPlay.lines_of(c, v))
+	var lines := _view.play_lines.lines
+	assert_eq(lines.size(), 1, "one line for the one hole")
+	assert_eq(lines[0], PackedVector2Array([Vector2(c.holes[0].tee), turn, Vector2(c.holes[0].cup)]),
+			"tee, turn, cup")
+	# The turn dot is drawn on the ground at the turn, and some dash end lies within a dash of it.
+	var at: Vector2 = _view.play_lines.ground_point(turn)
+	var dots := _view.play_lines.drawn_dots()
+	assert_eq(dots.size(), 1, "one dot")
+	assert_lt(dots[0].distance_to(at), 0.01, "at the turn")
+	var nearest: float = INF
+	for p: Vector2 in _view.play_lines.drawn_points():
+		nearest = minf(nearest, p.distance_to(at))
+	assert_lt(nearest, Iso.TILE_W * 1.5, "the line runs by the turn on screen")
+	# The line starts on the tee's ground (D50: drawn_steps, as the ball and markers stand).
+	var field := HeightField.new(c, BallParams.load_default())
+	var tee_yd := field.tile_center(c.holes[0].tee)
+	var tee_at := Iso.tile_to_screen(Vector2(c.holes[0].tee), field.drawn_steps(tee_yd.x, tee_yd.y))
+	var from_tee: float = INF
+	for p: Vector2 in _view.play_lines.drawn_points():
+		from_tee = minf(from_tee, p.distance_to(tee_at))
+	assert_lt(from_tee, 0.01, "the first dash starts on the tee")
+	var on: Vector2 = Iso.tile_to_screen(turn, field.drawn_steps((turn.x + 0.5) * 5.0, (turn.y + 0.5) * 5.0))
+	assert_lt(at.distance_to(on), 0.01, "the dot stands on the ground at the turn")
+
+
+## E3-S46: a straight hole's line runs tee to cup with no turn, and each piece sorts in its
+## tile's row, after the ground and before the hole markers.
+func test_a_straight_holes_line_runs_tee_to_cup_in_the_terrain_rows() -> void:
+	var c := ReactionHoles.fair_par4()
+	var v := CourseValidator.new()
+	assert_null(v.turn_point(c, c.holes[0]), "the fixture is straight")
+	_view.show_course(c)
+	_view.show_play_lines(LineOfPlay.lines_of(c, v))
+	assert_eq(_view.play_lines.lines, [PackedVector2Array([Vector2(c.holes[0].tee), Vector2(c.holes[0].cup)])])
+	assert_eq(_view.play_lines.drawn_dots().size(), 0, "no turn dot")
+	assert_gt(_view.play_lines.rows().size(), 10, "cut into the rows it crosses")
+	for row: Node2D in _view.play_lines.rows():
+		var frac: float = row.position.y - floorf(row.position.y)
+		assert_almost_eq(frac, LineOfPlay.SORT_BIAS, 0.001, "after its row's ground")
+	var tee := _view.hole_marker(c.holes[0].number, HoleMarker.Kind.TEE)
+	assert_lt(LineOfPlay.SORT_BIAS, Iso.object_sort_key(Vector2.ZERO, 0.0), "under an object on its tile")
+	assert_not_null(tee)
+
+
+## E3-S46: painting the dogleg's corner moves the line (the view redraws on every check), and the
+## geometry is built once per change, not per frame.
+func test_the_line_follows_the_corner_and_is_not_rebuilt_per_frame() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var b := CourseBuilder.new(c)
+	_view.show_course(c)
+	_view.show_play_lines(b.slot_lines())
+	var before: int = _view.play_lines.build_count
+	_view.show_play_lines(b.slot_lines())
+	await wait_process_frames(3)
+	assert_eq(_view.play_lines.build_count, before, "unchanged lines are not rebuilt")
+	# Straighten it: paint fairway along the straight line, so D47 plays it straight.
+	var h: HoleData = c.holes[0]
+	var d := Vector2(h.cup - h.tee)
+	for k: int in int(d.length()) + 1:
+		var cell := Vector2i((Vector2(h.tee) + d.normalized() * k).round())
+		b.paint(cell, Surface.Type.FAIRWAY, 3)
+	b.end_stroke()
+	_view.show_play_lines(b.slot_lines())
+	assert_null(b.validator.turn_point(c, h), "now straight")
+	assert_eq(_view.play_lines.lines[0].size(), 2, "the line straightened with it")
+	assert_eq(_view.play_lines.build_count, before + 1)
+
+
+## E3-S46: raising the ground under a line redraws it on the new ground at the next check; an
+## edit far from every line rebuilds nothing.
+func test_the_line_follows_the_ground_after_a_raise() -> void:
+	var c := ReactionHoles.fair_par4()
+	var b := CourseBuilder.new(c)
+	b.tiles_changed.connect(_view.refresh_cells)
+	_view.show_course(c)
+	_view.show_play_lines(b.slot_lines())
+	var before := _view.play_lines.drawn_points()
+	var count: int = _view.play_lines.build_count
+	var h: HoleData = c.holes[0]
+	b.raise(Vector2i((Vector2(h.tee).lerp(Vector2(h.cup), 0.5)).round()), 3)
+	b.end_stroke()
+	_view.show_play_lines(b.slot_lines())
+	assert_eq(_view.play_lines.build_count, count + 1, "rebuilt once")
+	assert_ne(_view.play_lines.drawn_points(), before, "on the raised ground")
+	b.raise(Vector2i(c.width - 1, 0), 1)
+	b.end_stroke()
+	_view.show_play_lines(b.slot_lines())
+	assert_eq(_view.play_lines.build_count, count + 1, "a raise far from the line rebuilds nothing")

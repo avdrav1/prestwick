@@ -49,6 +49,10 @@ extends Node2D
 ##
 ## Contours (E3-S57): `topo`, a TopoOverlay, draws contour lines Y-sorted into the terrain in
 ## Play (course/topo_overlay.gd); it traces again when a height changes.
+##
+## Line of play (E3-S46, D47): `play_lines`, a LineOfPlay, draws each hole's tee -> turn -> cup
+## line on the ground, Y-sorted into the terrain, in Build (course/line_of_play.gd). Main hands
+## it the builder's lines after every check (show_play_lines); a height change redraws it then.
 
 ## land_frame bits: the tile's edge toward x - 1, y - 1, x + 1, y + 1 lies on a parcel edge.
 const LAND_EDGE_W: int = 1
@@ -106,6 +110,8 @@ var play_art: bool = false:
 
 ## The contour overlay (E3-S57): Main enables it in Play.
 var topo: TopoOverlay
+## The line of play (E3-S46): Main enables it in Build.
+var play_lines: LineOfPlay
 
 ## Whether the issue highlights show (Build mode).
 var issues_visible: bool = true:
@@ -132,6 +138,8 @@ func _init() -> void:
 	add_child(_holes_root)
 	topo = TopoOverlay.new()
 	add_child(topo)
+	play_lines = LineOfPlay.new()
+	add_child(play_lines)
 	_issues_root = Node2D.new()
 	_issues_root.name = "Issues"
 	_issues_root.y_sort_enabled = true
@@ -158,6 +166,7 @@ func show_course(c: CourseData) -> void:
 			_ground_root.add_child(ch)
 			_chunks[key] = ch
 	topo.show_course(c)
+	play_lines.show_course(c)
 	refresh_holes()
 	show_issues({})
 
@@ -184,6 +193,13 @@ func refresh_holes() -> void:
 			m.shape_scale = marker_shape_scale(_view_scale())
 			_holes_root.add_child(m)
 			_markers.append(m)
+
+
+## Draws every hole's line of play (D47, D51): `lines` one per slot, [tee, cup] or [tee, turn,
+## cup] in tile coordinates (CourseBuilder.slot_lines). Main calls it after every check, so a
+## tee, cup or corner edit moves the line.
+func show_play_lines(lines: Array[PackedVector2Array]) -> void:
+	play_lines.show_lines(lines)
 
 
 ## Every hole marker drawn, tee and pin per hole in CourseData order.
@@ -463,6 +479,7 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 		terrain.build_chunk(_chunks[key], dirty[key])
 	if moved:
 		topo.mark_dirty()
+		play_lines.mark_dirty(cells)
 	for m: HoleMarker in _markers:
 		if changed.has(m.cell):
 			m.place(_course)

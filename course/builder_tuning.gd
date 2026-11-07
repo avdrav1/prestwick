@@ -48,6 +48,18 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export var height_shaded: PackedStringArray = PackedStringArray(["rough", "water", "trees", "oob"])
 ## How long a refusal ("not your land") stays on the Build HUD after a click, seconds.
 @export var refusal_show_s: float = 3.0
+## Line of play (E3-S46, D47): the faint dashed line Build draws tee -> turn -> cup on each
+## hole (CourseView.play_lines, course/line_of_play.gd). Its colour (chalk, part clear) and the
+## ink edge round it (so it reads on light fairway and dark trees, in grayscale too), its width,
+## edge and turn dot radius in screen px at every zoom, and its dash and gap along the ground in
+## yards.
+@export var play_line_color: Color = Color(1.0, 0.98, 0.9, 0.8)
+@export var play_line_halo_color: Color = Color(0.1, 0.11, 0.13, 0.45)
+@export var play_line_width_px: float = 2.0
+@export var play_line_halo_px: float = 1.0
+@export var play_line_turn_radius_px: float = 4.0
+@export var play_line_dash_yd: float = 6.0
+@export var play_line_gap_yd: float = 4.0
 
 
 static func load_default() -> BuilderTuning:

@@ -483,6 +483,8 @@ func _apply_mode() -> void:
 	course_view.play_art = not building
 	# The contour overlay is Play's (E3-S57), on unless the player hid it (toggle_topo, T).
 	course_view.topo.enabled = not building
+	# The line of play is Build's (E3-S46): Play has its own aim line.
+	course_view.play_lines.enabled = building
 	# The green view is Play's only (E3-S52); Main._process opens it there.
 	if building:
 		green_view.close()
@@ -496,6 +498,9 @@ func _on_tiles_changed(cells: Array[Vector2i]) -> void:
 ## After every builder check: highlight each failing rule and update the hole panel.
 func _on_checked(issues: Dictionary) -> void:
 	course_view.show_issues(issues, build_tool.builder.slot_issues() if build_tool.builder != null else [])
+	# The line of play follows every tee, cup and corner edit (E3-S46).
+	if build_tool.builder != null:
+		course_view.show_play_lines(build_tool.builder.slot_lines())
 	hole_panel.refresh()
 	# A tag stands on its hole's cup, which an edit can move.
 	reaction_tags.queue_redraw()

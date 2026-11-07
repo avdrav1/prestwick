@@ -406,6 +406,19 @@ func issues_at(slot: int) -> Array[CourseValidator.Issue]:
 	return out
 
 
+## Every slot's line of play (CourseValidator.line_of_play, D47, D51) as the latest validator run
+## measured it, in CourseData.holes order: [tee, cup], [tee, turn, cup], or empty when its tee or
+## cup is not placed (E3-S46: Build draws them). Measured afresh when that run did not see the
+## current holes.
+func slot_lines() -> Array[PackedVector2Array]:
+	if _slot_lines.size() == _course.holes.size():
+		return _slot_lines.duplicate()
+	var out: Array[PackedVector2Array] = []
+	for h: HoleData in _course.holes:
+		out.append(_validator.line_of_play(_course, h))
+	return out
+
+
 ## Slot `slot`'s hints from the latest validator run (CourseValidator.hint_slots, E3-S39):
 ## advice for Build that never closes the hole. Empty when it has none or there is no slot.
 func hints_at(slot: int) -> Array[CourseValidator.Issue]:
