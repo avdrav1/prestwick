@@ -21,6 +21,10 @@ enum Check { FAIR, INTERESTING, PACE, CHALLENGE }
 
 const KIND_NAMES: PackedStringArray = ["praise", "neutral", "complaint"]
 const CHECK_NAMES: PackedStringArray = ["fair", "interesting", "pace", "challenge"]
+## E3-S44: the four checks as the player reads them, in Check order: the one set of
+## player-facing words the hole panel's hover, the feed's hover and docs/design.md use (the
+## code names above stay internal).
+const CHECK_WORDS: PackedStringArray = ["sight line", "risk and reward", "pace", "difficulty"]
 ## Float slack for the challenge band's ends (both included).
 const EPS: float = 1e-6
 
@@ -48,6 +52,11 @@ var statics: HoleChecks.Statics
 ## One line for the feed, naming the hole ("Hole 3: blind from the tee, could not see the flag.
 ## I hate blind shots. Also slow (20 s wait).").
 var text: String = ""
+## E3-S44: the line's lead sentence, without "Hole N: " (the reason that matters, with its
+## full stop), and what follows it (the taste's sentence and "Also ...", or ""). `text` is
+## "Hole N: " + lead + " " + rest, but the parts are kept, never found again by splitting.
+var _lead: String = ""
+var _rest: String = ""
 
 
 ## `guest`'s reaction to `record` (a hole it finished), with the hole's `statics`.
@@ -136,27 +145,62 @@ func failed() -> PackedStringArray:
 	return out
 
 
+## E3-S44: the lead sentence, without "Hole N: ": a praise's whole line, a neutral's, or a
+## complaint's heaviest failed check in the guest's words, with its full stop. A reason may hold
+## ". " itself: the lead is kept as built, not split out of `text`.
+## A reaction given only a `text` (a test's or a tool's, never judged) leads with its whole body.
+func lead_line() -> String:
+	return _lead if not _lead.is_empty() else body_line()
+
+
+## The line without its "Hole N: " (the hole panel names the hole).
+func body_line() -> String:
+	if _lead.is_empty():
+		var head := "Hole %d: " % hole_number
+		return text.substr(head.length()) if text.begins_with(head) else text
+	return _lead if _rest.is_empty() else _lead + " " + _rest
+
+
+## E3-S44: the checks this reaction failed in the player's words (CHECK_WORDS), in Check order.
+func failed_words() -> PackedStringArray:
+	var out := PackedStringArray()
+	for c: int in Check.size():
+		if not passed[c]:
+			out.append(CHECK_WORDS[c])
+	return out
+
+
+## "Failed: sight line, pace and difficulty." for the hover texts, or "" with no fail.
+func failed_line() -> String:
+	var words := failed_words()
+	return "" if words.is_empty() else "Failed: %s." % _and_list(words)
+
+
 ## The feed line (E3-S7): "Hole N:", then the heaviest failed check (a taste's doubled one,
 ## else the first in Check order) as its own sentence with the taste's word, then the other
 ## failed checks in their short form after "Also", commas and one final "and", so a line of
 ## four fails stays short and its one reason that matters reads first. A neutral has one fail.
+## Sets the lead sentence and the rest (lead_line, body_line) as it builds the line.
 func _line() -> String:
-	var head := "Hole %d: " % hole_number
+	_rest = ""
 	if kind == Kind.PRAISE:
-		return head + "loved it, %d on a par %d." % [score, par]
-	var lead := lead_check()
-	if kind == Kind.NEUTRAL:
-		return head + "fine, but %s." % _reason(lead)
-	var line := head + "%s." % _reason(lead)
-	if weights[lead] > 1:
-		line += " " + _taste_line(lead)
-	var rest := PackedStringArray()
-	for c: int in Check.size():
-		if c != lead and not passed[c]:
-			rest.append(_short_reason(c))
-	if not rest.is_empty():
-		line += " Also %s." % _and_list(rest)
-	return line
+		_lead = "loved it, %d on a par %d." % [score, par]
+	elif kind == Kind.NEUTRAL:
+		_lead = "fine, but %s." % _reason(lead_check())
+	else:
+		var lead := lead_check()
+		_lead = "%s." % _reason(lead)
+		var after := PackedStringArray()
+		if weights[lead] > 1:
+			after.append(_taste_line(lead))
+		var rest := PackedStringArray()
+		for c: int in Check.size():
+			if c != lead and not passed[c]:
+				rest.append(_short_reason(c))
+		if not rest.is_empty():
+			after.append("Also %s." % _and_list(rest))
+		_rest = " ".join(after)
+	return "Hole %d: " % hole_number + body_line()
 
 
 ## The failed check the line leads with: the heaviest, ties in Check order; -1 with no fail.

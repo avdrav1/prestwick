@@ -6,6 +6,7 @@ extends GutTest
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const DottedReaction := preload("res://tests/fixtures/dotted_reaction.gd")
 
 
 ## A 40 x 70 rough plot at height 2.
@@ -1174,3 +1175,29 @@ func test_the_details_show_an_approach_hint_apart_from_the_rules() -> void:
 	assert_false(panel.issues_label.visible, "no rule fails")
 	panel.rows_for(1)[0].pick_button.pressed.emit()
 	assert_string_contains(panel.hint_label.text, "hole 2's tee is 30 yd from this cup")
+
+
+## E3-S44: the panel's lead is GuestReaction.lead_line, kept as the line was built, so a reason
+## holding ". " keeps its whole lead; its hover names the failed checks in CHECK_WORDS' words.
+func test_a_reason_holding_a_full_stop_keeps_its_lead() -> void:
+	var r := DottedReaction.make(3, true)
+	assert_eq(r.text, "Hole 3: slow. Very slow, waited 40 s. Also too hard (9 on a par 4).")
+	assert_eq(r.lead_line(), "slow. Very slow, waited 40 s.", "the whole reason, not cut at its own \". \"")
+	assert_eq(HolePanel.reaction_text(r, true), "Complaint: slow. Very slow, waited 40 s.")
+	assert_eq(HolePanel.reaction_text(r, false),
+			"Complaint: slow. Very slow, waited 40 s. Also too hard (9 on a par 4).")
+	var led := DottedReaction.make(3, false)
+	assert_eq(led.lead_line(), "blind from the tee, could not see the flag.",
+			"a fair lead stays its own sentence ahead of the taste's")
+	assert_string_contains(led.body_line(), "I hate blind shots. Also slow (40 s wait)")
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(3)
+	_give(m, r, 10)
+	panel.set_collapsed(true)
+	assert_eq(panel.reaction_label.text, "Complaint: slow. Very slow, waited 40 s.")
+	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: pace and difficulty.")
+	for c: int in GuestReaction.Check.size():
+		var word: String = GuestReaction.CHECK_WORDS[c]
+		assert_true(r.passed[c] or panel.reaction_label.tooltip_text.contains(word),
+				"the panel's hover reads %s from GuestReaction.CHECK_WORDS" % word)

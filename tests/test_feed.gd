@@ -10,6 +10,7 @@ extends GutTest
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+const DottedReaction := preload("res://tests/fixtures/dotted_reaction.gd")
 
 var tuning: GuestTuning
 
@@ -255,6 +256,37 @@ func test_clicking_a_line_shows_its_hole_in_build() -> void:
 	assert_false(m.jump_to_hole(8))
 	assert_eq(m.mode, Main.Mode.BUILD)
 	assert_eq(m.build_tool.hole_number, 3)
+
+
+## E3-S44: a feed line is the reaction's whole line, its lead kept whole though its reason holds
+## ". ", and the row's hover names the failed checks in the words the hole panel's hover uses
+## (GuestReaction.CHECK_WORDS, one set).
+func test_a_feed_line_keeps_its_lead_and_names_checks_in_the_panels_words() -> void:
+	var m := _main_in_play()
+	var feed: ReactionFeed = m.guest_sim.feed
+	var r := DottedReaction.make(3, true)
+	assert_eq(r.lead_line(), "slow. Very slow, waited 40 s.", "a reason holding \". \" keeps its lead")
+	assert_eq(HolePanel.reaction_lead(r), r.lead_line(), "the panel reads the same lead")
+	var praise := _praise(2, "Hole 2: loved it, 3 on a par 3.")
+	feed.push(r, 1, 90)
+	feed.push(praise, 1, 91)
+	for i: int in 2:
+		m.feed_panel.tick(m.feed_panel.tuning.reveal_interval_s)
+	var complaint_row: Button = m.feed_panel.rows[1]
+	assert_string_contains(complaint_row.text, r.text, "the feed shows the whole line")
+	var tip: String = complaint_row.tooltip_text
+	assert_string_starts_with(tip, "Show hole 3 in Build")
+	assert_string_contains(tip, "Failed: pace and difficulty.")
+	var panel_tip := HolePanel.reaction_tip(r)
+	for c: int in GuestReaction.Check.size():
+		if r.passed[c]:
+			continue
+		var word: String = GuestReaction.CHECK_WORDS[c]
+		assert_true(tip.contains(word) and panel_tip.contains(word),
+				"feed and panel both say \"%s\" for %s" % [word, GuestReaction.CHECK_NAMES[c]])
+	assert_eq(m.feed_panel.rows[0].tooltip_text, "Show hole 2 in Build", "a praise names no check")
+	assert_eq(GuestReaction.CHECK_WORDS, PackedStringArray(["sight line", "risk and reward", "pace",
+			"difficulty"]), "the words docs/design.md lists")
 
 
 # --- map tags ---

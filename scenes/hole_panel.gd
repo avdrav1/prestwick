@@ -35,7 +35,7 @@ extends PanelContainer
 ## (latest_reaction: the window the map tag counts, less what an edit cleared, E3-S17; a neutral
 ## is quiet, D39), led by the check that failed ("Complaint: blind from the tee, could not see
 ## the flag."). Expanded, the whole line; collapsed, its lead sentence alone, the rest and every
-## failed check (in the player's words, CHECK_LABELS) on hover, so it stays inside max_height
+## failed check (in the player's words, GuestReaction.CHECK_WORDS) on hover, so it stays inside max_height
 ## beside the one-line issue summary.
 ##
 ## A row's tag (E3-S43): a hole with a map tag (ReactionTags: its praise and complaint counts in
@@ -349,15 +349,13 @@ static func latest_reaction(p_feed: ReactionFeed, c: CourseData, slot: int) -> G
 
 ## `r`'s line without its "Hole N: " (the panel names the hole).
 static func reaction_body(r: GuestReaction) -> String:
-	var head := r.text.find(": ")
-	return r.text.substr(head + 2) if r.text.begins_with("Hole ") and head >= 0 else r.text
+	return r.body_line()
 
 
-## `r`'s lead sentence: its body up to the first full stop (a praise is one sentence).
+## `r`'s lead sentence (E3-S44: GuestReaction.lead_line, kept as the line was built, so a
+## reason holding ". " keeps its whole lead; a praise is one sentence).
 static func reaction_lead(r: GuestReaction) -> String:
-	var body := reaction_body(r)
-	var stop := body.find(". ")
-	return body if stop < 0 else body.substr(0, stop + 1)
+	return r.lead_line()
 
 
 ## The panel's line for `r`: "Praise: ..." or "Complaint: ...", the whole body, or with
@@ -368,22 +366,13 @@ static func reaction_text(r: GuestReaction, lead_only: bool) -> String:
 	return ("Praise: " if r.is_praise() else "Complaint: ") + said
 
 
-## The four checks as the player reads them, in GuestReaction.Check order.
-const CHECK_LABELS: PackedStringArray = ["sight line", "risk and reward", "pace", "difficulty"]
-
-
-## The hover text for `r`: its whole line and every check it failed, in CHECK_LABELS' words.
+## The hover text for `r`: its whole line and every check it failed, in the player's words
+## (GuestReaction.CHECK_WORDS, which the feed's hover uses too, E3-S44).
 static func reaction_tip(r: GuestReaction) -> String:
-	var tip := r.text
 	if r.is_praise():
-		return tip
-	var fails := PackedStringArray()
-	for c: int in GuestReaction.Check.size():
-		if not r.passed[c]:
-			fails.append(CHECK_LABELS[c])
-	if not fails.is_empty():
-		tip += "\nFailed: %s." % GuestReaction._and_list(fails)
-	return tip
+		return r.text
+	var fails := r.failed_line()
+	return r.text if fails.is_empty() else r.text + "\n" + fails
 
 
 ## The rows showing a hole now, in number order, whether or not the list is collapsed.

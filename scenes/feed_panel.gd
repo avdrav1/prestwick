@@ -173,6 +173,13 @@ func row_text(entry: ReactionFeed.Entry) -> String:
 			entry.display_text(number_now(entry))]
 
 
+## The hover text of `entry`'s row: where a click goes, then (E3-S44) the checks it failed in
+## the player's words, the same words the hole panel's hover uses (GuestReaction.CHECK_WORDS).
+func row_tip(entry: ReactionFeed.Entry, number: int) -> String:
+	var tip := "Show hole %d in Build" % (number if number > 0 else entry.hole_number)
+	return tip if entry.failed_text.is_empty() else tip + "\n" + entry.failed_text
+
+
 ## The number of the hole `entry` links to as the course has it now, or 0 when it is gone.
 func number_now(entry: ReactionFeed.Entry) -> int:
 	if sim == null or sim.course == null:
@@ -219,7 +226,7 @@ func _refresh() -> void:
 		b.visible = true
 		b.text = row_text(e)
 		var n: int = number_now(e)
-		b.tooltip_text = "Show hole %d in Build" % (n if n > 0 else e.hole_number)
+		b.tooltip_text = row_tip(e, n)
 		var c: Color = praise_color if e.is_praise() else complaint_color
 		for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
 			b.add_theme_color_override(state, c)

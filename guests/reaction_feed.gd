@@ -57,6 +57,9 @@ class Entry:
 	var slot: int = -1
 	var kind: GuestReaction.Kind = GuestReaction.Kind.NEUTRAL
 	var text: String = ""
+	## E3-S44: the checks the reaction failed, in the player's words ("Failed: sight line and
+	## pace.", GuestReaction.failed_line), or "" for a praise. The feed row's hover shows it.
+	var failed_text: String = ""
 	## How many guests gave this exact line in this second.
 	var count: int = 1
 
@@ -126,6 +129,7 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	entry.slot = slot
 	entry.kind = reaction.kind
 	entry.text = reaction.text
+	entry.failed_text = "" if reaction.is_praise() else reaction.failed_line()
 	entries.append(entry)
 	if entries.size() > max_entries:
 		entries = entries.slice(entries.size() - max_entries)
