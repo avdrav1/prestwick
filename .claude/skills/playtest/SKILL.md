@@ -11,6 +11,8 @@ Two modes. Pick by argument: `smoke` (default) or `full`.
 
 Run `bash scripts/playtest.sh`. It drives the real main scene headless at a fixed 60 fps with `scripts/playtest.gd`, prints one `ok` or `FAIL` line per check, and exits 0 only when every check passes and Godot printed no error or warning. Expected values (the course it must load, where the debug shot lands and rests) come from `data/playtest_smoke.json`, copied from `docs/design.md`, so a fallback course or a physics change fails it. Takes a few seconds. Used by `/ship-it`.
 
+Windowed step (E3-S32): when a display is available, also run `godot --path . -s res://scripts/shirt_render_check.gd`. It opens a window, renders the idle golfer in every shirt through the real shader and exits 0 only when every pixel matches the sheet with its key swapped (the GUT tests run headless, where nothing is drawn, so `run_tests.sh` cannot check the shader's output). With no display, say it was skipped.
+
 The smoke asserts only what the milestones shipped so far have built, so it can pass at every milestone. Each stage is added by the epic that builds it, which also raises `BUILT_MILESTONE` in `scripts/playtest.gd`:
 
 | Milestone | Stage | Pass if |

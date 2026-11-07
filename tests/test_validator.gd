@@ -614,7 +614,7 @@ func test_check_course_on_a_walled_128_plot_is_fast() -> void:
 	for n: int in range(1, 10):
 		assert_not_null(_issue(all[n], 3), "hole %d is walled off" % n)
 	gut.p("check_course, 9 walled holes on 128x128: %.1f ms (fastest of %d)" % [ms, BestTime.RUNS])
-	assert_lt(ms, 100.0, "one edit's rerun of nine holes stays under 100 ms (debug build)")
+	assert_lt(ms, 100.0, "one edit's rerun of nine holes stays under 100 ms (debug build)" + BestTime.load_note())
 
 
 func test_check_hole_on_a_128_plot_is_fast() -> void:
@@ -627,7 +627,7 @@ func test_check_hole_on_a_128_plot_is_fast() -> void:
 	var ms: float = BestTime.ms(func() -> void: _v.check_hole(c, c.holes[0]))
 	assert_eq(issues, [] as Array[CourseValidator.Issue])
 	gut.p("check_hole, one par 5 on 128x128: %.1f ms (fastest of %d)" % [ms, BestTime.RUNS])
-	assert_lt(ms, 30.0, "one hole's check stays under 30 ms (debug build)")
+	assert_lt(ms, 30.0, "one hole's check stays under 30 ms (debug build)" + BestTime.load_note())
 
 
 # --- rule 3's graph kept between edits (E3-S12) ---
@@ -1118,5 +1118,5 @@ func test_a_dogleg_costs_the_validator_little() -> void:
 	var straight_ms: float = BestTime.ms(func() -> void: _v.hole_yardage(straight, straight.holes[0]))
 	gut.p("line of play: dogleg %.3f ms, straight hole %.3f ms (fastest of %d)" % [
 			bent_ms, straight_ms, BestTime.RUNS])
-	assert_lt(bent_ms, 2.0, "a dogleg's line of play stays under 2 ms (debug build)")
-	assert_lt(straight_ms, 1.0, "a straight hole's zone check stays under 1 ms")
+	assert_lt(bent_ms, 2.0, "a dogleg's line of play stays under 2 ms (debug build)" + BestTime.load_note())
+	assert_lt(straight_ms, 1.0, "a straight hole's zone check stays under 1 ms" + BestTime.load_note())

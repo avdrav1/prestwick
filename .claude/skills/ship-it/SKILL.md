@@ -13,7 +13,7 @@ description: Cut a milestone build of Prestwick. Verifies the epic is complete, 
 ## Steps
 
 1. Run `/godot-check`. Must pass.
-2. Run `/playtest` in smoke mode (`bash scripts/playtest.sh`). It checks every stage built so far (see the playtest skill). Must pass.
+2. Run `/playtest` in smoke mode (`bash scripts/playtest.sh`). It checks every stage built so far (see the playtest skill). Must pass. Then its windowed step: `godot --path . -s res://scripts/shirt_render_check.gd` (needs a display; E3-S32). Must pass; with no display, say it was skipped in the release note's known issues.
 3. Bump the version in `project.godot` (`config/version`): milestone number as minor, so E2 done = `0.2.0`.
 4. Export with the headless editor:
    ```

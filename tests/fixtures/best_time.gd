@@ -29,6 +29,23 @@ static func ms(f: Callable, runs: int = RUNS) -> float:
 ## machine (the other jobs, a playtest beside the run) cannot slow them. Without the variable
 ## (GUT on its own) the test runs in place.
 const PHASE_ENV := "PRESTWICK_TEST_PHASE"
+## E3-S32 (D52): above this 1-minute load average a timed test that fails says the machine was
+## busy (the perf script warns there instead of failing).
+const LOAD_HIGH := 4.0
+
+
+## E3-S32: what a wall-clock assert adds to its message: the load average now, and when it is
+## high, that the failure is likely the machine, not the code (rerun on an idle one). A
+## timed test fails as before; only its message says why.
+static func load_note() -> String:
+	var f := FileAccess.open("/proc/loadavg", FileAccess.READ)
+	if f == null:
+		return ""
+	var one := float(f.get_line().split(" ")[0])
+	if one > LOAD_HIGH:
+		return " [load average %.2f, past %.1f on %d cores: likely the machine, not the code; rerun on an idle one]" % [
+			one, LOAD_HIGH, OS.get_processor_count()]
+	return " [load average %.2f]" % one
 
 
 static func later(test: GutTest) -> bool:

@@ -627,12 +627,12 @@ func test_the_putter_solve_spreads_over_frames_within_a_frame_budget() -> void:
 			sc.aim_putt.runs, sc.aim_putt.ticks, frames, first_answer, worst_usec / 1000.0,
 			total_usec / 1000.0 / frames])
 	assert_lt(float(total_usec) / frames, sc.tuning.putt_aim_frame_usec * 1.5,
-			"a frame's aim work stays near its time cap on average")
+			"a frame's aim work stays near its time cap on average" + BestTime.load_note())
 	assert_false(sc.is_aim_solving(), "the solve ends")
 	assert_true(sc.aim_putt.scanned, "this one needs the scan")
 	assert_gt(frames, 2, "a cold solve on a steep bank needs several frames")
 	assert_between(first_answer, 0, frames - 2, "a first answer shows before the solve ends")
-	assert_lt(worst_usec, 16667, "no aim update takes more than a 60 Hz frame")
+	assert_lt(worst_usec, 16667, "no aim update takes more than a 60 Hz frame" + BestTime.load_note())
 	var whole := PuttAim.solve(sc.course, sc.field, sc.model, sc.tuning, sc.ball_at, sc.aim_deg,
 			sc.cup_tile(), sc.next_seed())
 	assert_eq(sc.aim_power, whole.power, "the same putt as the solve at once")

@@ -16,6 +16,8 @@ extends SceneTree
 ## same day with a skill-1 foursome in each arrival slot in turn (D46 review); and the groups alone run on a day
 ## long enough to finish, so their whole round is measured. `day_s=N` plays the days at that
 ## length instead of data/guests.json's (`arrival_window_s=N` likewise); `quick` leaves out the statics and the 60 fps runs.
+## E3-S32: `frames` runs only the statics and each seed's day in 60 fps frames at 1x and 3x (the
+## CPU a frame, E3-S23's figures), with the load average at the start and end.
 ## E3-S22: `--lines` prints each day's reaction lines as they came (the feed's text, neutrals
 ## too, with the second, the guest's skill, patience and taste, its wait and walk), and each
 ## day prints its pace fails by hole and where the counted waits were (on the tee, on the hole
@@ -29,6 +31,8 @@ const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
 
 ## `--lines`: print every reaction line of each day's own draws.
 var lines: bool = false
+## E3-S32 `frames`: only the statics and the 60 fps frame runs.
+var frames_only: bool = false
 
 
 func _initialize() -> void:
@@ -57,10 +61,21 @@ func _initialize() -> void:
 			quick = true
 		elif arg == "--lines" or arg == "lines":
 			lines = true
+		elif arg == "frames":
+			frames_only = true
 	print("day_s %d s (arrivals over the first %d s)" % [tuning.day_s, tuning.arrival_window_s])
 	GuestClubTable.warm(model)
 	if not quick:
 		_statics(course, tuning, model)
+	if frames_only:
+		var NineHolesPerf: GDScript = load("res://scripts/nine_holes_perf.gd")
+		print("load average at the start: %s" % [NineHolesPerf.load_average()])
+		for s in seeds:
+			for speed in [1.0, 3.0]:
+				_frames(course, s, tuning, model, speed)
+		print("load average at the end: %s" % [NineHolesPerf.load_average()])
+		quit(0)
+		return
 	var all_plans: Array[int] = []
 	var all_finished := 0
 	var stress_finished := 0

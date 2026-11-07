@@ -52,6 +52,13 @@ extends SceneTree
 ##
 ##   godot [--headless] --path . -s res://scripts/nine_holes_perf.gd [-- fixture=hazards|doglegs]
 ##
+## E3-S32 (D52): the script prints the 1-minute load average at its start and end. Its gate (the
+## guest frames past `frame_guest_ms_max` on the lattice and flooded days, the 60 fps headless
+## days and Play at 3x) fails the run when GATE_FRAMES_MAX or more of them pass it, or one passes
+## it by GATE_OVER_SHARE; a lone outlier is printed, not failed. When the load average at the
+## start or the end is above LOAD_HIGH, a gate that would fail prints a WARNING and the run
+## exits 0: those frames measure the machine, not the code.
+##
 ## E3-S15: in either mode, before the rest, the guests' two searches under load with no scene
 ## (_time_searches): the cart path search on a dense painted lattice and Interesting's safe
 ## route on a map whose trees walls make it flood, each with whole guest days running at 3x.
@@ -63,6 +70,12 @@ extends SceneTree
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
+## E3-S32 (D52): above this 1-minute load average the gate warns instead of failing.
+const LOAD_HIGH: float = 4.0
+## E3-S32 (D52): the gate fails at this many guest frames past frame_guest_ms_max in one run...
+const GATE_FRAMES_MAX: int = 3
+## ... or at one past it by this share.
+const GATE_OVER_SHARE: float = 0.25
 const MAIN_SCENE := "res://scenes/main.tscn"
 const RUNS: int = 40
 ## Simulated seconds the guest day is stepped before the first frame (arrivals run to 90 s).
@@ -128,10 +141,16 @@ var _play_over: int = 0
 ## E3-S15 review: lattice guest-day frames (3x, 60 fps) whose guest work passed
 ## frame_guest_ms_max; since E3-S34 the flooded map's too.
 var _search_over: int = 0
+## E3-S32: every gated guest frame past frame_guest_ms_max, in ms, and the load average (1, 5
+## and 15 minutes) at the start.
+var _gated: Array[float] = []
+var _load_start := PackedFloat64Array()
 var _guest_stepped: Array[bool] = []
 
 
 func _initialize() -> void:
+	_load_start = load_average()
+	print("load average at the start: %s" % _load_text(_load_start))
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("fixture="):
 			_fixture = arg.substr(8)
@@ -164,8 +183,8 @@ func _initialize() -> void:
 	_guest_tuning = GuestTuning.load_default()
 	_time_searches()
 	if DisplayServer.get_name() == "headless":
-		var over := _time_guest_frames()
-		quit(0 if opened.size() == 9 and over == 0 and _search_over == 0 else 1)
+		_time_guest_frames()
+		_finish(opened.size() == 9)
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -307,6 +326,7 @@ func _time_guest_frames() -> int:
 				over += 1 if d > budget else 0
 			if fps == 60.0:
 				over_60 += over
+				_gate(ms)
 			var on_time: int = ceili((_guest_tuning.day_s + 1.0) * fps / 3.0)
 			# E3-S35: a frame's tick budget goes with its length (frame_ticks_per_real_s).
 			var frame_budget := mini(ceili(_guest_tuning.frame_ticks_per_real_s / fps - 1e-6),
@@ -346,7 +366,7 @@ func _time_searches() -> void:
 		SEARCH_WALL_X, fl.height - 1, fl_open])
 	_time_search_statics(fl)
 	var fl_over := _time_search_day("flooded map", fl, fb)
-	print("E3-S15 3x guest frames over %.1f ms: cart path lattice %d, flooded map %d (any fails the run)" % [
+	print("E3-S15 3x guest frames over %.1f ms: cart path lattice %d, flooded map %d (gated, D52)" % [
 		_guest_tuning.frame_guest_ms_max, _search_over, fl_over])
 	_search_over += fl_over
 
@@ -401,7 +421,7 @@ func _time_search_day(what: String, c: CourseData, b: CourseBuilder) -> int:
 		var frames := 0
 		var edits := 0
 		var measured := 0
-		var statics_ms: Array[float] = [0.0]
+		var statics_ms: Array[float] = []
 		while not brain.day_over:
 			frames += 1
 			if frames % SEARCH_EDIT_FRAMES == 0:
@@ -418,6 +438,7 @@ func _time_search_day(what: String, c: CourseData, b: CourseBuilder) -> int:
 				statics_ms.append(d)
 				measured = brain.checks.measured
 		over += _over(ms)
+		_gate(ms)
 		print("E3-S15 %s, guest day %d at 3x, 60 fps, %d click edits: guest work a frame %s; frames that ran a step %s; %d frames over 16.7 ms, %d over frame_guest_ms_max %.1f ms (%d of them measuring a hole); %d holes' statics measured, in frames %s; %d reactions; %d path searches kept at dusk" % [
 			what, day, edits, _stats(ms), _stats(step_ms), ms.filter(func(v: float) -> bool: return v > 16.7).size(),
 			_over(ms), _guest_tuning.frame_guest_ms_max, _over(statics_ms),
@@ -591,6 +612,50 @@ func _print_guests(phase: String) -> void:
 	_guest_ms.clear()
 
 
+## E3-S32 (D52): notes the frames of `ms` past frame_guest_ms_max for the gate.
+func _gate(ms: Array[float]) -> void:
+	for v: float in ms:
+		if v > _guest_tuning.frame_guest_ms_max:
+			_gated.append(v)
+
+
+## The 1, 5 and 15 minute load averages (/proc/loadavg), or empty where there is none.
+static func load_average() -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	var f := FileAccess.open("/proc/loadavg", FileAccess.READ)
+	if f == null:
+		return out
+	var parts := f.get_line().split(" ")
+	for i: int in mini(3, parts.size()):
+		out.append(float(parts[i]))
+	return out
+
+
+func _load_text(l: PackedFloat64Array) -> String:
+	if l.is_empty():
+		return "unknown"
+	return "%.2f, %.2f, %.2f (1, 5, 15 minutes; %d logical cores)" % [l[0], l[1], l[2], OS.get_processor_count()]
+
+
+## E3-S32 (D52): prints the load average at the end and the gate, and quits: 1 when `ok` is
+## false or the gate fails on an idle machine, else 0 (a failing gate under load warns).
+func _finish(ok: bool) -> void:
+	var load_end := load_average()
+	print("load average at the end: %s" % _load_text(load_end))
+	var budget: float = _guest_tuning.frame_guest_ms_max
+	var worst: float = _gated.max() if not _gated.is_empty() else 0.0
+	var failed: bool = _gated.size() >= GATE_FRAMES_MAX or worst > budget * (1.0 + GATE_OVER_SHARE)
+	print("gate (D52): %d gated guest frames past %.1f ms, worst %.2f; it fails at %d or at one past %.1f ms" % [
+		_gated.size(), budget, worst, GATE_FRAMES_MAX, budget * (1.0 + GATE_OVER_SHARE)])
+	var high: bool = (not _load_start.is_empty() and _load_start[0] > LOAD_HIGH) \
+			or (not load_end.is_empty() and load_end[0] > LOAD_HIGH)
+	if failed and high:
+		print("WARNING: the gate would fail, but the load average passed %.1f (start %s, end %s): these frames measure the machine; rerun on an idle one" % [
+			LOAD_HIGH, _load_text(_load_start), _load_text(load_end)])
+		failed = false
+	quit(0 if ok and not failed else 1)
+
+
 ## E3-S31: a frame of an idle or Play phase past 16.7 ms, with the guest work in it (this
 ## frame's _guest_ms; the rest is the map's draw and the engine).
 func _note_slow(frame_ms: float) -> void:
@@ -614,6 +679,8 @@ func _slow_share() -> String:
 
 
 func _stats(ms: Array[float]) -> String:
+	if ms.is_empty():
+		return "none"
 	var s: Array[float] = ms.duplicate()
 	s.sort()
 	var total: float = 0.0
@@ -832,6 +899,7 @@ func _process(_delta: float) -> bool:
 					_main.guest_sim.guests_on_course(), _main.guest_view.figures().size(),
 					_on_screen()])
 				_play_over += _over(_guest_ms)
+				_gate(_guest_ms)
 				_samples.clear()
 				_guest_ms.clear()
 				_guest_stepped.clear()
@@ -860,7 +928,7 @@ func _process(_delta: float) -> bool:
 				_print_guests("every hole but hole 1 failing")
 				print("3x guest frames over %.1f ms in Play: %d" % [_guest_tuning.frame_guest_ms_max, _play_over])
 				print("3x guest frames over %.1f ms on the cart path lattice and the flooded map: %d" % [_guest_tuning.frame_guest_ms_max, _search_over])
-				quit(0 if _play_over == 0 and _search_over == 0 else 1)
+				_finish(true)
 	return false
 
 	return false

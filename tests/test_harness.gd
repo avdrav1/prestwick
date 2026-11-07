@@ -61,3 +61,20 @@ func test_a_timed_test_waits_only_in_the_batch() -> void:
 	assert_false(BestTime.later(self), "alone (or GUT on its own): the test runs")
 	OS.set_environment(BestTime.PHASE_ENV, "batch")
 	assert_true(BestTime.later(self), "in the parallel batch: it passes now and runs later")
+
+
+## E3-S32: a timed assert's message carries the load average, and says the machine is the likely
+## cause when it is past BestTime.LOAD_HIGH.
+func test_a_timed_assert_says_the_load() -> void:
+	var f := FileAccess.open("/proc/loadavg", FileAccess.READ)
+	if f == null:
+		assert_eq(BestTime.load_note(), "", "no load average to read")
+		return
+	# /proc reports a size of 0, so read it by line, as load_note does.
+	var one := float(f.get_line().split(" ")[0])
+	var note := BestTime.load_note()
+	assert_string_contains(note, "load average")
+	# Away from the bound, where the load cannot cross it between the two reads.
+	if absf(one - BestTime.LOAD_HIGH) > 0.5:
+		assert_eq(note.contains("likely the machine"), one > BestTime.LOAD_HIGH,
+				"names the machine only under load (now %.2f)" % one)

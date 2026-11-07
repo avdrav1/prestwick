@@ -284,7 +284,7 @@ func test_a_dense_cluster_lays_out_quickly() -> void:
 	assert_eq(v.issue_markers().size(), 196)
 	for scale: float in [1.0, 0.5, 2.0]:
 		var ms: float = BestTime.ms(func() -> void: v.layout_issue_labels(scale))
-		assert_lt(ms, 100.0, "196 faults lay out in under 100 ms at %sx (fastest of %d took %.1f ms)" % [scale, BestTime.RUNS, ms])
+		assert_lt(ms, 100.0, "196 faults lay out in under 100 ms at %sx (fastest of %d took %.1f ms)" % [scale, BestTime.RUNS, ms] + BestTime.load_note())
 		_assert_near_and_apart(v, scale)
 
 
