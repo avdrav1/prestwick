@@ -61,6 +61,8 @@ func _ready() -> void:
 	build_palette.bind(build_tool)
 	hole_panel.bind(build_tool)
 	hole_panel.play_requested.connect(play_hole)
+	# A row's tag picks and frames its hole as the map tag does (E3-S43).
+	hole_panel.tag_requested.connect(func(number: int, slot: int) -> void: _on_tag_link(number, slot))
 	land_panel.bind(build_tool)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
@@ -75,7 +77,7 @@ func _ready() -> void:
 	feed_panel.bind(guest_sim)
 	feed_panel.hole_requested.connect(_on_hole_link)
 	reaction_tags.bind(guest_sim.feed)
-	tag_clicks.bind(reaction_tags, _on_tag_link)
+	tag_clicks.bind(reaction_tags, _on_tag_link, tag_click_taken)
 	hole_panel.bind_feed(guest_sim.feed)
 	_apply_mode()
 	var errors: Array[String] = []
@@ -167,6 +169,16 @@ func _on_tag_link(number: int, slot: int = -1) -> bool:
 	if mode == Mode.PLAY and tag_waits_for_swing():
 		return false
 	return _on_hole_link(number, slot)
+
+
+## True when a click on a map tag would be taken now (_on_tag_link): always in Build; in Play
+## only while the hole is not under way and no swing or ball is moving. A hovered tag shows the
+## pointing hand only then (E3-S43).
+func tag_click_taken() -> bool:
+	if mode != Mode.PLAY:
+		return true
+	return not tag_waits_for_swing() and not swing_control.swing.in_progress() \
+			and not swing_control.is_ball_moving()
 
 
 ## True in Play while the hole is under way: at least one stroke counted and not finished, so a

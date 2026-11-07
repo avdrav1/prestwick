@@ -758,3 +758,67 @@ func test_a_click_on_a_tag_mid_hole_at_rest_is_the_swings() -> void:
 	assert_eq(m.mode, Main.Mode.BUILD, "a finished hole's tag click goes to Build")
 	assert_eq(m.build_tool.picked_slot(), 1, "and picks hole 2")
 	_assert_framed(m, 1)
+
+
+# --- E3-S43: a tag looks clickable, and its hole-list row reaches it ---
+
+## A mouse motion to viewport point `at`, through the real viewport.
+func _move(m: Main, at: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	ev.global_position = at
+	m.get_viewport().push_input(ev, true)
+
+
+func test_hovering_a_tag_shows_the_pointing_hand_and_a_highlight() -> void:
+	var m := _main_with_verdicts()
+	var tags: ReactionTags = m.reaction_tags
+	await get_tree().process_frame
+	var at: Vector2 = _show_tag(m, 2)
+	assert_eq(m.tag_clicks.hover_at(at), 2, "the tag under the mouse")
+	assert_eq(m.tag_clicks.cursor_shape, Input.CURSOR_POINTING_HAND, "the pointing hand")
+	assert_eq(tags.hovered_slot, 2, "and the tag is highlighted")
+	assert_eq(m.tag_clicks.hover_at(at + Vector2(0, 60)), -1, "off the tag, on the green")
+	assert_eq(m.tag_clicks.cursor_shape, Input.CURSOR_ARROW, "the arrow again")
+	assert_eq(tags.hovered_slot, -1, "and no highlight")
+	# Through the viewport, as the mouse moves.
+	_move(m, at)
+	assert_eq(tags.hovered_slot, 2, "a motion over the tag hovers it")
+	assert_eq(m.tag_clicks.cursor_shape, Input.CURSOR_POINTING_HAND)
+	_move(m, at + Vector2(0, 60))
+	assert_eq(tags.hovered_slot, -1)
+	assert_eq(m.tag_clicks.cursor_shape, Input.CURSOR_ARROW)
+
+
+func test_a_tag_mid_hole_in_play_shows_no_hand() -> void:
+	var m := _main_with_verdicts()
+	await get_tree().process_frame
+	m.set_mode(Main.Mode.PLAY)
+	m.set_process(false)
+	var at: Vector2 = _show_tag(m, 1)
+	assert_eq(m.tag_clicks.hover_at(at), 1, "before the first stroke the tag takes a click")
+	m.swing_control.score.strokes = 1  # the hole under way
+	assert_eq(m.tag_clicks.hover_at(at), -1, "mid-hole the click is the swing's")
+	assert_eq(m.tag_clicks.cursor_shape, Input.CURSOR_ARROW, "so no hand")
+	assert_eq(m.reaction_tags.hovered_slot, -1, "and no highlight")
+
+
+func test_a_hole_list_rows_tag_picks_and_frames_its_hole() -> void:
+	var m := _main_with_verdicts()
+	await get_tree().process_frame
+	m.hole_panel.refresh()
+	var rows: Array = m.hole_panel.shown_rows()
+	assert_eq(rows.size(), 3)
+	var texts: Array[String] = []
+	for r: HolePanel.HoleRow in rows:
+		texts.append(r.tag_button.text if r.tag_button.visible else "")
+	assert_eq(texts, ["!2", "+1", "!1"], "each row shows its map tag's counts")
+	assert_eq(m.build_tool.picked_slot(), 0)
+	(rows[2] as HolePanel.HoleRow).tag_button.pressed.emit()
+	assert_eq(m.build_tool.picked_slot(), 2, "the row's tag picks hole 3")
+	_assert_framed(m, 2)
+	# A moved cup clears the tag, and the row's with it.
+	assert_true(m.build_tool.builder.place_cup(1, Vector2i(18, 6)))
+	m.hole_panel.refresh()
+	assert_false((m.hole_panel.shown_rows()[0] as HolePanel.HoleRow).tag_button.visible,
+			"hole 1's row has no tag once its tag is cleared")

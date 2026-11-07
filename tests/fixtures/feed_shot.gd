@@ -9,12 +9,16 @@ extends Node2D
 ## hole list and framed.
 ##   scripts/screenshot.sh tests/fixtures/feed_shot.tscn out.png 30
 ##   scripts/screenshot.sh tests/fixtures/feed_jump_shot.tscn out.png 30
+## With `hover` (E3-S43), the day then goes back to Build with the tags' holes framed and the
+## mouse over the first tag: its highlight, and each hole-list row's tag.
+##   scripts/screenshot.sh tests/fixtures/feed_hover_shot.tscn out.png 30
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 
 @export var jump: bool = false
 @export var run_to_s: int = 150
+@export var hover: bool = false
 
 var main: Main
 
@@ -43,3 +47,13 @@ func _ready() -> void:
 	main.camera.frame_points(main.tile_world(h1.tee), main.tile_world(h2.cup), main.free_view_rect())
 	if jump:
 		main.feed_panel.rows[0].pressed.emit()
+	if hover:
+		main.set_mode(Main.Mode.BUILD)
+		main.camera.frame_points(main.tile_world(h1.tee), main.tile_world(h2.cup), main.free_view_rect())
+		main.camera.force_update_scroll()
+		var tags: ReactionTags = main.reaction_tags
+		tags._process(0.0)
+		var slots: Array = tags.tag_slots().keys()
+		slots.sort()
+		if not slots.is_empty():
+			main.tag_clicks.hover_at(tags.tag_centre(slots[0]))

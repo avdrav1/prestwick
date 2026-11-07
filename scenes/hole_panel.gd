@@ -37,9 +37,17 @@ extends PanelContainer
 ## the flag."). Expanded, the whole line; collapsed, its lead sentence alone, the rest and every
 ## failed check (in the player's words, CHECK_LABELS) on hover, so it stays inside max_height
 ## beside the one-line issue summary.
+##
+## A row's tag (E3-S43): a hole with a map tag (ReactionTags: its praise and complaint counts in
+## the feed's window, its cup on the map) shows the same counts on a button after its number,
+## "+2 !1", which picks and frames the hole as a click on the map tag does (tag_requested), so a
+## tag drawn under this panel is still in reach. A hole with no tag shows none.
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
 signal play_requested(number: int, slot: int)
+## Emitted when a row's tag is pressed (E3-S43): Main picks and frames the hole, as a click on
+## its map tag does, so a tag under a panel can still be reached.
+signal tag_requested(number: int, slot: int)
 
 
 ## One hole's row in the list. Display only; its buttons go through the panel's BuildTool.
@@ -58,8 +66,10 @@ class HoleRow:
 	var pick_button: Button
 	var open_button: Button
 	var play_button: Button
+	## The hole's map tag counts ("+2 !1"), shown when it has a tag (E3-S43).
+	var tag_button: Button
 
-	func _init(pick_width: float) -> void:
+	func _init(pick_width: float, tag_width: float = 64.0) -> void:
 		add_theme_constant_override("separation", 2)
 		up_button = _button("↑", "Move the hole up: it takes the number above")
 		down_button = _button("↓", "Move the hole down: it takes the number below")
@@ -67,6 +77,11 @@ class HoleRow:
 		pick_button.toggle_mode = true
 		pick_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		pick_button.custom_minimum_size = Vector2(pick_width, 0)
+		tag_button = _button("", "")
+		tag_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		tag_button.visible = false
+		# Wide enough for "+12 !3", so the rows' Open and Play line up.
+		tag_button.custom_minimum_size = Vector2(tag_width, 0)
 		open_button = _button("Open", "")
 		open_button.custom_minimum_size = Vector2(56, 0)
 		play_button = _button("Play", "Play this hole")
@@ -117,6 +132,8 @@ var feed: ReactionFeed
 @export var text_width: float = 340.0
 ## Width of a list row's number, par, yardage and status button, screen px.
 @export var pick_width: float = 196.0
+## Least width of a row's tag button (E3-S43), screen px.
+@export var tag_width: float = 64.0
 ## The reaction line's colours, as the feed draws praise and complaints (FeedPanel).
 @export var praise_color: Color = Color8(240, 200, 58)
 @export var complaint_color: Color = Color8(240, 160, 150)
@@ -436,6 +453,7 @@ func _refresh_list(b: CourseBuilder) -> void:
 		rows.append(_make_row())
 	_shown = slots.size()
 	var picked: int = _tool.picked_slot()
+	var tallies: Dictionary = tag_tallies(b.course if b != null else null)
 	for i: int in rows.size():
 		var r: HoleRow = rows[i]
 		var h: HoleData = b.hole_at(slots[i]) if i < _shown else null
@@ -451,6 +469,7 @@ func _refresh_list(b: CourseBuilder) -> void:
 		r.pick_button.tooltip_text = r.duplicate_label.text if r.duplicate \
 				else "Build this hole: the Tee and Cup tools place its tee and cup"
 		r.pick_button.set_pressed_no_signal(slots[i] == picked)
+		_refresh_tag(r, tallies.get(slots[i], Vector2i.ZERO))
 		r.open_button.text = "Close" if h.open else "Open"
 		r.open_button.disabled = not h.open and not b.can_open(h.number)
 		r.open_button.tooltip_text = "Close the hole to guests" if h.open \
@@ -467,8 +486,38 @@ func _refresh_list(b: CourseBuilder) -> void:
 	collapse_button.visible = _shown > 0 or collapsed
 
 
+## {slot: Vector2i(praise, complaints)} for every hole the map tags (ReactionTags.tag_slots in
+## Build: a count above 0 in the feed's window and its cup on the map).
+func tag_tallies(c: CourseData) -> Dictionary:
+	var out := {}
+	if c == null or feed == null:
+		return out
+	var t: Dictionary = feed.slot_tallies(c)
+	for slot: int in t:
+		var cup: Vector2i = c.holes[slot].cup
+		var tally: Vector2i = t[slot]
+		if c.in_bounds(cup.x, cup.y) and (tally.x > 0 or tally.y > 0):
+			out[slot] = tally
+	return out
+
+
+## Row `r`'s tag button for `tally` (praise, complaints): the map tag's marks, "+2 !1", in the
+## complaint colour when there is a complaint, else the praise colour; hidden with neither.
+func _refresh_tag(r: HoleRow, tally: Vector2i) -> void:
+	var parts := PackedStringArray()
+	if tally.x > 0:
+		parts.append("+%d" % tally.x)
+	if tally.y > 0:
+		parts.append("!%d" % tally.y)
+	r.tag_button.visible = not parts.is_empty()
+	r.tag_button.text = " ".join(parts)
+	r.tag_button.add_theme_color_override("font_color", complaint_color if tally.y > 0 else praise_color)
+	r.tag_button.tooltip_text = "Guests: %d praised, %d complained. Show the hole and its tag" % [tally.x, tally.y]
+
+
 func _make_row() -> HoleRow:
-	var r := HoleRow.new(pick_width)
+	var r := HoleRow.new(pick_width, tag_width)
+	r.tag_button.pressed.connect(func() -> void: tag_requested.emit(r.number, r.slot))
 	r.pick_button.pressed.connect(func() -> void: _tool.select_hole(r.number, r.slot))
 	r.open_button.pressed.connect(func() -> void:
 		var h: HoleData = _tool.builder.hole_at(r.slot) if _tool.builder != null else null

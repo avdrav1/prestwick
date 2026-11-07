@@ -19,6 +19,9 @@ extends Node2D
 ##
 ## A tag can be clicked (E3-S19): `slot_at` hit-tests the boxes as drawn, and TagClicks, ahead
 ## of the build tool and the swing, hands the click to Main, which picks and frames the hole.
+## The tag under the mouse when a click would be taken (`hovered_slot`, E3-S43, set by
+## TagClicks) draws a chalk outline round its box, a shape cue as well as a colour, so it reads
+## as a button.
 
 ## Colours (art/palette.gpl): ink box, chalk number, sun_yellow praise, flag_red complaints.
 @export var box_color: Color = Color8(26, 28, 34)
@@ -41,6 +44,14 @@ var played_hole: HoleData = null:
 	set(h):
 		played_hole = h
 		queue_redraw()
+## The slot whose tag is hovered and would take a click (TagClicks), -1 for none.
+var hovered_slot: int = -1:
+	set(v):
+		if v != hovered_slot:
+			hovered_slot = v
+			queue_redraw()
+## The hovered tag's outline: chalk, screen px.
+@export var hover_width: float = 2.0
 ## Screen px per canvas unit the tags were last drawn at.
 var _scale: float = 1.0
 
@@ -209,6 +220,8 @@ func _draw() -> void:
 			draw_string(font, Vector2(x + padding, -padding - font.get_descent(font_size)), pieces[i],
 					HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_colors[i])
 			x += widths[i]
+		if slot == hovered_slot:
+			draw_rect(tag_box(slot, all[slot]).grow(hover_width * 0.5 + 1.0), text_color, false, hover_width)
 		# A short stem down to the pin, so the tag reads as the hole's.
 		draw_line(Vector2.ZERO, Vector2(0.0, stem * _scale), box_color, 2.0)
 		draw_set_transform(Vector2.ZERO)
