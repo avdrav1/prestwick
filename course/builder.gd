@@ -134,6 +134,9 @@ var _issues: Dictionary = {}
 var _slot_issues: Array = []
 ## Each slot's rule 4 yardage from the same run (the line of play, D47), in the same order.
 var _slot_yards: Array[int] = []
+## Each slot's line of play from the same run (CourseValidator.line_of_play, D51), so an edit
+## that moves or removes a dogleg's turn is still judged against the line it was checked on.
+var _slot_lines: Array[PackedVector2Array] = []
 ## Undo steps, oldest first.
 var _undo: Array[Step] = []
 ## The open stroke's step, or null when no stroke is open.
@@ -642,14 +645,21 @@ func _commit(tiles: Dictionary) -> bool:
 
 
 ## Closes every open hole with a footprint tile among `cells` (D11), even if it still passes.
+## The footprint follows the line of play (D51): the line as the last check measured it and the
+## line now, so an edit that moves or removes a dogleg's turn closes it either way.
 func _close_footprints(step: Step, cells: Array[Vector2i]) -> void:
 	var hs: Array[HoleData] = _holes_copy()
 	var closed: bool = false
-	for h: HoleData in hs:
+	var kept: bool = _slot_lines.size() == hs.size()
+	for i: int in hs.size():
+		var h: HoleData = hs[i]
 		if not h.open:
 			continue
+		var lines: Array[PackedVector2Array] = [_validator.line_of_play(_course, h)]
+		if kept and _slot_lines[i] != lines[0]:
+			lines.append(_slot_lines[i])
 		for c: Vector2i in cells:
-			if _validator.in_footprint(_course, h, c):
+			if _validator.near_line(lines[0], c) or (lines.size() > 1 and _validator.near_line(lines[1], c)):
 				h.open = false
 				closed = true
 				break
@@ -713,8 +723,14 @@ func _finish(step: Step) -> void:
 ## recording the holes in `step` first.
 func _rerun(step: Step) -> void:
 	_slot_yards = []
+	_slot_lines = []
+	var turns: Array = []
 	_slot_issues = [] if _course.holes.is_empty() \
-			else _validator.check_slots(_course, _current_reach(), _slot_yards)
+			else _validator.check_slots(_course, _current_reach(), _slot_yards, turns)
+	for i: int in turns.size():
+		var h: HoleData = _course.holes[i]
+		_slot_lines.append(PackedVector2Array() if not _course.in_bounds(h.tee.x, h.tee.y)
+				or not _course.in_bounds(h.cup.x, h.cup.y) else _validator.line_of_play_through(h, turns[i]))
 	_issues = CourseValidator.by_number(_course, _slot_issues)
 	var hs: Array[HoleData] = _holes_copy()
 	var closed: bool = false

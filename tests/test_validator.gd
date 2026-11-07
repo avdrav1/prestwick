@@ -866,7 +866,7 @@ func test_a_sharp_dogleg_under_300_yd_straight_is_measured_round_its_corner() ->
 	var c := _dogleg(Vector2i(6, 6), Vector2i(48, 6), Vector2i(48, 48), 4)
 	var h: HoleData = c.holes[0]
 	assert_eq(CourseValidator.yardage(h.tee, h.cup), 297)
-	assert_null(_v.landing_zone(h), "under zone_from_yd: rule 5 has no zone")
+	assert_null(_v.landing_zone(h), "under zone_from_yd on the straight line")
 	var turn: Variant = _v.turn_point(c, h)
 	assert_not_null(turn, "but rule 4 still finds its corner")
 	if turn != null:
@@ -967,6 +967,96 @@ func test_the_nine_hole_fixture_and_generated_holes_stay_straight() -> void:
 		for water: bool in [false, true]:
 			var c := CourseGenerator.generate(par, false, water)
 			assert_null(_v.turn_point(c, c.holes[0]), "generated par %d water %s is straight" % [par, water])
+
+
+# --- rule 5 and the footprint on a dogleg's line of play (D51, E3-S45) ---
+
+func test_a_tee_at_a_doglegs_turn_fails_rule_5() -> void:
+	# The 512 yd par 5 dogleg: its turn (54, 6) is 240 yd out on the east leg, where its tee
+	# shots come down; the straight line's 240 yd point is (39.9, 39.9), 35 tiles away.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var one: HoleData = c.holes[0]
+	assert_eq(_v.play_zone(c, one), Vector2(54, 6), "the zone sits on the turn")
+	assert_ne(_v.play_zone(c, one), _v.landing_zone(one), "not on the straight line")
+	var two := HoleData.new(2, 3, Vector2i(54, 8), Vector2i(80, 8))
+	c.set_tile(80, 8, 1, Surface.Type.GREEN)
+	c.set_holes([one, two])
+	var issue := _issue(_v.check_hole(c, c.holes[0]), 5)
+	assert_not_null(issue, "hole 2's tee at the turn fails hole 1's rule 5")
+	if issue:
+		assert_eq(issue.tile, Vector2i(54, 8))
+		assert_string_contains(issue.reason, "hole 2's tee is in this hole's landing zone, 10 yd from its centre")
+	var back := _issue(_v.check_hole(c, c.holes[1]), 5)
+	assert_not_null(back, "and hole 2's own check names it, both ways")
+	if back:
+		assert_string_contains(back.reason, "tee is in hole 1's landing zone")
+	var slots: Array = _v.check_slots(c)
+	assert_eq(_rules(slots[0]).count(5), 1, "check_slots agrees")
+	assert_eq(_rules(slots[1]).count(5), 1)
+
+
+func test_a_tee_on_a_doglegs_straight_line_is_clear_of_its_zone() -> void:
+	# The straight line's zone centre, where D11 put it, is no longer a landing zone.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var one: HoleData = c.holes[0]
+	var two := HoleData.new(2, 3, Vector2i(40, 40), Vector2i(40, 66))
+	c.set_tile(40, 66, 1, Surface.Type.GREEN)
+	c.set_holes([one, two])
+	assert_null(_issue(_v.check_hole(c, c.holes[0]), 5), "nobody lands on the straight line")
+
+
+func test_a_sharp_dogleg_under_300_yd_straight_has_a_zone_on_its_turn() -> void:
+	# 297 yd straight, about 337 round: rule 5's threshold reads the line of play, so this
+	# par 4 has a zone like every par 4, on its turn.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(48, 6), Vector2i(48, 48), 4)
+	var h: HoleData = c.holes[0]
+	assert_null(_v.landing_zone(h), "under zone_from_yd on the straight line")
+	assert_eq(_v.play_zone(c, h), _v.turn_point(c, h), "but over it round the corner")
+
+
+func test_a_straight_holes_zone_and_footprint_are_unchanged() -> void:
+	var c := ReactionHoles.fair_par4()
+	var h: HoleData = c.holes[0]
+	assert_eq(_v.play_zone(c, h), _v.landing_zone(h), "zone on the straight line")
+	assert_eq(_v.line_of_play(c, h), PackedVector2Array([Vector2(h.tee), Vector2(h.cup)]))
+	var capsule: Array[Vector2i] = []
+	for y: int in c.height:
+		for x: int in c.width:
+			var p := Vector2(x, y)
+			var q: Vector2 = Geometry2D.get_closest_point_to_segment(p, Vector2(h.tee), Vector2(h.cup))
+			if p.distance_to(q) * CourseValidator.YARDS_PER_TILE <= 30.0:
+				capsule.append(Vector2i(x, y))
+	assert_eq(_v.footprint(c, h), capsule, "the D11 capsule round the straight segment")
+
+
+func test_a_doglegs_footprint_follows_tee_to_turn_to_cup() -> void:
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var h: HoleData = c.holes[0]
+	assert_eq(_v.line_of_play(c, h), PackedVector2Array([Vector2(6, 6), Vector2(54, 6), Vector2(60, 60)]))
+	assert_true(_v.in_footprint(c, h, Vector2i(56, 12)), "on the second leg, 31 tiles off the straight line")
+	assert_true(_v.in_footprint(c, h, Vector2i(30, 6)), "on the first leg")
+	assert_false(_v.in_footprint(c, h, Vector2i(33, 33)), "on the straight line, 27 tiles from either leg")
+	var tiles: Array[Vector2i] = _v.footprint(c, h)
+	assert_true(tiles.has(Vector2i(56, 12)) and tiles.has(Vector2i(60, 66)), "footprint holds the leg and past the cup")
+	assert_false(tiles.has(Vector2i(33, 33)))
+	for t: Vector2i in tiles:
+		if not _v.in_footprint(c, h, t):
+			assert_true(false, "footprint tile %s outside in_footprint" % t)
+			break
+
+
+func test_an_edit_at_a_doglegs_corner_closes_it() -> void:
+	# A bunker on the inside of the corner: outside the straight capsule (31 tiles off the
+	# diagonal), on the second leg. The hole still passes; the footprint closes it.
+	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
+	var b := CourseBuilder.new(c)
+	assert_true(b.open_hole(1), "the dogleg opens")
+	b.paint(Vector2i(58, 14), Surface.Type.BUNKER, 1)
+	assert_false(b.hole(1).open, "an edit at the corner closes it")
+	assert_true(b.issues_for(1).is_empty(), "though it still passes")
+	assert_true(b.open_hole(1), "and Open reopens it")
+	b.paint(Vector2i(33, 33), Surface.Type.BUNKER, 1)
+	assert_true(b.hole(1).open, "an edit on the straight line, off the line of play, leaves it open")
 
 
 func test_a_dogleg_costs_the_validator_little() -> void:

@@ -214,9 +214,9 @@ func holes_edited(before: Array[HoleData], after: Array[HoleData]) -> void:
 ## (`validator`, D11) has its tally cleared.
 func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValidator) -> void:
 	for i: int in c.holes.size():
-		var h: HoleData = c.holes[i]
+		var line: PackedVector2Array = validator.line_of_play(c, c.holes[i])
 		for cell: Vector2i in cells:
-			if validator.in_footprint(c, h, cell):
+			if validator.near_line(line, cell):
 				clear_slot(c.holes, i)
 				break
 

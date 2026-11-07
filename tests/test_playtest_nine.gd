@@ -191,10 +191,18 @@ func test_fairways_with_bunkers_and_trees() -> void:
 		if h.par == 3:
 			continue
 		assert_between(float(spec["width"]), 4.0, 7.0, "hole %d fairway width" % h.number)
+		# The hole's ground: its footprint (on a dogleg the line of play, D51) and the D11
+		# capsule round the straight line, which holds the trees inside each bend.
+		var straight := PackedVector2Array([Vector2(h.tee), Vector2(h.cup)])
+		var played: PackedVector2Array = _v.line_of_play(_c, h)
 		var count := {}
-		for t: Vector2i in _v.footprint(_c, h):
-			var s: int = _c.get_surface(t.x, t.y)
-			count[s] = int(count.get(s, 0)) + 1
+		for y: int in _c.height:
+			for x: int in _c.width:
+				var t := Vector2i(x, y)
+				if not _v.near_line(straight, t) and not _v.near_line(played, t):
+					continue
+				var s: int = _c.get_surface(t.x, t.y)
+				count[s] = int(count.get(s, 0)) + 1
 		assert_gt(int(count.get(Surface.Type.FAIRWAY, 0)), 0, "hole %d fairway" % h.number)
 		assert_gt(int(count.get(Surface.Type.BUNKER, 0)), 0, "hole %d bunkers" % h.number)
 		assert_gte(int(count.get(Surface.Type.TREES, 0)), 10, "hole %d trees" % h.number)

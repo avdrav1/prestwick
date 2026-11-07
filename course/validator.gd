@@ -10,8 +10,8 @@ extends RefCounted
 ##      A tile on an unowned parcel counts as OB (D30, E6-S4).
 ##   4. Yardage matches par (par 3 < 320, par 5 > 470), on the rounded line of play (D47): the
 ##      straight tee-to-cup line, or for a dogleg tee -> turn_point -> cup.
-##   5. No tee inside another hole's landing zone (a disc on the line of each hole of
-##      zone_from_yd or more, whatever its par: D35, E6-S37).
+##   5. No tee inside another hole's landing zone (a disc on the line of play of each hole of
+##      zone_from_yd or more, whatever its par: D35, E6-S37; a dogleg's at its turn, D51).
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
 ##
 ## Each failing rule is one Issue: the rule, the tile at fault and a one-line reason.
@@ -264,13 +264,18 @@ func check_course(course: CourseData) -> Dictionary:
 ## between edits, E3-S12): it must describe `course` as it is now. When `yards` is given it is
 ## filled with each slot's hole_yardage as rule 4 measured it (0 when not placed), so a caller
 ## showing it need not measure a dogleg again (E3-S25 review).
-func check_slots(course: CourseData, reach: Reach = null, yards: Array[int] = []) -> Array:
+## When `turns` is given it is filled with each slot's turn_point (null when straight or not
+## placed), so a caller can keep each hole's line of play as checked (E3-S45).
+func check_slots(course: CourseData, reach: Reach = null, yards: Array[int] = [],
+		turns: Array = []) -> Array:
 	var out: Array = []
 	yards.clear()
+	turns.clear()
 	if reach == null:
 		reach = Reach.new(course)
-	for hole: HoleData in course.holes:
-		out.append(check_hole(course, hole, reach))
+	turns.assign(_all_turns(course))
+	for i: int in course.holes.size():
+		out.append(_check(course, course.holes[i], i, reach, turns))
 		yards.append(_rule4_yards)
 	return out
 
@@ -298,6 +303,13 @@ static func by_number(course: CourseData, slots: Array) -> Dictionary:
 ## copies. A hole with no entry is checked as if it were added to the course.
 ## `reach` lets callers checking several holes on an unchanged course share rule 3's flood.
 func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Array[Issue]:
+	var own: int = _own_index(course, hole)
+	return _check(course, hole, own, reach if reach != null else Reach.new(course), _all_turns(course))
+
+
+## check_hole for `hole` at index `own` of course.holes (-1: not in it), with `turns` each
+## entry's turn_point, read once per check (rule 5 reads every other hole's zone).
+func _check(course: CourseData, hole: HoleData, own: int, reach: Reach, turns: Array) -> Array[Issue]:
 	var issues: Array[Issue] = []
 	_rule4_yards = 0
 	var has_tee: bool = _placed(course, hole.tee)
@@ -310,14 +322,22 @@ func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Arra
 		else:
 			issues.append(Issue.new(1, HoleData.UNPLACED, "hole %d has no tee and no cup" % hole.number))
 		return issues
-	var own: int = _own_index(course, hole)
+	var turn: Variant = turns[own] if own >= 0 else turn_point(course, hole)
 	_rule1(course, hole, own, issues)
 	_rule2(course, hole, issues)
-	_rule3(course, hole, reach if reach != null else Reach.new(course), issues)
-	_rule4(course, hole, issues)
-	_rule5(course, hole, own, issues)
+	_rule3(course, hole, reach, issues)
+	_rule4(hole, turn, issues)
+	_rule5(course, hole, own, turn, turns, issues)
 	_rule6(course, hole, issues)
 	return issues
+
+
+## turn_point of every entry of course.holes, in order (null when straight or not placed).
+func _all_turns(course: CourseData) -> Array:
+	var out: Array = []
+	for h: HoleData in course.holes:
+		out.append(turn_point(course, h))
+	return out
 
 
 ## The straight tee-to-cup line between tile centres, rounded to the nearest yard. Rule 5's
@@ -333,11 +353,31 @@ static func yardage(tee: Vector2i, cup: Vector2i) -> int:
 func hole_yardage(course: CourseData, hole: HoleData) -> int:
 	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
 		return 0
-	var turn: Variant = turn_point(course, hole)
+	return _play_yards(hole, turn_point(course, hole))
+
+
+## The rounded line of play of a placed `hole` whose turn_point is `turn`.
+static func _play_yards(hole: HoleData, turn: Variant) -> int:
 	if turn == null:
 		return yardage(hole.tee, hole.cup)
 	var b: Vector2 = turn
 	return roundi((b.distance_to(Vector2(hole.tee)) + b.distance_to(Vector2(hole.cup))) * YARDS_PER_TILE)
+
+
+## The line of play's points in tile coordinates (D47, D51): [tee, cup] on a straight hole,
+## [tee, turn, cup] on a dogleg, empty when its tee or cup is not placed. The footprint and
+## rule 5's zone follow it.
+func line_of_play(course: CourseData, hole: HoleData) -> PackedVector2Array:
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return PackedVector2Array()
+	return line_of_play_through(hole, turn_point(course, hole))
+
+
+## line_of_play for a placed `hole` whose turn_point is `turn` (check_slots' `turns`).
+static func line_of_play_through(hole: HoleData, turn: Variant) -> PackedVector2Array:
+	if turn == null:
+		return PackedVector2Array([Vector2(hole.tee), Vector2(hole.cup)])
+	return PackedVector2Array([Vector2(hole.tee), turn as Vector2, Vector2(hole.cup)])
 
 
 ## Where a dogleg's line of play turns (D47, E3-S25), in tile coordinates, or null for a hole
@@ -414,34 +454,66 @@ func par_for_yardage(yards: int) -> int:
 
 
 ## True when `cell` is under `hole` (D11 footprint): its centre is within
-## footprint_half_width_yd of the tee-to-cup segment. A hole whose tee or cup is not placed
-## has no footprint.
+## footprint_half_width_yd of the line of play (D51, E3-S45: tee to cup, or tee to turn to cup
+## on a dogleg). A hole whose tee or cup is not placed has no footprint. Measures the turn on
+## every call: a caller testing many cells reads line_of_play once and asks near_line.
 func in_footprint(course: CourseData, hole: HoleData, cell: Vector2i) -> bool:
-	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
-		return false
+	return near_line(line_of_play(course, hole), cell)
+
+
+## True when `cell`'s centre is within footprint_half_width_yd of the polyline `line`
+## (line_of_play's points). False for an empty line.
+func near_line(line: PackedVector2Array, cell: Vector2i) -> bool:
 	var p := Vector2(cell)
-	var closest: Vector2 = Geometry2D.get_closest_point_to_segment(p, Vector2(hole.tee), Vector2(hole.cup))
-	return _yards_between(p, closest) <= tuning.footprint_half_width_yd
+	for i: int in range(1, line.size()):
+		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(p, line[i - 1], line[i])
+		if _yards_between(p, closest) <= tuning.footprint_half_width_yd:
+			return true
+	return false
 
 
 ## Every in-map tile under `hole` (in_footprint), row-major. Empty when it is not placed.
 func footprint(course: CourseData, hole: HoleData) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+	var line: PackedVector2Array = line_of_play(course, hole)
+	if line.is_empty():
 		return out
-	var pad: int = ceili(tuning.footprint_half_width_yd / YARDS_PER_TILE)
-	var lo := Vector2i(maxi(mini(hole.tee.x, hole.cup.x) - pad, 0), maxi(mini(hole.tee.y, hole.cup.y) - pad, 0))
-	var hi := Vector2i(mini(maxi(hole.tee.x, hole.cup.x) + pad, course.width - 1),
-			mini(maxi(hole.tee.y, hole.cup.y) + pad, course.height - 1))
+	var pad: float = tuning.footprint_half_width_yd / YARDS_PER_TILE
+	var box := Rect2(line[0], Vector2.ZERO)
+	for pt: Vector2 in line:
+		box = box.expand(pt)
+	var lo := Vector2i(maxi(floori(box.position.x - pad), 0), maxi(floori(box.position.y - pad), 0))
+	var hi := Vector2i(mini(ceili(box.end.x + pad), course.width - 1), mini(ceili(box.end.y + pad), course.height - 1))
 	for y: int in range(lo.y, hi.y + 1):
 		for x: int in range(lo.x, hi.x + 1):
-			if in_footprint(course, hole, Vector2i(x, y)):
+			if near_line(line, Vector2i(x, y)):
 				out.append(Vector2i(x, y))
 	return out
 
 
-## Rule 5's landing zone centre, in tile coordinates, or null for a hole shorter than
-## `zone_from_yd` on the rounded yardage (which has none), whatever its par (D35, E6-S37).
+## Rule 5's landing zone centre (D51, E3-S45), in tile coordinates, or null for a hole
+## shorter than `zone_from_yd` on its line of play (which has none), whatever its par (D35,
+## E6-S37). A straight hole's is landing_zone; a dogleg's is its turn_point, where its tee
+## shots come down. Null when its tee or cup is not placed.
+func play_zone(course: CourseData, hole: HoleData) -> Variant:
+	if not _placed(course, hole.tee) or not _placed(course, hole.cup):
+		return null
+	return _zone(hole, turn_point(course, hole))
+
+
+## play_zone for a placed `hole` whose turn_point is `turn`.
+func _zone(hole: HoleData, turn: Variant) -> Variant:
+	if turn == null:
+		return landing_zone(hole)
+	if _play_yards(hole, turn) < tuning.zone_from_yd:
+		return null
+	return turn
+
+
+## The landing zone on the straight tee-to-cup line, in tile coordinates, or null for a hole
+## shorter than `zone_from_yd` on the rounded straight yardage, whatever its par (D35,
+## E6-S37). Rule 5 reads play_zone, which is this on every hole but a dogleg (D51); guests'
+## sight check (D43) and rule 4's disc keep the straight line.
 func landing_zone(hole: HoleData) -> Variant:
 	var line := Vector2(hole.cup - hole.tee)
 	if line == Vector2.ZERO:
@@ -483,8 +555,8 @@ func _rule3(course: CourseData, hole: HoleData, reach: Reach, issues: Array[Issu
 			% [what, _fmt(at)]))
 
 
-func _rule4(course: CourseData, hole: HoleData, issues: Array[Issue]) -> void:
-	var yards: int = hole_yardage(course, hole)
+func _rule4(hole: HoleData, turn: Variant, issues: Array[Issue]) -> void:
+	var yards: int = _play_yards(hole, turn)
 	_rule4_yards = yards
 	var want: int = par_for_yardage(yards)
 	if hole.par == want:
@@ -496,8 +568,9 @@ func _rule4(course: CourseData, hole: HoleData, issues: Array[Issue]) -> void:
 			yards, played, want, hole.par, bands]))
 
 
-func _rule5(course: CourseData, hole: HoleData, own: int, issues: Array[Issue]) -> void:
-	var own_zone: Variant = landing_zone(hole)
+func _rule5(course: CourseData, hole: HoleData, own: int, turn: Variant, turns: Array,
+		issues: Array[Issue]) -> void:
+	var own_zone: Variant = _zone(hole, turn)
 	for i in course.holes.size():
 		var other: HoleData = course.holes[i]
 		if i == own or not _placed(course, other.tee):
@@ -512,7 +585,7 @@ func _rule5(course: CourseData, hole: HoleData, own: int, issues: Array[Issue]) 
 		# This hole's tee in another hole's zone: that zone is built from its cup.
 		if not _placed(course, other.cup):
 			continue
-		var zone: Variant = landing_zone(other)
+		var zone: Variant = _zone(other, turns[i])
 		if zone != null:
 			var d: float = _yards_between(zone as Vector2, Vector2(hole.tee))
 			if d <= tuning.zone_radius_yd:
