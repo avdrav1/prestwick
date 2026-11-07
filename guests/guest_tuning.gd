@@ -241,14 +241,15 @@ func guest_swing_tuning(base: SwingTuning) -> SwingTuning:
 ## and per-second rates above 0, guest_min_power above 0 and at most 1; the day's clock
 ## (day_s and stroke_s above 0, arrival_window_s 0 to day_s so no group arrives after dusk,
 ## arrivals_per_day 0 or more); and the older checks (E3-S3 to E3-S8) the engine leans on.
+## E3-S36: the pace limits, challenge bands, expected score, sight line and rating window too;
+## every message names its keys and the bad value (docs/design.md lists each bound).
 static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) -> void:
 	_at_most(errors, "full_sigma_best", t.full_sigma_best, "full_sigma_worst", t.full_sigma_worst)
 	_at_most(errors, "putt_aim_sigma_best", t.putt_aim_sigma_best,
 			"putt_aim_sigma_worst", t.putt_aim_sigma_worst)
 	_at_most(errors, "putt_power_sigma_best", t.putt_power_sigma_best,
 			"putt_power_sigma_worst", t.putt_power_sigma_worst)
-	if t.group_size_min < 1:
-		errors.append("group_size_min must be at least 1")
+	_at_least(errors, "group_size_min", t.group_size_min, 1)
 	_at_most(errors, "group_size_min", t.group_size_min, "group_size_max", t.group_size_max)
 	if t.skill_max <= t.skill_min:
 		errors.append("skill_min (%s) must be below skill_max (%s)" % [t.skill_min, t.skill_max])
@@ -280,31 +281,39 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 			else:
 				_positive(errors, "taste_weights.%s" % name, float(w))
 	if t.sim_ticks_per_s < t.guest_ticks_per_s:
-		errors.append("sim_ticks_per_s must be at least guest_ticks_per_s")
-	if t.play_clear_yd < 0.0:
-		errors.append("play_clear_yd must be 0 or more")
-	if t.play_clear_share < 0.0:
-		errors.append("play_clear_share must be 0 or more")
-	if t.cross_clear_yd < 0.0:
-		errors.append("cross_clear_yd must be 0 or more")
-	if t.cross_hold_max_s < 1:
-		errors.append("cross_hold_max_s must be at least 1")
-	if t.cart_path_max_detour < 1.0:
-		errors.append("cart_path_max_detour must be at least 1 (the straight line)")
-	if t.max_steps_per_frame < 1:
-		errors.append("max_steps_per_frame must be at least 1")
-	if t.frame_ticks_max < 1:
-		errors.append("frame_ticks_max must be at least 1")
-	if t.frame_guest_ms_max <= 0.0:
-		errors.append("frame_guest_ms_max must be above 0")
+		errors.append("sim_ticks_per_s (%s) must be at least guest_ticks_per_s (%s)"
+				% [t.sim_ticks_per_s, t.guest_ticks_per_s])
+	_at_least(errors, "play_clear_yd", t.play_clear_yd, 0.0)
+	_at_least(errors, "play_clear_share", t.play_clear_share, 0.0)
+	_at_least(errors, "cross_clear_yd", t.cross_clear_yd, 0.0)
+	_at_least(errors, "cross_hold_max_s", t.cross_hold_max_s, 1)
+	_at_least(errors, "cart_path_max_detour", t.cart_path_max_detour, 1.0, " (the straight line)")
+	_at_least(errors, "max_steps_per_frame", t.max_steps_per_frame, 1)
+	_at_least(errors, "frame_ticks_max", t.frame_ticks_max, 1)
+	_positive(errors, "frame_guest_ms_max", t.frame_guest_ms_max)
 	if t.praise_passes < 1 or t.praise_passes > 4:
-		errors.append("praise_passes must be 1 to 4 (the four checks)")
-	if t.complaint_fails < 1:
-		errors.append("complaint_fails must be at least 1")
-	if t.sight_step_yd <= 0.0:
-		errors.append("sight_step_yd must be above 0")
-	if t.guest_putt_max_runs < 2:
-		errors.append("guest_putt_max_runs must be at least 2 (Swing.validate)")
+		errors.append("praise_passes (%s) must be 1 to 4 (the four checks)" % t.praise_passes)
+	_at_least(errors, "complaint_fails", t.complaint_fails, 1)
+	_positive(errors, "sight_step_yd", t.sight_step_yd)
+	_at_least(errors, "guest_putt_max_runs", t.guest_putt_max_runs, 2, " (Swing.validate)")
+	# E3-S36: the pace limits (GuestReaction.wait_limit_s, walk_limit_yd), the challenge bands
+	# and the expected score (D40) take no negatives; a Casual guest's band is the wider (D42);
+	# the sight line's eye stands above the tee (D43), its mark at or above the target; the rating
+	# averages at least one reaction.
+	_at_least(errors, "wait_base_s", t.wait_base_s, 0.0)
+	_at_least(errors, "wait_per_patience_s", t.wait_per_patience_s, 0.0)
+	_at_least(errors, "walk_base_yd", t.walk_base_yd, 0.0)
+	_at_least(errors, "walk_per_patience_yd", t.walk_per_patience_yd, 0.0)
+	_at_least(errors, "challenge_within", t.challenge_within, 0.0)
+	if t.casual_challenge_within < 0.0:
+		_at_least(errors, "casual_challenge_within", t.casual_challenge_within, 0.0)
+	elif t.challenge_within >= 0.0:
+		_at_most(errors, "challenge_within", t.challenge_within,
+				"casual_challenge_within", t.casual_challenge_within)
+	_at_least(errors, "over_par_worst", t.over_par_worst, 0.0)
+	_positive(errors, "eye_height_yd", t.eye_height_yd)
+	_at_least(errors, "mark_height_yd", t.mark_height_yd, 0.0)
+	_at_least(errors, "rating_window", t.rating_window, 1)
 
 
 ## E3-S20: simulated seconds from a strike to the club meeting the ball.
@@ -323,13 +332,21 @@ func flight_shown_s(path_ticks: int) -> float:
 	return maxf(float(path_ticks), 0.0) / (Ball.TICK_HZ * flight_draw_speed)
 
 
-static func _at_most(errors: Array[String], low_key: String, low: float, high_key: String,
-		high: float) -> void:
+static func _at_most(errors: Array[String], low_key: String, low: Variant, high_key: String,
+		high: Variant) -> void:
 	if low > high:
 		errors.append("%s (%s) must be at most %s (%s)" % [low_key, low, high_key, high])
 
 
-static func _positive(errors: Array[String], key: String, v: float) -> void:
+## E3-S36: `v` (an int key's value stays an int, so the message shows it as the file has it)
+## must be `low` or more.
+static func _at_least(errors: Array[String], key: String, v: Variant, low: Variant,
+		why: String = "") -> void:
+	if v < low:
+		errors.append("%s (%s) must be at least %s%s" % [key, v, low, why])
+
+
+static func _positive(errors: Array[String], key: String, v: Variant) -> void:
 	if v <= 0.0:
 		errors.append("%s (%s) must be above 0" % [key, v])
 
