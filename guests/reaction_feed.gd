@@ -217,10 +217,20 @@ func holes_edited(before: Array[HoleData], after: Array[HoleData]) -> void:
 ## Tiles `cells` of `c` were written: every hole with one of them in its footprint
 ## (`validator`, D11) has its tally cleared.
 func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValidator) -> void:
+	# E3-S16: a cell outside the footprint's bounding box is no nearer the line than its
+	# half width, so it is passed over without the segment tests (an undo of a big drag off
+	# every line tested each of its tiles against each hole's whole line).
+	var pad: float = validator.tuning.footprint_half_width_yd / CourseValidator.YARDS_PER_TILE + 1.0
 	for i: int in c.holes.size():
 		var line: PackedVector2Array = validator.line_of_play(c, c.holes[i])
+		if line.is_empty():
+			continue
+		var box := Rect2(line[0], Vector2.ZERO)
+		for pt: Vector2 in line:
+			box = box.expand(pt)
+		box = box.grow(pad)
 		for cell: Vector2i in cells:
-			if validator.near_line(line, cell):
+			if box.has_point(Vector2(cell)) and validator.near_line(line, cell):
 				clear_slot(c.holes, i)
 				break
 

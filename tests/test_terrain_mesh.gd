@@ -297,6 +297,93 @@ func test_an_edit_redraws_as_a_fresh_draw_would() -> void:
 	assert_eq(_view.terrain_digest(), fresh.terrain_digest(), "and after the undos")
 
 
+## E3-S16: a tile whose surface alone changed is written in place in its chunk
+## (TerrainMesh.repaint_tile), not its chunk and its neighbours' rebuilt. On hilly, part-unowned
+## land, batches of surface paint on slopes and flats, beside a height moved in the same batch,
+## to and from water (rebuilt, since water changes the shape), and their undos, leave the view
+## as a fresh draw would; a surface-only batch rebuilds no chunk.
+func test_a_surface_only_batch_is_repainted_in_place_as_a_fresh_draw() -> void:
+	var c := HeightsFixture.build()
+	c.set_parcel_owned(Vector2i(0, 0), false)
+	_view.show_course(c)
+	var b := CourseBuilder.new(c)
+	b.tiles_changed.connect(_view.refresh_cells)
+	var fresh := CourseView.new()
+	add_child_autofree(fresh)
+	var kinds: Array[Surface.Type] = [Surface.Type.FAIRWAY, Surface.Type.BUNKER, Surface.Type.GREEN,
+			Surface.Type.TREES, Surface.Type.ROUGH]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 16
+	var strokes := 0
+	for round: int in 6:
+		b.begin_stroke()
+		for i: int in 40:
+			b.paint(Vector2i(rng.randi() % c.width, rng.randi() % c.height), kinds[rng.randi() % kinds.size()], 1)
+		if round % 3 == 1:
+			b.raise(Vector2i(rng.randi() % c.width, rng.randi() % c.height), 1)
+		if round % 3 == 2:
+			b.paint(Vector2i(rng.randi() % c.width, rng.randi() % c.height), Surface.Type.WATER, 1)
+		b.end_stroke()
+		strokes += 1
+		fresh.show_course(c)
+		assert_eq(_view.terrain_digest(), fresh.terrain_digest(), "after stroke %d" % round)
+	for i: int in strokes:
+		b.undo()
+		fresh.show_course(c)
+		assert_eq(_view.terrain_digest(), fresh.terrain_digest(), "after undo %d" % i)
+	# Surface alone: no chunk is joined again, only written in place.
+	var ch: TerrainMesh.Chunk = _view.chunk_at(Vector2i(10, 10))
+	var before: Array = ch.parts[Vector2i(9, 11)]
+	var at: int = ch.starts[Vector2i(10, 10)]
+	b.paint(Vector2i(10, 10), Surface.Type.BUNKER, 1)
+	assert_same(ch.parts[Vector2i(9, 11)], before, "the chunk's other tiles kept what they emitted")
+	assert_eq(ch.starts[Vector2i(10, 10)], at, "the tile's points where they were")
+	fresh.show_course(c)
+	assert_eq(_view.terrain_digest(), fresh.terrain_digest(), "a bunker painted in place")
+
+
+## E3-S16: a batch bigger than `refresh_tiles_per_frame` (an undo of a long drag) is drawn over
+## the next frames, at most that many tiles a frame (one chunk past it at most), and ends as a
+## fresh draw; a small batch is drawn at once.
+func test_a_big_batch_is_drawn_over_frames_within_the_frame_budget() -> void:
+	var c := CourseData.create(64, 64, Surface.Type.ROUGH, 0)
+	for y: int in c.height:
+		for x: int in c.width:
+			c.set_tile(x, y, (x / 5 + y / 7) % 4, Surface.Type.ROUGH)
+	_view.show_course(c)
+	var b := CourseBuilder.new(c)
+	b.tiles_changed.connect(_view.refresh_cells)
+	var budget: int = _view.terrain.tuning.refresh_tiles_per_frame
+	var m: TerrainMesh = _view.terrain
+	var before: int = m.repainted + m.emitted
+	b.paint(Vector2i(10, 10), Surface.Type.BUNKER, 1)
+	assert_false(_view.drawing_pending(), "a one-tile paint is drawn at once")
+	b.begin_stroke()
+	for y: int in range(8, 30):
+		for x: int in range(4, 60):
+			b.paint(Vector2i(x, y), Surface.Type.FAIRWAY, 1)
+	b.end_stroke()
+	# Painted in one frame, the stroke's own tiles go over the budget too, and wait.
+	assert_true(_view.drawing_pending(), "a frame's paints share its budget")
+	_view.finish_drawing()
+	before = m.repainted + m.emitted
+	b.undo()
+	var first: int = m.repainted + m.emitted - before
+	assert_true(_view.drawing_pending(), "the undo's %d tiles wait for the next frames" % (22 * 56))
+	assert_lte(first, budget + _view.terrain.tuning.chunk_tiles, "the undo's frame drew at most the budget")
+	var frames := 0
+	while _view.drawing_pending() and frames < 100:
+		await wait_frames(1)
+		assert_lte(_view.drawn_this_frame(), budget + _view.terrain.tuning.chunk_tiles, "frame %d" % frames)
+		frames += 1
+	assert_gt(frames, 2, "spread over several frames")
+	assert_false(_view.drawing_pending())
+	var fresh := CourseView.new()
+	add_child_autofree(fresh)
+	fresh.show_course(c)
+	assert_eq(_view.terrain_digest(), fresh.terrain_digest(), "drawn over frames as a fresh draw")
+
+
 # --- picking on the drawn ground ---
 
 func test_the_picker_picks_the_tile_under_the_cursor_on_a_slope() -> void:
@@ -382,3 +469,4 @@ func test_pick_matches_what_is_drawn_frontmost() -> void:
 			misses.append("%s: drawn %s, picked %s" % [p, want, got])
 	assert_gt(hits, 400, "most samples land on the course")
 	assert_eq(misses.size(), 0, "\n".join(misses.slice(0, 5)))
+

@@ -26,6 +26,9 @@ const PATH: String = "res://course/terrain_tuning.tres"
 @export var base_steps: float = 0.0
 ## Tiles a side of each drawn chunk along a depth row: an edit rebuilds only the chunks round it.
 @export var chunk_tiles: int = 8
+## E3-S16: the most tiles CourseView draws again in one frame after an edit; a bigger batch (an
+## undo of a long drag) is drawn over the next frames, so its frame stays inside 16.7 ms.
+@export var refresh_tiles_per_frame: int = 64
 
 
 static func load_default() -> TerrainTuning:

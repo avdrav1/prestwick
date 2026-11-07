@@ -73,6 +73,11 @@ var _uv_scale: float = 1.0
 var _inv_tex: Vector2 = Vector2.ONE
 var _inv_land: Vector2 = Vector2.ONE
 ## The course as the build reads it (sync): size, every tile's height, water flag and sloped flag.
+## E3-S16: chunks joined whole and tiles emitted since the view was drawn (tests and the perf
+## script read them: a surface-only edit joins none).
+var joined: int = 0
+var emitted: int = 0
+var repainted: int = 0
 var _w: int = 0
 var _h: int = 0
 var _hs := PackedByteArray()
@@ -102,6 +107,12 @@ class Chunk:
 	## What each of its tiles last emitted (TerrainMesh.emit_tile), so an edit emits only the
 	## tiles it touched and joins the rest as they were.
 	var parts: Dictionary = {}
+	## E3-S16: where each tile's points start in `pts` (and `uvs`, `cols`), so a tile whose
+	## surface alone changed is written in place (TerrainMesh.repaint_tile).
+	var starts: Dictionary = {}
+	## And where each tile's land hatch and faces start (in `land_pts`, `face_pts`).
+	var land_starts: Dictionary = {}
+	var face_starts: Dictionary = {}
 
 	func clear() -> void:
 		for a: Variant in [pts, cols, uvs, idx, land_pts, land_cols, land_uvs, land_idx, face_pts, face_cols, face_idx]:
@@ -190,12 +201,24 @@ static func ground_in(c: CourseData, cell: Vector2i, t: Vector2, heights: Dictio
 		return tile_height(c, cell.x, cell.y, heights)
 	# All the tile's ground reads its 3 x 3 heights, clamped at the map edge. On a flat tile every
 	# grid corner is its height, so the triangles below give it too.
+	var hh := _heights_round(c, cell, heights)
+	var n: int = subdiv if subdiv > 0 else _default_subdiv()
+	return _ground_hh(hh, cell, t, n)
+
+
+## The 3 x 3 heights round `cell` (row-major, the tile at index 4), clamped at the map edge.
+static func _heights_round(c: CourseData, cell: Vector2i, heights: Dictionary = {}) -> PackedFloat32Array:
 	var hh := PackedFloat32Array()
 	hh.resize(9)
 	for dy: int in 3:
 		for dx: int in 3:
 			hh[dy * 3 + dx] = tile_height(c, cell.x + dx - 1, cell.y + dy - 1, heights)
-	var n: int = subdiv if subdiv > 0 else _default_subdiv()
+	return hh
+
+
+## ground_in on land from the tile's 3 x 3 heights `hh` and the grid's `n` (E3-S16: ring reads
+## them once a tile, not once a point).
+static func _ground_hh(hh: PackedFloat32Array, cell: Vector2i, t: Vector2, n: int) -> float:
 	# The grid square holding t (clamped into the tile), and its corner heights.
 	var u: float = clampf(t.x - cell.x + 0.5, 0.0, 1.0) * n
 	var v: float = clampf(t.y - cell.y + 0.5, 0.0, 1.0) * n
@@ -236,12 +259,23 @@ static func _local(hh: PackedFloat32Array, u: float, v: float) -> float:
 static func ring(c: CourseData, cell: Vector2i, k: float = 1.0, per_edge: int = 8) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	var corners: Array[Vector2] = [Vector2(-0.5, -0.5), Vector2(0.5, -0.5), Vector2(0.5, 0.5), Vector2(-0.5, 0.5)]
+	# E3-S16: the tile's heights read once (a 5 x 5 brush outline read them 33 times a tile, about
+	# 9 ms a redraw); water and flat ground lie at one height.
+	var flat: bool = c.get_surface(cell.x, cell.y) == Surface.Type.WATER
+	var hh := PackedFloat32Array()
+	var level: float = tile_height(c, cell.x, cell.y)
+	if not flat:
+		hh = _heights_round(c, cell)
+		flat = true
+		for v: float in hh:
+			flat = flat and v == level
+	var n: int = _default_subdiv()
 	for e: int in 4:
 		var a: Vector2 = Vector2(cell) + corners[e] * k
 		var b: Vector2 = Vector2(cell) + corners[(e + 1) % 4] * k
 		for i: int in per_edge:
 			var t: Vector2 = a.lerp(b, float(i) / per_edge)
-			out.append(Vector3(t.x, t.y, ground_in(c, cell, t)))
+			out.append(Vector3(t.x, t.y, level if flat else _ground_hh(hh, cell, t, n)))
 	out.append(out[0])
 	return out
 
@@ -564,17 +598,41 @@ func make_chunk(key: Vector2i) -> Chunk:
 
 ## Fills `ch` from the cache (sync first) and redraws it. With `only` (tile -> true), only those
 ## of its tiles are emitted again; the others keep what they last emitted (Chunk.parts).
-func build_chunk(ch: Chunk, only: Dictionary = {}) -> void:
+## Returns the tiles its work stands for (E3-S16, CourseView's frame budget): the tiles emitted
+## when they were written in place, else every tile of the chunk, joined again.
+func build_chunk(ch: Chunk, only: Dictionary = {}) -> int:
 	ch.texture = surface_texture()
 	ch.land_texture = land_texture()
 	var cells: Array[Vector2i] = chunk_cells(Vector2i(ch.row, ch.index))
+	# E3-S16: when every tile emitted again keeps its triangles, hatch and faces as they were
+	# (only points, uvs and colours move), it is written in place and the chunk is not joined.
+	var in_place: bool = not only.is_empty() and ch.starts.size() == cells.size()
+	var fresh := {}
 	for cell: Vector2i in cells:
 		if only.is_empty() or only.has(cell) or not ch.parts.has(cell):
-			ch.parts[cell] = emit_tile(cell, ch.position.y)
+			var part: Array = emit_tile(cell, ch.position.y)
+			if in_place:
+				var old: Array = ch.parts.get(cell, [])
+				in_place = not old.is_empty() and part[3] == old[3] \
+						and (part[4] as PackedVector2Array).size() == (old[4] as PackedVector2Array).size() \
+						and part[7] == old[7]
+			ch.parts[cell] = part
+			fresh[cell] = true
+	emitted += fresh.size()
+	if in_place:
+		for cell: Vector2i in fresh:
+			_write_in_place(ch, cell)
+		ch.queue_redraw()
+		return fresh.size()
+	joined += 1
 	ch.clear()
+	ch.starts.clear()
+	ch.land_starts.clear()
+	ch.face_starts.clear()
 	for cell: Vector2i in cells:
 		var part: Array = ch.parts[cell]
 		var base: int = ch.pts.size()
+		ch.starts[cell] = base
 		ch.pts.append_array(part[0])
 		ch.uvs.append_array(part[1])
 		ch.cols.append_array(part[2])
@@ -583,6 +641,7 @@ func build_chunk(ch: Chunk, only: Dictionary = {}) -> void:
 		var land_uvs: PackedVector2Array = part[4]
 		if not land_uvs.is_empty():
 			var lbase: int = ch.land_pts.size()
+			ch.land_starts[cell] = lbase
 			ch.land_pts.append_array(part[0])
 			ch.land_uvs.append_array(land_uvs)
 			for t: int in part[3] as PackedInt32Array:
@@ -590,6 +649,7 @@ func build_chunk(ch: Chunk, only: Dictionary = {}) -> void:
 		var face_pts: PackedVector2Array = part[5]
 		if not face_pts.is_empty():
 			var fbase: int = ch.face_pts.size()
+			ch.face_starts[cell] = fbase
 			ch.face_pts.append_array(face_pts)
 			ch.face_cols.append_array(part[6])
 			for t: int in part[7] as PackedInt32Array:
@@ -597,10 +657,89 @@ func build_chunk(ch: Chunk, only: Dictionary = {}) -> void:
 	ch.land_cols.resize(ch.land_pts.size())
 	ch.land_cols.fill(Color.WHITE)
 	ch.queue_redraw()
+	return cells.size()
+
+
+## E3-S16: writes `cell`'s emitted part (ch.parts) into `ch`'s arrays where it already stands:
+## its points, uvs and colours, its land hatch and its faces, whose counts and triangles are
+## the ones `ch` was joined with (build_chunk checks).
+func _write_in_place(ch: Chunk, cell: Vector2i) -> void:
+	var part: Array = ch.parts[cell]
+	var base: int = ch.starts[cell]
+	var pts: PackedVector2Array = part[0]
+	var uvs: PackedVector2Array = part[1]
+	var cols: PackedColorArray = part[2]
+	for i: int in pts.size():
+		ch.pts[base + i] = pts[i]
+		ch.uvs[base + i] = uvs[i]
+		ch.cols[base + i] = cols[i]
+	var land_uvs: PackedVector2Array = part[4]
+	if not land_uvs.is_empty():
+		var lbase: int = ch.land_starts[cell]
+		for i: int in land_uvs.size():
+			ch.land_pts[lbase + i] = pts[i]
+			ch.land_uvs[lbase + i] = land_uvs[i]
+	var face_pts: PackedVector2Array = part[5]
+	if not face_pts.is_empty():
+		var fbase: int = ch.face_starts[cell]
+		var face_cols: PackedColorArray = part[6]
+		for i: int in face_pts.size():
+			ch.face_pts[fbase + i] = face_pts[i]
+			ch.face_cols[fbase + i] = face_cols[i]
+
+
+## E3-S16: writes `cell`'s ground again in place in its chunk `ch` after its surface alone
+## changed (its height, its neighbours' heights and whether it or they are water as `ch` last
+## drew them, so its points, triangles, land hatch and faces are the same): only its texture
+## points and colours, the surface's frame and shade. Does not redraw `ch` (queue_redraw once
+## after the batch). Returns false, writing nothing, when its points would not line up (rebuild
+## the chunk then).
+func repaint_tile(ch: Chunk, cell: Vector2i) -> bool:
+	if not ch.starts.has(cell) or not ch.parts.has(cell):
+		return false
+	var part: Array = ch.parts[cell]
+	if part.size() < 11:
+		return false
+	var uv_off: PackedVector2Array = part[8]
+	var zs: PackedFloat64Array = part[9]
+	var lights: PackedFloat64Array = part[10]
+	var frame: int = course.get_surface(cell.x, cell.y)
+	var owned: bool = course.is_owned(cell.x, cell.y)
+	var tint: Color = Color.WHITE if owned else unowned_tint
+	var row: PackedFloat32Array = shades[frame]
+	var cap: float = caps[frame]
+	var sheet: TileSheet = art.surfaces
+	var origin: Vector2 = Vector2(sheet.region(frame).position) + Vector2(sheet.anchor)
+	repainted += 1
+	var base: int = ch.starts[cell]
+	var uvs: PackedVector2Array = part[1]
+	var cols: PackedColorArray = part[2]
+	for i: int in uv_off.size():
+		var uv: Vector2 = (origin + uv_off[i]) * _inv_tex
+		var z: float = zs[i]
+		var k: int = clampi(floori(z), 0, CourseData.MAX_HEIGHT)
+		var hs: float = lerpf(row[k], row[mini(k + 1, CourseData.MAX_HEIGHT)], z - k)
+		var v: float = minf(hs * lights[i], cap)
+		var col := Color(v * tint.r, v * tint.g, v * tint.b)
+		uvs[i] = uv
+		cols[i] = col
+		ch.uvs[base + i] = uv
+		ch.cols[base + i] = col
+	part[1] = uvs
+	part[2] = cols
+	return true
+
+
+## Whether `cell` is water as the cache last read it (sync), for a caller deciding before a sync
+## which tiles changed only their surface.
+func water_seen(cell: Vector2i) -> bool:
+	return _wat.size() == _w * _h and cell.x >= 0 and cell.y >= 0 and cell.x < _w and cell.y < _h \
+			and _wat[cell.y * _w + cell.x] != 0
 
 
 ## What `cell` draws, in the space of a chunk whose sort key is `key_y`: [points, uvs, colours,
-## triangles, land hatch uvs (empty on owned land), face points, face colours, face triangles].
+## triangles, land hatch uvs (empty on owned land), face points, face colours, face triangles,
+## and for repaint_tile each point's texture offset, height and slope light].
 func emit_tile(cell: Vector2i, key_y: float) -> Array:
 	var sheet: TileSheet = art.surfaces
 	var strength: float = tuning.light_strength
@@ -624,9 +763,17 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 	var screen := PackedVector2Array()
 	var uvs := PackedVector2Array()
 	var cols := PackedColorArray()
+	# E3-S16: what a repaint of the surface alone needs (repaint_tile): each point's texture
+	# offset from the frame's origin, its height and its slope light.
+	var uv_off := PackedVector2Array()
+	var zs := PackedFloat64Array()
+	var lights := PackedFloat64Array()
 	screen.resize(count)
 	uvs.resize(count)
 	cols.resize(count)
+	uv_off.resize(count)
+	zs.resize(count)
+	lights.resize(count)
 	for i: int in count:
 		var p: Vector3 = pts[i]
 		var dx: float = p.x - cell.x
@@ -634,7 +781,9 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 		var lx: float = dx * _uv_scale
 		var ly: float = dy * _uv_scale
 		screen[i] = centre + Vector2((dx - dy) * Iso.HALF_W, (dx + dy) * Iso.HALF_H - p.z * Iso.STEP_PX)
-		uvs[i] = (origin + Vector2((lx - ly) * Iso.HALF_W, (lx + ly) * Iso.HALF_H)) * _inv_tex
+		var lo := Vector2((lx - ly) * Iso.HALF_W, (lx + ly) * Iso.HALF_H)
+		uv_off[i] = lo
+		uvs[i] = (origin + lo) * _inv_tex
 		var k: int = clampi(floori(p.z), 0, CourseData.MAX_HEIGHT)
 		var hs: float = lerpf(row[k], row[mini(k + 1, CourseData.MAX_HEIGHT)], p.z - k)
 		var g: Vector2 = slopes[i]
@@ -645,6 +794,8 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 			light = clampf(1.0 + strength * (nx * _light.x + ny * _light.y) / sqrt(nx * nx + ny * ny + 1.0), lmin, lmax)
 		var v: float = minf(hs * light, cap)
 		cols[i] = Color(v * tint.r, v * tint.g, v * tint.b)
+		zs[i] = p.z
+		lights[i] = light
 	var land_uvs := PackedVector2Array()
 	if not owned:
 		var land_sheet: TileSheet = art.land
@@ -674,4 +825,4 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 			for i: int in top.size() - 1:
 				var a: int = fbase + 2 * i
 				face_idx.append_array([a, a + 2, a + 3, a, a + 3, a + 1])
-	return [screen, uvs, cols, geo[1], land_uvs, face_pts, face_cols, face_idx]
+	return [screen, uvs, cols, geo[1], land_uvs, face_pts, face_cols, face_idx, uv_off, zs, lights]

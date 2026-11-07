@@ -74,6 +74,12 @@ const LINE_CLEAR: float = 2.0
 ## A changed tile's chunks are rebuilt this many tiles round it: its height moves the ground of
 ## the tiles beside it, and whether those are sloped moves the fans of the tiles beside them.
 const REBUILD_REACH: int = 2
+## E3-S16: a tile that turned to or from water, its height unmoved, rebuilds only this far: its
+## own ground changes (flat at its level, or sloped), so the fans beside it (their edge points)
+## and the bank faces of the tiles behind it (-x, -y), but no neighbour's slope.
+const WATER_REACH: int = 1
+## E3-S16: edited tiles _drain sorts (_classify) for each tile of its budget.
+const CLASSIFY_PER_TILE: int = 4
 
 var course: CourseData:
 	get:
@@ -87,6 +93,21 @@ var _course: CourseData
 var _chunks: Dictionary = {}
 ## Every tile's height when its chunks were last built, so an edit knows whether a height moved.
 var _heights_seen: PackedByteArray = PackedByteArray()
+## E3-S16: ground work a big batch left for the next frames (chunk key -> {tile: true}): chunks
+## to emit again (a height or water moved near those tiles) and tiles to repaint in place (their
+## surface alone changed). At most TerrainTuning.refresh_tiles_per_frame tiles are drawn a frame
+## (_drain); chunk_at and terrain_digest finish it first.
+var _pending_build: Dictionary = {}
+var _pending_paint: Dictionary = {}
+## The edited tiles not yet sorted into that work (_classify), and how far the sorting has got.
+var _pending_cells: Array[Vector2i] = []
+## Each tile's height as the markers last followed it (refresh_cells, at once).
+var _heights_marked: PackedByteArray = PackedByteArray()
+var _pending_at: int = 0
+## The tiles _drain has drawn since this node's last _process ended (a frame's share of the
+## budget), and in the frame before.
+var _drained: int = 0
+var _last_drained: int = 0
 var _ground_root: Node2D
 var _holes_root: Node2D
 var _markers: Array[HoleMarker] = []
@@ -169,12 +190,17 @@ func show_course(c: CourseData) -> void:
 		_ground_root.remove_child(ch)
 		ch.free()
 	_chunks.clear()
+	_pending_build.clear()
+	_pending_paint.clear()
+	_pending_cells.clear()
+	_pending_at = 0
 	_heights_seen = PackedByteArray()
 	if c != null:
 		_heights_seen.resize(c.width * c.height)
 		for y: int in c.height:
 			for x: int in c.width:
 				_heights_seen[y * c.width + x] = c.get_height(x, y)
+		_heights_marked = _heights_seen.duplicate()
 		terrain.sync()
 		for key: Vector2i in terrain.all_chunk_keys():
 			var ch := terrain.make_chunk(key)
@@ -302,6 +328,8 @@ func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
 ## collapsed. CourseView reruns it when the zoom changes or a marker moves.
 func layout_issue_labels(scale: float) -> void:
 	_issue_layout_scale = scale
+	if _issue_markers.is_empty():
+		return  # E3-S16: nothing to lay out (an undo reran show_issues with no faults)
 	var order: Array[IssueMarker] = _issue_markers.duplicate()
 	order.sort_custom(func(a: IssueMarker, b: IssueMarker) -> bool:
 		return a.draw_point().y > b.draw_point().y)
@@ -444,6 +472,12 @@ func issue_label_rects() -> Array[Rect2]:
 
 
 func _process(_delta: float) -> void:
+	# The frame's budget counts what edits drew before this (input runs first), and starts
+	# again after it.
+	if drawing_pending():
+		_drain(terrain.tuning.refresh_tiles_per_frame)
+	_last_drained = _drained
+	_drained = 0
 	var s: float = _view_scale()
 	if not is_equal_approx(s, _hole_label_scale):
 		layout_hole_labels(s)
@@ -501,6 +535,7 @@ func issue_markers() -> Array[IssueMarker]:
 
 ## Every ground chunk drawn, in no set order.
 func chunks() -> Array[TerrainMesh.Chunk]:
+	finish_drawing()
 	var out: Array[TerrainMesh.Chunk] = []
 	for ch: TerrainMesh.Chunk in _chunks.values():
 		out.append(ch)
@@ -509,6 +544,7 @@ func chunks() -> Array[TerrainMesh.Chunk]:
 
 ## The chunk drawing `cell`'s ground, or null.
 func chunk_at(cell: Vector2i) -> TerrainMesh.Chunk:
+	finish_drawing()
 	if _course == null or not _course.in_bounds(cell.x, cell.y):
 		return null
 	return _chunks.get(terrain.chunk_key(cell))
@@ -519,6 +555,7 @@ func chunk_at(cell: Vector2i) -> TerrainMesh.Chunk:
 ## triangles]. Two views drawing the same course give equal digests (tests compare an edited
 ## view against one drawn from scratch).
 func terrain_digest() -> Array:
+	finish_drawing()
 	var keys: Array = _chunks.keys()
 	keys.sort()
 	var out: Array = []
@@ -534,52 +571,145 @@ func refresh_cell(cell: Vector2i) -> void:
 	refresh_cells([cell])
 
 
-## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16): every
-## chunk within REBUILD_REACH tiles of a changed tile is rebuilt once however many changed tiles
-## share it, and each hole marker and issue box is tested once per batch, so an undo of a big
-## drag costs in proportion to its tiles. Leaves the view as show_course would. Main calls it
-## with each tiles_changed.
+## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16): each
+## hole marker and issue box on one of its tiles is placed again at once; the ground is drawn
+## again within the frame's budget (_drain, TerrainTuning.refresh_tiles_per_frame), the rest over
+## the next frames: a tile whose surface alone changed is written in place in its chunk, and the
+## chunks within REBUILD_REACH tiles of a tile whose height moved (WATER_REACH of one that turned
+## to or from water) are emitted again, once however many of the batch's tiles share them. So
+## an undo of a big drag costs its frame a bounded share. Leaves the view as show_course would,
+## once drawn (finish_drawing). Main calls it with each tiles_changed.
 func refresh_cells(cells: Array[Vector2i]) -> void:
 	if _course == null or cells.is_empty():
 		return
-	var changed := {}
-	var dirty := {}
+	_pending_cells.append_array(cells)
+	# The markers read the course, not the drawn ground, so they follow the batch at once: a
+	# height moved in it may cover or uncover an issue box's foot.
 	var moved: bool = false
+	var w: int = _course.width
 	for cell: Vector2i in cells:
-		changed[cell] = true
-		if not _course.in_bounds(cell.x, cell.y):
-			continue
-		var i: int = cell.y * _course.width + cell.x
-		var h: int = _course.get_height(cell.x, cell.y)
-		if _heights_seen[i] != h:
-			_heights_seen[i] = h
-			moved = true
-		for dy: int in range(-REBUILD_REACH, REBUILD_REACH + 1):
-			for dx: int in range(-REBUILD_REACH, REBUILD_REACH + 1):
-				var c := cell + Vector2i(dx, dy)
-				if _course.in_bounds(c.x, c.y):
-					var key := terrain.chunk_key(c)
-					if not dirty.has(key):
-						dirty[key] = {}
-					dirty[key][c] = true
-	terrain.sync(cells)
-	for key: Vector2i in dirty:
-		terrain.build_chunk(_chunks[key], dirty[key])
-	if moved:
-		topo.mark_dirty()
-		play_lines.mark_dirty(cells)
+		if _course.in_bounds(cell.x, cell.y):
+			var h: int = _course.get_height(cell.x, cell.y)
+			if _heights_marked[cell.y * w + cell.x] != h:
+				_heights_marked[cell.y * w + cell.x] = h
+				moved = true
 	for m: HoleMarker in _markers:
-		if changed.has(m.cell):
+		if cells.has(m.cell):
 			m.place(_course)
 	if moved:
 		_hole_label_scale = 0.0
-	# An edit in front of a fault may cover or uncover its leader's foot.
 	for m: IssueMarker in _issue_markers:
-		if changed.has(m.cell):
+		if cells.has(m.cell):
 			m.place(_course)
 			_issue_layout_scale = 0.0
 		elif moved:
 			m.foot_hidden = IssueMarker.covered(_course, m.cell)
+	_drain(terrain.tuning.refresh_tiles_per_frame)
+
+
+## E3-S16: sorts up to `limit` of the pending edited tiles (_pending_cells, oldest first) into
+## ground work against what is drawn (_heights_seen, the terrain's water cache): a tile whose
+## surface alone changed is repainted in place, one whose height or water moved has the chunks
+## round it emitted again (its slope flags read again first, TerrainMesh.sync). A height moved
+## also redraws the contours and lines of play.
+func _classify(limit: int) -> int:
+	var end: int = mini(_pending_at + limit, _pending_cells.size())
+	var done: int = end - _pending_at
+	var reshaped: Array[Vector2i] = []
+	var moved: Array[Vector2i] = []
+	for n: int in range(_pending_at, end):
+		var cell: Vector2i = _pending_cells[n]
+		if not _course.in_bounds(cell.x, cell.y):
+			continue
+		var i: int = cell.y * _course.width + cell.x
+		var h: int = _course.get_height(cell.x, cell.y)
+		var here_moved: bool = _heights_seen[i] != h
+		if here_moved:
+			_heights_seen[i] = h
+			moved.append(cell)
+		var water: bool = _course.get_surface(cell.x, cell.y) == Surface.Type.WATER
+		if not here_moved and water == terrain.water_seen(cell):
+			var k := terrain.chunk_key(cell)
+			if not _pending_paint.has(k):
+				_pending_paint[k] = {}
+			_pending_paint[k][cell] = true
+			continue
+		reshaped.append(cell)
+		var reach: int = REBUILD_REACH if here_moved else WATER_REACH
+		for dy: int in range(-reach, reach + 1):
+			for dx: int in range(-reach, reach + 1):
+				var c := cell + Vector2i(dx, dy)
+				if _course.in_bounds(c.x, c.y):
+					var key := terrain.chunk_key(c)
+					if not _pending_build.has(key):
+						_pending_build[key] = {}
+					_pending_build[key][c] = true
+	_pending_at = end
+	if _pending_at >= _pending_cells.size():
+		_pending_cells.clear()
+		_pending_at = 0
+	if not reshaped.is_empty():
+		terrain.sync(reshaped)
+	if not moved.is_empty():
+		topo.mark_dirty()
+		play_lines.mark_dirty(moved)
+	return done
+
+
+## E3-S16: draws the ground work pending (_pending_build, _pending_paint), at most `budget`
+## tiles in this frame, counting what earlier calls since the last _process drew (below 0: all
+## of it). A chunk is done whole once begun, so a frame may pass the budget by one chunk's tiles.
+func _drain(budget: int) -> void:
+	# Sorting a tile costs about a quarter of drawing one.
+	while _pending_at < _pending_cells.size():
+		if budget >= 0 and _drained >= budget:
+			return
+		var room: int = (budget - _drained) * CLASSIFY_PER_TILE if budget >= 0 else _pending_cells.size()
+		_drained += ceili(float(_classify(room)) / CLASSIFY_PER_TILE)
+	for key: Vector2i in _pending_build.keys():
+		if budget >= 0 and _drained >= budget:
+			return
+		var cells: Dictionary = _pending_build[key]
+		_pending_build.erase(key)
+		if _pending_paint.has(key):
+			cells.merge(_pending_paint[key])
+			_pending_paint.erase(key)
+		_drained += terrain.build_chunk(_chunks[key], cells)
+	for key: Vector2i in _pending_paint.keys():
+		if budget >= 0 and _drained >= budget:
+			return
+		var cells: Dictionary = _pending_paint[key]
+		_pending_paint.erase(key)
+		var ch: TerrainMesh.Chunk = _chunks[key]
+		var whole: bool = false
+		for cell: Vector2i in cells:
+			if not terrain.repaint_tile(ch, cell):
+				whole = true
+				break
+		if whole:
+			_drained += terrain.build_chunk(ch, cells)
+		else:
+			ch.queue_redraw()
+			_drained += cells.size()
+
+
+## The ground tiles drawn in the last frame, its edits' and _process's (tests read the budget held).
+func drawn_this_frame() -> int:
+	return _last_drained
+
+
+## True while a big batch's ground is still being drawn over the next frames (_drain).
+func drawing_pending() -> bool:
+	return not _pending_cells.is_empty() or not _pending_build.is_empty() or not _pending_paint.is_empty()
+
+
+## Draws all the ground work still pending now (tests, and anything that reads the chunks).
+func finish_drawing() -> void:
+	if not drawing_pending():
+		return
+	var kept: int = _drained
+	_drain(-1)
+	_drained = kept  # a forced finish is no frame's budget
 
 
 ## Redraws every tile of parcel `parcel` after it was bought or a purchase was undone (the
