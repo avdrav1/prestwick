@@ -114,6 +114,8 @@ var _undo_samples: Array[float] = []
 var _release_samples: Array[float] = []
 var _release_guests: Array[int] = []
 var _shown: Array[int] = []
+## E3-S31: the current phase's frames past 16.7 ms: (frame ms, its guest work ms).
+var _slow: Array[Vector2] = []
 ## E3-S16: the drag_to and undo calls alone (tool, builder, view), and the guest CPU in the
 ## frames holding them.
 var _drag_calls: Array[float] = []
@@ -589,6 +591,28 @@ func _print_guests(phase: String) -> void:
 	_guest_ms.clear()
 
 
+## E3-S31: a frame of an idle or Play phase past 16.7 ms, with the guest work in it (this
+## frame's _guest_ms; the rest is the map's draw and the engine).
+func _note_slow(frame_ms: float) -> void:
+	if frame_ms > 16.7:
+		_slow.append(Vector2(frame_ms, _guest_ms[-1] if not _guest_ms.is_empty() else 0.0))
+
+
+## The phase's frames past 16.7 ms and how much of them was guest work; clears the list.
+func _slow_share() -> String:
+	if _slow.is_empty():
+		return "no frame over 16.7 ms"
+	var total := 0.0
+	var guest := 0.0
+	for v: Vector2 in _slow:
+		total += v.x
+		guest += v.y
+	var out := "%d frames over 16.7 ms, mean %.2f ms, of which guest work %.2f and the rest (map draw, engine) %.2f" % [
+		_slow.size(), total / _slow.size(), guest / _slow.size(), (total - guest) / _slow.size()]
+	_slow.clear()
+	return out
+
+
 func _stats(ms: Array[float]) -> String:
 	var s: Array[float] = ms.duplicate()
 	s.sort()
@@ -622,8 +646,9 @@ func _process(_delta: float) -> bool:
 		1, 2, 3:  # idle in Build at 1x, then 0.5x, then the farthest zoom (D45) on the map's centre
 			if _frames > 2:
 				_samples.append(frame_ms)
+				_note_slow(frame_ms)
 			if _frames >= IDLE_FRAMES:
-				print("idle frames in Build at %sx: %s" % [_main.camera.zoom.x, _stats(_samples)])
+				print("idle frames in Build at %sx: %s; %s" % [_main.camera.zoom.x, _stats(_samples), _slow_share()])
 				_print_guests("idle")
 				_next_phase()
 				if _phase == 2:
@@ -638,10 +663,12 @@ func _process(_delta: float) -> bool:
 			if _frames > 2:
 				_samples.append(frame_ms)
 				_shown.append(_main.guest_view.figures().size())
+				_note_slow(frame_ms)
 			if _frames >= IDLE_FRAMES:
 				_shown.sort()
-				print("Play frames at %sx, guests at 3x, %d to %d figures shown: %s" % [
-					_main.camera.zoom.x, _shown[0], _shown[-1], _stats(_samples)])
+				print("Play frames at %sx, guests at 3x, %d to %d figures shown, %d on the course: %s; %s" % [
+					_main.camera.zoom.x, _shown[0], _shown[-1], _main.guest_sim.guests_on_course(),
+					_stats(_samples), _slow_share()])
 				_print_guests("Play")
 				_shown.clear()
 				_next_phase()
@@ -935,6 +962,11 @@ func _begin_play_phase() -> void:
 	sim.set_speed(1.0)
 	for i: int in GUEST_REFRESH_S:
 		sim.advance(1.0)
+	# E3-S31: on with the day until the whole field is out (16 guests), so the farthest zoom
+	# draws every one of them.
+	var all: int = _guest_tuning.arrivals_per_day
+	while sim.guests_on_course() < all and sim.brain.second < _guest_tuning.arrival_window_s + 10.0:
+		sim.brain.step()
 	sim.set_speed(3.0)
 	_main.camera.frame(_main.course_view.screen_bounds())
 	_main.camera.set_zoom_index(0)
