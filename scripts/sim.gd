@@ -12,15 +12,18 @@ extends SceneTree
 ## field, how many guests play each fixture hole (the target is read at --runs 50); the
 ## field's days count up from --seed, which is also the corridor par 4's land seed. For
 ## putting (E3-S51, scripts/putting_sim.gd), --runs is the hole-outs from each length on each
-## green.
+## green. E3-S48: --jobs N runs reactions' jobs N at a time, each in its own headless Godot
+## (the figures are the same as --jobs 1, which runs them all in this one); it defaults to
+## the machine's processor count, at most DEFAULT_JOBS_MAX.
 
 const TABLES: PackedStringArray = ["clubs", "lies", "surfaces", "land", "reactions", "putting"]
+const DEFAULT_JOBS_MAX: int = 16
 
 
 func _initialize() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
 	if args.is_empty():
-		print("usage: sim.gd -- --table clubs|lies|surfaces|land|reactions|putting [--runs N] [--seed S]")
+		print("usage: sim.gd -- --table clubs|lies|surfaces|land|reactions|putting [--runs N] [--seed S] [--jobs N]")
 		quit(2)
 		return
 	var sim := BalanceSim.new()
@@ -36,7 +39,7 @@ func _initialize() -> void:
 		"land":
 			rows = sim.measure_land(runs, rng_seed)
 		"reactions":
-			rows = sim.measure_reactions(runs, rng_seed)
+			rows = sim.measure_reactions(runs, rng_seed, ReactionField.NINE_DAYS, args.jobs)
 		"putting":
 			rows = sim.measure_putting(runs, rng_seed)
 		_:
@@ -51,7 +54,8 @@ func _initialize() -> void:
 
 ## {table, runs, seed}, or {} when the table is missing or unknown.
 static func _parse(argv: PackedStringArray) -> Dictionary:
-	var out := {"table": "", "runs": 200, "seed": 1}
+	var out := {"table": "", "runs": 200, "seed": 1,
+		"jobs": mini(OS.get_processor_count(), DEFAULT_JOBS_MAX)}
 	var i := 0
 	while i < argv.size():
 		var key := argv[i]
@@ -63,6 +67,8 @@ static func _parse(argv: PackedStringArray) -> Dictionary:
 				out.runs = maxi(1, value.to_int())
 			"--seed":
 				out.seed = value.to_int()
+			"--jobs":
+				out.jobs = maxi(1, value.to_int())
 			_:
 				i += 1
 				continue

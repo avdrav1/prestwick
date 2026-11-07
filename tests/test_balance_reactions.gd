@@ -5,16 +5,72 @@ extends GutTest
 ## gets 60 to 75% praise and under 15% complaints, and a blind one clearly worse. The fixture
 ## holes are tests/fixtures/reaction_holes.gd. The full field of 50 (and the nine-hole day)
 ## is the sim's run (`--table reactions --runs 50`); here a smaller field checks the rows.
+## E3-S48: every field, nine-hole day and edges job the tests read is run once, in before_all,
+## WORKERS at a time in their own Godots (ReactionField.run_jobs), as the sim runs them, and
+## each test reads its results (`_result`); the figures are the same as one at a time.
 
 const SEED: int = 1
 ## Guests in the field here; the target's field is FIELD_TARGET.
 const SMALL: int = 12
+## E3-S48: before_all's jobs run this many at once.
+const WORKERS: int = 8
+## The edges tests' guests a job.
+const EDGE_FIELD: int = 12
+const PUTT_FIELD: int = 16
 
 var sim: ReactionField
+## {ReactionField.job_key: result} of before_all's batch.
+var batch: Dictionary = {}
 
 
 func before_all() -> void:
 	sim = ReactionField.new()
+	var jobs: Array[Dictionary] = []
+	jobs.append_array(_rows_jobs())
+	for course_name: String in ["fair", "blind"]:
+		jobs.append(_fifty(course_name))
+	jobs.append_array(ScoringEdges.new(sim.model).jobs(1, SEED))
+	jobs.append_array(_skill_10_jobs())
+	jobs.append_array(_putt_jobs())
+	for skill: int in [10, 1]:
+		jobs.append(_chips(skill))
+	var results := sim.run_jobs(jobs, WORKERS)
+	for i: int in jobs.size():
+		batch[ReactionField.job_key(jobs[i])] = results[i]
+
+
+func _result(job: Dictionary) -> Dictionary:
+	return batch[ReactionField.job_key(job)]
+
+
+## The jobs of the rows test's measure: a field of SMALL, one nine-hole day, no edges.
+func _rows_jobs() -> Array[Dictionary]:
+	return sim.jobs_for(SMALL, SEED, 1, 1, false, SMALL)
+
+
+func _fifty(course_name: String) -> Dictionary:
+	var n := ReactionField.FIELD_TARGET
+	return {"kind": "field", "course": course_name, "n": n, "seed": SEED, "cuts": [n]}
+
+
+func _skill_10_jobs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for hole_name: String in ScoringEdges.SPIKE_HOLES:
+		out.append({"kind": "edge_hole", "hole": hole_name, "skill": 10, "n": EDGE_FIELD, "seed": SEED})
+	return out
+
+
+func _putts(green_name: String, skill: int) -> Dictionary:
+	return {"kind": "edge_putts", "green": green_name, "skill": skill, "n": PUTT_FIELD, "seed": SEED}
+
+
+func _putt_jobs() -> Array[Dictionary]:
+	return [_putts("flat green", ScoringEdges.NOISE_FREE), _putts("sloped green", ScoringEdges.NOISE_FREE),
+			_putts("tier green", ScoringEdges.NOISE_FREE), _putts("sloped green", 1)]
+
+
+func _chips(skill: int) -> Dictionary:
+	return {"kind": "edge_chips", "skill": skill, "n": EDGE_FIELD, "seed": SEED}
 
 
 func _named(rows: Array[Dictionary], prefix: String) -> Dictionary:
@@ -73,7 +129,11 @@ func test_a_field_plays_the_hole_through_the_guest_day() -> void:
 
 
 func test_reaction_rows_print_next_to_their_targets() -> void:
-	var rows := sim.measure(SMALL, SEED, 1, false, SMALL, 1)
+	var jobs := _rows_jobs()
+	var results: Array[Dictionary] = []
+	for job: Dictionary in jobs:
+		results.append(_result(job))
+	var rows := sim.rows_from(SMALL, SEED, 1, 1, false, SMALL, jobs, results)
 	for prefix: String in ["fair par 4: praise", "fair par 4: complaints",
 			"blind par 4: praise", "blind par 4: complaints",
 			"corridor par 4", "dogleg par 4", "nine holes", "pace fails: fair par 4",
@@ -98,24 +158,53 @@ func test_reaction_rows_print_next_to_their_targets() -> void:
 			"a blind hole clearly scores worse")
 	var nine := _named(rows, "nine holes, New sandbox: days reaching every hole")
 	assert_true(nine.ok, "the nine-hole day reaches every hole: %s" % nine.note)
+	# E3-S48: the nine-hole field plays the holes that can be praised; pace stays on the bare nine.
+	assert_string_starts_with(String(nine.note), "nine_holes_hazards.gd:")
+	var finished := _named(rows, "nine holes, New sandbox: days every hole was finished")
+	assert_string_contains(String(finished.note), "praise")
+	assert_string_contains(String(_named(rows, "pace fails: par 5").note), "pace fails by hole")
 
 
 func test_the_fair_par_4_hits_its_target_with_a_field_of_50() -> void:
-	var c := ReactionHoles.fair_par4()
-	var field := sim.play_field(c, ReactionField.FIELD_TARGET, SEED)
-	var tally := ReactionField.tally(field)
+	var n := ReactionField.FIELD_TARGET
+	var tally: Dictionary = _result(_fifty("fair"))[str(n)]
+	var blind: Dictionary = _result(_fifty("blind"))[str(n)]
 	assert_between(float(tally.praise), ReactionField.FAIR_PRAISE.x, ReactionField.FAIR_PRAISE.y,
 			"praise share of %d guests" % ReactionField.FIELD_TARGET)
 	assert_lt(float(tally.complaints), ReactionField.FAIR_COMPLAINTS.y + 1e-6, "complaints under 15%")
-	var blind := ReactionField.tally(sim.play_field(ReactionHoles.blind_par4(), ReactionField.FIELD_TARGET, SEED))
 	assert_eq(float(blind.praise), 0.0, "nobody praises a blind hole")
 	assert_gt(float(blind.complaints), float(tally.complaints) + 0.25, "and many more complain")
+
+
+## E3-S48: jobs run in their own Godots give the very results they give run here, so the
+## parallel sim prints the same figures: two of before_all's jobs (a field cut at two sizes,
+## a breaking putt's share) run again here.
+func test_jobs_run_in_parallel_give_the_same_results_as_run_here() -> void:
+	var jobs: Array[Dictionary] = []
+	for job: Dictionary in _rows_jobs():
+		if String(job.kind) == "field" and String(job.course) == "corridor":
+			jobs.append(job)
+	jobs.append(_putts("sloped green", 1))
+	assert_eq(jobs.size(), 2)
+	var here := sim.run_jobs(jobs, 1)
+	var apart: Array[Dictionary] = []
+	for job: Dictionary in jobs:
+		apart.append(_result(job))
+	for i: int in jobs.size():
+		# JSON keeps numbers as floats: compare both as JSON gives them back.
+		var mine: Variant = JSON.parse_string(JSON.stringify(here[i], "", true, true))
+		assert_eq(JSON.stringify(apart[i], "", true, true), JSON.stringify(mine, "", true, true),
+				"job %s" % ReactionField.job_key(jobs[i]))
 
 
 # --- E3-S24: scoring at the edges (scripts/scoring_edges.gd) ---
 
 func test_the_edge_rows_print_and_only_the_spike_mean_has_a_target() -> void:
-	var rows := ScoringEdges.new(sim.model).measure(1, SEED)
+	var edges := ScoringEdges.new(sim.model)
+	var results: Array[Dictionary] = []
+	for job: Dictionary in edges.jobs(1, SEED):
+		results.append(_result(job))
+	var rows := edges.rows_from(1, SEED, results)
 	var prefixes: Array[String] = []
 	for hole_name: String in ScoringEdges.spike_holes():
 		prefixes.append("skill 10 on %s:" % hole_name)
@@ -154,21 +243,19 @@ func test_the_short_game_greens_are_shaped_as_named() -> void:
 
 
 func test_a_noise_free_guest_one_putts_a_flat_green_and_never_three_putts_a_sloped_one() -> void:
-	var edges := ScoringEdges.new(sim.model)
-	var flat := edges.putts(ShortGameHoles.flat_green(), ScoringEdges.NOISE_FREE, 16, SEED)
+	var flat := _result(_putts("flat green", ScoringEdges.NOISE_FREE))
 	assert_eq(float(flat.one), 1.0, "with no noise every straight putt drops")
-	for course: CourseData in [ShortGameHoles.sloped_green(), ShortGameHoles.tier_green()]:
-		var p := edges.putts(course, ScoringEdges.NOISE_FREE, 16, SEED)
+	for green_name: String in ["sloped green", "tier green"]:
+		var p := _result(_putts(green_name, ScoringEdges.NOISE_FREE))
 		assert_eq(float(p.three), 0.0, "no three-putts with no noise")
 		assert_gt(float(p.two), 0.0, "aimed at the cup, some breaking putts miss (D41)")
-	var noisy := edges.putts(ShortGameHoles.sloped_green(), 1, 16, SEED)
+	var noisy := _result(_putts("sloped green", 1))
 	assert_gt(float(noisy.three), float(flat.three), "skill 1 three-putts the sloped green")
 
 
 func test_chips_hole_out_and_skill_10_gets_down_in_fewer() -> void:
-	var edges := ScoringEdges.new(sim.model)
-	var best := edges.chips(10, 12, SEED)
-	var worst := edges.chips(1, 12, SEED)
+	var best := _result(_chips(10))
+	var worst := _result(_chips(1))
 	gut.p("chips: skill 10 %.2f, skill 1 %.2f" % [best.mean, worst.mean])
 	assert_between(float(best.mean), 2.0, 3.5, "skill 10 about up and down")
 	assert_gt(float(worst.mean), float(best.mean), "skill 1 takes more")
@@ -176,13 +263,11 @@ func test_chips_hole_out_and_skill_10_gets_down_in_fewer() -> void:
 
 func test_skill_10_averages_near_par_over_the_spike_holes() -> void:
 	# The sim reads the target at 50 guests a hole; a field of 12 is looser.
-	var edges := ScoringEdges.new(sim.model)
-	var holes := ScoringEdges.spike_holes()
+	var jobs := _skill_10_jobs()
 	var sum := 0.0
-	for hole_name: String in holes:
-		var c: CourseData = holes[hole_name]
-		var m := edges.mean_over_par(c, c.holes[0], 10, 12, SEED)
-		gut.p("skill 10 on %s: %+.2f" % [hole_name, m.over])
+	for job: Dictionary in jobs:
+		var m := _result(job)
+		gut.p("skill 10 on %s: %+.2f" % [job.hole, m.over])
 		sum += float(m.over)
-	assert_almost_eq(sum / holes.size(), 0.0, ScoringEdges.SKILL_10_WITHIN + 0.15,
+	assert_almost_eq(sum / jobs.size(), 0.0, ScoringEdges.SKILL_10_WITHIN + 0.15,
 			"skill 10 averages about par (D40)")

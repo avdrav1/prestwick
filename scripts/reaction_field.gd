@@ -31,10 +31,22 @@ const PACE_FIELD: int = 150
 const PACE_DAYS: int = 10
 ## The days a field may take before play_field stops (a hole nobody finishes).
 const FIELD_MAX_DAYS: int = 60
-## The nine-hole day: tests/fixtures/nine_holes.gd on this land, the first NINE_DAYS days.
+## The nine-hole day: the nine-hole fixtures on this land, the first NINE_DAYS days. E3-S48:
+## the days reaching every hole are read on nine_holes_hazards (REACH_FIXTURE: the same holes
+## with a bunker on each line and hole 1's crest cut, so they can be praised, E3-S23); pace
+## across hole shapes stays on the bare nine (PACE_FIXTURE), which E3-S22, E3-S54 and E3-S37
+## tuned its targets on.
 const NINE_LAND_SEED: int = 7
 const NINE_DAYS: int = 5
+const REACH_FIXTURE: String = "hazards"
+const PACE_FIXTURE: String = "bare"
+const NINE_FILES := {"bare": "nine_holes.gd", "hazards": "nine_holes_hazards.gd"}
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
+## E3-S48: the script a parallel job runs in (run_jobs), and how often run_jobs looks for the
+## jobs it started to finish.
+const JOB_SCRIPT: String = "res://scripts/reaction_job.gd"
+const JOB_POLL_MS: int = 20
 const EPS := 0.001
 
 var model: Variant
@@ -55,55 +67,74 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 ## (play_field): the fair par 4 against its praise and complaint targets; the same hole blind,
 ## clearly worse (at most BLIND_PRAISE_SHARE of the fair hole's praise and at least
 ## FAIR_TO_BLIND_COMPLAINTS more complaints); the one-parcel corridor par 4 on the generated
-## land of `rng_seed` and the New sandbox dogleg, recorded. Then the nine-hole fixture
-## (tests/fixtures/nine_holes.gd) plays the first `nine_days` days of a New sandbox course
-## (GuestSim.day_seed(0, d)), each against "every hole reached". Last, E3-S24's scoring at
-## the edges (scripts/scoring_edges.gd): skill 10 on the spike holes, putting on sloped
-## greens and chips, `runs` guests each, unless `edges` is false (tests read them alone).
+## land of `rng_seed` and the New sandbox dogleg, recorded. Then the nine-hole field
+## (E3-S48: tests/fixtures/nine_holes_hazards.gd, REACH_FIXTURE, whose holes can be praised)
+## plays the first `nine_days` days of a New sandbox course (GuestSim.day_seed(0, d)), each
+## against "every hole reached". Last, E3-S24's scoring at the edges
+## (scripts/scoring_edges.gd): skill 10 on the spike holes, putting on sloped greens and
+## chips, `runs` guests each, unless `edges` is false (tests read them alone).
 ## E3-S22: before the edges, pace across hole shapes (the first tee, the nine-hole fixture's
-## first par 5 and the dogleg, each within PACE_SPREAD of the fair par 4's pace fails) and the
-## crossing holes' field (ReactionHoles.crossing_holes), held for a group on the other hole.
+## par 5s and the dogleg, each within PACE_SPREAD of the fair par 4's pace fails, on the bare
+## nine, PACE_FIXTURE) and the crossing holes' field (ReactionHoles.crossing_holes), held for a
+## group on the other hole.
+## E3-S48: the work is a list of jobs (jobs_for, run_job), each a plain call with a JSON
+## result, run one after another (`workers` 1) or up to `workers` at once in their own
+## headless Godots (run_jobs, scripts/reaction_job.gd); the rows are the same either way. A
+## field is played once at its largest size and its first records tallied for the smaller
+## (the first `n` records of a field are the field of `n`), and each nine-hole day once.
 func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool = true,
-		pace_field: int = PACE_FIELD, pace_days: int = PACE_DAYS) -> Array[Dictionary]:
+		pace_field: int = PACE_FIELD, pace_days: int = PACE_DAYS, workers: int = 1) -> Array[Dictionary]:
 	var n := maxi(runs, 1)
+	var pf := maxi(pace_field, 1)
+	var nd := maxi(nine_days, 1)
+	var pd := maxi(pace_days, 1)
+	var jobs := jobs_for(n, rng_seed, nd, pd, edges, pf)
+	return rows_from(n, rng_seed, nd, pd, edges, pf, jobs, run_jobs(jobs, workers))
+
+
+## measure's rows from the `results` of its `jobs` (jobs_for with the same arguments; a test
+## may run them in one batch with others).
+func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
+		jobs: Array[Dictionary], results: Array[Dictionary]) -> Array[Dictionary]:
+	var by := {}
+	for i: int in jobs.size():
+		by[job_key(jobs[i])] = results[i]
 	var rows: Array[Dictionary] = []
-	var fair := tally(play_field(ReactionHoles.fair_par4(), n, rng_seed))
+	var fair := _tally_of(by, "fair", n)
 	rows.append(_row("fair par 4: praise (share of the field)", fair.praise, FAIR_PRAISE,
 			"%d guests; %s" % [n, fair.note]))
 	rows.append(_row("fair par 4: complaints (share)", fair.complaints, FAIR_COMPLAINTS,
 			"fails: %s" % fair.fails))
-	var blind := tally(play_field(ReactionHoles.blind_par4(), n, rng_seed))
+	var blind := _tally_of(by, "blind", n)
 	rows.append(_row("blind par 4: praise (share)", blind.praise,
 			Vector2(0.0, float(fair.praise) * BLIND_PRAISE_SHARE),
 			"the same hole behind a one-step ridge; %s" % blind.note))
 	rows.append(_row("blind par 4: complaints (share)", blind.complaints,
 			Vector2(float(fair.complaints) + FAIR_TO_BLIND_COMPLAINTS, INF), "fails: %s" % blind.fails))
-	var corridor_course := ReactionHoles.corridor_par4(rng_seed)
-	if corridor_course == null:
+	var corridor := _tally_of(by, "corridor", n)
+	if corridor.is_empty():
 		rows.append(_row("corridor par 4: opens on land seed %d" % rng_seed, 0.0, Vector2(1.0, 1.0)))
 	else:
-		var corridor := tally(play_field(corridor_course, n, rng_seed))
 		rows.append(_row("corridor par 4: tee shots OB (share)", corridor.tee_ob, Vector2(-INF, INF),
 				"land seed %d, one parcel (80 yd) wide; OB %.2f a guest a hole; %s" % [rng_seed,
 					corridor.ob_per_hole, corridor.note]))
 		rows.append(_row("corridor par 4: praise (share)", corridor.praise, Vector2(-INF, INF),
 				"complaints %.2f; fails: %s" % [corridor.complaints, corridor.fails]))
-	var dog := tally(play_field(ReactionHoles.dogleg_par4(), n, rng_seed))
+	var dog := _tally_of(by, "dogleg", n)
 	rows.append(_row("dogleg par 4: strokes over the expected score (mean)", dog.over, Vector2(-INF, INF),
 			"333 yd straight, 470 yd round the corner; by skill %s; praise %.2f, complaints %.2f; fails: %s" % [
 				dog.over_by_skill, dog.praise, dog.complaints, dog.fails]))
-	var nine := nine_hole_days(maxi(nine_days, 1))
-	rows.append(_row("nine holes, New sandbox: days reaching every hole", nine.reached, Vector2(1.0, 1.0),
-			nine.note))
-	rows.append(_row("nine holes, New sandbox: days every hole was finished", nine.finished,
-			Vector2(-INF, INF), "by at least one guest"))
+	var nine := combine_days(_days_of(by, REACH_FIXTURE, nd), REACH_FIXTURE)
+	rows.append(_row("nine holes, New sandbox: days reaching every hole", nine.reached,
+			Vector2(1.0, 1.0), nine.note))
+	rows.append(_row("nine holes, New sandbox: days every hole was finished", nine.finished, Vector2(-INF, INF), "by at least one guest; praise %.2f of %d records" % [
+				nine.praise, nine.records]))
 	# E3-S22: pace across hole shapes, each against the fair par 4's pace fails, on bigger
 	# samples than the field (PACE_FIELD, PACE_DAYS).
 	var spread := Vector2(-PACE_SPREAD, PACE_SPREAD)
-	var pf := maxi(pace_field, 1)
-	var fair_pace := fair if pf == n else tally(play_field(ReactionHoles.fair_par4(), pf, rng_seed))
-	var dog_pace := dog if pf == n else tally(play_field(ReactionHoles.dogleg_par4(), pf, rng_seed))
-	var pace_nine := nine if maxi(pace_days, 1) == maxi(nine_days, 1) else nine_hole_days(maxi(pace_days, 1))
+	var fair_pace := _tally_of(by, "fair", pf)
+	var dog_pace := _tally_of(by, "dogleg", pf)
+	var pace_nine := combine_days(_days_of(by, PACE_FIXTURE, pd), PACE_FIXTURE)
 	var pace_by_hole: Dictionary = pace_nine.pace_by_hole
 	var base: float = fair_pace.pace
 	rows.append(_row("pace fails: fair par 4 (share)", base, Vector2(-INF, INF),
@@ -112,7 +143,7 @@ func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool =
 	rows.append(_row("pace fails: first tee (nine holes, hole %d) less the fair par 4's" % PACE_FIRST_TEE_HOLE,
 			float(pace_by_hole.get(PACE_FIRST_TEE_HOLE, 0.0)) - base, spread,
 			"%.2f against %.2f; nine-hole days 1 to %d" % [
-				float(pace_by_hole.get(PACE_FIRST_TEE_HOLE, 0.0)), base, maxi(pace_days, 1)]))
+				float(pace_by_hole.get(PACE_FIRST_TEE_HOLE, 0.0)), base, pd]))
 	rows.append(_row("pace fails: par 5 (nine holes, hole %d) less the fair par 4's" % PACE_PAR5_HOLE,
 			float(pace_by_hole.get(PACE_PAR5_HOLE, 0.0)) - base, spread,
 			"%.2f against %.2f; %s" % [float(pace_by_hole.get(PACE_PAR5_HOLE, 0.0)), base,
@@ -140,14 +171,42 @@ func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool =
 	rows.append(_row("pace fails: dogleg par 4 less the fair par 4's", dog_pace.pace - base, spread,
 			"%.2f against %.2f; %d hole records; waits a hole mean %.1f s" % [dog_pace.pace, base, pf,
 				dog_pace.wait_mean]))
-	var crossing := tally(play_field(ReactionHoles.crossing_holes(), n, rng_seed))
+	var crossing := _tally_of(by, "crossing", n)
 	rows.append(_row("crossing holes: records held for a group on the other hole (share)",
 			crossing.cross_held, Vector2(-INF, INF),
 			"a par 3's green on a par 4's line 250 yd out; held %.1f s a record on average; pace fails %.2f; %s" % [
 				crossing.cross_wait_mean, crossing.pace, crossing.note]))
 	if edges:
-		rows.append_array(ScoringEdges.new(model).measure(n, rng_seed))
+		var edge_results: Array[Dictionary] = []
+		for i: int in jobs.size():
+			if String(jobs[i].kind).begins_with("edge_"):
+				edge_results.append(results[i])
+		rows.append_array(ScoringEdges.new(model).rows_from(n, rng_seed, edge_results))
 	return rows
+
+
+## E3-S48: measure's jobs, the longest first (the nine-hole days and the 150-record fields),
+## so a parallel run is not left waiting on one long job at the end: each field once at its
+## largest size, cut at the sizes measure reads; each nine-hole day of each fixture once; the
+## edges' jobs (ScoringEdges.jobs).
+func jobs_for(n: int, rng_seed: int, nine_days: int, pace_days: int, edges: bool,
+		pf: int) -> Array[Dictionary]:
+	var jobs: Array[Dictionary] = []
+	var days := {}
+	for d: int in range(1, pace_days + 1):
+		days[[PACE_FIXTURE, d]] = true
+	for d: int in range(1, nine_days + 1):
+		days[[REACH_FIXTURE, d]] = true
+	for k: Array in days:
+		jobs.append({"kind": "nine_day", "fixture": k[0], "day": k[1]})
+	for course_name: String in ["dogleg", "fair"]:
+		jobs.append({"kind": "field", "course": course_name, "n": maxi(n, pf), "seed": rng_seed,
+				"cuts": [n, pf]})
+	for course_name: String in ["blind", "corridor", "crossing"]:
+		jobs.append({"kind": "field", "course": course_name, "n": n, "seed": rng_seed, "cuts": [n]})
+	if edges:
+		jobs.append_array(ScoringEdges.new(model).jobs(n, rng_seed))
+	return jobs
 
 
 ## The first `n` hole records a field gives on `course`, a course of one open hole: the days
@@ -244,41 +303,184 @@ static func tally(field: Array[Dictionary]) -> Dictionary:
 	}
 
 
-## The nine-hole fixture's first `days` days as a New sandbox course plays them: {reached,
-## finished: the share of days on which every hole was teed off, and finished by someone;
-## note}.
-func nine_hole_days(days: int) -> Dictionary:
+## A job's key: its kind and arguments, so measure finds each result by what it asked.
+static func job_key(job: Dictionary) -> String:
+	return JSON.stringify(job, "", true)
+
+
+## The result of one job (jobs_for, ScoringEdges.jobs), a Dictionary that JSON keeps: a
+## field's tallies at each cut ({"<cut>": tally}; {} for a corridor that does not open), one
+## nine-hole day (nine_day), or an edges job's numbers.
+func run_job(job: Dictionary) -> Dictionary:
+	match String(job.kind):
+		"field":
+			var course := course_named(String(job.course), int(job.seed))
+			if course == null:
+				return {}
+			var field := play_field(course, int(job.n), int(job.seed))
+			var out := {}
+			for cut: Variant in job.cuts:
+				out[str(int(cut))] = tally(field.slice(0, int(cut)))
+			return out
+		"nine_day":
+			return nine_day(String(job.fixture), int(job.day))
+		_:
+			return ScoringEdges.new(model).run_job(job)
+
+
+## E3-S48: every job's result, in order. `workers` 1 or less runs them here one after another;
+## more runs up to that many at once, each in its own headless Godot on this project
+## (scripts/reaction_job.gd, which calls run_job and writes the result as JSON with full
+## precision, so the rows are the same as a run here). A job whose Godot fails is run here.
+func run_jobs(jobs: Array[Dictionary], workers: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	out.resize(jobs.size())
+	if workers <= 1:
+		for i: int in jobs.size():
+			out[i] = run_job(jobs[i])
+		return out
+	var dir := "user://reaction_jobs/%d" % OS.get_process_id()
+	DirAccess.make_dir_recursive_absolute(dir)
+	var running := {}
+	var next := 0
+	while next < jobs.size() or not running.is_empty():
+		while running.size() < workers and next < jobs.size():
+			var path := ProjectSettings.globalize_path("%s/%d.json" % [dir, next])
+			var args := PackedStringArray(["--headless", "--quiet", "--path",
+					ProjectSettings.globalize_path("res://"), "-s", JOB_SCRIPT, "--",
+					"--job=" + JSON.stringify(jobs[next]), "--out=" + path])
+			var pid := OS.create_process(OS.get_executable_path(), args)
+			if pid <= 0:
+				out[next] = run_job(jobs[next])
+			else:
+				running[pid] = [next, path]
+			next += 1
+		OS.delay_msec(JOB_POLL_MS)
+		for pid: int in running.keys():
+			if OS.is_process_running(pid):
+				continue
+			var i: int = running[pid][0]
+			var path: String = running[pid][1]
+			running.erase(pid)
+			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) \
+					if FileAccess.file_exists(path) else null
+			if typeof(parsed) == TYPE_DICTIONARY:
+				out[i] = parsed
+			else:
+				push_error("reaction job %d left no result; running it here" % i)
+				out[i] = run_job(jobs[i])
+			DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
+	return out
+
+
+## A fixture hole's course by name (measure's fields): fair, blind, dogleg, crossing, or the
+## corridor par 4 on land seed `rng_seed` (null when it does not open).
+static func course_named(course_name: String, rng_seed: int) -> CourseData:
+	match course_name:
+		"fair":
+			return ReactionHoles.fair_par4()
+		"blind":
+			return ReactionHoles.blind_par4()
+		"dogleg":
+			return ReactionHoles.dogleg_par4()
+		"crossing":
+			return ReactionHoles.crossing_holes()
+		"corridor":
+			return ReactionHoles.corridor_par4(rng_seed)
+	push_error("no fixture hole named %s" % course_name)
+	return null
+
+
+## The tally of the first `cut` records of the field of `course_name` among measure's results
+## ({} for a corridor that did not open).
+func _tally_of(by: Dictionary, course_name: String, cut: int) -> Dictionary:
+	for key: String in by:
+		var job: Dictionary = JSON.parse_string(key)
+		if String(job.kind) == "field" and String(job.course) == course_name:
+			var r: Dictionary = by[key]
+			return r.get(str(cut), {})
+	return {}
+
+
+## Nine-hole days 1 to `days` of `fixture` among measure's results, in order.
+func _days_of(by: Dictionary, fixture: String, days: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for d: int in range(1, days + 1):
+		out.append(by[job_key({"kind": "nine_day", "fixture": fixture, "day": d})])
+	return out
+
+
+## The nine-hole fixture of that name ("bare": tests/fixtures/nine_holes.gd, "hazards":
+## tests/fixtures/nine_holes_hazards.gd) on NINE_LAND_SEED's land, built: {course, opened}.
+static func nine_course(fixture: String) -> Dictionary:
+	var script: GDScript = NineHolesHazards if fixture == "hazards" else NineHoles
+	var course: CourseData = script.land(NINE_LAND_SEED)
+	var opened: Array[int] = script.build(CourseBuilder.new(course))
+	return {"course": course, "opened": opened}
+
+
+## Day `d` of the nine-hole `fixture` as a New sandbox course plays it (GuestSim.day_seed(0,
+## d)): {reached, finished: every open hole teed off, and finished by someone; part: the day's
+## line; pace: {"<hole>": [records, pace fails, tee wait s, crossing wait s]}; records, praise}.
+func nine_day(fixture: String, d: int) -> Dictionary:
 	var tuning := GuestTuning.load_default()
-	var course := NineHoles.land(NINE_LAND_SEED)
-	var opened := NineHoles.build(CourseBuilder.new(course))
+	var built := nine_course(fixture)
+	var course: CourseData = built.course
+	var opened: Array[int] = built.opened
+	var brain := GuestBrain.new(course, GuestSim.day_seed(0, d), tuning, model)
+	brain.run_day()
+	var done := {}
+	var records := 0
+	var praise := 0
+	var nine := 0
+	var pace := {}
+	for g: Guest in brain.guests:
+		records += g.records.size()
+		if g.records.size() == opened.size():
+			nine += 1
+		for r: Guest.HoleRecord in g.records:
+			done[r.number] = true
+			if r.reaction.kind == GuestReaction.Kind.PRAISE:
+				praise += 1
+			var key := str(r.number)
+			var acc: Array = pace.get(key, [0, 0, 0, 0])
+			pace[key] = [int(acc[0]) + 1,
+					int(acc[1]) + (0 if r.reaction.passed[GuestReaction.Check.PACE] else 1),
+					int(acc[2]) + r.tee_wait_s, int(acc[3]) + r.cross_wait_s]
+	return {"reached": brain.teed_off.size() == opened.size(), "finished": done.size() == opened.size(),
+		"records": records, "praise": praise, "pace": pace,
+		"part": "day %d: %d teed off, %d finished, %d guests played all %d, %d records" % [
+				d, brain.teed_off.size(), done.size(), nine, opened.size(), records]}
+
+
+## The nine-hole days `days` (nine_day's results, in day order) of `fixture` summed: {reached,
+## finished: the share of days on which every hole was teed off, and finished by someone;
+## pace_by_hole, par_by_hole, tee_wait_by_hole, cross_wait_by_hole (a record, over every
+## day); records, praise (share of the records); note}.
+static func combine_days(days: Array[Dictionary], fixture: String) -> Dictionary:
+	var built := nine_course(fixture)
+	var course: CourseData = built.course
+	var opened: Array[int] = built.opened
 	var reached := 0
 	var finished := 0
+	var records := 0
+	var praise := 0
 	var parts := PackedStringArray()
-	# {hole number: [records, pace fails]} over every day (E3-S8 review: par 3s and short
-	# holes hold the group behind longest).
+	# {hole number: [records, pace fails, tee, crossing]} over every day (E3-S8 review: par 3s
+	# and short holes hold the group behind longest).
 	var pace := {}
-	for d: int in range(1, days + 1):
-		var brain := GuestBrain.new(course, GuestSim.day_seed(0, d), tuning, model)
-		brain.run_day()
-		var done := {}
-		var records := 0
-		var nine := 0
-		for g: Guest in brain.guests:
-			records += g.records.size()
-			if g.records.size() == opened.size():
-				nine += 1
-			for r: Guest.HoleRecord in g.records:
-				done[r.number] = true
-				var acc: Array = pace.get(r.number, [0, 0, 0, 0])
-				pace[r.number] = [int(acc[0]) + 1,
-						int(acc[1]) + (0 if r.reaction.passed[GuestReaction.Check.PACE] else 1),
-						int(acc[2]) + r.tee_wait_s, int(acc[3]) + r.cross_wait_s]
-		if brain.teed_off.size() == opened.size():
-			reached += 1
-		if done.size() == opened.size():
-			finished += 1
-		parts.append("day %d: %d teed off, %d finished, %d guests played all %d, %d records" % [
-				d, brain.teed_off.size(), done.size(), nine, opened.size(), records])
+	for day: Dictionary in days:
+		reached += 1 if bool(day.reached) else 0
+		finished += 1 if bool(day.finished) else 0
+		records += int(day.records)
+		praise += int(day.praise)
+		parts.append(String(day.part))
+		for key: String in day.pace:
+			var a: Array = day.pace[key]
+			var acc: Array = pace.get(int(key), [0, 0, 0, 0])
+			pace[int(key)] = [int(acc[0]) + int(a[0]), int(acc[1]) + int(a[1]),
+					int(acc[2]) + int(a[2]), int(acc[3]) + int(a[3])]
 	var by_hole := PackedStringArray()
 	var pace_by_hole := {}
 	# E3-S22 review: each hole's par and its counted waits a record on the tee and held for a
@@ -297,7 +499,18 @@ func nine_hole_days(days: int) -> Dictionary:
 		cross_wait_by_hole[h.number] = int(acc[3]) / recs
 		by_hole.append("%d (par %d) %.2f" % [h.number, h.par, pace_by_hole[h.number]])
 	parts.append("pace fails by hole: " + ", ".join(by_hole))
-	return {"reached": reached / float(days), "finished": finished / float(days),
+	var n := float(maxi(days.size(), 1))
+	return {"reached": reached / n, "finished": finished / n,
+		"records": records, "praise": praise / float(maxi(records, 1)),
 		"pace_by_hole": pace_by_hole, "par_by_hole": par_by_hole,
 		"tee_wait_by_hole": tee_wait_by_hole, "cross_wait_by_hole": cross_wait_by_hole,
-		"note": "; ".join(parts)}
+		"note": "%s: %s" % [NINE_FILES[fixture], "; ".join(parts)]}
+
+
+## The nine-hole `fixture`'s first `days` days as a New sandbox course plays them, here
+## (nine_day, combine_days).
+func nine_hole_days(days: int, fixture: String = PACE_FIXTURE) -> Dictionary:
+	var out: Array[Dictionary] = []
+	for d: int in range(1, days + 1):
+		out.append(nine_day(fixture, d))
+	return combine_days(out, fixture)

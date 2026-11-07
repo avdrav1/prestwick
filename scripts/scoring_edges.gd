@@ -25,6 +25,12 @@ extends RefCounted
 const SKILL_10_WITHIN: float = 0.25
 ## The skills the short-game rows are read at, and -1 for noise-free.
 const SKILLS: Array[int] = [1, 4, 7, 10]
+## E3-S1's spike holes (spike_hole), in row order, and their pars; the short-game greens.
+const SPIKE_HOLES: Array[String] = ["example_par3", "flat par 4", "hilly par 4",
+		"hilly par 4 water", "hilly par 5", "flat par 5 water"]
+const SPIKE_PARS := {"example_par3": 3, "flat par 4": 4, "hilly par 4": 4,
+		"hilly par 4 water": 4, "hilly par 5": 5, "flat par 5 water": 5}
+const GREENS: Array[String] = ["sloped green", "tier green", "flat green"]
 const NOISE_FREE: int = -1
 ## A putt from this close (yards, ball to cup centre) is a tap-in: the putting rows count how
 ## many of them drop.
@@ -52,32 +58,75 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 
 
 ## Every row: `runs` guests (at least 1) a spike hole at skill 10, and as many putts and
-## chips a skill on the short-game greens, seeds from `rng_seed`.
+## chips a skill on the short-game greens, seeds from `rng_seed`. E3-S48: the work is
+## jobs(), each run by run_job (here, or in its own Godot by ReactionField.run_jobs), and the
+## rows are rows_from() of the results.
 func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
+	var results: Array[Dictionary] = []
+	for job: Dictionary in jobs(runs, rng_seed):
+		results.append(run_job(job))
+	return rows_from(runs, rng_seed, results)
+
+
+## The jobs measure is made of, in the order rows_from reads them: each spike hole at skill
+## 10 and skill 1, each green's putts noise-free and at SKILLS, the chips at SKILLS.
+func jobs(runs: int, rng_seed: int) -> Array[Dictionary]:
+	var n := maxi(runs, 1)
+	var out: Array[Dictionary] = []
+	for hole_name: String in SPIKE_HOLES:
+		for skill: int in [10, 1]:
+			out.append({"kind": "edge_hole", "hole": hole_name, "skill": skill, "n": n, "seed": rng_seed})
+	for green_name: String in GREENS:
+		for skill: int in [NOISE_FREE] + SKILLS:
+			out.append({"kind": "edge_putts", "green": green_name, "skill": skill, "n": n, "seed": rng_seed})
+	for skill: int in SKILLS:
+		out.append({"kind": "edge_chips", "skill": skill, "n": n, "seed": rng_seed})
+	return out
+
+
+## One of jobs()' results: mean_over_par, putts or chips.
+func run_job(job: Dictionary) -> Dictionary:
+	var n := int(job.n)
+	var s := int(job.seed)
+	var skill := int(job.skill)
+	match String(job.kind):
+		"edge_hole":
+			var course := spike_hole(String(job.hole))
+			return mean_over_par(course, course.holes[0], skill, n, s)
+		"edge_putts":
+			return putts(green(String(job.green)), skill, n, s)
+		"edge_chips":
+			return chips(skill, n, s)
+	push_error("no edges job %s" % job.kind)
+	return {}
+
+
+## The rows of jobs(`runs`, `rng_seed`)' `results`, in that order.
+func rows_from(runs: int, rng_seed: int, results: Array[Dictionary]) -> Array[Dictionary]:
 	var n := maxi(runs, 1)
 	var rows: Array[Dictionary] = []
-	var holes := spike_holes()
+	var k := 0
 	var sum := 0.0
 	var parts_10 := PackedStringArray()
-	for hole_name: String in holes:
-		var course: CourseData = holes[hole_name]
-		var m := mean_over_par(course, course.holes[0], 10, n, rng_seed)
-		sum += m.over
+	for hole_name: String in SPIKE_HOLES:
+		var m := results[k]
+		var worst := results[k + 1]
+		k += 2
+		sum += float(m.over)
 		parts_10.append("%s %+.2f" % [hole_name, m.over])
 		rows.append(_row("skill 10 on %s: strokes over par (mean)" % hole_name, m.over,
-				Vector2(-INF, INF), "%d guests, par %d; skill 1 %+.2f" % [n, course.holes[0].par,
-					mean_over_par(course, course.holes[0], 1, n, rng_seed).over]))
+				Vector2(-INF, INF), "%d guests, par %d; skill 1 %+.2f" % [n, SPIKE_PARS[hole_name],
+					worst.over]))
 	rows.append(_row("skill 10 on the spike holes: strokes over par (mean of the holes)",
-			sum / holes.size(), Vector2(-SKILL_10_WITHIN, SKILL_10_WITHIN),
+			sum / SPIKE_HOLES.size(), Vector2(-SKILL_10_WITHIN, SKILL_10_WITHIN),
 			"full_sigma_best %.3f; %s" % [tuning.full_sigma_best, ", ".join(parts_10)]))
-	var greens := {"sloped green": ShortGameHoles.sloped_green(),
-			"tier green": ShortGameHoles.tier_green(), "flat green": ShortGameHoles.flat_green()}
-	for green_name: String in greens:
+	for green_name: String in GREENS:
 		var parts := PackedStringArray()
 		var noise_free := 0.0
 		var skill_10 := 0.0
 		for skill: int in [NOISE_FREE] + SKILLS:
-			var p := putts(greens[green_name], skill, n, rng_seed)
+			var p := results[k]
+			k += 1
 			parts.append("%s: 1 putt %.2f, 2 %.2f, 3+ %.2f, mean %.2f, inside %d yd holed %.2f of %d" % [
 					_skill_name(skill), p.one, p.two, p.three, p.mean, SHORT_PUTT_YD, p.short_holed, p.short])
 			if skill == NOISE_FREE:
@@ -89,7 +138,8 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var chip_parts := PackedStringArray()
 	var chip_10 := 0.0
 	for skill: int in SKILLS:
-		var c := chips(skill, n, rng_seed)
+		var c := results[k]
+		k += 1
 		chip_parts.append("%s: %s" % [_skill_name(skill), c.note])
 		if skill == 10:
 			chip_10 = c.mean
@@ -101,14 +151,39 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 
 ## E3-S1's spike holes (D40), each a course of one open hole.
 static func spike_holes() -> Dictionary:
-	return {
-		"example_par3": CourseSave.load_file("res://courses/example_par3.json"),
-		"flat par 4": CourseGenerator.generate(4, false, false),
-		"hilly par 4": CourseGenerator.generate(4, true, false),
-		"hilly par 4 water": CourseGenerator.generate(4, true, true),
-		"hilly par 5": CourseGenerator.generate(5, true, false),
-		"flat par 5 water": CourseGenerator.generate(5, false, true),
-	}
+	var out := {}
+	for hole_name: String in SPIKE_HOLES:
+		out[hole_name] = spike_hole(hole_name)
+	return out
+
+
+## The spike hole of that name, a course of one open hole.
+static func spike_hole(hole_name: String) -> CourseData:
+	match hole_name:
+		"example_par3":
+			return CourseSave.load_file("res://courses/example_par3.json")
+		"flat par 4":
+			return CourseGenerator.generate(4, false, false)
+		"hilly par 4":
+			return CourseGenerator.generate(4, true, false)
+		"hilly par 4 water":
+			return CourseGenerator.generate(4, true, true)
+		"hilly par 5":
+			return CourseGenerator.generate(5, true, false)
+		"flat par 5 water":
+			return CourseGenerator.generate(5, false, true)
+	push_error("no spike hole %s" % hole_name)
+	return null
+
+
+## The short-game green of that name (GREENS).
+static func green(green_name: String) -> CourseData:
+	match green_name:
+		"sloped green":
+			return ShortGameHoles.sloped_green()
+		"tier green":
+			return ShortGameHoles.tier_green()
+	return ShortGameHoles.flat_green()
 
 
 ## `n` guests of `skill` play `hole` alone: {over: mean strokes over par, mean}.

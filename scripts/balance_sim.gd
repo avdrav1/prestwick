@@ -519,9 +519,12 @@ static func parcel_tally(c: CourseData, parcel: Vector2i) -> Dictionary:
 
 # --- reactions (E3-S8) ---
 
-## /balance reactions: ReactionField.measure (scripts/reaction_field.gd), with this sim's bag.
-func measure_reactions(runs: int, rng_seed: int, nine_days: int = ReactionField.NINE_DAYS) -> Array[Dictionary]:
-	return ReactionField.new(model).measure(runs, rng_seed, nine_days)
+## /balance reactions: ReactionField.measure (scripts/reaction_field.gd), with this sim's bag;
+## E3-S48: its jobs `workers` at a time, each in its own Godot (1: all here).
+func measure_reactions(runs: int, rng_seed: int, nine_days: int = ReactionField.NINE_DAYS,
+		workers: int = 1) -> Array[Dictionary]:
+	return ReactionField.new(model).measure(runs, rng_seed, nine_days, true,
+			ReactionField.PACE_FIELD, ReactionField.PACE_DAYS, workers)
 
 
 # --- putting (E3-S51) ---
