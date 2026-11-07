@@ -19,7 +19,8 @@ const BLIND_PRAISE_SHARE: float = 0.5
 const FAIR_TO_BLIND_COMPLAINTS: float = 0.15
 ## E3-S22: pace fails on the first tee (the nine-hole fixture's hole 1), its first par 5
 ## (PACE_PAR5_HOLE) and the dogleg each within PACE_SPREAD of the fair par 4's. Its other par 5
-## (hole 8) is a recorded row, no target (E3-S22 review): it fails pace on waits at its own tee.
+## (hole 8) was a recorded row (E3-S22 review: it failed pace on waits at its own tee); since
+## E3-S37 (`next_tee_queue_max`) it has the same target.
 ## Read on PACE_FIELD hole records of the fair par 4 and the dogleg and PACE_DAYS nine-hole
 ## days (days 1 to 10, as D46 measured them), whatever `--runs` is: a field of 50 is three
 ## mornings, too few for a share of waits a few seconds long (E3-S22).
@@ -116,9 +117,8 @@ func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool =
 			float(pace_by_hole.get(PACE_PAR5_HOLE, 0.0)) - base, spread,
 			"%.2f against %.2f; %s" % [float(pace_by_hole.get(PACE_PAR5_HOLE, 0.0)), base,
 				pace_nine.note.get_slice("; ", pace_nine.note.get_slice_count("; ") - 1)]))
-	# E3-S22 review: recorded, no target. The target's par 5 is hole 3 (the E3 review's "33%
-	# on the par 5"); the fixture's other par 5 and every nine-hole hole past the spread print
-	# here with where their waits were, so the target does not read as covering them.
+	# E3-S22 review: the fixture's other par 5 (hole 8), recorded until E3-S37 gave it the
+	# spread too; every nine-hole hole past the spread prints here with where its waits were.
 	var worst_par5 := -1
 	var over := PackedStringArray()
 	for num: int in pace_by_hole:
@@ -132,8 +132,8 @@ func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool =
 					float(pace_nine.tee_wait_by_hole.get(num, 0.0)),
 					float(pace_nine.cross_wait_by_hole.get(num, 0.0))])
 	if worst_par5 >= 0:
-		rows.append(_row("pace fails: other par 5 (nine holes, hole %d) less the fair par 4's, recorded" % worst_par5,
-				float(pace_by_hole[worst_par5]) - base, Vector2(-INF, INF),
+		rows.append(_row("pace fails: other par 5 (nine holes, hole %d) less the fair par 4's" % worst_par5,
+				float(pace_by_hole[worst_par5]) - base, spread,
 				"%.2f against %.2f; past the %d-point spread: %s" % [
 					float(pace_by_hole[worst_par5]), base, roundi(PACE_SPREAD * 100.0),
 					"none" if over.is_empty() else "; ".join(over)]))

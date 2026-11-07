@@ -526,8 +526,11 @@ func ball_shown_s(guest: Guest) -> float:
 ## `tee_clear_yd` (every ball of the group ahead 250 yd out) into play_clear: each tee shot
 ## then waits on the tee, like any stroke, until nobody is in its way (hold_for), so on a
 ## par 3 the group behind tees off once the group ahead has left the green, and on a longer
-## hole once its guests and balls are out of the drive's landing area.
+## hole once its guests and balls are out of the drive's landing area. E3-S37: and only while
+## the next hole's tee is not backed up (next_tee_free).
 func tee_clear(g: GuestGroup, _h: HoleData) -> bool:
+	if not next_tee_free(g):
+		return false
 	var q: Array = _queues[g.hole_number]
 	var i := q.find(g)
 	if i <= 0:
@@ -544,6 +547,27 @@ func tee_clear(g: GuestGroup, _h: HoleData) -> bool:
 				or guest.hole.strokes.is_empty():
 			return false
 	return true
+
+
+## E3-S37: true when fewer than `next_tee_queue_max` groups (0: no limit) are heading for, or
+## standing at, the tee of the open hole after group `g`'s (none: always true). A group held
+## here waits on its own tee, counted against pace on its hole like any wait for the group
+## ahead. On the nine-hole fixture groups reach hole 8 (a par 5, the round's slowest) bunched
+## after hole 7 (a par 3, its quickest) and queued on its tee 11 to 12 s a record; spacing
+## them at hole 7's tee splits that wait between the two holes. A group at the next tee always
+## moves on, since its own hole's queue does not wait on this one, so no two groups wait on
+## each other.
+func next_tee_free(g: GuestGroup) -> bool:
+	if tuning.next_tee_queue_max <= 0:
+		return true
+	var m := next_open_hole(g.hole_number)
+	if m == 0 or not _queues.has(m):
+		return true
+	var heading := 0
+	for o: GuestGroup in _queues[m]:
+		if o.phase == GuestGroup.Phase.TO_TEE:
+			heading += 1
+	return heading < tuning.next_tee_queue_max
 
 
 ## True when `guest` of group `g`, ready to strike, may play: nobody is in the stroke's way

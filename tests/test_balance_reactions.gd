@@ -85,10 +85,12 @@ func test_reaction_rows_print_next_to_their_targets() -> void:
 		assert_false(r.is_empty(), "a row for %s" % prefix)
 		assert_eq(r.target, Vector2(-ReactionField.PACE_SPREAD, ReactionField.PACE_SPREAD),
 				"%s: within 10 points of the fair par 4" % prefix)
-	# E3-S22 review: the fixture's other par 5 is recorded beside the target, not under it.
+	# E3-S22 review: the fixture's other par 5 (hole 8) was recorded; E3-S37 gives it the
+	# same 10 points (next_tee_queue_max spaces the groups bunched after par 3 hole 7).
 	var other := _named(rows, "pace fails: other par 5")
-	assert_false(other.is_empty(), "a recorded row for the other par 5")
-	assert_eq(other.target, Vector2(-INF, INF), "the other par 5 is recorded, no target")
+	assert_false(other.is_empty(), "a row for the other par 5")
+	assert_eq(other.target, Vector2(-ReactionField.PACE_SPREAD, ReactionField.PACE_SPREAD),
+			"the other par 5: within 10 points of the fair par 4")
 	var praise := _named(rows, "fair par 4: praise")
 	assert_eq(praise.target, ReactionField.FAIR_PRAISE, "praise is read against 60 to 75%")
 	var blind := _named(rows, "blind par 4: praise")

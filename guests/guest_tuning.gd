@@ -35,6 +35,11 @@ var play_clear_share: float = 0.0
 ## other for ever.
 var cross_clear_yd: float = 0.0
 var cross_hold_max_s: int = 0
+## E3-S37: a group steps onto a tee only while fewer than this many groups are heading for,
+## or standing at, the next open hole's tee (GuestBrain.next_tee_free); 0 turns it off. So
+## groups that bunch after a quick hole (a par 3 before a par 5) wait a little on its tee, not
+## a long while on the slow hole's, and the wait is shared between the two.
+var next_tee_queue_max: int = 0
 ## E3-S8: ready golf. True: the guest away among those standing at their balls plays, so a
 ## partner still walking to a ball farther out does not hold the group up.
 var ready_golf: bool = false
@@ -146,6 +151,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.play_clear_share = _float(d, "play_clear_share", errors)
 	t.cross_clear_yd = _float(d, "cross_clear_yd", errors)
 	t.cross_hold_max_s = CourseData.read_int(d, "cross_hold_max_s", errors)
+	t.next_tee_queue_max = CourseData.read_int(d, "next_tee_queue_max", errors)
 	var ready: Variant = d.get("ready_golf")
 	if typeof(ready) == TYPE_BOOL:
 		t.ready_golf = ready
@@ -287,6 +293,7 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "play_clear_share", t.play_clear_share, 0.0)
 	_at_least(errors, "cross_clear_yd", t.cross_clear_yd, 0.0)
 	_at_least(errors, "cross_hold_max_s", t.cross_hold_max_s, 1)
+	_at_least(errors, "next_tee_queue_max", t.next_tee_queue_max, 0, " (0 turns it off)")
 	_at_least(errors, "cart_path_max_detour", t.cart_path_max_detour, 1.0, " (the straight line)")
 	_at_least(errors, "max_steps_per_frame", t.max_steps_per_frame, 1)
 	_at_least(errors, "frame_ticks_max", t.frame_ticks_max, 1)

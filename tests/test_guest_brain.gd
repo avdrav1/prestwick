@@ -269,6 +269,59 @@ func test_the_next_group_tees_off_once_the_group_ahead_is_out_of_reach() -> void
 	assert_eq(brain.teed_off.get(1, 0), 2, "both groups teed off hole 1")
 
 
+## E3-S37: a group steps onto a tee only while fewer than `next_tee_queue_max` groups are
+## heading for, or standing at, the next open hole's tee (GuestBrain.next_tee_free), so groups
+## bunched after a quick hole wait on its tee rather than on the slow hole's. Checked on every
+## step of a few days on the three par 3s: no group goes from heading for its tee to on the hole
+## while the next tee holds that many. With the rule off (0) it happens, so the check bites.
+func test_a_group_waits_on_its_tee_while_the_next_tee_is_backed_up() -> void:
+	assert_eq(tuning.next_tee_queue_max, 1, "data/guests.json spaces groups one at the next tee")
+	var on := _next_tee_crowding(tuning)
+	assert_gt(int(on.teed), 20, "groups teed off")
+	assert_eq(int(on.crowded), 0, "none while a group was heading for the next tee")
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GuestTuning.PATH))
+	d["next_tee_queue_max"] = 0
+	var errors: Array[String] = []
+	var off := _next_tee_crowding(GuestTuning.from_dict(d, errors))
+	assert_eq(errors, [] as Array[String])
+	assert_gt(int(off.crowded), 0, "with the rule off, groups tee off into a backed-up next tee")
+
+
+## {teed, crowded}: over day seeds 1 to 3 on GuestCourse with `t`, the tee-offs (a group from
+## TO_TEE to ON_HOLE in a step), and those made while `t.next_tee_queue_max` (at least 1) or
+## more groups were heading for the next hole's tee. Groups update in index order, so a group
+## ahead of the one teeing off is read after the step and one behind it before.
+func _next_tee_crowding(t: GuestTuning) -> Dictionary:
+	var teed := 0
+	var crowded := 0
+	var limit := maxi(t.next_tee_queue_max, 1)
+	for day_seed: int in [1, 2, 3]:
+		var brain := GuestBrain.new(GuestCourse.course(), day_seed, t, model)
+		while not brain.day_over:
+			brain.serve(-1)
+			var before := {}
+			for g: GuestGroup in brain.groups:
+				before[g.index] = [g.phase, g.hole_number]
+			brain.step()
+			for g: GuestGroup in brain.groups:
+				if int(before[g.index][0]) != GuestGroup.Phase.TO_TEE \
+						or g.phase != GuestGroup.Phase.ON_HOLE or g.hole_number != int(before[g.index][1]):
+					continue
+				teed += 1
+				var m := brain.next_open_hole(g.hole_number)
+				if m == 0:
+					continue
+				var heading := 0
+				for o: GuestGroup in brain.groups:
+					var phase: int = o.phase if o.index < g.index else int(before[o.index][0])
+					var hole: int = o.hole_number if o.index < g.index else int(before[o.index][1])
+					if hole == m and phase == GuestGroup.Phase.TO_TEE:
+						heading += 1
+				if heading >= limit:
+					crowded += 1
+	return {"teed": teed, "crowded": crowded}
+
+
 ## E3-S8: ready golf. The guest away among those standing at their balls plays, so a partner
 ## still walking out to a ball farther from the cup does not hold the group up; nobody plays
 ## while a ball of the group is moving or a stroke is under way.
