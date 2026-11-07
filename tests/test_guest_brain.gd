@@ -481,8 +481,9 @@ func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> 
 	var held_on_hole_1 := 0
 	var cross_wait := 0
 	# E3-S20: day 18 too, since the drawn-flight walks moved days 1 and 2's groups so no
-	# hole 1 tee shot met a group out on hole 2.
-	for day_seed: int in [1, 2, 18]:
+	# hole 1 tee shot met a group out on hole 2; E3-S54 (`cross_clear_yd` 15) day 27 for 18,
+	# one of the days 1 to 40 (23, 27, 37, 38) on which a hole 1 guest is held.
+	for day_seed: int in [1, 2, 27]:
 		var brain := GuestBrain.new(c, day_seed, tuning, model)
 		while not brain.day_over:
 			brain.serve(-1)
