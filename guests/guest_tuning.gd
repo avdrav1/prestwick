@@ -85,6 +85,11 @@ var sim_ticks_per_s: int = 0
 ## (the frame's share of its second's need is smaller; a step whose second's work is not yet
 ## served waits for later frames: the day runs late, never differently).
 var frame_ticks_max: int = 0
+## E3-S35: the Ball ticks advance_real serves per real second, spread by the frame's length: a
+## frame of `delta` seconds serves at most `frame_ticks_per_real_s` x `delta` (200 at 60 fps,
+## 400 at 30), never more than `frame_ticks_max`. So the day's real time no longer depends on
+## the frame rate: at 30 fps a frame has twice a 60 fps frame's budget, as it has twice its time.
+var frame_ticks_per_real_s: int = 0
 ## E3-S14: the guest work one 3x frame at 60 fps may take, ms: a target that
 ## scripts/nine_holes_perf.gd measures against. The sim never reads a clock.
 var frame_guest_ms_max: float = 0.0
@@ -189,6 +194,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.guest_ticks_per_s = CourseData.read_int(d, "guest_ticks_per_s", errors)
 	t.sim_ticks_per_s = CourseData.read_int(d, "sim_ticks_per_s", errors)
 	t.frame_ticks_max = CourseData.read_int(d, "frame_ticks_max", errors)
+	t.frame_ticks_per_real_s = CourseData.read_int(d, "frame_ticks_per_real_s", errors)
 	t.frame_guest_ms_max = _float(d, "frame_guest_ms_max", errors)
 	t.guest_putt_max_runs = CourseData.read_int(d, "guest_putt_max_runs", errors)
 	t.putt_tick_weight = _float(d, "putt_tick_weight", errors)
@@ -304,6 +310,7 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "cart_path_max_detour", t.cart_path_max_detour, 1.0, " (the straight line)")
 	_at_least(errors, "max_steps_per_frame", t.max_steps_per_frame, 1)
 	_at_least(errors, "frame_ticks_max", t.frame_ticks_max, 1)
+	_at_least(errors, "frame_ticks_per_real_s", t.frame_ticks_per_real_s, 1)
 	_positive(errors, "frame_guest_ms_max", t.frame_guest_ms_max)
 	_at_least(errors, "putt_tick_weight", t.putt_tick_weight, 1.0, " (a putt tick costs no less than another)")
 	if t.praise_passes < 1 or t.praise_passes > 4:

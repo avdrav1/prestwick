@@ -17,7 +17,8 @@ extends RefCounted
 ## its need (E3-S14): the share of the second gone by, times the most the second can spend
 ## (`guest_ticks_per_s` for each guest with work when it began, at most the sim's cap; work
 ## only starts in a step, so no second spends more), and never more than `frame_ticks_max` in
-## one frame (a putt solve's tick counting `putt_tick_weight` there, E3-S34). A step that is due waits, frame by frame, until its second's work is served
+## one frame (a putt solve's tick counting `putt_tick_weight` there, E3-S34), nor more than
+## `frame_ticks_per_real_s` times the frame's length (E3-S35: the day keeps time at 30 fps). A step that is due waits, frame by frame, until its second's work is served
 ## (`held_frames`), and `step` itself first finishes whatever that second still owes, so a day
 ## plays the same however it is sliced into frames: the same seed gives the same day. No clock
 ## is read and every random number comes from the day's seed. A long frame (a hitch) runs at
@@ -139,14 +140,18 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 ## Real time passing in Play: `delta` real seconds at `speed` (0 paused, 1, 3). Runs a step
 ## for every whole simulated second gone by, at most `max_steps_per_frame` (a hitch's extra
 ## time is let go), and spends the current second's Ball work in proportion to its need, all
-## inside `frame_ticks_max` (E3-S14). A due step whose second's work is not yet served waits
+## inside the frame's budget: `frame_ticks_per_real_s` x `delta`, at most `frame_ticks_max`
+## (E3-S14, E3-S35). A due step whose second's work is not yet served waits
 ## for later frames. Returns the steps it ran.
 func advance_real(delta: float, speed: float) -> int:
 	frame_ticks = 0
 	if day_over or speed <= 0.0 or delta <= 0.0:
 		return 0
 	_clock = minf(_clock + delta * speed, float(tuning.max_steps_per_frame))
-	var left := tuning.frame_ticks_max
+	# E3-S35: the frame's budget goes with its length (frame_ticks_per_real_s), so a day takes
+	# the same real time at 30 fps as at 60.
+	var budget := mini(ceili(tuning.frame_ticks_per_real_s * delta - 1e-6), tuning.frame_ticks_max)
+	var left := budget
 	var stepped := 0
 	while _clock >= 1.0 - CLOCK_EPS and not day_over:
 		left -= serve(left)
@@ -160,7 +165,7 @@ func advance_real(delta: float, speed: float) -> int:
 		var due := ceili(minf(_clock, 1.0) * _need)
 		if due > _sim_used:
 			left -= serve(left, due - _sim_used)
-	frame_ticks = tuning.frame_ticks_max - left
+	frame_ticks = budget - left
 	max_frame_ticks = maxi(max_frame_ticks, frame_ticks)
 	return stepped
 

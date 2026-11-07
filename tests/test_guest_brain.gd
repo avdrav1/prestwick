@@ -949,6 +949,26 @@ func test_a_walled_day_in_frames_judges_as_the_day_stepped_directly_one_flood_a_
 	assert_eq(int(framed[2]), 1, "at most one labelling a frame")
 
 
+## E3-S35: a frame's Ball tick budget goes with its length (`frame_ticks_per_real_s`), so a
+## busy 3x morning on the nine-hole fixture takes the same real time in 30 fps frames as in
+## 60 fps frames, within 2%, and both stay within 2% of on time. A fixed 200 a frame (E3-S14's
+## budget, whatever the frame rate) ran the 30 fps day several percent late.
+func test_a_3x_day_in_30_fps_frames_keeps_the_time_of_60_fps_frames() -> void:
+	var course: CourseData = NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(course))
+	var short := _tuning({"day_s": 180})
+	var on_time := (short.day_s + 1.0) / 3.0
+	var at_60 := _real_s_of_day(course, short, 1.0 / 60.0)
+	var at_30 := _real_s_of_day(course, short, 1.0 / 30.0)
+	assert_almost_eq(at_30 / at_60, 1.0, 0.02, "30 fps (%.2f s) against 60 fps (%.2f s)" % [at_30, at_60])
+	assert_almost_eq(at_60 / on_time, 1.0, 0.02, "60 fps on time (%.2f s of %.2f)" % [at_60, on_time])
+	var fixed := _tuning({"day_s": 180, "frame_ticks_max": 200, "frame_ticks_per_real_s": 1000000})
+	var fixed_30 := _real_s_of_day(course, fixed, 1.0 / 30.0)
+	assert_gt(fixed_30 / on_time, 1.02, "a fixed 200 a frame at 30 fps ran late (%.2f s)" % fixed_30)
+	gut.p("E3-S35 3x day to 180 s: on time %.2f s; 60 fps %.2f, 30 fps %.2f; a fixed 200 a frame at 30 fps %.2f" % [
+			on_time, at_60, at_30, fixed_30])
+
+
 func test_ball_work_is_paced_by_need_not_spent_up_to_the_cap_at_once() -> void:
 	# A lone guest needs at most guest_ticks_per_s a second: at 3x and 60 fps a frame spends
 	# about a twentieth of that, not 240 (a twentieth of the sim's cap) until it runs out.
@@ -1142,6 +1162,16 @@ func _day_log(day_seed: int, speed: float, frame: float = 1.0 / 60.0, t: GuestTu
 			continue
 		out.append("%d %s" % [brain.second, _snapshot(brain)])
 	return out
+
+
+## E3-S35: the real seconds day 1 on `course` takes at 3x in frames of `frame` seconds.
+func _real_s_of_day(course: CourseData, t: GuestTuning, frame: float) -> float:
+	var brain := GuestBrain.new(course, 1, t, model)
+	var frames := 0
+	while not brain.day_over:
+		brain.advance_real(frame, 3.0)
+		frames += 1
+	return frames * frame
 
 
 ## E3-S34: the walled nine's day 1 (`speed` below 0 steps directly, else 1/60 s frames at that

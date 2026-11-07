@@ -227,10 +227,14 @@ func _time_guest_frames() -> int:
 			if fps == 60.0:
 				over_60 += over
 			var on_time: int = ceili((_guest_tuning.day_s + 1.0) * fps / 3.0)
-			print("guest day %d at 3x, %d fps: guest work a frame %s; ticks a frame median %d, p95 %d, worst %d (frame_ticks_max %d); %d frames over %.1f ms; %d frames, %d on time (%d a step waited, %.1f%% late)" % [
+			# E3-S35: a frame's tick budget goes with its length (frame_ticks_per_real_s).
+			var frame_budget := mini(ceili(_guest_tuning.frame_ticks_per_real_s / fps - 1e-6),
+					_guest_tuning.frame_ticks_max)
+			var scaled := ms.filter(func(v: float) -> bool: return v > budget * 60.0 / fps).size()
+			print("guest day %d at 3x, %d fps: guest work a frame %s; ticks a frame median %d, p95 %d, worst %d (the frame's budget %d); %d frames over %.1f ms (%d over %.1f ms, the same share of the frame); %d frames, %d on time (%d a step waited, %.1f%% late)" % [
 				day, fps, _stats(ms), _q(ticks, 0.5), _q(ticks, 0.95), _q(ticks, 1.0),
-				_guest_tuning.frame_ticks_max, over, budget, ms.size(), on_time, brain.held_frames,
-				100.0 * (ms.size() - on_time) / on_time])
+				frame_budget, over, budget, scaled, budget * 60.0 / fps, ms.size(), on_time,
+				brain.held_frames, 100.0 * (ms.size() - on_time) / on_time])
 	return over_60
 
 
