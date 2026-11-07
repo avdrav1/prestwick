@@ -41,6 +41,17 @@ extends SceneTree
 ## GuestBrain, as in the other Build phases). The run fails (exit 1) when a 3x frame's guest
 ## work at 60 fps passes `frame_guest_ms_max`.
 ##
+## E3-S33: `fixture=hazards` plays tests/fixtures/nine_holes_hazards.gd (the same nine holes with
+## a bunker on each line and hole 1's crest cut, as scripts/guest_day.gd takes it) and
+## `fixture=doglegs` tests/fixtures/playtest_nine.gd (PlaytestNine: four doglegs measured round
+## their bend, D47, with water, bunkers and trees), in place of the bare nine. Each prints every
+## hole's statics (HoleChecks.measure: sight line, hazard on the line, safe route) and its cost,
+## and with a display the hole panel's refresh (HolePanel.refresh) in Build, shown, and in Play,
+## hidden. The fixtures other than the bare nine skip the off-line drag (its row crosses their
+## holes) and click-edit tiles off every footprint of theirs.
+##
+##   godot [--headless] --path . -s res://scripts/nine_holes_perf.gd [-- fixture=hazards|doglegs]
+##
 ## E3-S15: in either mode, before the rest, the guests' two searches under load with no scene
 ## (_time_searches): the cart path search on a dense painted lattice and Interesting's safe
 ## route on a map whose trees walls make it flood, each with whole guest days running at 3x.
@@ -51,6 +62,7 @@ extends SceneTree
 ## measured holes floods once, not once a hole (5 to 7 ms each before).
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
 const RUNS: int = 40
 ## Simulated seconds the guest day is stepped before the first frame (arrivals run to 90 s).
@@ -87,6 +99,11 @@ var _samples: Array[float] = []
 var _edit_samples: Array[float] = []
 var _edits: int = 0
 var _course: CourseData
+## E3-S33: the fixture played ("nine", "hazards" or "doglegs"), its holes as [number, par, tee,
+## cup] in number order, and the tiles its click edits paint (off every footprint).
+var _fixture: String = "nine"
+var _holes: Array = []
+var _edit_tiles: Array[Vector2i] = []
 var _brain: GuestBrain
 var _day: int = 1
 var _model: ShotModel
@@ -113,10 +130,32 @@ var _guest_stepped: Array[bool] = []
 
 
 func _initialize() -> void:
-	_course = NineHoles.land(7)
-	var b := CourseBuilder.new(_course)
-	var opened: Array[int] = NineHoles.build(b)
-	print("nine holes: %d open %s, issues %s" % [opened.size(), opened, _failing(b)])
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("fixture="):
+			_fixture = arg.substr(8)
+	var b: CourseBuilder
+	var opened: Array[int] = []
+	match _fixture:
+		"hazards":
+			_course = NineHolesHazards.land(7)
+			b = CourseBuilder.new(_course)
+			opened = NineHolesHazards.build(b)
+		"doglegs":
+			_course = PlaytestNine.land()
+			b = CourseBuilder.new(_course)
+			opened = PlaytestNine.build(b)
+		_:
+			_fixture = "nine"
+			_course = NineHoles.land(7)
+			b = CourseBuilder.new(_course)
+			opened = NineHoles.build(b)
+	for h: HoleData in _course.holes:
+		_holes.append([h.number, h.par, h.tee, h.cup])
+	_holes.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+	_edit_tiles = EDIT_TILES if _fixture != "doglegs" else _free_tiles(b, EDIT_TILES.size())
+	print("nine holes (fixture %s): %d open %s, issues %s; click edits paint %s" % [
+		_fixture, opened.size(), opened, _failing(b), _edit_tiles])
+	_time_statics_per_hole(b)
 	_time_validator(b)
 	_time_break_drag(b)
 	_model = ShotModel.new()
@@ -141,6 +180,46 @@ func _initialize() -> void:
 		_brain.step()
 
 
+## E3-S33: `n` owned tiles off every hole's footprint, far apart, for click edits that leave
+## every hole open on a fixture whose holes EDIT_TILES might touch.
+func _free_tiles(b: CourseBuilder, n: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var c := b.course
+	for k: int in 64:
+		var cell := Vector2i((37 * k + 11) % c.width, (53 * k + 29) % c.height)
+		if not c.is_owned(cell.x, cell.y) or c.get_surface(cell.x, cell.y) == Surface.Type.WATER:
+			continue
+		var clear := true
+		for h: HoleData in c.holes:
+			clear = clear and not b.validator.in_footprint(c, h, cell)
+		if clear:
+			out.append(cell)
+			if out.size() == n:
+				break
+	return out
+
+
+## E3-S33: every hole's statics measured afresh (HoleChecks.measure, its hazard grid read with
+## it), RUNS / 4 times each: what it found and its median cost.
+func _time_statics_per_hole(b: CourseBuilder) -> void:
+	var checks := HoleChecks.new(GuestTuning.load_default())
+	var total: Array[float] = []
+	for spec: Array in _holes:
+		var h: HoleData = b.hole(spec[0])
+		var runs: Array[float] = []
+		var st: HoleChecks.Statics
+		for i: int in RUNS / 4:
+			var t0 := Time.get_ticks_usec()
+			st = checks.measure(_course, h)
+			runs.append((Time.get_ticks_usec() - t0) / 1000.0)
+		runs.sort()
+		total.append(runs[runs.size() / 2])
+		print("  statics hole %d (par %d, %d yd): %.2f ms median, worst %.2f; blind %s, hazard on the line %s, safe route %s" % [
+			h.number, h.par, b.validator.hole_yardage(_course, h), runs[runs.size() / 2], runs[-1],
+			st.blind, st.hazard_on_line, st.safe_route])
+	print("statics per hole (fixture %s): %s" % [_fixture, _stats(total)])
+
+
 func _failing(b: CourseBuilder) -> Dictionary:
 	var out := {}
 	for n: int in b.issues:
@@ -156,7 +235,7 @@ func _time_validator(b: CourseBuilder) -> void:
 		var t0 := Time.get_ticks_usec()
 		b.validator.check_course(_course)
 		check.append((Time.get_ticks_usec() - t0) / 1000.0)
-		var cell: Vector2i = EDIT_TILES[i % EDIT_TILES.size()]
+		var cell: Vector2i = _edit_tiles[i % _edit_tiles.size()]
 		var s: Surface.Type = Surface.Type.FAIRWAY if i % 2 == 0 else Surface.Type.ROUGH
 		t0 = Time.get_ticks_usec()
 		b.paint(cell, s, 1)
@@ -178,10 +257,10 @@ func _time_break_drag(b: CourseBuilder) -> void:
 	for i: int in RUNS:
 		var t0 := Time.get_ticks_usec()
 		b.begin_stroke()
-		var from: Vector2i = NineHoles.HOLES[0][3]
+		var from: Vector2i = _holes[0][3]
 		b.paint(from, Surface.Type.ROUGH, 1)
-		for k: int in range(1, NineHoles.HOLES.size()):
-			var to: Vector2i = NineHoles.HOLES[k][3]
+		for k: int in range(1, _holes.size()):
+			var to: Vector2i = _holes[k][3]
 			for cell: Vector2i in BuildTool.grid_line(from, to):
 				if cell != from:
 					b.paint(cell, Surface.Type.ROUGH, 1)
@@ -452,15 +531,15 @@ func _q(a: Array[float], q: float) -> int:
 ## The tiles the breaking drag paints: the grid lines from cup to cup, in hole order.
 func _break_cells() -> Dictionary:
 	var out := {}
-	for k: int in range(1, NineHoles.HOLES.size()):
-		for cell: Vector2i in BuildTool.grid_line(NineHoles.HOLES[k - 1][3], NineHoles.HOLES[k][3]):
+	for k: int in range(1, _holes.size()):
+		for cell: Vector2i in BuildTool.grid_line(_holes[k - 1][3], _holes[k][3]):
 			out[cell] = true
 	return out
 
 
 ## Point k (0 to 8) of the off-line drag: along OFF_LINE_ROW from OFF_LINE_X0 to OFF_LINE_X1.
 func _off_line_cell(k: int) -> Vector2i:
-	var steps: int = NineHoles.HOLES.size() - 1
+	var steps: int = _holes.size() - 1
 	return Vector2i(OFF_LINE_X0 + (OFF_LINE_X1 - OFF_LINE_X0) * k / steps, OFF_LINE_ROW)
 
 
@@ -482,7 +561,7 @@ func _tile_point(cell: Vector2i) -> Vector2:
 ## A screen point the tile picker resolves to hole k's cup (a cup half behind higher ground
 ## in front, as hole 7's is, is picked near the back of its top).
 func _cup_point(k: int) -> Vector2:
-	var cell: Vector2i = NineHoles.HOLES[k][3]
+	var cell: Vector2i = _holes[k][3]
 	var top: Vector2 = Iso.tile_to_screen(Vector2(cell), _course.get_height(cell.x, cell.y))
 	for dy: float in [0.5, -4.0, -8.0, -12.0, -14.0]:
 		if TilePicker.pick(_course, top + Vector2(0.5, dy)) == cell:
@@ -538,6 +617,7 @@ func _process(_delta: float) -> bool:
 			if _frames == 1:
 				_main.camera.set_zoom_level(1.0)
 			if _frames >= WARMUP_FRAMES:
+				_time_hole_panel("Build, shown")
 				_next_phase()
 		1, 2, 3:  # idle in Build at 1x, then 0.5x, then the farthest zoom (D45) on the map's centre
 			if _frames > 2:
@@ -576,7 +656,7 @@ func _process(_delta: float) -> bool:
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)
 			if _frames % 10 == 0:
-				var cell: Vector2i = EDIT_TILES[_edits % EDIT_TILES.size()]
+				var cell: Vector2i = _edit_tiles[_edits % _edit_tiles.size()]
 				_main.build_tool.select_surface(Surface.Type.FAIRWAY if _edits % 2 == 0 else Surface.Type.ROUGH)
 				var at: Vector2 = Iso.tile_to_screen(Vector2(cell), _course.get_height(cell.x, cell.y)) + Vector2(0.5, 0.5)
 				var t0 := Time.get_ticks_usec()
@@ -599,7 +679,7 @@ func _process(_delta: float) -> bool:
 			# the release and the undo; a fresh guest day stepped to GUEST_REFRESH_S after the
 			# undo (14, untimed), so guests are out at every release
 			var f: int = _frames % DRAG_CYCLE
-			var n: int = NineHoles.HOLES.size()
+			var n: int = _holes.size()
 			if _frames > DRAG_CYCLE:
 				if f == n + 1:
 					_edit_samples.append(frame_ms)
@@ -661,7 +741,7 @@ func _process(_delta: float) -> bool:
 			# guest day is stepped to GUEST_REFRESH_S in the phase's first frame (untimed), since
 			# phase 7's last release sent every guest home
 			var f: int = _frames % DRAG_CYCLE
-			var n: int = NineHoles.HOLES.size()
+			var n: int = _holes.size()
 			if _frames == 1:
 				_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
 				for i: int in GUEST_REFRESH_S:
@@ -738,7 +818,7 @@ func _process(_delta: float) -> bool:
 			if _frames % 10 == 1 and _frames > 1:
 				_edit_samples.append(frame_ms)
 			if _frames % 10 == 0:
-				var cell: Vector2i = EDIT_TILES[_edits % EDIT_TILES.size()]
+				var cell: Vector2i = _edit_tiles[_edits % _edit_tiles.size()]
 				_main.build_tool.select_surface(Surface.Type.FAIRWAY if _edits % 2 == 0 else Surface.Type.ROUGH)
 				var at: Vector2 = Iso.tile_to_screen(Vector2(cell), _course.get_height(cell.x, cell.y)) + Vector2(0.5, 0.5)
 				var t0 := Time.get_ticks_usec()
@@ -825,8 +905,8 @@ func _on_screen() -> int:
 ## hole 1 stays open for guests, and centres the camera on the map.
 func _fail_all_but_first_hole() -> void:
 	var b: CourseBuilder = _main.build_tool.builder
-	for spec: Array in NineHoles.HOLES:
-		if spec[0] == 1:
+	for spec: Array in _holes:
+		if spec[0] == _holes[0][0]:
 			continue
 		b.paint(spec[3], Surface.Type.ROUGH, 1)
 		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
@@ -858,6 +938,18 @@ func _begin_play_phase() -> void:
 	sim.set_speed(3.0)
 	_main.camera.frame(_main.course_view.screen_bounds())
 	_main.camera.set_zoom_index(0)
+	_time_hole_panel("Play, hidden")
+
+
+## E3-S33: HolePanel.refresh alone, RUNS times (the main scene's builder has every check run).
+func _time_hole_panel(where: String) -> void:
+	var ms: Array[float] = []
+	for i: int in RUNS:
+		var t0 := Time.get_ticks_usec()
+		_main.hole_panel.refresh()
+		ms.append((Time.get_ticks_usec() - t0) / 1000.0)
+	print("hole panel refresh (fixture %s, %s, panel visible %s): %s" % [
+		_fixture, where, _main.hole_panel.is_visible_in_tree(), _stats(ms)])
 
 
 ## The main scene's guest day by one frame of 1/60 s of real time at 3x, its CPU counted.
@@ -876,5 +968,9 @@ func _open_count() -> int:
 
 func _next_phase() -> void:
 	_phase += 1
+	if _phase == 8 and _fixture != "nine" and _fixture != "hazards":
+		print("drag off every line: skipped (fixture %s: row %d crosses its holes)" % [_fixture, OFF_LINE_ROW])
+		_begin_budget_play()
+		_phase += 1
 	_frames = 0
 	_samples.clear()

@@ -153,6 +153,14 @@ var _reach: CourseValidator.Reach = null
 var _reach_dirty: Dictionary = {}
 ## CourseData.revision the graph stands for once _reach_dirty is applied.
 var _reach_revision: int = 0
+## E3-S33: each placed hole's line of play now, by its tee and cup (Vector4i), for
+## _close_footprints. A dogleg's turn (CourseValidator.turn_point) reads only where fairway
+## lies, so the lines stand until a write turns a tile to or from fairway (_set_tile drops
+## them) or the course is written by someone else (CourseData.revision moved past
+## `_lines_revision`). Before, every brush paint measured every open hole's line again, a
+## search through its fairway, so a drag on doglegs held 50 ms frames.
+var _lines_now: Dictionary = {}
+var _lines_revision: int = -1
 
 
 func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null,
@@ -642,11 +650,26 @@ func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
 	_set_tile(c, h, s)
 
 
-## Writes one tile and notes it for rule 3's graph.
+## Writes one tile and notes it for rule 3's graph and the lines of play (_lines_now).
 func _set_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
+	if (_course.get_surface(c.x, c.y) == Surface.Type.FAIRWAY) != (s == Surface.Type.FAIRWAY):
+		_lines_now.clear()
 	_course.set_tile(c.x, c.y, h, s)
 	_reach_dirty[c] = true
 	_reach_revision += 1
+	_lines_revision += 1
+
+
+## Hole `h`'s line of play on the course as it is now (CourseValidator.line_of_play), kept in
+## _lines_now while no tile turned to or from fairway.
+func _line_now(h: HoleData) -> PackedVector2Array:
+	if _course.revision != _lines_revision:
+		_lines_now.clear()
+		_lines_revision = _course.revision
+	var k := Vector4i(h.tee.x, h.tee.y, h.cup.x, h.cup.y)
+	if not _lines_now.has(k):
+		_lines_now[k] = _validator.line_of_play(_course, h)
+	return _lines_now[k]
 
 
 ## Files the tiles one terrain edit wrote into its step (the open stroke's, or a new one),
@@ -679,7 +702,7 @@ func _close_footprints(step: Step, cells: Array[Vector2i]) -> void:
 		var h: HoleData = hs[i]
 		if not h.open:
 			continue
-		var lines: Array[PackedVector2Array] = [_validator.line_of_play(_course, h)]
+		var lines: Array[PackedVector2Array] = [_line_now(h)]
 		if kept and _slot_lines[i] != lines[0]:
 			lines.append(_slot_lines[i])
 		for c: Vector2i in cells:

@@ -1201,3 +1201,22 @@ func test_a_reason_holding_a_full_stop_keeps_its_lead() -> void:
 		var word: String = GuestReaction.CHECK_WORDS[c]
 		assert_true(r.passed[c] or panel.reaction_label.tooltip_text.contains(word),
 				"the panel's hover reads %s from GuestReaction.CHECK_WORDS" % word)
+
+
+## E3-S33: the hole panel refreshes on every feed line, but not while it is hidden (in Play):
+## it refreshes once when shown again, with the lines that came meanwhile.
+func test_a_hidden_hole_panel_skips_feed_refreshes_and_catches_up_when_shown() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(3)
+	var before: int = panel.refreshes
+	_give(m, _verdict(3, 5), 10)
+	assert_eq(panel.refreshes, before + 1, "shown: a feed line refreshes the panel")
+	panel.visible = false
+	before = panel.refreshes
+	for i: int in 5:
+		_give(m, _verdict(3, 5), 20 + i)
+	assert_eq(panel.refreshes, before, "hidden: the feed lines wait")
+	panel.visible = true
+	assert_eq(panel.refreshes, before + 1, "shown again: one refresh")
+	assert_true(panel.reaction_label.visible, "with the latest verdict")

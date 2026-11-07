@@ -125,6 +125,10 @@ var collapsed: bool = false
 var reaction_label: Label
 ## The guests' reactions (bind_feed); null shows none.
 var feed: ReactionFeed
+## E3-S33: refreshes run (tests count them), and whether a feed line came while the panel was
+## hidden (refreshed when it is shown again).
+var refreshes: int = 0
+var _stale: bool = false
 ## Null loads scenes/hole_panel_tuning.tres.
 @export var tuning: HolePanelTuning
 
@@ -228,16 +232,34 @@ func bind(tool: BuildTool) -> void:
 ## Shows the picked hole's latest guest verdict from `p_feed` from now on (E3-S18).
 func bind_feed(p_feed: ReactionFeed) -> void:
 	feed = p_feed
-	feed.added.connect(func(_e: ReactionFeed.Entry) -> void: refresh())
-	feed.cleared.connect(refresh)
-	feed.slot_cleared.connect(func(_slot: int) -> void: refresh())
+	feed.added.connect(func(_e: ReactionFeed.Entry) -> void: _refresh_shown())
+	feed.cleared.connect(_refresh_shown)
+	feed.slot_cleared.connect(func(_slot: int) -> void: _refresh_shown())
+	if not visibility_changed.is_connected(_on_visibility_changed):
+		visibility_changed.connect(_on_visibility_changed)
 	refresh()
+
+
+## E3-S33: a feed line refreshes the panel only while it is shown (Play hides it and the feed
+## runs on); hidden, it waits for the panel to be shown again.
+func _refresh_shown() -> void:
+	if is_visible_in_tree():
+		refresh()
+	else:
+		_stale = true
+
+
+func _on_visibility_changed() -> void:
+	if _stale and is_visible_in_tree():
+		refresh()
 
 
 ## Shows the hole as the builder has it now.
 func refresh() -> void:
 	if _tool == null or title_label == null:
 		return
+	refreshes += 1
+	_stale = false
 	var b: CourseBuilder = _tool.builder
 	var number: int = _tool.hole_number
 	var slot: int = _tool.picked_slot()
