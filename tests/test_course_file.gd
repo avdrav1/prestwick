@@ -185,6 +185,29 @@ func test_inspect_reports_a_closed_failing_hole() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
+## E3-S41: a shared number's rule 1 stands on each hole's own tee and names its twin by the
+## map's label, as the map's box and the hole list's row read it.
+func test_validate_and_inspect_name_a_shared_number_by_its_own_tee() -> void:
+	var c := CourseData.create(40, 12, Surface.Type.ROUGH, 2)
+	c.set_tile(30, 2, 2, Surface.Type.GREEN)
+	c.set_tile(30, 8, 2, Surface.Type.GREEN)
+	c.set_holes([HoleData.new(2, 3, Vector2i(2, 2), Vector2i(30, 2), false),
+			HoleData.new(2, 3, Vector2i(2, 8), Vector2i(30, 8), false)] as Array[HoleData])
+	var path := "user://test_course_file_twins.json"
+	assert_eq(CourseSave.save_file(c, path), OK)
+	var out: Array[String] = []
+	assert_eq(CourseFileTool.run(PackedStringArray(["validate", path]), out), 1, "\n".join(out))
+	var text := "\n".join(out)
+	assert_string_contains(text, "hole 2a, par 3, 140 yd\n  rule 1 FAIL at (2, 2): shares number 2 with hole 2b")
+	assert_string_contains(text, "hole 2b, par 3, 140 yd\n  rule 1 FAIL at (2, 8): shares number 2 with hole 2a")
+	out.clear()
+	assert_eq(CourseFileTool.run(PackedStringArray(["inspect", path]), out), 0)
+	text = "\n".join(out)
+	assert_string_contains(text, "hole 2a: par 3, 140 yd, closed, FAIL\n  rule 1 FAIL at (2, 2): shares number 2 with hole 2b")
+	assert_string_contains(text, "hole 2b: par 3, 140 yd, closed, FAIL\n  rule 1 FAIL at (2, 8): shares number 2 with hole 2a")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 ## D47 (E3-S25): validate and inspect quote the line of play, round a dogleg's corner.
 func test_inspect_and_validate_quote_a_doglegs_line_of_play() -> void:
 	var path := "user://test_course_file_dogleg.json"

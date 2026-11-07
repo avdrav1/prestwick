@@ -56,9 +56,10 @@ static func validate(path: String, out: Array[String]) -> int:
 		return 0
 	var validator := CourseValidator.new()
 	var failed: bool = false
-	for hole: HoleData in course.holes:
+	for slot: int in course.holes.size():
+		var hole: HoleData = course.holes[slot]
 		var issues := validator.check_hole(course, hole)
-		out.append("hole %d, par %d, %d yd" % [hole.number, hole.par, validator.hole_yardage(course, hole)])
+		out.append("hole %s, par %d, %d yd" % [course.hole_label(slot), hole.par, validator.hole_yardage(course, hole)])
 		for rule: int in range(1, CourseValidator.RULE_COUNT + 1):
 			var line := "  rule %d pass" % rule
 			for issue: CourseValidator.Issue in issues:
@@ -98,9 +99,10 @@ static func inspect(path: String, out: Array[String]) -> int:
 	out.append("holes: %d" % course.holes.size())
 	var validator := CourseValidator.new()
 	var reach := CourseValidator.Reach.new(course)
-	for hole: HoleData in course.holes:
+	for slot: int in course.holes.size():
+		var hole: HoleData = course.holes[slot]
 		var issues := validator.check_hole(course, hole, reach)
-		out.append("hole %d: par %d, %d yd, %s, %s" % [hole.number, hole.par,
+		out.append("hole %s: par %d, %d yd, %s, %s" % [course.hole_label(slot), hole.par,
 				validator.hole_yardage(course, hole), "open" if hole.open else "closed",
 				"FAIL" if not issues.is_empty() else "PASS"])
 		for issue: CourseValidator.Issue in issues:

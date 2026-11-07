@@ -377,12 +377,12 @@ func rows_for(number: int) -> Array[HoleRow]:
 
 
 ## The text under a duplicate's row: rule 1's reason for slot `slot`, from the builder's latest
-## run (it names the other hole's tee).
+## run (it names the other hole as the map labels it, E3-S41).
 static func duplicate_text(b: CourseBuilder, slot: int) -> String:
 	for issue: CourseValidator.Issue in b.issues_at(slot):
 		if issue.rule == 1:
 			return "Duplicate number. rule 1: %s" % issue.reason
-	return "Duplicate number. rule 1: hole %d has a second tee and cup" % b.hole_at(slot).number
+	return "Duplicate number. rule 1: shares number %d with another hole" % b.hole_at(slot).number
 
 
 ## One line for a hole in the list: number, par, yardage (once tee and cup are on the map; the

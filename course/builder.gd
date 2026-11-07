@@ -396,7 +396,7 @@ func slot_issues() -> Array:
 
 
 ## Slot `slot`'s own failing rules from the latest validator run (E3-S11): for a hole sharing
-## its number, rule 1 names the other's tee. Empty when it passes or there is no such slot.
+## its number, rule 1 stands on its own tee and names the other. Empty when it passes or there is no such slot.
 func issues_at(slot: int) -> Array[CourseValidator.Issue]:
 	var out: Array[CourseValidator.Issue] = []
 	if slot >= 0 and slot < _slot_issues.size():

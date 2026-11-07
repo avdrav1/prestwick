@@ -857,10 +857,10 @@ func test_a_loaded_duplicate_number_lists_both_holes() -> void:
 		assert_true(r.duplicate, "row %d is marked a duplicate" % k)
 		assert_string_contains(r.pick_button.tooltip_text, "rule 1", "its pick says why too")
 		assert_true(r.duplicate_label.visible)
-		assert_string_contains(r.duplicate_label.text, "rule 1: hole 2 has a second tee and cup")
-	assert_string_contains(rows[1].duplicate_label.text, "(%d, %d)" % [_tee(2).x, _tee(2).y],
-			"each names the other's tee")
-	assert_string_contains(rows[2].duplicate_label.text, "(%d, %d)" % [_tee(1).x, _tee(1).y])
+	# E3-S41: the same words as the map's box on each one's own tee.
+	assert_eq(rows[1].duplicate_label.text, "Duplicate number. rule 1: shares number 2 with hole 2b",
+			"each names the other as the map labels it")
+	assert_eq(rows[2].duplicate_label.text, "Duplicate number. rule 1: shares number 2 with hole 2a")
 	assert_eq(panel.collapse_button.text, "Hide the list (3 holes)")
 
 
@@ -893,9 +893,10 @@ func test_duplicates_are_told_apart_on_the_map_and_in_the_list() -> void:
 	assert_eq(m.course_view.hole_marker(3, HoleMarker.Kind.TEE).label_text(), "3")
 
 
-## E3-S27 review: rule 1 puts each duplicate's issue on its twin's tee, so the box there names
-## the hole whose tee it stands on and the twin it shares the number with: never "hole 2b" on
-## the tee marked 2a.
+## E3-S27 review, E3-S41: rule 1 puts each duplicate's issue on its own tee, so the box there
+## names the hole whose tee it stands on and the twin it shares the number with: never "hole 2b"
+## on the tee marked 2a. The validator's reason is the box's words, so the panel rows and
+## /course-file read the same.
 func test_each_duplicate_box_names_the_tee_under_it() -> void:
 	var m := _main_with_duplicate()
 	var tee_label := {}
@@ -911,6 +912,7 @@ func test_each_duplicate_box_names_the_tee_under_it() -> void:
 			var own: String = tee_label.get(box.cell, "?")
 			var twin: String = "2b" if own == "2a" else "2a"
 			assert_eq(box.lines()[i], "hole %s, rule 1: shares number 2 with hole %s" % [own, twin])
+			assert_eq(box.cell, _tee(1) if own == "2a" else _tee(2), "on hole %s's own tee" % own)
 			checked += 1
 	assert_eq(checked, 2, "one rule-1 box per duplicate")
 
@@ -966,8 +968,8 @@ func test_picking_a_duplicate_row_builds_its_own_hole() -> void:
 	assert_eq(m.build_tool.picked_slot(), 2, "the second hole numbered 2")
 	assert_true(panel.rows_for(2)[1].pick_button.button_pressed, "its row shows the pick")
 	assert_false(panel.rows_for(2)[0].pick_button.button_pressed, "its twin's does not")
-	assert_string_contains(panel.issues_label.text, "(%d, %d)" % [_tee(1).x, _tee(1).y],
-			"the details show its own rule 1, naming its twin's tee")
+	assert_string_contains(panel.issues_label.text, "shares number 2 with hole 2a",
+			"the details show its own rule 1, naming its twin")
 	m.build_tool.select_tool(BuildTool.Tool.TEE)
 	_click(m, Vector2i(4, 17))
 	assert_eq(b.hole_at(2).tee, Vector2i(4, 17), "the tee tool moved the picked duplicate's tee")

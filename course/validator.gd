@@ -259,7 +259,7 @@ func check_course(course: CourseData) -> Dictionary:
 
 
 ## Every hole's failing rules, one array per entry of `course.holes`, in its order (E3-S11):
-## two holes sharing a number each keep their own, rule 1 naming the other's tee. The passable
+## two holes sharing a number each keep their own, rule 1 on its own tee naming the other. The passable
 ## graph is read once for all holes, or `reach` is used when given (the builder's, kept
 ## between edits, E3-S12): it must describe `course` as it is now. When `yards` is given it is
 ## filled with each slot's hole_yardage as rule 4 measured it (0 when not placed), so a caller
@@ -534,8 +534,9 @@ func _rule1(course: CourseData, hole: HoleData, own: int, issues: Array[Issue]) 
 	for i in course.holes.size():
 		var other: HoleData = course.holes[i]
 		if i != own and other.number == hole.number:
-			issues.append(Issue.new(1, other.tee,
-					"hole %d has a second tee and cup, tee at %s" % [hole.number, _fmt(other.tee)]))
+			# E3-S41: on the hole's own tee, naming its twin as the map and the list label it.
+			issues.append(Issue.new(1, hole.tee, "shares number %d with hole %s" % [
+					hole.number, course.hole_label(i)]))
 			return
 
 

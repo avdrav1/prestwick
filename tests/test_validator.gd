@@ -113,8 +113,11 @@ func test_rule1_fails_both_holes_sharing_a_number() -> void:
 	var ib := _issue(_v.check_hole(c, c.holes[1]), 1)
 	assert_not_null(ia)
 	assert_not_null(ib)
-	assert_eq(ia.tile, Vector2i(2, 8), "hole A points at the other tee")
-	assert_eq(ib.tile, Vector2i(2, 2), "hole B points at the other tee")
+	# E3-S41: each stands on its own tee and names the other as the map labels it.
+	assert_eq(ia.tile, Vector2i(2, 2), "hole A's issue is on its own tee")
+	assert_eq(ib.tile, Vector2i(2, 8), "hole B's on its own")
+	assert_eq(ia.reason, "shares number 1 with hole 1b")
+	assert_eq(ib.reason, "shares number 1 with hole 1a")
 	_assert_one_line(ia)
 
 
@@ -126,8 +129,9 @@ func test_check_slots_keeps_each_duplicates_own_issues() -> void:
 	var c := _course(40, 12, [a, b, other])
 	var slots: Array = _v.check_slots(c)
 	assert_eq(slots.size(), 3)
-	assert_eq((_issue(slots[0], 1) as CourseValidator.Issue).tile, Vector2i(2, 8), "slot 0 names slot 1's tee")
-	assert_eq((_issue(slots[1], 1) as CourseValidator.Issue).tile, Vector2i(2, 2), "slot 1 names slot 0's tee")
+	assert_eq((_issue(slots[0], 1) as CourseValidator.Issue).tile, Vector2i(2, 2), "slot 0 on its own tee")
+	assert_eq((_issue(slots[1], 1) as CourseValidator.Issue).tile, Vector2i(2, 8), "slot 1 on its own tee")
+	assert_eq((_issue(slots[0], 1) as CourseValidator.Issue).reason, "shares number 1 with hole 1b")
 	assert_eq(slots[2], [] as Array[CourseValidator.Issue], "hole 2 passes")
 	var by_number: Dictionary = _v.check_course(c)
 	assert_eq(_rules(by_number[1]), [1, 1] as Array[int], "check_course still merges a shared number")
@@ -148,7 +152,8 @@ func test_rule1_held_copy_still_sees_a_real_duplicate_number() -> void:
 	var c := _course(40, 12, [a, b])
 	var ia := _issue(_v.check_hole(c, a), 1)
 	assert_not_null(ia)
-	assert_eq(ia.tile, Vector2i(2, 8), "points at the other hole's tee, not its own")
+	assert_eq(ia.tile, Vector2i(2, 2), "on its own tee (E3-S41)")
+	assert_eq(ia.reason, "shares number 1 with hole 1b")
 
 # --- rule 2: cup on a green ---
 

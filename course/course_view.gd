@@ -213,19 +213,11 @@ func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
 	var wanted := {}
 	var order: Array[Vector2i] = []
 	var name_of := {}
-	var reason_of := {}
 	if _course != null and slot_issues.size() == _course.holes.size():
 		for slot: int in slot_issues.size():
 			for issue: CourseValidator.Issue in slot_issues[slot]:
+				# A duplicate's rule 1 stands on its own tee and names its twin (E3-S41).
 				name_of[issue] = _course.hole_label(slot)
-				# Rule 1 puts a duplicate's issue on its twin's tee (CourseValidator._rule1). The
-				# box stands on that tee, so it is named by the hole whose tee it is, and says
-				# which hole it shares the number with (E3-S27 review: "hole 4b" on 4a's tee).
-				var twin: int = _tee_slot(issue, slot)
-				if twin >= 0:
-					name_of[issue] = _course.hole_label(twin)
-					reason_of[issue] = "shares number %d with hole %s" % [
-							_course.holes[twin].number, _course.hole_label(slot)]
 	if _course != null:
 		for number: int in issues:
 			for issue: CourseValidator.Issue in issues[number]:
@@ -242,7 +234,7 @@ func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
 				var holes: PackedInt32Array = w[2]
 				var names: PackedStringArray = w[3]
 				rules.append(issue.rule)
-				reasons.append(reason_of.get(issue, issue.reason))
+				reasons.append(issue.reason)
 				holes.append(number)
 				names.append(name_of.get(issue, ""))
 				wanted[issue.tile] = [rules, reasons, holes, names]
@@ -266,18 +258,6 @@ func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
 			_issues_root.add_child(m)
 		_issue_markers.append(m)
 	layout_issue_labels(_view_scale())
-
-
-## The slot other than `own` whose tee a rule-1 `issue` of slot `own` stands on, or -1 for any
-## other issue (a tee-on-cup rule 1 stands on its own tee).
-func _tee_slot(issue: CourseValidator.Issue, own: int) -> int:
-	if issue.rule != 1:
-		return -1
-	var number: int = _course.holes[own].number
-	for i: int in _course.holes.size():
-		if i != own and _course.holes[i].number == number and _course.holes[i].tee == issue.tile:
-			return i
-	return -1
 
 
 ## Lays the issue text boxes out in screen space at a zoom of `scale` screen px per local unit:

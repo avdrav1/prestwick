@@ -834,11 +834,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Accept: crowded issue boxes collapse to badges at the farther steps, a badge never covers a tee's label, a tee label is never clipped by terrain at 0.5x, and a framed hole's issue box sits off its line where it can.
   - Test: `tests/test_issue_marker.gd` (no two labels' rects overlap on nine_holes with every hole failing at 0.175x; a badge's rect clears its tee label). Screenshot at 0.175x with every hole failing.
   - Touches: `scenes/`, `tests/`
-- [ ] E3-S41 Name a rule-1 issue by the hole's own tee. Today it stands on the twin's.
+- [x] E3-S41 Name a rule-1 issue by the hole's own tee. Today it stands on the twin's.
   - Note: (found in E3 review) the validator's rule-1 issue tile is still the twin's tee (`course/validator.gd` `_rule1`); E3-S27 changed only the map labels to read "hole 2a, rule 1: shares number 2 with hole 2b".
   - Accept: the rule-1 issue stands on the hole's own tee and its reason reads the same on the map, the panel rows and `/course-file`.
   - Test: `tests/test_validator.gd` (the rule-1 issue tile is the hole's tee); `tests/test_hole_list.gd`.
   - Touches: `course/`, `scenes/`, `tests/`
+  - Done 2026-11-07: `CourseValidator._rule1` puts a shared number's issue on the hole's own tee with the reason "shares number 2 with hole 2b" (the twin's `CourseData.hole_label`), the words the map's box already read; `CourseView.show_issues` drops its twin rewrite (`_tee_slot`) and shows the reason as it comes, the hole list's duplicate line reads "Duplicate number. rule 1: shares number 2 with hole 2b", and `/course-file validate` and `inspect` head each hole by its label ("hole 2a, par 3, 140 yd"; a plain number when none is shared). Tests: `tests/test_validator.gd` (each duplicate's rule-1 tile is its own tee, the reason names the twin's label, check_slots and a held copy agree), `tests/test_hole_list.gd` (the rows' lines equal the map's words, each rule-1 box stands on its own hole's tee, the details name the twin), `tests/test_course_file.gd` (validate and inspect print the same reason on each own tee).
 - [ ] E3-S42 Try the L's corner for a long hole's tee. The framing never places a tee there.
   - Note: (found in E3 review) `free_view_rect_for` compares only the two rectangular strips, picking one for the tee; the cup can use either strip, but the tee is always held in one, so a tee in the corner region of the L is never tried (E3-S26).
   - Accept: the framing also tries the tee in the L's corner, and picks it when it shows more of the tee-to-cup line with the cup clear of every control.
