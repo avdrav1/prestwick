@@ -94,11 +94,11 @@ func shirt_count() -> int:
 	return shirt_body.size()
 
 
-## The shirt group `group_id` (its arrival order in the day) wears: the groups take the shirts
-## in turn, so any `shirt_count()` groups in a row all differ. Groups never pass, so the groups
-## on a hole and the next differ while those hold no more than `shirt_count()` (seven since
-## D46's longer day: the most a backed-up day on the nine-hole fixture puts there over day
-## seeds 1 to 10; seed 16 still repeats one, art/specs/golfer.md "Shirts").
+## The shirt group `group_id` (its arrival order in the day) wears by count: the groups take the
+## shirts in turn, so any `shirt_count()` groups in a row differ. Since E3-S47 GuestView chooses
+## each group's shirt on arrival (GuestView.assign_shirts: one no group on the course wears, else
+## the one worn farthest ahead), which keeps a backed-up day's neighbours apart; this is its
+## fallback for a group it has not seen arrive.
 func shirt_of_group(group_id: int) -> int:
 	return posmod(group_id, maxi(shirt_count(), 1))
 

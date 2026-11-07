@@ -35,9 +35,11 @@ extends Node2D
 ## screen (at 0.5x it is drawn at twice its size, one texel a screen pixel), so it reads as a
 ## person at every zoom (art/specs/golfer.md).
 ##
-## Shirts (E3-S28): a figure wears its group's shirt (GolferArt.shirt_of_group: the day's
-## groups take the art spec's shirts in turn), drawn by swapping the sheet's chalk in a shader
-## material shared by everyone in that shirt, so a group reads as one and its neighbours differ.
+## Shirts (E3-S28): a figure wears its group's shirt, drawn by swapping the sheet's chalk in a
+## shader material shared by everyone in that shirt, so a group reads as one and its neighbours
+## differ. Since E3-S47 a group chooses its shirt when it arrives (assign_shirts): the first no
+## group still on the course wears, else the one whose nearest wearer is farthest ahead, so the
+## groups on a hole and the next differ by choice, not by arrival count.
 ##
 ## D45 (E3-S9 review): below BuilderTuning marker_min_screen_scale (0.5x) the whole view draws
 ## at z 1 (CourseView.lifted_z), as the grown tee markers and pins do, so figures and balls
@@ -72,6 +74,8 @@ var screen_rect_override: Rect2 = Rect2()
 
 ## {guest id: Figure} for every guest on the course.
 var _figures: Dictionary = {}
+## Group index -> the shirt it chose on arriving (assign_shirts), for this view's day.
+var _shirts: Dictionary = {}
 var _brain: GuestBrain
 var _field: HeightField
 var _second: int = 0
@@ -153,8 +157,11 @@ func update_view(delta: float, speed: float) -> void:
 		_brain = brain
 		_field = HeightField.new(brain.course, BallParams.load_default()) if brain != null else null
 		_second = brain.second if brain != null else 0
+		_shirts = {}
 	if brain == null:
 		return
+	if brain.second != _second or _shirts.is_empty():
+		assign_shirts(brain, _shirts, art.shirt_count())
 	_time += delta
 	var stepped := brain.second != _second
 	_second = brain.second
@@ -207,10 +214,50 @@ func _drop(id: int) -> void:
 	_figures.erase(id)
 
 
-## The shirt figure `f` wears (E3-S28): its group's, so a group reads as one and the groups
-## on a hole and the next differ (GolferArt.shirt_of_group).
+## The shirt figure `f` wears (E3-S28): its group's (assign_shirts, E3-S47), so a group reads
+## as one and the groups on a hole and the next differ; the arrival-order shirt
+## (GolferArt.shirt_of_group) for a group not yet given one.
 func shirt_of(f: Figure) -> int:
-	return art.shirt_of_group(f.guest.group_id)
+	return _shirts.get(f.guest.group_id, art.shirt_of_group(f.guest.group_id))
+
+
+## Gives every group of `brain` that has arrived and has no shirt in `shirts` (group index ->
+## shirt) one of `count` shirts (E3-S47), in arrival order: the first shirt no group still on the
+## course (walking to a tee or playing a hole) wears; when every shirt is worn, the shirt whose
+## wearer nearest the first tee stands on the highest hole, so the new group (on hole 1, and
+## groups never pass) meets it last if at all (the lower shirt at a tie). Groups given a shirt in
+## the same call count as on the course whatever their phase, so a view that first looks after
+## several arrivals (a fixture, a frame of many steps) still gives them shirts as if it had seen
+## each arrive. Deterministic for the same brain stepped the same way; tests step a headless
+## brain through it.
+static func assign_shirts(brain: GuestBrain, shirts: Dictionary, count: int) -> void:
+	count = maxi(count, 1)
+	var fresh := {}
+	for g: GuestGroup in brain.groups:
+		if g.phase == GuestGroup.Phase.PENDING or shirts.has(g.index):
+			continue
+		# Each worn shirt's lowest hole among the groups on the course.
+		var lowest := {}
+		for o: GuestGroup in brain.groups:
+			if o == g or not shirts.has(o.index):
+				continue
+			if o.phase != GuestGroup.Phase.TO_TEE and o.phase != GuestGroup.Phase.ON_HOLE \
+					and not fresh.has(o.index):
+				continue
+			var s: int = shirts[o.index]
+			lowest[s] = mini(lowest.get(s, o.hole_number), o.hole_number)
+		var pick: int = -1
+		for s: int in count:
+			if not lowest.has(s):
+				pick = s
+				break
+		if pick < 0:
+			pick = 0
+			for s: int in count:
+				if lowest[s] > lowest[pick]:
+					pick = s
+		shirts[g.index] = pick
+		fresh[g.index] = true
 
 
 ## A guest's place in its group as a small sideways step on screen, yards: place 0 on the

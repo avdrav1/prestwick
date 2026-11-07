@@ -30,8 +30,12 @@ as `ShotView` does for the ball, so the sheet keeps to fully opaque palette pixe
 
 ## Shirts (E3-S28)
 
-Each group wears one shirt, and the groups of a day take the shirts in turn by arrival order
-(`GolferArt.shirt_of_group`), so any seven groups in a row differ. Groups never pass, so the
+Each group wears one shirt. Since E3-S47 a group chooses it when it arrives
+(`GuestView.assign_shirts`): the first shirt no group still on the course wears, else the one
+whose wearer nearest the first tee is farthest ahead (groups never pass, so the new group meets
+that one last if at all). Before, the groups of a day took the shirts in turn by arrival order
+(`GolferArt.shirt_of_group`, still the fallback for a group the view has not seen arrive), so
+any seven groups in a row differed; the history below is of that rule. Groups never pass, so the
 groups on one hole and the next (queued for a tee or playing it) are groups in a row, and they
 all differ while no hole and its neighbour hold more than seven. When play backs up they can
 hold that many: on the nine-hole fixture (land seed 7) day seeds 1 to 10 put up to five groups
@@ -41,7 +45,7 @@ D46 (E3-S21) lengthened the day (450 s, then 510 s in its review), so every grou
 back up too: seed 7 puts six groups on hole 7 and seven on holes 7 and 8 (its first and last
 groups met in one shirt for 13 simulated seconds), so shirt 6 was added and the set is seven
 (`tests/test_guest_view.gd` plays seeds 5 and 7 and checks no two groups in one shirt share a
-hole or stand on neighbouring holes). A day that backs up further repeats a shirt within reach: day seed 16 (seeds 1 to 30 checked in the D46 review) puts groups 0 and 7 in one shirt on holes 7 and 8 for 47 simulated seconds from 230 s. Seven is sized to seeds 1 to 10, not proven for every day. The sheets draw the shirt in one key colour, chalk, and
+hole or stand on neighbouring holes). A day that backs up further repeated a shirt within reach by arrival order: day seed 16 (seeds 1 to 30 checked in the D46 review) put groups 0 and 7 in one shirt on holes 7 and 8 for 47 simulated seconds from 230 s. Chosen on arrival (E3-S47), seeds 5, 7 and 16 hold (`tests/test_guest_view.gd`); see E3-S47's note in `docs/BACKLOG.md` for seeds 1 to 30. Seven is not proven for every day. The sheets draw the shirt in one key colour, chalk, and
 nowhere else (rows 9 to 16 of a frame, `shirt_rows`); `GuestView` puts a shader
 (`art/sprites/golfer_shirt.gdshader`) on each figure that swaps every chalk pixel for the
 group's shirt, so one sheet dresses every group. The set, in `art/sprites/golfer.tres`:

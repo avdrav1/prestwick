@@ -509,8 +509,10 @@ func test_neighbouring_groups_get_different_shirts() -> void:
 ## that hole), as [second, hole, group, group], for `brain` stepped to dusk.
 static func _shirt_clashes(brain: GuestBrain, art: GolferArt) -> Array:
 	var clashes := []
+	var shirts := {}  # chosen on arrival, as GuestView does (E3-S47)
 	while not brain.day_over:
 		brain.step()
+		GuestView.assign_shirts(brain, shirts, art.shirt_count())
 		var by_hole := {}
 		for g: GuestGroup in brain.groups:
 			if g.phase == GuestGroup.Phase.TO_TEE or g.phase == GuestGroup.Phase.ON_HOLE:
@@ -519,7 +521,7 @@ static func _shirt_clashes(brain: GuestBrain, art: GolferArt) -> Array:
 			var near: Array = by_hole[h] + by_hole.get(h + 1, [])
 			var worn := {}
 			for g: GuestGroup in near:
-				var shirt := art.shirt_of_group(g.guests[0].group_id)
+				var shirt: int = shirts[g.index]
 				if worn.has(shirt):
 					clashes.append([brain.second, h, worn[shirt], g.index])
 				worn[shirt] = g.index
@@ -535,7 +537,9 @@ func test_a_backed_up_day_keeps_shirts_apart_on_neighbouring_holes() -> void:
 	NineHoles.build(CourseBuilder.new(course))
 	var art := GolferArt.load_default()
 	var model := ShotModel.new()
-	for day_seed: int in [5, 7]:
+	# E3-S47: by arrival order seed 16 put groups 0 and 7 in one shirt on holes 7 and 8 for 47 s;
+	# chosen on arrival, no group meets its shirt.
+	for day_seed: int in [5, 7, 16]:
 		var clashes := _shirt_clashes(GuestBrain.new(course, day_seed, null, model), art)
 		assert_eq(clashes, [], "seed %d: no two groups in one shirt on a hole or the next" % day_seed)
 
