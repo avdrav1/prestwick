@@ -946,24 +946,30 @@ func test_a_skill_1_foursome_arriving_last_finishes_its_nine_by_dusk() -> void:
 
 
 ## D46 review: a slow foursome early in the day holds up every group behind it, since groups
-## never pass. Day seed 6 with its first group made a skill-1 foursome is the latest day of the
-## sweep (`scripts/guest_day.gd`, the foursome in every slot of days 1 to 10: last finish 490 s);
-## every guest of that field still holes out on all nine before dusk.
+## never pass. E3-S60: day seed 10 with its second group (slot 1) made a skill-1 foursome is
+## the latest day of the sweep (`scripts/guest_day.gd`, the foursome in every slot of days 1 to
+## 10: last finish 519 s at `day_s` 540; at 510 that field ends short); every guest of that
+## field still holes out on all nine before dusk. (Before E3-S38, E3-S39 and E3-S54 the latest
+## was day 6 with the foursome first.)
 func test_a_skill_1_foursome_leading_the_latest_day_still_lets_everyone_finish_nine() -> void:
 	var course: CourseData = NineHoles.land(7)
 	NineHoles.build(CourseBuilder.new(course))
-	var groups := GuestDay.with_foursome(GuestSpawner.day(tuning, 6), 0)
-	assert_eq(groups[0].size(), 4, "the first group is the foursome")
-	var brain := GuestBrain.new(course, 6, tuning, model, groups)
-	brain.run_day()
-	var field := 0
-	for gr: GuestGroup in groups:
-		field += gr.size()
-	assert_eq(brain.guests.size(), field, "every group teed off")
-	for g: Guest in brain.guests:
-		assert_eq(g.records.size(), 9, "guest %d (group %d) played all nine" % [g.id, g.group_id])
-		assert_false(g.left_at_dusk, "guest %d went home before dusk (left at %d of %d s)" % [
-				g.id, g.left_s, tuning.day_s])
+	for spec: Array in [[10, 1]]:
+		var day_seed: int = spec[0]
+		var slot: int = spec[1]
+		var groups := GuestDay.with_foursome(GuestSpawner.day(tuning, day_seed), slot)
+		assert_eq(groups[slot].size(), 4, "day %d: group %d is the foursome" % spec)
+		var brain := GuestBrain.new(course, day_seed, tuning, model, groups)
+		brain.run_day()
+		var field := 0
+		for gr: GuestGroup in groups:
+			field += gr.size()
+		assert_eq(brain.guests.size(), field, "day %d: every group teed off" % day_seed)
+		for g: Guest in brain.guests:
+			assert_eq(g.records.size(), 9, "day %d: guest %d (group %d) played all nine" % [
+					day_seed, g.id, g.group_id])
+			assert_false(g.left_at_dusk, "day %d: guest %d went home before dusk (left at %d of %d s)" % [
+					day_seed, g.id, g.left_s, tuning.day_s])
 
 
 func test_dusk_sends_everyone_home_and_an_unfinished_hole_gives_no_record() -> void:
