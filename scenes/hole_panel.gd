@@ -93,6 +93,9 @@ var status_label: Label
 ## cut at text_width with an ellipsis, every rule on hover (E3-S27). Its width is text_width
 ## either way, so no text widens the panel.
 var issues_label: Label
+## The picked hole's hints (CourseBuilder.hints_at, E3-S39): advice that never closes it, one
+## per line expanded, cut to one line collapsed with all of them on hover.
+var hint_label: Label
 ## Picks the next hole in build order (BuildTool.new_hole); disabled when the course is full.
 var new_hole_button: Button
 ## The list's rows, in number order; the first shown_rows().size() hold a hole, and of those
@@ -117,6 +120,9 @@ var feed: ReactionFeed
 ## The reaction line's colours, as the feed draws praise and complaints (FeedPanel).
 @export var praise_color: Color = Color8(240, 200, 58)
 @export var complaint_color: Color = Color8(240, 160, 150)
+## The hint line's colour (E3-S39): sand (art/palette.gpl), apart from the rules' red, since
+## a hint never stops the hole opening.
+@export var hint_color: Color = Color8(232, 211, 154)
 
 var _tool: BuildTool
 var _par_group := ButtonGroup.new()
@@ -186,6 +192,13 @@ func _ready() -> void:
 	issues_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	issues_label.add_theme_color_override("font_color", Color8(240, 160, 150))
 	box.add_child(issues_label)
+	hint_label = Label.new()
+	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_label.custom_minimum_size = Vector2(text_width, 0)
+	hint_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	hint_label.add_theme_color_override("font_color", hint_color)
+	hint_label.visible = false
+	box.add_child(hint_label)
 
 
 ## Follows `tool` from now on.
@@ -243,6 +256,17 @@ func refresh() -> void:
 	issues_label.text = issues_summary(own) if collapsed else full
 	issues_label.tooltip_text = full if collapsed else ""
 	issues_label.visible = not text.is_empty()
+	var hints := PackedStringArray()
+	if b != null and slot >= 0:
+		for hint: CourseValidator.Issue in b.hints_at(slot):
+			hints.append("hint at (%d, %d): %s" % [hint.tile.x, hint.tile.y, hint.reason])
+	var all_hints: String = "\n".join(hints)
+	hint_label.autowrap_mode = issues_label.autowrap_mode
+	hint_label.text_overrun_behavior = issues_label.text_overrun_behavior
+	hint_label.text = (hints[0] if hints.size() == 1 else "%d hints: hover for them" % hints.size()) \
+			if collapsed and not hints.is_empty() else all_hints
+	hint_label.tooltip_text = all_hints if collapsed else ""
+	hint_label.visible = not hints.is_empty()
 	_refresh_reaction(c, slot)
 	_refresh_list(b)
 	new_hole_button.disabled = b == null or b.next_hole_number() == 0

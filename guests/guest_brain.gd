@@ -538,8 +538,9 @@ func play_clear(guest: Guest, g: GuestGroup) -> bool:
 ## landing_radius). SAME_HOLE: of a group ahead in the hole's queue that is on the hole, so
 ## the group behind never plays into the group ahead, nor onto a green it is still on; a group
 ## it has passed (nearer the tee) never holds it, so no two groups on a hole wait on each
-## other. CROSSING: of a group on another hole, or walking to a tee (a hole that crosses this
-## one, or a fairway beside it), so guests do not play into each other across holes; after
+## other. CROSSING: of a group out on another hole (a hole that crosses this one, or a
+## fairway beside it), or a guest waiting on another hole's tee (E3-S39: a tee in this hole's
+## approach), so guests do not play into each other across holes; after
 ## `cross_hold_max_s` seconds held in a row by such groups alone, the group plays on, so two
 ## groups on crossing holes never wait on each other for ever.
 func hold_for(guest: Guest, g: GuestGroup) -> Hold:
@@ -559,12 +560,31 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 	if g.cross_held_s >= tuning.cross_hold_max_s:
 		return Hold.CLEAR
 	for other: GuestGroup in groups:
-		if other != g and other.hole_number != g.hole_number \
-				and other.phase == GuestGroup.Phase.ON_HOLE \
-				and _group_in_the_way(other, at, rest, cup, tuning.cross_clear_yd,
-						tuning.cross_clear_yd, true):
+		if other == g or other.hole_number == g.hole_number:
+			continue
+		if other.phase == GuestGroup.Phase.ON_HOLE and _group_in_the_way(other, at, rest, cup,
+				tuning.cross_clear_yd, tuning.cross_clear_yd, true):
+			return Hold.CROSSING
+		if (other.phase == GuestGroup.Phase.ON_HOLE or other.phase == GuestGroup.Phase.TO_TEE) \
+				and _waiting_on_tee_in_the_way(other, at, rest, cup, tuning.cross_clear_yd):
 			return Hold.CROSSING
 	return Hold.CLEAR
+
+
+## True when a guest of group `other` stands waiting on its tee, not yet struck there (E3-S39:
+## its group queued for the tee, or on the hole while a partner tees off), in the way of a
+## stroke from `at` planned to rest at `rest` (in_the_way, `near` both ways). A guest still
+## walking to the tee does not count.
+func _waiting_on_tee_in_the_way(other: GuestGroup, at: Vector2, rest: Vector2, cup: Vector2,
+		near: float) -> bool:
+	for o: Guest in other.guests:
+		if o.is_done() or o.is_walking():
+			continue
+		if o.hole != null and not o.hole.strokes.is_empty():
+			continue
+		if in_the_way(o.position, at, rest, cup, near, near):
+			return true
+	return false
 
 
 ## The landing area's radius round a stroke's planned rest `distance` yd away (E3-S22): the

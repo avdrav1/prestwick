@@ -33,6 +33,11 @@ const PATH: String = "res://course/validator_tuning.tres"
 @export var turn_cup_reach_yd: float = 40.0
 ## Footprint (CourseValidator.in_footprint, read by course/builder.gd): tiles whose centre is within this distance of the tee-to-cup segment.
 @export var footprint_half_width_yd: float = 30.0
+## Approach hint (E3-S39, never a rule, pillar 1: CourseValidator.hint_slots): a tee whose
+## centre is this close to another hole's cup, or closer, stands where that hole's approach
+## shots come down. 50 yd: guests' landing area round an approach's rest (play_clear_yd in
+## data/guests.json), and nine_holes' tees 50 yd past the greens before them.
+@export var approach_hint_yd: float = 50.0
 
 
 static func load_default() -> ValidatorTuning:

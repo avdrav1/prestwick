@@ -1064,6 +1064,51 @@ func test_an_edit_at_a_doglegs_corner_closes_it() -> void:
 	assert_true(b.hole(1).open, "an edit on the straight line, off the line of play, leaves it open")
 
 
+# --- the approach hint (E3-S39): never a rule ---
+
+func test_a_tee_in_another_holes_approach_gets_a_hint_that_never_closes_it() -> void:
+	# nine_holes: hole 2's tee (92, 8) is 50 yd past hole 1's cup (82, 8); hole 3's tee
+	# (120, 19) is 56 yd from hole 2's cup (122, 8), past approach_hint_yd.
+	var nine: CourseData = NineHoles.land()
+	var b := CourseBuilder.new(nine)
+	var opened: Array[int] = NineHoles.build(b)
+	assert_eq(opened.size(), 9, "every hole still opens: a hint is not a rule")
+	var hints: Array = _v.hint_slots(nine)
+	assert_eq(hints.size(), 9)
+	var one: Array[CourseValidator.Issue] = []
+	one.assign(hints[0])
+	assert_eq(one.size(), 1, "hole 1's approach holds hole 2's tee")
+	if not one.is_empty():
+		assert_eq(one[0].rule, CourseValidator.HINT)
+		assert_eq(one[0].tile, Vector2i(92, 8))
+		assert_string_contains(one[0].reason, "hole 2's tee is 50 yd from this cup")
+		_assert_one_line(one[0])
+	var two: Array[CourseValidator.Issue] = []
+	two.assign(hints[1])
+	assert_true(two.any(func(i: CourseValidator.Issue) -> bool:
+			return i.tile == Vector2i(92, 8) and i.reason.contains("tee is 50 yd from hole 1's cup")),
+			"and hole 2 is told its tee is in hole 1's approach")
+	assert_false(two.any(func(i: CourseValidator.Issue) -> bool: return i.tile == Vector2i(120, 19)),
+			"hole 3's tee, 56 yd from hole 2's cup, is clear")
+	for slot: int in 9:
+		assert_eq(b.hints_at(slot).size(), (hints[slot] as Array).size(), "the builder keeps slot %d's" % slot)
+		for issue: CourseValidator.Issue in b.issues_at(slot):
+			assert_ne(issue.rule, CourseValidator.HINT, "no hint among the rules")
+	assert_true(b.hole(1).open and b.hole(2).open, "both stay open")
+
+
+func test_the_approach_hint_reads_its_tuning() -> void:
+	var a := HoleData.new(1, 3, Vector2i(2, 5), Vector2i(32, 5))
+	var b := HoleData.new(2, 3, Vector2i(40, 5), Vector2i(70, 5))
+	var c := _course(80, 10, [a, b])
+	assert_eq((_v.hint_slots(c)[0] as Array).size(), 1, "40 yd: inside 50")
+	var t := ValidatorTuning.load_default().duplicate() as ValidatorTuning
+	t.approach_hint_yd = 35.0
+	assert_eq((CourseValidator.new(t).hint_slots(c)[0] as Array).size(), 0, "outside 35")
+	var lone := _course(80, 10, [a, HoleData.new(2, 3, Vector2i(40, 5), HoleData.UNPLACED)])
+	assert_eq((_v.hint_slots(lone)[0] as Array).size(), 0, "a hole with no cup gives no hint")
+
+
 func test_a_dogleg_costs_the_validator_little() -> void:
 	if BestTime.later(self):
 		return

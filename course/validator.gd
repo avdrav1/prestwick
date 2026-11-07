@@ -15,11 +15,15 @@ extends RefCounted
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
 ##
 ## Each failing rule is one Issue: the rule, the tile at fault and a one-line reason.
+## Hints (E3-S39, hint_slots) are Issues with rule HINT: advice shown in Build that never
+## closes a hole or stops it opening (pillar 1); check_hole never returns them.
 ## Distances are between tile centres at YARDS_PER_TILE. Numbers come from ValidatorTuning.
 
 ## Grid constant (CLAUDE.md Grid, D4), the same as BallParams.yards_per_tile (a test checks).
 const YARDS_PER_TILE: float = 5.0
 const RULE_COUNT: int = 6
+## The `rule` of a hint (hint_slots): not a rule at all.
+const HINT: int = 0
 
 
 ## One failing rule of one hole.
@@ -523,6 +527,37 @@ func landing_zone(hole: HoleData) -> Variant:
 		return null
 	var out_yd: float = maxf(minf(tuning.landing_distance_yd, yards - tuning.cup_clearance_yd), 0.0)
 	return Vector2(hole.tee) + line.normalized() * (out_yd / YARDS_PER_TILE)
+
+
+## Each slot's hints (E3-S39), one array per entry of course.holes, in its order: a tee within
+## approach_hint_yd of another hole's cup stands where that hole's approach shots come down,
+## so guests waiting on it are in the way of a topped or long approach. Both holes get one,
+## each on the tee's tile, as rule 5 reports a pair. A hole with its tee or cup not placed has
+## none and gives none. Never a failing rule: a hole with hints opens.
+func hint_slots(course: CourseData) -> Array:
+	var out: Array = []
+	var n: int = course.holes.size()
+	for i: int in n:
+		out.append([] as Array[Issue])
+	var reach: float = tuning.approach_hint_yd
+	for i: int in n:
+		var h: HoleData = course.holes[i]
+		if not _placed(course, h.tee) or not _placed(course, h.cup):
+			continue
+		for j: int in n:
+			var o: HoleData = course.holes[j]
+			if j == i or not _placed(course, o.tee) or not _placed(course, o.cup):
+				continue
+			var d: float = _yards_between(Vector2(h.cup), Vector2(o.tee))
+			if d > reach:
+				continue
+			(out[i] as Array[Issue]).append(Issue.new(HINT, o.tee,
+					"hole %s's tee is %d yd from this cup, where approach shots land: guests waiting there may be hit"
+					% [course.hole_label(j), roundi(d)]))
+			(out[j] as Array[Issue]).append(Issue.new(HINT, o.tee,
+					"tee is %d yd from hole %s's cup, where its approach shots land: guests waiting here may be hit"
+					% [roundi(d), course.hole_label(i)]))
+	return out
 
 
 # --- rules ---

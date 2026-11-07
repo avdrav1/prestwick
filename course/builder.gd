@@ -137,6 +137,8 @@ var _slot_yards: Array[int] = []
 ## Each slot's line of play from the same run (CourseValidator.line_of_play, D51), so an edit
 ## that moves or removes a dogleg's turn is still judged against the line it was checked on.
 var _slot_lines: Array[PackedVector2Array] = []
+## Each slot's hints from the same run (CourseValidator.hint_slots, E3-S39): never close a hole.
+var _slot_hints: Array = []
 ## Undo steps, oldest first.
 var _undo: Array[Step] = []
 ## The open stroke's step, or null when no stroke is open.
@@ -401,6 +403,15 @@ func issues_at(slot: int) -> Array[CourseValidator.Issue]:
 	var out: Array[CourseValidator.Issue] = []
 	if slot >= 0 and slot < _slot_issues.size():
 		out.assign(_slot_issues[slot])
+	return out
+
+
+## Slot `slot`'s hints from the latest validator run (CourseValidator.hint_slots, E3-S39):
+## advice for Build that never closes the hole. Empty when it has none or there is no slot.
+func hints_at(slot: int) -> Array[CourseValidator.Issue]:
+	var out: Array[CourseValidator.Issue] = []
+	if slot >= 0 and slot < _slot_hints.size():
+		out.assign(_slot_hints[slot])
 	return out
 
 
@@ -727,6 +738,7 @@ func _rerun(step: Step) -> void:
 	var turns: Array = []
 	_slot_issues = [] if _course.holes.is_empty() \
 			else _validator.check_slots(_course, _current_reach(), _slot_yards, turns)
+	_slot_hints = _validator.hint_slots(_course)
 	for i: int in turns.size():
 		var h: HoleData = _course.holes[i]
 		_slot_lines.append(PackedVector2Array() if not _course.in_bounds(h.tee.x, h.tee.y)

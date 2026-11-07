@@ -1152,3 +1152,25 @@ func test_a_collapsed_panel_with_a_complaint_stays_under_its_limit() -> void:
 				"hole %d: the issue line keeps its room beside the complaint" % n)
 		gut.p("E3-S18: hole %d collapsed with its complaint: %.0f x %.0f px, reaction %.0f px"
 				% [n, shut.size.x, shut.size.y, panel.reaction_label.get_combined_minimum_size().y])
+
+
+## E3-S39: the picked hole's details show its approach hints in their own line, apart from the
+## rules, and the hole still opens.
+func test_the_details_show_an_approach_hint_apart_from_the_rules() -> void:
+	var c := _plot()
+	var b := CourseBuilder.new(c)
+	b.paint(Vector2i(22, 3), Surface.Type.GREEN, 1)
+	b.paint(Vector2i(22, 30), Surface.Type.GREEN, 1)
+	assert_true(b.place_tee(1, Vector2i(2, 3), 3) and b.place_cup(1, Vector2i(22, 3)))
+	# Hole 2's tee 30 yd past hole 1's cup.
+	assert_true(b.place_tee(2, Vector2i(28, 3), 3) and b.place_cup(2, Vector2i(22, 30)))
+	assert_true(b.open_hole(1) and b.open_hole(2), "a hint never stops a hole opening")
+	var m := _main_with(c)
+	var panel: HolePanel = m.hole_panel
+	panel.rows_for(2)[0].pick_button.pressed.emit()
+	assert_true(panel.hint_label.visible, "hole 2 shows its hint")
+	assert_eq(panel.hint_label.text,
+			"hint at (28, 3): tee is 30 yd from hole 1's cup, where its approach shots land: guests waiting here may be hit")
+	assert_false(panel.issues_label.visible, "no rule fails")
+	panel.rows_for(1)[0].pick_button.pressed.emit()
+	assert_string_contains(panel.hint_label.text, "hole 2's tee is 30 yd from this cup")

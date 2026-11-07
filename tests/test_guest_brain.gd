@@ -479,6 +479,72 @@ func test_a_guest_holds_for_a_group_on_a_crossing_hole_in_its_landing_area() -> 
 	assert_gt(held_on_hole_1, 0, "hole 1 guests held for guests out on hole 2")
 
 
+## E3-S39: a guest waiting on another hole's tee is crossing traffic. On GuestCourse hole 2's
+## tee is 20 yd past hole 1's cup, so the group queued there stands where hole 1's tee shots
+## come down. No stroke is struck while such a guest (standing on its tee, not yet struck
+## there, before and after the step) is in its way (GuestBrain.in_the_way at
+## `cross_clear_yd`, 40 yd here), unless the striking group has waited `cross_hold_max_s` on
+## other holes.
+func test_a_guest_holds_for_guests_waiting_on_another_holes_tee() -> void:
+	var c := GuestCourse.course()
+	# At data/guests.json's cross_clear_yd (20) no hole 1 stroke was held on these days (the
+	# tee is 20 yd from the cup, and in_the_way needs a guest under 20 yd from the planned
+	# rest); 40 yd puts the waiting group in reach, to see the rule hold.
+	var t := _tuning({"cross_clear_yd": 40.0})
+	var strokes := 0
+	var violations := 0
+	var held_on_hole_1 := 0
+	for day_seed: int in [1, 2, 3]:
+		var brain := GuestBrain.new(c, day_seed, t, model)
+		while not brain.day_over:
+			brain.serve(-1)
+			var before := {}
+			for g: Guest in brain.guests:
+				var gr := brain.group_of(g)
+				var waiting: bool = not g.is_done() and not g.is_walking() \
+						and (gr.phase == GuestGroup.Phase.ON_HOLE or gr.phase == GuestGroup.Phase.TO_TEE) \
+						and (g.hole == null or g.hole.strokes.is_empty())
+				var plan := Vector2.INF
+				if g.hole != null and g.hole.state == GuestHole.State.READY and g.hole.plan != null:
+					plan = Vector2(g.hole.plan.prediction.rest.x, g.hole.plan.prediction.rest.y)
+				before[g.id] = [g.hole.strokes.size() if g.hole != null else -1, plan, g.position,
+						waiting, gr.hole_number]
+			var capped := {}
+			for gr: GuestGroup in brain.groups:
+				capped[gr.index] = gr.cross_held_s >= t.cross_hold_max_s
+			brain.step()
+			for g: Guest in brain.guests:
+				if g.hole == null or not before.has(g.id) or int(before[g.id][0]) < 0 \
+						or g.hole.strokes.size() != int(before[g.id][0]) + 1:
+					continue
+				strokes += 1
+				var me := brain.group_of(g)
+				if bool(capped[me.index]):
+					continue
+				var at := Vector2(g.hole.strokes[-1].start.x, g.hole.strokes[-1].start.y)
+				var rest: Vector2 = before[g.id][1]
+				var cup := brain.field.tile_center(g.hole.hole.cup)
+				for o: Guest in brain.guests:
+					var og := brain.group_of(o)
+					if not before.has(o.id):
+						continue  # arrived this second
+					var b: Array = before[o.id]
+					if og == me or int(b[4]) == me.hole_number or not bool(b[3]):
+						continue
+					var still: bool = not o.is_done() and not o.is_walking() and o.position == b[2] \
+							and (o.hole == null or o.hole.strokes.is_empty())
+					if still and GuestBrain.in_the_way(o.position, at, rest, cup, t.cross_clear_yd,
+							t.cross_clear_yd):
+						violations += 1
+		for g: Guest in brain.guests:
+			for r: Guest.HoleRecord in g.records:
+				if r.number == 1 and r.cross_wait_s > 0:
+					held_on_hole_1 += 1
+	assert_gt(strokes, 100, "the days were played")
+	assert_eq(violations, 0, "nobody struck into a guest waiting on another hole's tee")
+	assert_gt(held_on_hole_1, 0, "hole 1 guests held for guests on hole 2's tee")
+
+
 ## E3-S8 review: the engine's budget never fails pace by itself. A guest alone on the course
 ## counts no wait at all, its own putt solve (reading the green) included, so even patience 1
 ## never fails pace on a hole with nobody ahead.
