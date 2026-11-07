@@ -24,7 +24,10 @@ extends Node2D
 ## screen size, so they are laid out in screen space at the current zoom (layout_issue_labels):
 ## nearest the camera first, each pushed up clear of the boxes already placed, but never more
 ## than BuilderTuning.issue_box_max_stack; past that it moves sideways instead, at most
-## issue_box_max_side, and past both it collapses to its badge (E2-S17). A
+## issue_box_max_side, and past both it collapses to its badge (E2-S17). Since E3-S40 the boxes
+## also keep clear of every tee's hole number and every issue badge, and of the framed hole's
+## line of play where they can (`framed_slot`), so at the farther zooms crowded boxes collapse to
+## their badges rather than cover a label; a badge on a tee stands past its number. A
 ## leader foot covered by a tile in front draws dashed and faded (IssueMarker.foot_hidden).
 ## Main shows them in Build only.
 ##
@@ -64,6 +67,10 @@ const LAND_EDGE_S: int = 8
 const HUE_MIN_SAT: float = 0.1
 ## Screen px left between two issue text boxes when one is pushed up past the other.
 const ISSUE_BOX_GAP: float = 4.0
+## Screen px between a tee's hole number and an issue badge on the same tile (E3-S40).
+const BADGE_GAP: float = 2.0
+## Screen px an issue box keeps from the framed hole's line of play (E3-S40).
+const LINE_CLEAR: float = 2.0
 ## A changed tile's chunks are rebuilt this many tiles round it: its height moves the ground of
 ## the tiles beside it, and whether those are sloped moves the fans of the tiles beside them.
 const REBUILD_REACH: int = 2
@@ -89,6 +96,13 @@ var _issue_markers: Array[IssueMarker] = []
 var _issue_layout_scale: float = 0.0
 ## The zoom the tee markers' hole numbers were last sized for (layout_hole_labels).
 var _hole_label_scale: float = 0.0
+## The slot (CourseData.holes index) of the hole framed in Build (Main.frame_hole), whose line of
+## play the issue boxes keep off where they can (E3-S40); -1 for none.
+var framed_slot: int = -1:
+	set(value):
+		if value != framed_slot:
+			framed_slot = value
+			_issue_layout_scale = 0.0
 ## How far past its resting height a text box may be pushed up, screen px
 ## (BuilderTuning.issue_box_max_stack).
 var issue_max_stack: float = 0.0
@@ -150,6 +164,7 @@ func _init() -> void:
 func show_course(c: CourseData) -> void:
 	_course = c
 	terrain.course = c
+	framed_slot = -1
 	for ch: TerrainMesh.Chunk in _chunks.values():
 		_ground_root.remove_child(ch)
 		ch.free()
@@ -193,6 +208,7 @@ func refresh_holes() -> void:
 			m.shape_scale = marker_shape_scale(_view_scale())
 			_holes_root.add_child(m)
 			_markers.append(m)
+	layout_hole_labels(_view_scale())
 
 
 ## Draws every hole's line of play (D47, D51): `lines` one per slot, [tee, cup] or [tee, turn,
@@ -289,42 +305,109 @@ func layout_issue_labels(scale: float) -> void:
 	var order: Array[IssueMarker] = _issue_markers.duplicate()
 	order.sort_custom(func(a: IssueMarker, b: IssueMarker) -> bool:
 		return a.draw_point().y > b.draw_point().y)
+	# Labels a box must not cover (E3-S40): every tee's hole number and every issue badge. A
+	# badge on a tee stands past its number.
+	var labels: Array[Rect2] = []
+	var tee_label := {}
+	for hm: HoleMarker in _markers:
+		var r: Rect2 = hm.label_rect(scale)
+		if r.size != Vector2.ZERO:
+			tee_label[hm.cell] = maxf(tee_label.get(hm.cell, 0.0), r.end.x)
+			r.position += hm.draw_point() * scale
+			labels.append(r)
+	for m: IssueMarker in _issue_markers:
+		m.badge_clear = tee_label[m.cell] + BADGE_GAP if tee_label.has(m.cell) else 0.0
+		var r: Rect2 = m.badge_rect(scale)
+		r.position += m.draw_point() * scale
+		labels.append(r)
+	var line: Array[Rect2] = framed_line_rects(scale)
 	var placed: Array[Rect2] = []
 	for m: IssueMarker in order:
 		m.text_scale = 1.0 / scale
 		var anchor: Vector2 = m.draw_point() * scale
 		var rest: Rect2 = m.box_rect(scale, 0.0)
 		rest.position += anchor
-		# Only boxes within reach of every allowed position can be in the way.
+		# Only rects within reach of every allowed position can be in the way.
 		var reach: Rect2 = rest.grow_individual(issue_max_side + ISSUE_BOX_GAP,
 			issue_max_stack + rest.size.y + ISSUE_BOX_GAP, issue_max_side + ISSUE_BOX_GAP, 0.0)
 		var near: Array[Rect2] = []
-		var sides: Array[float] = [0.0]
+		# Sideways tries start just past a box in the way; a label only blocks (a tee number or
+		# badge is small, and a try past each of them costs more than it finds).
+		var sides_from: int = 0
 		for r: Rect2 in placed:
 			if r.intersects(reach):
 				near.append(r)
-				# Just right of r, or just left of it.
-				sides.append(r.end.x + ISSUE_BOX_GAP - rest.position.x)
-				sides.append(r.position.x - ISSUE_BOX_GAP - rest.end.x)
-		sides.sort_custom(func(a: float, b: float) -> bool: return absf(a) < absf(b))
-		var done: bool = false
-		for side: float in sides:
-			if absf(side) > issue_max_side:
-				break
-			var push: float = _clear_push(m, scale, anchor, side, near)
-			if push <= issue_max_stack:
-				var rect: Rect2 = m.box_rect(scale, push, side)
-				rect.position += anchor
-				placed.append(rect)
-				m.stack = push
-				m.shift = side
-				m.collapsed = false
-				done = true
-				break
-		if not done:
+		sides_from = near.size()
+		for r: Rect2 in labels:
+			if r.intersects(reach):
+				near.append(r)
+		var near_line: Array[Rect2] = []
+		for r: Rect2 in line:
+			if r.intersects(reach):
+				near_line.append(r)
+		# Off the framed hole's line where it can (E3-S40), else as before.
+		var spot: Array = []
+		if not near_line.is_empty():
+			# Boxes and the line both offer sideways tries: just past the line is off it.
+			var with_line: Array[Rect2] = near.slice(0, sides_from)
+			with_line.append_array(near_line)
+			with_line.append_array(near.slice(sides_from))
+			spot = _find_spot(m, scale, anchor, rest, with_line, sides_from + near_line.size())
+		if spot.is_empty():
+			spot = _find_spot(m, scale, anchor, rest, near, sides_from)
+		if spot.is_empty():
 			m.stack = 0.0
 			m.shift = 0.0
 			m.collapsed = true
+			continue
+		var rect: Rect2 = m.box_rect(scale, spot[0], spot[1])
+		rect.position += anchor
+		placed.append(rect)
+		m.stack = spot[0]
+		m.shift = spot[1]
+		m.collapsed = false
+
+
+## The first spot for `m`'s box clear of every rect in `near`: [push, side], trying sideways
+## offsets nearest first (just past each of the first `side_count` rects of `near`, the boxes in
+## its way), each pushed up as far as needed, within issue_max_side and issue_max_stack; [] when
+## none fits.
+func _find_spot(m: IssueMarker, scale: float, anchor: Vector2, rest: Rect2, near: Array[Rect2],
+		side_count: int) -> Array:
+	var sides: Array[float] = [0.0]
+	for i: int in side_count:
+		var r: Rect2 = near[i]
+		# Just right of r, or just left of it.
+		sides.append(r.end.x + ISSUE_BOX_GAP - rest.position.x)
+		sides.append(r.position.x - ISSUE_BOX_GAP - rest.end.x)
+	sides.sort_custom(func(a: float, b: float) -> bool: return absf(a) < absf(b))
+	for side: float in sides:
+		if absf(side) > issue_max_side:
+			break
+		var push: float = _clear_push(m, scale, anchor, side, near)
+		if push <= issue_max_stack:
+			return [push, side]
+	return []
+
+
+## The framed hole's line of play (framed_slot) as small screen rects at a zoom of `scale`, one
+## per half tile along it on the ground, for the issue boxes to keep off; [] with no framed hole
+## or no line.
+func framed_line_rects(scale: float) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	if framed_slot < 0 or framed_slot >= play_lines.lines.size():
+		return out
+	var line: PackedVector2Array = play_lines.lines[framed_slot]
+	for i: int in range(1, line.size()):
+		var a: Vector2 = line[i - 1]
+		var b: Vector2 = line[i]
+		var n: int = maxi(1, ceili(a.distance_to(b) / 0.5))
+		var prev: Vector2 = play_lines.ground_point(a) * scale
+		for k: int in range(1, n + 1):
+			var q: Vector2 = play_lines.ground_point(a.lerp(b, float(k) / n)) * scale
+			out.append(Rect2(prev, Vector2.ZERO).expand(q).grow(LINE_CLEAR))
+			prev = q
+	return out
 
 
 ## How far `m`'s box, `side` px sideways, must be pushed up to clear every box in `placed`,
@@ -379,6 +462,11 @@ func layout_hole_labels(scale: float) -> void:
 	for m: HoleMarker in _markers:
 		m.text_scale = 1.0 / scale
 		m.shape_scale = k
+		# A grown marker already draws over the terrain; at 0.5x and nearer the number rises over
+		# it only where ground in front would cover it (E3-S40).
+		m.label_lifted = k <= 1.0 + 0.0001 and m.label_covered(_course, scale)
+	# The issue boxes keep off the numbers, which moved.
+	_issue_layout_scale = 0.0
 
 
 ## How large a tee marker or pin is drawn at a zoom of `scale` screen px per local unit (D45):
@@ -483,6 +571,8 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 	for m: HoleMarker in _markers:
 		if changed.has(m.cell):
 			m.place(_course)
+	if moved:
+		_hole_label_scale = 0.0
 	# An edit in front of a fault may cover or uncover its leader's foot.
 	for m: IssueMarker in _issue_markers:
 		if changed.has(m.cell):

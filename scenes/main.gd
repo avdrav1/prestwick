@@ -221,6 +221,8 @@ func frame_hole(number: int, slot: int = -1) -> bool:
 	if h == null or not course.in_bounds(h.tee.x, h.tee.y) or not course.in_bounds(h.cup.x, h.cup.y):
 		return false
 	build_tool.select_hole(number, slot)
+	# Its issue boxes keep off its line of play where they can (E3-S40).
+	course_view.framed_slot = course.holes.find(h)
 	var tee: Vector2 = tile_world(h.tee)
 	var cup: Vector2 = tile_world(h.cup)
 	camera.frame_points(tee, cup, free_view_rect_for(tee, cup), free_view_rects())

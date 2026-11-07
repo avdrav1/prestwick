@@ -309,6 +309,147 @@ func test_a_lone_box_stays_centred_over_its_tile() -> void:
 	assert_false(m.collapsed)
 
 
+# --- labels kept apart (E3-S40) ---
+
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+
+## nine_holes with every hole failing two rules (its cup on rough, its par wrong), as E3-S2's
+## frame figures: nine boxes of two lines at the cups. Returns [course, builder].
+func _nine_failing() -> Array:
+	var c := NineHoles.land()
+	var b := CourseBuilder.new(c)
+	NineHoles.build(b)
+	for spec: Array in NineHoles.HOLES:
+		b.paint(spec[3], Surface.Type.ROUGH, 1)
+		b.set_par(spec[0], 5 if spec[1] != 5 else 3)
+	return [c, b]
+
+
+## Every label drawn at `scale` in screen px: [kind, rect] for each shown issue box ("box"), each
+## tee's hole number ("tee") and each issue badge ("badge").
+func _labels(v: CourseView, scale: float) -> Array:
+	var out: Array = []
+	for r: Rect2 in v.issue_label_rects():
+		if r.size != Vector2.ZERO:
+			out.append(["box", r])
+	for hm: HoleMarker in v.hole_markers():
+		var r: Rect2 = hm.label_rect(scale)
+		if r.size != Vector2.ZERO:
+			r.position += hm.draw_point() * scale
+			out.append(["tee", r])
+	for m: IssueMarker in v.issue_markers():
+		var r: Rect2 = m.badge_rect(scale)
+		r.position += m.draw_point() * scale
+		out.append(["badge", r])
+	return out
+
+
+func test_no_two_labels_overlap_on_nine_holes_with_every_hole_failing() -> void:
+	var cb: Array = _nine_failing()
+	var c: CourseData = cb[0]
+	var b: CourseBuilder = cb[1]
+	var v := _view(c)
+	v.show_issues(b.issues, b.slot_issues())
+	assert_eq(v.issue_markers().size(), 9, "a box at each cup")
+	for scale: float in [0.175, 0.5, 1.0]:
+		v.layout_hole_labels(scale)
+		v.layout_issue_labels(scale)
+		var labels: Array = _labels(v, scale)
+		var bad: Array = []
+		for i: int in labels.size():
+			for j: int in range(i + 1, labels.size()):
+				if (labels[i][1] as Rect2).intersects(labels[j][1]):
+					bad.append("%s %d and %s %d" % [labels[i][0], i, labels[j][0], j])
+		assert_eq(bad, [], "no two labels overlap at %sx" % scale)
+		_assert_near_and_apart(v, scale)
+## A course whose hole 2 is in two slots (2a and 2b), each tee six tiles apart.
+func _shared_number() -> CourseData:
+	var c := CourseData.create(40, 20, Surface.Type.ROUGH, 2)
+	var b := CourseBuilder.new(c)
+	for n: int in [1, 2]:
+		b.place_tee(n, Vector2i(6, n * 6), 3)
+		b.place_cup(n, Vector2i(30, n * 6))
+	var data: Dictionary = c.to_dict()
+	(data["holes"] as Array)[0]["number"] = 2
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_json(JSON.stringify(data), errors)
+	assert_not_null(loaded, "a shared number loads: %s" % [errors])
+	return loaded
+
+
+func test_a_badge_on_a_tee_clears_its_label_at_every_zoom() -> void:
+	var c := _shared_number()
+	var b := CourseBuilder.new(c)
+	var v := _view(c)
+	v.show_issues(b.issues, b.slot_issues())
+	var tees := 0
+	for scale: float in [0.175, 0.5, 1.0, 2.0]:
+		v.layout_hole_labels(scale)
+		v.layout_issue_labels(scale)
+		for hm: HoleMarker in v.hole_markers():
+			if hm.kind != HoleMarker.Kind.TEE:
+				continue
+			for m: IssueMarker in v.issue_markers():
+				if m.cell != hm.cell:
+					continue
+				tees += 1
+				assert_true(m.rules.has(1), "the rule-1 issue stands on a tee")
+				assert_false(m.badge_rect(scale).intersects(hm.label_rect(scale)),
+						"the badge clears %s's label at %sx" % [hm.label_text(), scale])
+	assert_gt(tees, 0, "a rule-1 badge stands on a tee")
+
+
+func test_a_tee_label_behind_a_hill_rises_over_the_terrain_at_half_zoom() -> void:
+	var c := _flat()
+	var b := CourseBuilder.new(c)
+	b.place_tee(1, Vector2i(8, 8), 3)
+	b.place_cup(1, Vector2i(8, 16))
+	var v := _view(c)
+	v.layout_hole_labels(0.5)
+	var tee := v.hole_marker(1, HoleMarker.Kind.TEE)
+	assert_false(tee.label_lifted, "on flat ground the number sorts with the terrain")
+	assert_eq(tee.label.z_index, 0)
+	# A hill just in front, five steps up, rises over the number on screen.
+	var cells: Array[Vector2i] = []
+	for y: int in range(9, 12):
+		for x: int in range(9, 12):
+			c.set_tile(x, y, 7, Surface.Type.ROUGH)
+			cells.append(Vector2i(x, y))
+	v.refresh_cells(cells)
+	v.layout_hole_labels(0.5)
+	assert_true(tee.label_covered(c, 0.5), "the hill covers the number")
+	assert_true(tee.label_lifted, "so it rises over the terrain")
+	assert_gt(tee.label.z_index, 0)
+
+
+## E3-S40: a framed hole's box keeps off its line of play where it can.
+func test_a_framed_holes_box_sits_off_its_line() -> void:
+	var c := CourseData.create(60, 20, Surface.Type.ROUGH, 2)
+	var b := CourseBuilder.new(c)
+	b.place_tee(1, Vector2i(4, 10), 4)
+	b.place_cup(1, Vector2i(50, 10))
+	var v := _view(c)
+	v.show_play_lines(b.slot_lines())
+	# A fault on the line, half way along it.
+	v.show_issues({1: [CourseValidator.Issue.new(3, Vector2i(30, 10), "no path from tee to cup")]})
+	v.framed_slot = 0
+	var line: Array[Rect2] = v.framed_line_rects(0.5)
+	assert_gt(line.size(), 0)
+	v.framed_slot = -1
+	v.layout_issue_labels(0.5)
+	var free: Rect2 = v.issue_label_rects()[0]
+	var crossed := false
+	for r: Rect2 in line:
+		crossed = crossed or r.intersects(free)
+	assert_true(crossed, "unframed, the box stands over the line")
+	v.framed_slot = 0
+	v.layout_issue_labels(0.5)
+	var off: Rect2 = v.issue_label_rects()[0]
+	for r: Rect2 in line:
+		assert_false(r.intersects(off), "framed, it keeps off the line")
+	assert_false(v.issue_markers()[0].collapsed, "and still shows")
+
+
 # --- the swing bar ---
 
 func test_the_swing_bar_redraws_on_resize_while_idle() -> void:

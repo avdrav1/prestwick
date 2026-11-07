@@ -24,6 +24,11 @@ extends Node2D
 ## lays the boxes out in screen space (`text_scale`, `stack`, `shift`) so neighbouring boxes
 ## never cover each other and none sits far above or beside its tile; one with no room
 ## near its tile collapses to its badge (`collapsed`).
+##
+## The badge keeps its screen size too (E3-S40), on the tile's right corner at 1x; at farther
+## zooms the corner closes in on the tile centre, so the badge holds at least `badge_clear`
+## screen px right of it, set by CourseView past a tee's hole number on the same tile, so it
+## never covers the "4a" it warns about.
 
 @export var line_color: Color = Color8(216, 58, 58)
 @export var ink_color: Color = Color8(26, 28, 34)
@@ -36,6 +41,8 @@ extends Node2D
 @export var font_size: int = 14
 @export var text_width: float = 320.0
 @export var text_padding: float = 4.0
+## The badge's half size, screen px at every zoom.
+@export var badge_half: float = 7.0
 ## A hidden foot's (and its badge's) alpha, and its leader's dash length (screen px at 1x).
 @export var hidden_alpha: float = 0.45
 @export var dash_length: float = 4.0
@@ -83,6 +90,13 @@ var shift: float = 0.0:
 	set(value):
 		if value != shift:
 			shift = value
+			label.queue_redraw()
+## The least distance, screen px, from the tile centre to the badge's left edge (CourseView:
+## past a tee's hole number on this tile, E3-S40); 0 lets it sit on the tile's right corner.
+var badge_clear: float = 0.0:
+	set(value):
+		if value != badge_clear:
+			badge_clear = value
 			label.queue_redraw()
 ## Whether the layout found no room for the text box near the tile, so only the diamond and
 ## badge draw (the hole panel still lists the reasons), set by CourseView's layout.
@@ -190,6 +204,19 @@ func box_rect(scale: float, push: float, side: float = 0.0) -> Rect2:
 	return Rect2(Vector2(-size.x * 0.5 + side, bottom - size.y), size)
 
 
+## The badge's centre in screen px relative to the tile centre at a zoom of `scale`: the tile's
+## right corner (as at 1x), or further right to keep badge_clear.
+func badge_centre(scale: float) -> Vector2:
+	var x: float = maxf((Iso.HALF_W - 2.0) * scale, badge_clear + badge_half)
+	return Vector2(x, -4.0 * scale)
+
+
+## The badge's box in screen px relative to the tile centre at a zoom of `scale` (E3-S40).
+func badge_rect(scale: float) -> Rect2:
+	var c: Vector2 = badge_centre(scale)
+	return Rect2(c - Vector2(badge_half, badge_half), Vector2(badge_half, badge_half) * 2.0)
+
+
 ## `line` broken at spaces into pieces no wider than text_width (a single long word stays whole).
 func wrap_line(font: Font, line: String) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -235,18 +262,21 @@ func _draw() -> void:
 ## The badge, leader line and text box, over everything; drawn on `label`, at the tile centre.
 func _draw_label() -> void:
 	var font: Font = ThemeDB.fallback_font
+	# Everything on the label is drawn in screen px about the tile centre.
+	label.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * text_scale)
+	var s: float = 1.0 / text_scale if text_scale > 0.0 else 1.0
 	# The warning badge on the right corner: a triangle with "!", faded with a hidden foot.
 	var a: float = hidden_alpha if foot_hidden else 1.0
-	var corner := Vector2(Iso.HALF_W - 2.0, -4.0)
-	var tri := PackedVector2Array([corner + Vector2(-7, 6), corner + Vector2(7, 6), corner + Vector2(0, -7), corner + Vector2(-7, 6)])
+	var corner: Vector2 = badge_centre(s)
+	var b: float = badge_half
+	var tri := PackedVector2Array([corner + Vector2(-b, b - 1.0), corner + Vector2(b, b - 1.0), corner + Vector2(0, -b), corner + Vector2(-b, b - 1.0)])
 	label.draw_colored_polygon(tri, Color(line_color, a))
 	label.draw_polyline(tri, Color(ink_color, a), 1.0)
 	label.draw_string(font, corner + Vector2(-2, 5), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(text_color, a))
 	if rules.is_empty() or collapsed:
+		label.draw_set_transform(Vector2.ZERO)
 		return
 	# The reasons, at screen size, above the tile; a leader line down to the tile centre.
-	label.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * text_scale)
-	var s: float = 1.0 / text_scale if text_scale > 0.0 else 1.0
 	var box: Rect2 = box_rect(s, stack, shift)
 	# The leader meets the box bottom straight above the tile, or its nearest end when shifted.
 	var inset: float = minf(text_padding * 2.0, box.size.x * 0.5)

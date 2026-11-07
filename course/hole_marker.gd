@@ -13,8 +13,19 @@ extends Node2D
 ## square blocks either side of the tile centre, the pin a dark cup with a pole and a pennant.
 ## Colours are art/palette.gpl entries. With nine holes (E3-S2) the tee marker shows its hole
 ## number between its blocks, chalk on an ink outline, so the map says which tee is which.
+##
+## The number is drawn by a child (`label`, E3-S40) so it can rise over the terrain on its own:
+## Y-sorted with the marker, ground in front on raised land could cover it at 0.5x and nearer,
+## so CourseView lifts it (`label_lifted`, z_index 1) whenever drawn ground nearer the camera
+## covers any part of it (label_covered), and leaves it sorted with the terrain otherwise, so the
+## player's ball on the tee still draws over it.
 
 enum Kind { TEE, PIN }
+## The hole number's ink outline, screen px.
+const LABEL_OUTLINE: int = 3
+## How many tiles in front label_covered looks for higher ground before casting rays: at 0.5x
+## the number stands about two tiles' worth of height over its tile.
+const LIFT_REACH: int = 4
 
 ## Tee blocks: sun_yellow on ink. Pin: flag_red pennant, chalk pole, ink cup and outlines.
 @export var tee_color: Color = Color8(240, 200, 58)
@@ -49,7 +60,15 @@ var text_scale: float = 1.0:
 	set(v):
 		if not is_equal_approx(v, text_scale):
 			text_scale = v
-			queue_redraw()
+			label.queue_redraw()
+## The hole number, drawn over the terrain while `label_lifted` (E3-S40).
+var label: Node2D
+## Whether the number draws over the terrain (z_index 1 over the marker's), set by CourseView
+## when ground in front covers it (label_covered).
+var label_lifted: bool = false:
+	set(v):
+		label_lifted = v
+		label.z_index = 1 if v else 0
 
 
 ## How many times its 1x size the shape is drawn, in the CourseView's space (D45, E3-S9): 1 at
@@ -64,6 +83,7 @@ var shape_scale: float = 1.0:
 			shape_scale = v
 			z_index = 1 if shape_scale > 1.0 + 0.0001 else 0
 			queue_redraw()
+			label.queue_redraw()
 
 
 func _init(p_kind: Kind = Kind.TEE, p_hole_number: int = 0, p_cell: Vector2i = Vector2i.ZERO) -> void:
@@ -71,6 +91,10 @@ func _init(p_kind: Kind = Kind.TEE, p_hole_number: int = 0, p_cell: Vector2i = V
 	hole_number = p_hole_number
 	cell = p_cell
 	name = "%s%d" % ["Tee" if kind == Kind.TEE else "Pin", hole_number]
+	label = Node2D.new()
+	label.name = "Label"
+	label.draw.connect(_draw_label)
+	add_child(label)
 
 
 ## Stands the marker on its tile's ground in `course`.
@@ -85,6 +109,7 @@ func place(course: CourseData) -> void:
 	var at: Vector2 = draw_point()
 	position = Vector2(at.x, Iso.object_sort_key(Vector2(cell), ground))
 	queue_redraw()
+	label.queue_redraw()
 
 
 ## Where its shape is drawn, in the CourseView's space: its tile's centre, on the ground.
@@ -105,6 +130,49 @@ func label_screen_height(zoom: float) -> float:
 	return ThemeDB.fallback_font.get_height(number_font_size) * text_scale * zoom
 
 
+## The hole number's box on screen at a zoom of `zoom` screen px per local unit, in px relative
+## to its tile centre on the ground (draw_point), outline included; empty on a pin or a tee
+## with no number (E3-S40).
+func label_rect(zoom: float) -> Rect2:
+	var text: String = label_text()
+	if text.is_empty():
+		return Rect2()
+	var font: Font = ThemeDB.fallback_font
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size).x
+	var ascent: float = font.get_ascent(number_font_size)
+	var descent: float = font.get_descent(number_font_size)
+	# Drawn with its baseline ascent / 2 below a point tee_block_radius above the centre (local).
+	var base_y: float = -tee_block_radius * shape_scale * zoom + ascent * 0.5 * text_scale * zoom
+	var k: float = text_scale * zoom
+	var r := Rect2(-w * 0.5 * k, base_y - ascent * k, w * k, (ascent + descent) * k)
+	return r.grow(LABEL_OUTLINE * 0.5 * k)
+
+
+## Whether drawn ground nearer the camera than this tee's row covers any part of its number at
+## a zoom of `zoom` (E3-S40): the frontmost ground under the bottom corners and middle of
+## label_rect stands on a row in front (ground in front rises up the screen from below, so the
+## bottom edge is covered first). With no tile within LIFT_REACH in front higher than this one,
+## nothing can cover it and no ray is cast.
+func label_covered(course: CourseData, zoom: float) -> bool:
+	var r: Rect2 = label_rect(zoom)
+	if r.size == Vector2.ZERO or zoom <= 0.0:
+		return false
+	var higher: bool = false
+	for dy: int in range(0, LIFT_REACH + 1):
+		for dx: int in range(0, LIFT_REACH + 1):
+			var c := cell + Vector2i(dx, dy)
+			if (dx > 0 or dy > 0) and course.in_bounds(c.x, c.y) and course.get_height(c.x, c.y) > ground:
+				higher = true
+	if not higher:
+		return false
+	var at: Vector2 = draw_point()
+	for p: Vector2 in [Vector2(r.position.x, r.end.y), Vector2(r.get_center().x, r.end.y), r.end]:
+		var hit: Array = TilePicker.cast(course, at + p / zoom)
+		if not hit.is_empty() and (hit[0] as Vector2i).x + (hit[0] as Vector2i).y > cell.x + cell.y:
+			return true
+	return false
+
+
 ## Its Y-sort key, in the CourseView's space (Iso.object_sort_key on its tile).
 func sort_key() -> float:
 	return position.y
@@ -123,15 +191,6 @@ func _draw() -> void:
 			draw_rect(Rect2(c - r - Vector2.ONE, (r + Vector2.ONE) * 2.0), ink_color)
 			draw_rect(Rect2(c - r, r * 2.0), tee_color)
 		draw_set_transform(Vector2.ZERO)
-		var text: String = label_text()
-		if not text.is_empty():
-			var font: Font = ThemeDB.fallback_font
-			var size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size)
-			var base := Vector2(-size.x * 0.5, font.get_ascent(number_font_size) * 0.5)
-			draw_set_transform(at + Vector2(0.0, -tee_block_radius * k), 0.0, Vector2.ONE * text_scale)
-			draw_string_outline(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, 3, ink_color)
-			draw_string(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, pole_color)
-			draw_set_transform(Vector2.ZERO)
 		return
 	draw_set_transform(at, 0.0, Vector2(k, k * 0.5))
 	draw_circle(Vector2.ZERO, cup_radius, ink_color)
@@ -144,3 +203,18 @@ func _draw() -> void:
 	flag.append(top)
 	draw_polyline(flag, ink_color, 1.0)
 	draw_set_transform(Vector2.ZERO)
+
+
+## The tee's hole number, on `label`, at screen size (text_scale).
+func _draw_label() -> void:
+	var text: String = label_text()
+	if text.is_empty():
+		return
+	var at: Vector2 = draw_point() - position
+	var font: Font = ThemeDB.fallback_font
+	var size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size)
+	var base := Vector2(-size.x * 0.5, font.get_ascent(number_font_size) * 0.5)
+	label.draw_set_transform(at + Vector2(0.0, -tee_block_radius * shape_scale), 0.0, Vector2.ONE * text_scale)
+	label.draw_string_outline(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, LABEL_OUTLINE, ink_color)
+	label.draw_string(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, pole_color)
+	label.draw_set_transform(Vector2.ZERO)
