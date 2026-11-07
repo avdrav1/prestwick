@@ -231,6 +231,58 @@ func test_a_swinging_guest_stands_over_its_own_ball() -> void:
 	assert_true(_run(sim, view, eased), "the group spread comes back")
 
 
+## E3-S38: a striker closes its group spread to stand over its ball, which on the tee is the
+## spot its place-0 partner stood on until E3-S38; now nobody stands on the spot and the
+## partners step back while it swings, so no standing figure of its group is drawn on the
+## striker's spot (within SAME_SPOT_YD) while it strikes from the tee, nor does a step back jump.
+const SAME_SPOT_YD: float = 0.5
+
+
+func test_no_two_figures_of_one_group_on_one_spot_while_one_strikes() -> void:
+	var sim := _sim(GuestCourse.course(), 7)
+	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+	var seen := {"frames": 0, "tee": 0, "closest": INF, "prev": {}, "jump": 0.0}
+	var check := func() -> bool:
+		var by_group := {}
+		for f: GuestView.Figure in view.figures().values():
+			if not by_group.has(f.guest.group_id):
+				by_group[f.guest.group_id] = []
+			(by_group[f.guest.group_id] as Array).append(f)
+		var prev: Dictionary = seen.prev
+		for figs: Array in by_group.values():
+			var striker: GuestView.Figure = null
+			for f: GuestView.Figure in figs:
+				if f.guest.state == Guest.State.PLAYING:
+					striker = f
+			if striker == null or figs.size() < 2:
+				continue
+			seen.frames += 1
+			if striker.guest.hole.strokes.size() != 1:
+				continue  # off the tee partners stand at their own balls, wherever they lie
+			seen.tee += 1
+			for b: GuestView.Figure in figs:
+				# A partner walking off after its own tee shot is not standing on the tee.
+				if b == striker or b.anim == GolferArt.Anim.WALK:
+					continue
+				var d := striker.at.distance_to(b.at)
+				seen.closest = minf(seen.closest, d)
+				assert_gt(d, SAME_SPOT_YD, "guest %d of group %d drawn %.2f yd from %d striking on the tee"
+						% [b.guest.id, b.guest.group_id, d, striker.guest.id])
+			for f: GuestView.Figure in figs:
+				# A partner's step back grows and goes smoothly (walkers move anyway).
+				if f != striker and f.anim != GolferArt.Anim.WALK and prev.has(f.guest.id):
+					seen.jump = maxf(seen.jump, f.room.distance_to(prev[f.guest.id]))
+		for f: GuestView.Figure in view.figures().values():
+			prev[f.guest.id] = f.room
+		return false
+	_run(sim, view, check, 60 * 150)
+	assert_gt(seen.tee, 30, "many frames of a tee shot with partners on the tee")
+	var walk_step := view.guest_tuning.walk_yd_per_s * FRAME + 0.01
+	assert_lt(seen.jump, walk_step, "a standing partner steps aside no faster than a walk")
+	gut.p("%d frames with a striker in a group, %d on the tee; closest partner to the striker %.2f yd; a standing partner moved at most %.2f yd a frame"
+			% [seen.frames, seen.tee, seen.closest, seen.jump])
+
+
 # --- swing, flight and walk in sync (E3-S20) ---
 
 func test_the_impact_share_lands_on_the_arts_impact_frame() -> void:

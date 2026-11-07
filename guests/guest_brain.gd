@@ -286,6 +286,8 @@ func _update(t: int) -> void:
 	if t >= tuning.day_s:
 		_dusk(t)
 		return
+	for guest: Guest in guests:
+		guest.step_from = guest.position
 	for g: GuestGroup in groups:
 		if g.phase == GuestGroup.Phase.PENDING and g.arrive_s <= t:
 			_arrive(g, t)
@@ -426,6 +428,8 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 	if done:
 		g.prev_cup = cup
 		g.has_prev_cup = true
+		g.left_hole = g.hole_number
+		g.left_s = t
 		_move_on(g, t)
 		return
 	var away: Guest = null
@@ -574,6 +578,18 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 		if ahead.phase == GuestGroup.Phase.ON_HOLE and _group_in_the_way(ahead, at, rest, cup,
 				tuning.play_clear_yd, radius, false):
 			return Hold.SAME_HOLE
+	# E3-S38: a group that holed out leaves the queue in the step its last guest stands at the
+	# cup; that guest walks off during the second, so a guest of a group gone from this hole
+	# who stood on a green when the second began still holds the stroke.
+	for other: GuestGroup in groups:
+		# It left in this second or the one before (it may already be on its next hole, a tee
+		# within a second's walk, even struck there); later its guests are off the green.
+		if other != g and other.left_hole == g.hole_number and other.left_s >= second - 1:
+			for o: Guest in other.guests:
+				if not o.is_done() \
+						and field.surface_at(o.step_from.x, o.step_from.y) == Surface.Type.GREEN \
+						and in_the_way(o.step_from, at, rest, cup, tuning.play_clear_yd, radius):
+					return Hold.SAME_HOLE
 	if g.cross_held_s >= tuning.cross_hold_max_s:
 		return Hold.CLEAR
 	for other: GuestGroup in groups:

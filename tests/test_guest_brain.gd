@@ -409,6 +409,65 @@ func test_the_group_behind_never_plays_into_the_group_ahead() -> void:
 	assert_eq(close, 0, "no ball of it rested within %.0f yd of a guest ahead" % PLAY_CLEAR_TEST_YD)
 
 
+## E3-S38: the group behind holds until the last guest of the group ahead has left the green.
+## A group that holes out leaves its hole's queue in the step its last guest stands at the cup;
+## that guest walks off during the second, so no stroke onto the green may be struck in a
+## second that starts with a guest of another group standing on it.
+func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void:
+	var onto := 0
+	var bad: Array[String] = []
+	for c: CourseData in [ReactionHoles.fair_par4(), GuestCourse.course()]:
+		for day_seed: int in [1, 2, 3]:
+			var brain := GuestBrain.new(c, day_seed, tuning, model)
+			var field := brain.field
+			# {guest id: [second struck, cup, guests of other groups on its green then]}
+			var pending := {}
+			while not brain.day_over:
+				var stood := {}
+				var strokes := {}
+				for g: Guest in brain.guests:
+					if not g.is_done():
+						stood[g.id] = [g.position, g.group_id]
+					strokes[g.id] = g.hole.strokes.size() if g.hole != null else 0
+				brain.step()
+				for g: Guest in brain.guests:
+					if g.hole == null:
+						pending.erase(g.id)
+						continue
+					if g.hole.strokes.size() > int(strokes.get(g.id, 0)):
+						var cup := field.tile_center(g.hole.hole.cup)
+						var on_green := PackedStringArray()
+						for id: int in stood:
+							var at: Vector2 = stood[id][0]
+							# A guest that went home this second is no longer drawn (GuestView).
+							if _guest_by_id(brain, id).is_done():
+								continue
+							if int(stood[id][1]) != g.group_id and at.distance_to(cup) < 30.0 \
+									and field.surface_at(at.x, at.y) == Surface.Type.GREEN:
+								on_green.append("guest %d at %s" % [id, at])
+						pending[g.id] = [brain.second - 1, cup, on_green]
+					elif pending.has(g.id) and g.hole.state != GuestHole.State.FLYING:
+						var p: Array = pending[g.id]
+						pending.erase(g.id)
+						var rest := Vector2(g.hole.ball_at.x, g.hole.ball_at.y)
+						if field.surface_at(rest.x, rest.y) != Surface.Type.GREEN \
+								or rest.distance_to(p[1]) > 30.0:
+							continue
+						onto += 1
+						if not (p[2] as PackedStringArray).is_empty():
+							bad.append("day %d s %d: guest %d onto the green with %s" % [day_seed,
+									p[0], g.id, ", ".join(p[2])])
+	assert_gt(onto, 50, "strokes came down on greens")
+	assert_eq(bad, [] as Array[String], "no stroke onto a green another group still stands on")
+
+
+func _guest_by_id(brain: GuestBrain, id: int) -> Guest:
+	for g: Guest in brain.guests:
+		if g.id == id:
+			return g
+	return null
+
+
 ## E3-S22: a guest holds for a group on a crossing hole in its landing area. On
 ## ReactionHoles.crossing_holes hole 2's green lies on hole 1's line 250 yd out, so groups
 ## putting there stand where the next group's drives come down. No stroke is struck while a

@@ -52,6 +52,9 @@ var state: State = State.WAITING
 var waiting_for: Wait = Wait.NONE
 ## Where the guest stands, yards (HeightField coordinates).
 var position: Vector2 = Vector2.ZERO
+## E3-S38: where it stood when the step now running began (GuestBrain._update), so a guest
+## that walks off a green in this second still holds the group behind for it.
+var step_from: Vector2 = Vector2.ZERO
 ## The walk under way (null when standing).
 var walk: GuestWalk
 ## The hole it is playing or about to play (null between holes).

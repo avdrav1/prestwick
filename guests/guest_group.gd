@@ -28,6 +28,11 @@ var prev_cup: Vector2 = Vector2.ZERO
 var has_prev_cup: bool = false
 ## The second it teed off `hole_number`.
 var start_s: int = 0
+## E3-S38: the hole it last left by holing out (0: none yet). Its guests still standing on
+## that hole's green hold the group behind (GuestBrain.hold_for), though it left the queue.
+var left_hole: int = 0
+## The second it left `left_hole`.
+var left_s: int = -1
 ## True once anyone in the group has struck a ball on `hole_number`.
 var struck: bool = false
 ## Seconds in a row its next stroke has been held by groups on other holes alone (E3-S22,

@@ -9,5 +9,6 @@ walk_fps = 8.0
 group_spread_yd = 1.5
 on_screen_margin_px = 32.0
 spread_ease_s = 0.5
+strike_room_yd = 1.5
 figure_min_screen_scale = 1.0
 ball_scale = 0.7

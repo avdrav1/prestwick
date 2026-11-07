@@ -101,6 +101,8 @@ class Figure:
 	var spread: float = 1.0
 	## Where the figure is drawn now, yards (place offset included).
 	var at: Vector2
+	## E3-S38: the step aside it takes now for a groupmate's swing, yards (in `at`; strike_room).
+	var room: Vector2 = Vector2.ZERO
 	## The hole and stroke count last seen, to spot a new stroke.
 	var hole: GuestHole
 	var strokes_seen: int = 0
@@ -166,17 +168,21 @@ func update_view(delta: float, speed: float) -> void:
 	var stepped := brain.second != _second
 	_second = brain.second
 	var frac := brain.step_fraction()
-	for guest: Guest in brain.guests:
-		if guest.is_done():
-			_drop(guest.id)
-			continue
-		var f: Figure = _figures.get(guest.id)
-		if f == null:
-			f = _add(guest)
-		elif stepped:
-			f.from = f.to
-			f.to = guest.position
-		_update_figure(f, delta, speed, frac)
+	# E3-S38: strikers first, so a partner steps aside (strike_room) by this frame's spread.
+	for striking: bool in [true, false]:
+		for guest: Guest in brain.guests:
+			if (guest.state == Guest.State.PLAYING) != striking:
+				continue
+			if guest.is_done():
+				_drop(guest.id)
+				continue
+			var f: Figure = _figures.get(guest.id)
+			if f == null:
+				f = _add(guest)
+			elif stepped:
+				f.from = f.to
+				f.to = guest.position
+			_update_figure(f, delta, speed, frac)
 
 
 ## Removes every figure.
@@ -260,11 +266,31 @@ static func assign_shirts(brain: GuestBrain, shirts: Dictionary, count: int) -> 
 		fresh[g.index] = true
 
 
-## A guest's place in its group as a small sideways step on screen, yards: place 0 on the
-## spot, then right, left, two right (screen x is along +x and -y of the grid).
+## A guest's place in its group as a small sideways step on screen, yards: half a spread left
+## and right of the spot, then one and a half (screen x is along +x and -y of the grid). E3-S38:
+## nobody stands on the spot itself (until E3-S38 place 0 did), where a striker on the tee
+## closes in over its ball.
 func place_offset(place: int) -> Vector2:
-	var m: float = [0.0, 1.0, -1.0, 2.0][place % 4]
+	var m: float = [-0.5, 0.5, -1.5, 1.5][place % 4]
 	return Vector2(1.0, -1.0) * tuning.group_spread_yd * m
+
+
+## E3-S38: the step back, yards, a figure drawn at `at` takes while a groupmate swings beside
+## it: toward the top of the screen (across the group's sideways spread, along which the
+## striker closes in over its ball, so the two never cross), up to `strike_room_yd`, in step
+## with the striker's spread closing and easing back (a groupmate easing back after its swing
+## still counts), and fading out from two `strike_room_yd` away. Smooth both ways, so nobody
+## jumps; on the tee no standing partner is drawn over the striker. Strikers are drawn first
+## each frame (update_view).
+func strike_room(f: Figure, at: Vector2) -> Vector2:
+	var room := 0.0
+	var reach := maxf(2.0 * tuning.strike_room_yd, 0.001)
+	for other: Figure in _figures.values():
+		if other == f or other.guest.group_id != f.guest.group_id or other.spread >= 1.0:
+			continue
+		var near := clampf(1.0 - at.distance_to(other.at) / reach, 0.0, 1.0)
+		room = maxf(room, (1.0 - other.spread) * near)
+	return Vector2(-1.0, -1.0).normalized() * tuning.strike_room_yd * room
 
 
 ## Screen vector (CourseView space, x right, y down) of a step `d` in yards.
@@ -307,6 +333,12 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 	else:
 		f.spread = minf(1.0, f.spread + delta * speed / maxf(tuning.spread_ease_s, 0.001))
 	f.at = f.from.lerp(f.to, p) + place_offset(g.place) * f.spread
+	f.room = strike_room(f, f.at)
+	if g.state == Guest.State.PLAYING:
+		# A striker that stood aside for the last stroke steps back to its ball as its own
+		# spread closes, so it neither jumps nor swings off its ball.
+		f.room *= f.spread
+	f.at += f.room
 	var moving := walking and f.from.distance_squared_to(f.to) > 1e-6
 	var d := -1
 	if moving:

@@ -9,6 +9,9 @@ extends Node2D
 ## E3-S20: with `catch_landing` (guest_flight_shot_landing.tscn) it pauses instead as a tee
 ## shot's drawn ball is about to rest, `landing_ticks` ticks from its end: its guest still
 ## stands on the tee, in its finish, and has not set off after it.
+## E3-S38: with `catch_tee_swing` (guest_flight_shot_tee_swing.tscn) it pauses at the top of a
+## tee shot's swing by a guest whose partners all still stand on the tee, so the picture shows
+## them stepped aside round the striker.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
@@ -16,6 +19,10 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## E3-S20: pause as the drawn ball lands, not as it first flies.
 @export var catch_landing: bool = false
 @export var landing_ticks: float = 15.0
+## E3-S38: pause mid-swing on a tee with partners beside the striker.
+@export var catch_tee_swing: bool = false
+## The guest days' base seed (GuestSim.start), or below 0 for the course's own.
+@export var day_base_seed: int = -1
 
 var main: Main
 var caught: bool = false
@@ -26,6 +33,8 @@ func _ready() -> void:
 	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(main)
 	main.show_course(GuestCourse.course())
+	if day_base_seed >= 0:
+		main.guest_sim.start(main.course, day_base_seed)
 	main.set_mode(Main.Mode.PLAY)
 	main.swing_panel.visible = false
 	main.set_process(false)
@@ -40,6 +49,14 @@ func _process(_delta: float) -> void:
 	if caught:
 		return
 	for f: GuestView.Figure in main.guest_view.figures().values():
+		if catch_tee_swing:
+			if f.guest.state == Guest.State.PLAYING and f.guest.hole.strokes.size() == 1 \
+					and f.spread <= 0.0 \
+					and _partners_on_tee(f.guest):
+				caught = true
+				main.guest_sim.set_speed(0.0)
+				return
+			continue
 		if catch_landing:
 			if main.guest_view.is_replaying(f) and f.guest.hole.strokes.size() == 1 \
 					and f.replay_head > f.replay_hole.stroke_path().size() - 1 - landing_ticks:
@@ -51,3 +68,14 @@ func _process(_delta: float) -> void:
 			caught = true
 			main.guest_sim.set_speed(0.0)
 			return
+
+
+## E3-S38: every partner of `guest` (a group of three or more) has yet to strike.
+func _partners_on_tee(guest: Guest) -> bool:
+	var g: GuestGroup = main.guest_sim.brain.group_of(guest)
+	if g.size() < 3:
+		return false
+	for o: Guest in g.guests:
+		if o != guest and (o.hole == null or not o.hole.strokes.is_empty()):
+			return false
+	return true
