@@ -103,6 +103,11 @@ class Figure:
 	var at: Vector2
 	## E3-S38: the step aside it takes now for a groupmate's swing, yards (in `at`; strike_room).
 	var room: Vector2 = Vector2.ZERO
+	## E3-S38: the sidestep it takes now walking past a striker, yards (in `at`; pass_room),
+	## and the way it steps for each striker ({guest id: unit vector}, kept while it steps
+	## aside for that striker, so a new walk leg keeps the same side).
+	var aside: Vector2 = Vector2.ZERO
+	var pass_sides: Dictionary = {}
 	## The hole and stroke count last seen, to spot a new stroke.
 	var hole: GuestHole
 	var strokes_seen: int = 0
@@ -293,6 +298,42 @@ func strike_room(f: Figure, at: Vector2) -> Vector2:
 	return Vector2(-1.0, -1.0).normalized() * tuning.strike_room_yd * room
 
 
+## E3-S38: the sidestep, yards, a figure drawn at `at` and walking along `dir` (unit) takes past
+## a groupmate that swings (or eases its spread back): across its walk line, away from the
+## striker, so its distance to the striker never falls under `pass_room_yd` on a straight walk.
+## The step is `pass_room_yd` less the walk line's distance from the striker, times
+## 1 - (along / reach)^2 where `along` is how far the figure is from the striker along its walk
+## (reach two strike_room_yd: wide enough that the eased step never dips inside), times how far
+## the striker's spread has closed. Smooth both ways and always to one side of each striker
+## (kept in `pass_sides` while it steps), so a walker bends round the striker, never orbits it.
+func pass_room(f: Figure, at: Vector2, dir: Vector2) -> Vector2:
+	var clear := tuning.pass_room_yd
+	var reach := maxf(2.0 * tuning.strike_room_yd, clear * 1.5)
+	var normal := Vector2(-dir.y, dir.x)
+	var out := Vector2.ZERO
+	var sides := {}
+	for other: Figure in _figures.values():
+		if other == f or other.guest.group_id != f.guest.group_id or other.spread >= 1.0:
+			continue
+		var rel := at - other.at
+		var along := rel.dot(dir)
+		var bump := 1.0 - (along / reach) * (along / reach)
+		if bump <= 0.0:
+			continue
+		var perp := rel.dot(normal)
+		var side := 1.0 if perp >= 0.0 else -1.0
+		if f.pass_sides.has(other.guest.id):
+			side = 1.0 if (f.pass_sides[other.guest.id] as Vector2).dot(normal) >= 0.0 else -1.0
+		var need := maxf(clear - perp * side, 0.0) * bump * (1.0 - other.spread)
+		if need <= 0.0:
+			continue
+		sides[other.guest.id] = normal * side
+		if need > out.length():
+			out = normal * side * need
+	f.pass_sides = sides
+	return out
+
+
 ## Screen vector (CourseView space, x right, y down) of a step `d` in yards.
 func screen_vector(d: Vector2) -> Vector2:
 	var t := d / _field.yards_per_tile
@@ -333,12 +374,31 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 	else:
 		f.spread = minf(1.0, f.spread + delta * speed / maxf(tuning.spread_ease_s, 0.001))
 	f.at = f.from.lerp(f.to, p) + place_offset(g.place) * f.spread
-	f.room = strike_room(f, f.at)
+	# E3-S38: a figure walking this second sidesteps round a striker across its walk line
+	# (pass_room) instead of stepping back up the screen (strike_room), whose push would carry it
+	# across the line it steps aside from. Over the last yards of the walk the sidestep fades out
+	# and the step back fades in, so a walker that stops beside the striker (or swings next) is
+	# where a standing figure would be when it stops. Either step moves no faster than a walk.
+	var walker := g.state != Guest.State.PLAYING and f.from.distance_squared_to(f.to) > 1e-6
+	var step := guest_tuning.walk_yd_per_s * speed * delta
+	var walk_share := 0.0
+	if walker:
+		var end: Vector2 = g.walk.end() if g.walk != null else f.to
+		walk_share = clampf(f.at.distance_to(end) / maxf(4.0 * tuning.strike_room_yd, 0.001), 0.0, 1.0)
+	var room := strike_room(f, f.at) * (1.0 - walk_share)
 	if g.state == Guest.State.PLAYING:
 		# A striker that stood aside for the last stroke steps back to its ball as its own
 		# spread closes, so it neither jumps nor swings off its ball.
-		f.room *= f.spread
+		room *= f.spread
+	f.room = f.room.move_toward(room, step)
 	f.at += f.room
+	var aside := Vector2.ZERO
+	if walker:
+		aside = pass_room(f, f.at, (f.to - f.from).normalized()) * walk_share
+	else:
+		f.pass_sides = {}
+	f.aside = f.aside.move_toward(aside, step)
+	f.at += f.aside
 	var moving := walking and f.from.distance_squared_to(f.to) > 1e-6
 	var d := -1
 	if moving:

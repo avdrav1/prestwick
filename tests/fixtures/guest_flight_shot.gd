@@ -21,6 +21,10 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 @export var landing_ticks: float = 15.0
 ## E3-S38: pause mid-swing on a tee with partners beside the striker.
 @export var catch_tee_swing: bool = false
+## E3-S38 (open case): pause as a partner walking off the tee sidesteps round the next striker
+## (GuestView.pass_room) on hole 1, the framed tee, so the picture shows the walker bending round it.
+##   scripts/screenshot.sh tests/fixtures/guest_flight_shot_walk_past.tscn out.png 600
+@export var catch_walk_past: bool = false
 ## The guest days' base seed (GuestSim.start), or below 0 for the course's own.
 @export var day_base_seed: int = -1
 
@@ -49,6 +53,13 @@ func _process(_delta: float) -> void:
 	if caught:
 		return
 	for f: GuestView.Figure in main.guest_view.figures().values():
+		if catch_walk_past:
+			if f.anim == GolferArt.Anim.WALK and f.guest.hole != null and f.guest.hole.hole.number == 1 \
+					and f.aside.length() > 0.6 * main.guest_view.tuning.pass_room_yd:
+				caught = true
+				main.guest_sim.set_speed(0.0)
+				return
+			continue
 		if catch_tee_swing:
 			if f.guest.state == Guest.State.PLAYING and f.guest.hole.strokes.size() == 1 \
 					and f.spread <= 0.0 \

@@ -20,6 +20,9 @@ const PATH: String = "res://scenes/guest_view_tuning.tres"
 ## yards, in step with the striker's spread closing (GuestView.strike_room), so no standing
 ## partner is drawn over the striker on the tee.
 @export var strike_room_yd: float = 1.5
+## E3-S38: a groupmate walking past a striker sidesteps off its walk line so it passes at least
+## this far from it, yards (GuestView.pass_room), in step with the striker's spread closing.
+@export var pass_room_yd: float = 0.75
 ## The figure is never drawn under this share of its native 24 px on screen: at 0.5x zoom
 ## 1.0 draws it at twice its canvas size (art/specs/golfer.md: reads at 0.5x).
 @export var figure_min_screen_scale: float = 1.0

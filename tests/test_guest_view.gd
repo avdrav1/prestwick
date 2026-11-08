@@ -241,7 +241,8 @@ const SAME_SPOT_YD: float = 0.5
 func test_no_two_figures_of_one_group_on_one_spot_while_one_strikes() -> void:
 	var sim := _sim(GuestCourse.course(), 7)
 	var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
-	var seen := {"frames": 0, "tee": 0, "closest": INF, "prev": {}, "jump": 0.0}
+	var seen := {"frames": 0, "tee": 0, "closest": INF, "prev": {}, "jump": 0.0,
+			"walkers": 0, "walk_closest": INF, "pass_jump": 0.0, "prev_pass": {}}
 	var check := func() -> bool:
 		var by_group := {}
 		for f: GuestView.Figure in view.figures().values():
@@ -261,10 +262,14 @@ func test_no_two_figures_of_one_group_on_one_spot_while_one_strikes() -> void:
 				continue  # off the tee partners stand at their own balls, wherever they lie
 			seen.tee += 1
 			for b: GuestView.Figure in figs:
-				# A partner walking off after its own tee shot is not standing on the tee.
-				if b == striker or b.anim == GolferArt.Anim.WALK:
+				if b == striker:
 					continue
 				var d := striker.at.distance_to(b.at)
+				# E3-S38: a partner walking off after its own tee shot sidesteps round the
+				# striker too (pass_room), so it never passes over it either.
+				if b.anim == GolferArt.Anim.WALK:
+					seen.walk_closest = minf(seen.walk_closest, d)
+					seen.walkers += 1
 				seen.closest = minf(seen.closest, d)
 				assert_gt(d, SAME_SPOT_YD, "guest %d of group %d drawn %.2f yd from %d striking on the tee"
 						% [b.guest.id, b.guest.group_id, d, striker.guest.id])
@@ -272,15 +277,23 @@ func test_no_two_figures_of_one_group_on_one_spot_while_one_strikes() -> void:
 				# A partner's step back grows and goes smoothly (walkers move anyway).
 				if f != striker and f.anim != GolferArt.Anim.WALK and prev.has(f.guest.id):
 					seen.jump = maxf(seen.jump, f.room.distance_to(prev[f.guest.id]))
+		var prev_pass: Dictionary = seen.prev_pass
 		for f: GuestView.Figure in view.figures().values():
 			prev[f.guest.id] = f.room
+			# A walker's sidestep grows and goes smoothly.
+			if prev_pass.has(f.guest.id):
+				seen.pass_jump = maxf(seen.pass_jump, f.aside.distance_to(prev_pass[f.guest.id]))
+			prev_pass[f.guest.id] = f.aside
 		return false
 	_run(sim, view, check, 60 * 150)
 	assert_gt(seen.tee, 30, "many frames of a tee shot with partners on the tee")
+	assert_gt(seen.walkers, 10, "frames of a partner walking off the tee past a striker")
+	assert_lt(seen.pass_jump, view.guest_tuning.walk_yd_per_s * FRAME + 0.01,
+			"a walker sidesteps no faster than a walk")
 	var walk_step := view.guest_tuning.walk_yd_per_s * FRAME + 0.01
 	assert_lt(seen.jump, walk_step, "a standing partner steps aside no faster than a walk")
-	gut.p("%d frames with a striker in a group, %d on the tee; closest partner to the striker %.2f yd; a standing partner moved at most %.2f yd a frame"
-			% [seen.frames, seen.tee, seen.closest, seen.jump])
+	gut.p("%d frames with a striker in a group, %d on the tee; closest partner to the striker %.2f yd; a standing partner moved at most %.2f yd a frame; %d walker frames, closest %.2f yd, sidestep at most %.2f yd a frame"
+			% [seen.frames, seen.tee, seen.closest, seen.jump, seen.walkers, seen.walk_closest, seen.pass_jump])
 
 
 # --- swing, flight and walk in sync (E3-S20) ---
