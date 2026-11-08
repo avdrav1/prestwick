@@ -49,6 +49,9 @@ var land_seed: int = -1
 @onready var tag_clicks: TagClicks = $TagClicks
 ## The overhead green view (E3-S52, D48): Play only, opened while the ball is on a green.
 @onready var green_view: GreenView = $HUD/GreenView
+## The off-screen cup's edge marker (E3-S64): Play only, while the played hole's cup is outside
+## the free view.
+@onready var cup_pointer: CupPointer = $HUD/CupPointer
 
 
 func _ready() -> void:
@@ -382,6 +385,7 @@ func _process(_delta: float) -> void:
 		return
 	# The green view opens, follows the putt and closes (E3-S52), centred in the free view.
 	green_view.follow(free_view_rect())
+	update_cup_pointer()
 	if shot_view.playing:
 		camera.clear_lead()
 		camera.set_focus(_ball_world())
@@ -390,6 +394,17 @@ func _process(_delta: float) -> void:
 		camera.set_lead(_aim_marker_world())
 	else:
 		camera.clear_lead()
+
+
+## Points the edge marker at the played hole's cup while it is outside the free view (E3-S64),
+## so a neighbouring hole's flag on screen never reads as this hole's; hidden otherwise and in
+## Build.
+func update_cup_pointer() -> void:
+	var h: HoleData = swing_control.hole
+	if mode != Mode.PLAY or h == null or not course.in_bounds(h.cup.x, h.cup.y):
+		cup_pointer.hide_marker()
+		return
+	cup_pointer.follow(camera.screen_point(tile_world(h.cup)), free_view_rect(), h.number)
 
 
 func toggle_mode() -> void:
@@ -503,6 +518,7 @@ func _apply_mode() -> void:
 	# The green view is Play's only (E3-S52); Main._process opens it there.
 	if building:
 		green_view.close()
+		cup_pointer.hide_marker()
 
 
 ## One batch per builder tiles_changed: each issue box is tested once per batch (E3-S16).

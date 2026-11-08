@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CupPointerTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/cup_pointer_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+edge_inset = 28.0
+arrow_length = 26.0
+arrow_half_width = 9.0
+font_size = 14
+padding = 4.0

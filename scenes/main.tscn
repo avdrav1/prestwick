@@ -20,6 +20,7 @@
 [ext_resource type="Script" path="res://scenes/reaction_tags.gd" id="18_tags"]
 [ext_resource type="Script" path="res://scenes/tag_clicks.gd" id="19_tag_clicks"]
 [ext_resource type="Script" path="res://scenes/green_view.gd" id="20_green_view"]
+[ext_resource type="Script" path="res://scenes/cup_pointer.gd" id="cup_pointer"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -166,6 +167,11 @@ script = ExtResource("17_feed_panel")
 [node name="GreenView" type="Control" parent="HUD"]
 visible = false
 script = ExtResource("20_green_view")
+
+[node name="CupPointer" type="Control" parent="HUD"]
+visible = false
+mouse_filter = 2
+script = ExtResource("cup_pointer")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")

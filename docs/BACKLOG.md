@@ -988,11 +988,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: `ReactionTags.faded_slots` tests each drawn tag's box against `GuestView.figure_rects` (every figure drawn now, CourseView space) every frame; a covered tag draws at FeedTuning `tag_covered_alpha` 0.3, the hovered one in full, and `slot_at` ignores the fade. Main hands the tags the guest view, so guests drawn in Build (E3-S62) fade them too. Screenshot `docs/decisions/e3-s63-fade.png` (`tests/fixtures/feed_fade_shot.tscn`). `docs/design.md` Feed and map tags.
 
-- [ ] E3-S64 Point to a framed hole's off-screen cup. A neighbour's flag never reads as this hole's.
+- [x] E3-S64 Point to a framed hole's off-screen cup. A neighbour's flag never reads as this hole's.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Hole 8 shows hole 9's flag when its own cup is off screen (E3-S9).
   - Accept: in Play, when the current hole's cup is outside the free view, a marker at the free view's edge points to it and carries the hole number; it hides when the cup is on screen.
   - Test: `tests/test_play_hud.gd` (or the camera test): the marker shows, points at the cup and hides. Screenshot looked at.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: `scenes/cup_pointer.gd` (`CupPointer`, a HUD control that takes no clicks; `scenes/cup_pointer_tuning.tres`): `Main.update_cup_pointer`, each Play frame, puts it `edge_inset` inside the free view's edge on the line from the free view's centre to the played hole's cup, an arrow at the cup and a box with the hole number; hidden with the cup in the free view and in Build. Screenshot `docs/decisions/e3-s64-pointer.png` (hole 8 of the playtest nine at 1x from its tee). `docs/design.md` Off-screen cup.
 
 - [ ] E3-S65 Collapse the hole list when the camera frames a hole. The framed hole gets the room.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only a click collapses it today (E3-S10).

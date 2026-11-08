@@ -16,6 +16,9 @@ extends Node2D
 ##   PLAYTEST_SHOT=play:4 PLAYTEST_ZOOM=1 scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn
 ## E3-S58: PLAYTEST_ZOOM also sets the zoom of `course`, `green` and `corner` in Build, and
 ## PLAYTEST_GRAY=1 works there too.
+## E3-S64: in `play:<n>` with the cup off the screen (PLAYTEST_AT=tee, a near zoom), the edge
+## marker points to it.
+##   PLAYTEST_SHOT=play:8 PLAYTEST_ZOOM=1 PLAYTEST_AT=tee scripts/screenshot.sh tests/fixtures/playtest_nine_shot.tscn
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const FLAT_PATH: String = "res://tests/fixtures/flat_20x20.json"
@@ -124,3 +127,14 @@ func _frame_play(main: Main, c: CourseData, n: int, z: float) -> void:
 	main.set_process(false)
 	main.camera.tracking = false
 	main.camera.position = at
+	# The off-screen cup's edge marker (E3-S64), drawn for this held view each frame (_process),
+	# once the HUD has laid out.
+	_main = main
+
+
+var _main: Main
+
+
+func _process(_delta: float) -> void:
+	if _main != null:
+		_main.update_cup_pointer()
