@@ -421,7 +421,8 @@ func test_when_no_strip_fits_the_one_showing_more_of_the_line_wins() -> void:
 	var tee_w: Vector2 = m.tile_world(h.tee)
 	var cup_w: Vector2 = m.tile_world(h.cup)
 	var t0: int = Time.get_ticks_usec()
-	assert_true(m.frame_hole(9))
+	# The list kept expanded (E3-S65 would collapse it, and the strip under it would then fit).
+	assert_true(m.frame_hole(9, -1, false))
 	gut.p("E3-S26: frame_hole on a hole too long for both strips took %.2f ms" % [(Time.get_ticks_usec() - t0) / 1000.0])
 	var strips: Array[Rect2] = m.free_view_rects()
 	for s: Rect2 in strips:

@@ -995,11 +995,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: `scenes/cup_pointer.gd` (`CupPointer`, a HUD control that takes no clicks; `scenes/cup_pointer_tuning.tres`): `Main.update_cup_pointer`, each Play frame, puts it `edge_inset` inside the free view's edge on the line from the free view's centre to the played hole's cup, an arrow at the cup and a box with the hole number; hidden with the cup in the free view and in Build. Screenshot `docs/decisions/e3-s64-pointer.png` (hole 8 of the playtest nine at 1x from its tee). `docs/design.md` Off-screen cup.
 
-- [ ] E3-S65 Collapse the hole list when the camera frames a hole. The framed hole gets the room.
+- [x] E3-S65 Collapse the hole list when the camera frames a hole. The framed hole gets the room.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only a click collapses it today (E3-S10).
   - Accept: `frame_hole` and jump-to-hole collapse the hole list (the framing then uses the larger free view); the player's own expand still holds until the next framing.
   - Test: `tests/test_hole_list.gd`: framing collapses the list and the frame reads the collapsed free view.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: `Main.frame_hole` collapses the hole list (`HolePanel.set_collapsed`) before it reads the free view, so jump-to-hole, a tag or feed click and a row's tag frame in the collapsed free view; a pick or the player's expand leaves it until the next framing. `frame_hole(..., collapse = false)` keeps it: `frame_first_hole` uses it, so a course still opens with the list expanded (E3-S10's "the list starts expanded"; the opening frame was not named in the Accept line). Screenshot `docs/decisions/e3-s65-framed.png` (hole 3 of the playtest nine framed). `docs/design.md` Hole list.
 
 - [ ] E3-S66 Keep a tee's hole number clear of the ball on it. The number reads at every zoom.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). At 0.175x the ball on its tee covers the number (E3-S9).

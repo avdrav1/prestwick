@@ -213,7 +213,9 @@ func jump_to_hole(number: int, slot: int = -1) -> bool:
 ## cup are on the map: frame_hole (E3-S2). False, leaving the camera, when there is no such hole.
 func frame_first_hole() -> bool:
 	var h: HoleData = SwingControl.hole_to_play(course, 1)
-	return h != null and frame_hole(h.number)
+	# A course opens with its list as the player left it (E3-S65 collapses only on a framing
+	# the player asked for).
+	return h != null and frame_hole(h.number, -1, false)
 
 
 ## Picks hole `number` in the hole list and frames it clear of the whole HUD (E3-S9; E3-S7's
@@ -223,8 +225,11 @@ func frame_first_hole() -> bool:
 ## inside the free view and runs off the screen toward its cup (CourseCamera.frame_points),
 ## its cup either off the screen or in the free view, never under a control (E3-S26). False, changing nothing, when the
 ## course has no hole `number` with its tee and cup on the map. `slot` picks that one of several
-## holes sharing `number` (E3-S11) while it still has the number.
-func frame_hole(number: int, slot: int = -1) -> bool:
+## holes sharing `number` (E3-S11) while it still has the number. With `collapse` (E3-S65, the
+## default) it collapses the hole list first, so the framed hole gets the room the list frees
+## (the strip under the collapsed panel, free_view_rect_for); the player's own expand holds until
+## the next framing.
+func frame_hole(number: int, slot: int = -1, collapse: bool = true) -> bool:
 	var h: HoleData = null
 	if slot >= 0 and slot < course.holes.size() and course.holes[slot].number == number:
 		h = course.holes[slot]
@@ -237,6 +242,8 @@ func frame_hole(number: int, slot: int = -1) -> bool:
 	if h == null or not course.in_bounds(h.tee.x, h.tee.y) or not course.in_bounds(h.cup.x, h.cup.y):
 		return false
 	build_tool.select_hole(number, slot)
+	if collapse:
+		hole_panel.set_collapsed(true)
 	# Its issue boxes keep off its line of play where they can (E3-S40).
 	course_view.framed_slot = course.holes.find(h)
 	var tee: Vector2 = tile_world(h.tee)

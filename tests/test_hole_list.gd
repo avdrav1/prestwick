@@ -669,7 +669,7 @@ func test_a_collapsed_list_frames_a_hole_under_the_panel_when_it_fits_nearer() -
 	var open_zoom: Array[float] = []
 	for n: int in range(1, 10):
 		assert_false(m.build_tool.builder.issues_for(n).is_empty(), "hole %d has issue text" % n)
-		m.frame_hole(n)
+		m.frame_hole(n, -1, false)  # the list kept expanded (E3-S65 would collapse it)
 		open_zoom.append(cam.zoom.x)
 	assert_eq(open_zoom[8], 0.5, "expanded, hole 9 frames at 0.5x")
 	panel.collapse_button.pressed.emit()
@@ -1247,3 +1247,48 @@ func test_a_hidden_hole_panel_skips_feed_refreshes_and_catches_up_when_shown() -
 	panel.visible = true
 	assert_eq(panel.refreshes, before + 1, "shown again: one refresh")
 	assert_true(panel.reaction_label.visible, "with the latest verdict")
+
+
+# --- E3-S65: framing collapses the list ---
+
+func test_framing_a_hole_collapses_the_list_and_frames_in_the_room_it_frees() -> void:
+	# Hole 9 runs across the screen (as above): expanded it frames at 0.5x beside the panel,
+	# collapsed at 1x in the strip under it.
+	var c := _plot()
+	var b := CourseBuilder.new(c)
+	_build(b, 9, false)
+	assert_true(b.place_tee(9, Vector2i(4, 66), 3))
+	assert_true(b.place_cup(9, Vector2i(17, 53)))
+	for n: int in range(1, 10):
+		b.set_par(n, 5)
+	var m := _main_with(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	var cam: CourseCamera = m.camera
+	assert_false(panel.collapsed, "a course opens with the list expanded")
+	var open_strips: Array[Rect2] = m.free_view_rects()
+	assert_true(m.frame_hole(9, -1, false))
+	assert_eq(cam.zoom.x, 0.5, "kept expanded, hole 9 frames at 0.5x")
+	assert_true(m.frame_hole(9))
+	assert_true(panel.collapsed, "framing collapses the list")
+	var strips: Array[Rect2] = m.free_view_rects()
+	assert_gt(strips[1].get_area(), open_strips[1].get_area(), "the strip under the panel grows")
+	var h: HoleData = m.build_tool.builder.hole(9)
+	var free: Rect2 = m.free_view_rect_for(m.tile_world(h.tee), m.tile_world(h.cup))
+	assert_eq(free, strips[1], "the frame reads the collapsed free view")
+	assert_eq(cam.zoom.x, 1.0, "nearer than expanded")
+	var inner: Rect2 = free.grow(-cam.tuning.aim_frame_margin + 0.5)
+	for cell: Vector2i in [h.tee, h.cup]:
+		var at: Vector2 = cam.screen_point(m.tile_world(cell))
+		assert_true(inner.has_point(at), "%s shows in the free view" % cell)
+		for ctl: Control in m.hud_controls():
+			assert_false(m._hud_rect(ctl).has_point(at), "%s is clear of %s" % [cell, ctl.name])
+	# The player's expand holds until the next framing.
+	panel.collapse_button.pressed.emit()
+	assert_false(panel.collapsed, "one click expands it")
+	m.build_tool.select_hole(3)
+	panel.row_for(4).pick_button.pressed.emit()
+	assert_false(panel.collapsed, "picking a hole keeps it expanded")
+	assert_true(m.jump_to_hole(2), "a feed line's or a tag's jump frames hole 2")
+	assert_true(panel.collapsed, "the next framing collapses it again")
+	assert_eq(m.build_tool.hole_number, 2, "with hole 2 picked")
