@@ -1095,8 +1095,8 @@ func test_a_picked_hole_with_a_complaint_shows_its_lead_check() -> void:
 	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: sight line, pace and difficulty.",
 			"the tooltip names every failed check in the player's words")
 	panel.set_collapsed(true)
-	assert_eq(panel.reaction_label.text, "Complaint: blind from the tee, could not see the flag.",
-			"collapsed, the lead sentence alone")
+	assert_eq(panel.reaction_label.text, "Complaint: blind from the tee, could not see the flag. (the only complaint)",
+			"collapsed, the lead sentence alone, then its tally (E3-S69)")
 	assert_string_contains(panel.reaction_label.tooltip_text, "Also slow", "the rest on hover")
 	m.build_tool.select_hole(4)
 	assert_false(panel.reaction_label.visible, "another hole shows its own verdicts, here none")
@@ -1120,7 +1120,7 @@ func test_a_picked_hole_with_a_complaint_shows_its_lead_check() -> void:
 	assert_false(panel.reaction_label.visible, "an edited hole shows no stale verdict")
 	# With no complaint in the window, its newest praise shows.
 	_give(m, _verdict(3, 4, true), 14)
-	assert_eq(panel.reaction_label.text, "Praise: loved it, 4 on a par 4.",
+	assert_eq(panel.reaction_label.text, "Praise: loved it, 4 on a par 4. (the only praise)",
 			"a hole guests only praised shows its praise")
 	assert_false(panel.reaction_label.tooltip_text.contains("Failed"), "a praise failed nothing")
 
@@ -1195,12 +1195,39 @@ func test_a_reason_holding_a_full_stop_keeps_its_lead() -> void:
 	m.build_tool.select_hole(3)
 	_give(m, r, 10)
 	panel.set_collapsed(true)
-	assert_eq(panel.reaction_label.text, "Complaint: slow. Very slow, waited 40 s.")
+	assert_eq(panel.reaction_label.text, "Complaint: slow. Very slow, waited 40 s. (the only complaint)")
 	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: pace and difficulty.")
 	for c: int in GuestReaction.Check.size():
 		var word: String = GuestReaction.CHECK_WORDS[c]
 		assert_true(r.passed[c] or panel.reaction_label.tooltip_text.contains(word),
 				"the panel's hover reads %s from GuestReaction.CHECK_WORDS" % word)
+
+
+## E3-S69: the reason line ends with its tally, from the counts the hole's map tag and its row's
+## tag button show: "(1 of 4 complaints)" under a complaint, "(1 of 2 praises)" under a praise
+## when the window holds no complaint, "(the only complaint)" when it is the one.
+func test_the_reason_lines_tally_matches_the_tags_counts() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(3)
+	var slot: int = m.build_tool.picked_slot()
+	_give(m, _verdict(3, 5, true), 10)
+	assert_string_ends_with(panel.reaction_label.text, " (the only praise)")
+	_give(m, _verdict(3, 5, true), 11)
+	assert_eq(m.reaction_tags.tag_slots()[slot], Vector2i(2, 0))
+	assert_string_ends_with(panel.reaction_label.text, " (1 of 2 praises)", "the tag's +2")
+	_give(m, _verdict(3, 5), 12)
+	assert_string_ends_with(panel.reaction_label.text, " (the only complaint)", "a complaint leads with its own count")
+	for i: int in 3:
+		_give(m, _verdict(3, 5), 13 + i)
+	var tally: Vector2i = m.reaction_tags.tag_slots()[slot]
+	assert_eq(tally, Vector2i(2, 4))
+	assert_eq(panel.tag_tallies(m.course)[slot], tally, "the row's tag button reads the same")
+	assert_string_ends_with(panel.reaction_label.text, " (1 of %d complaints)" % tally.y, "the tag's !4")
+	panel.set_collapsed(true)
+	assert_string_ends_with(panel.reaction_label.text, " (1 of 4 complaints)", "collapsed too")
+	assert_eq(HolePanel.tally_text(_verdict(3, 5), Vector2i(0, 4)), "(1 of 4 complaints)")
+	assert_eq(HolePanel.tally_text(_verdict(3, 5, true), Vector2i(3, 0)), "(1 of 3 praises)")
 
 
 ## E3-S33: the hole panel refreshes on every feed line, but not while it is hidden (in Play):

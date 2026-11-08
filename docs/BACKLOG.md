@@ -1019,11 +1019,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `guests/`, `scenes/`, `tests/`
   - Done 2026-11-08: `ReactionFeed.Entry.edited`, set by `clear_slot` on every line about the slot (the same edits that clear its tally: tee, cup, par, terrain in its footprint, the slot going away) and on a line pushed uncounted (a verdict on the version before the edit); a counted line given after the edit is not, and an edited and a fresh line never fold together. `FeedPanel` draws an edited line at `edited_alpha` 0.45 (`scenes/feed_tuning.tres`) of its colour, refreshing on `slot_cleared`; it still links. `test_a_line_given_before_its_holes_edit_dims_and_one_after_does_not` (renumber dims nothing; lines before a moved cup dim, the line after does not, the uncounted line does; row alphas; a dimmed row still emits its hole). Screenshot `docs/decisions/e3-s68-feed-edited.png` (`tests/fixtures/feed_edited_shot.tscn`). `docs/design.md` Feed and map tags.
 
-- [ ] E3-S69 Show the tally on the hole panel's reason line. The player sees how many guests said it.
+- [x] E3-S69 Show the tally on the hole panel's reason line. The player sees how many guests said it.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only the map tag's +n and !n count reactions (E3-S18).
   - Accept: the hole panel's reaction line ends with its tally, for example "(1 of 4 complaints)", from the same counts the tag shows.
   - Test: `tests/test_hole_list.gd`: the tally matches the tag's counts.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: `HolePanel.tally_text` ends the reason line, expanded and collapsed, with the slot's count of the shown verdict's kind from `ReactionFeed.slot_tallies` (the map tag's and the row tag button's counts): "(1 of 4 complaints)", "(1 of 2 praises)", or "(the only complaint)" / "(the only praise)" for one. The collapsed panel stays under `max_height` with nine adventurer complaints. `test_the_reason_lines_tally_matches_the_tags_counts`; E3-S18 and E3-S44's exact-text asserts carry the tally now. Screenshots `docs/decisions/e3-s69-reason-tally.png`, `docs/decisions/e3-s69-reason-tally-collapsed.png` (the E3-S18 fixtures, one complaint). `docs/design.md` Feed and map tags.
 
 - [ ] E3-S70 Aim guests along a dogleg's bend. They play round the corner, not over it (D54).
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Guests aim every full shot at the cup (D41); the reaction dogleg plays about +0.8 and slow, 0.92 penalty strokes a hole.

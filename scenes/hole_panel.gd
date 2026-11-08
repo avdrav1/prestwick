@@ -36,7 +36,8 @@ extends PanelContainer
 ## is quiet, D39), led by the check that failed ("Complaint: blind from the tee, could not see
 ## the flag."). Expanded, the whole line; collapsed, its lead sentence alone, the rest and every
 ## failed check (in the player's words, GuestReaction.CHECK_WORDS) on hover, so it stays inside max_height
-## beside the one-line issue summary.
+## beside the one-line issue summary. The line ends with its tally (E3-S69, tally_text), from
+## the counts the hole's map tag shows: "(1 of 4 complaints)", or "(the only complaint)".
 ##
 ## A row's tag (E3-S43): a hole with a map tag (ReactionTags: its praise and complaint counts in
 ## the feed's window, its cup on the map) shows the same counts on a button after its number,
@@ -342,7 +343,8 @@ func _refresh_reaction(c: CourseData, slot: int) -> void:
 		reaction_label.text = ""
 		reaction_label.tooltip_text = ""
 		return
-	reaction_label.text = reaction_text(r, collapsed)
+	var tally: Vector2i = feed.slot_tallies(c).get(slot, Vector2i.ZERO)
+	reaction_label.text = reaction_text(r, collapsed) + " " + tally_text(r, tally)
 	reaction_label.tooltip_text = reaction_tip(r)
 	reaction_label.add_theme_color_override("font_color",
 			praise_color if r.is_praise() else complaint_color)
@@ -386,6 +388,17 @@ static func reaction_lead(r: GuestReaction) -> String:
 static func reaction_text(r: GuestReaction, lead_only: bool) -> String:
 	var said := reaction_lead(r) if lead_only else reaction_body(r)
 	return ("Praise: " if r.is_praise() else "Complaint: ") + said
+
+
+## The tally that ends the panel's line for `r` (E3-S69), from `tally` (praise, complaints), the
+## counts the hole's map tag shows (ReactionFeed.slot_tallies): "(1 of 4 complaints)" under a
+## complaint, "(1 of 2 praises)" under a praise, "(the only complaint)" when it is the one.
+static func tally_text(r: GuestReaction, tally: Vector2i) -> String:
+	var n: int = tally.x if r.is_praise() else tally.y
+	var word: String = "praise" if r.is_praise() else "complaint"
+	if n <= 1:
+		return "(the only %s)" % word
+	return "(1 of %d %ss)" % [n, word]
 
 
 ## The hover text for `r`: its whole line and every check it failed, in the player's words
