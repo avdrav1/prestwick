@@ -1039,11 +1039,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: smooth, not snapped (recorded in `docs/design.md` Green view). `GreenView.turn_for` turns the top-down drawing at each rest so the ball-to-cup line points straight up; tiles, shade, contours, ticks, arrows, dots and marker turn with it, the cup's flag stays upright. The panel fits the turned window's bounding box and draws every map tile under it (`GreenView.drawn`), so a diagonal putt makes a larger panel whose corners show ground past the fringe. Tests: ball straight below the cup for five headings (S, W, N, E, a diagonal), with the marker and the window inside the panel; the turn holds through a roll and is taken again at the next rest; the cursor test now runs on a turned panel and aims at the tile under it. Screenshots `docs/decisions/e3-s71-contoured.png`, `e3-s71-nine-3.png`.
 
-- [ ] E3-S72 Reopen the green view on each new green. G hides it for this green only.
+- [x] E3-S72 Reopen the green view on each new green. G hides it for this green only.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). G's choice holds across holes today (E3-S52).
   - Accept: G hides and shows the panel; when the ball next comes to rest on a different green (or a new hole starts) it opens again.
   - Test: `tests/test_green_view.gd`: hidden by G, reopens on the next green.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: `GreenView.toggle` records the green window and hole it hid on; a rest on another green window, another hole, or a finished hole clears it. Off the green and back onto the same one stays hidden (recorded in `docs/design.md` Green view). Test `test_g_hides_it_for_this_green_only`: hidden across putts and an off-and-back on one green, open on a second green, G shows and hides it again, open again after the hole ends. Screenshot looked at (the turned view mid-roll, unchanged).
 
 - [ ] E3-S73 Mark the marker's pace on the putter's bar. The player sees where to stop.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The putter's bar shows no target (D49).

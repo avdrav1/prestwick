@@ -7,11 +7,11 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
 
 ## The main scene in Play on GreenViewShot's `kind` green, the ball on hole 1's tee.
-func _main(kind: String = "flat") -> Main:
+func _main(kind: String = "flat", course: CourseData = null) -> Main:
 	var m := MAIN_SCENE.instantiate() as Main
 	m.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(m)
-	m.show_course(GreenViewShot.course(kind).course)
+	m.show_course(course if course != null else GreenViewShot.course(kind).course)
 	m.set_mode(Main.Mode.PLAY)
 	m.swing_control.set_process(false)
 	return m
@@ -84,6 +84,53 @@ func test_the_toggle_key_hides_and_shows_it() -> void:
 	assert_false(gv.visible, "and it stays hidden frame after frame")
 	gv._unhandled_input(key)
 	assert_true(gv.visible, "shown again")
+
+
+func test_g_hides_it_for_this_green_only() -> void:
+	# E3-S72: hidden by G, it opens again on the next green, or when a new hole starts.
+	var made := GreenViewShot.course("flat")
+	var c: CourseData = made.course
+	# A second green, apart from the fixture's, in the rough below the fairway.
+	var b := CourseBuilder.new(c)
+	b.begin_stroke()
+	for y: int in range(22, 26):
+		for x: int in range(6, 10):
+			b.paint(Vector2i(x, y), Surface.Type.GREEN, 1)
+	b.end_stroke()
+	var m := _main("flat", c)
+	var gv := m.green_view
+	var sc := m.swing_control
+	_rest(m, made.ball, made.cup)
+	gv.toggle()
+	assert_false(gv.visible, "G hides it")
+	# Another putt on the same green: still hidden.
+	_rest(m, made.ball + Vector2(5.0, 0.0), made.cup)
+	assert_true(gv.is_open)
+	assert_false(gv.visible, "hidden for the rest of this green")
+	# Off the green and back on it: still this green, still hidden.
+	_rest(m, Vector2(16.5, 9.5) * 5.0, made.cup)
+	assert_false(gv.is_open)
+	_rest(m, made.ball, made.cup)
+	assert_false(gv.visible, "back on the same green, still hidden")
+	# The ball comes to rest on the other green: it opens again.
+	_rest(m, Vector2(7.5, 23.5) * 5.0, made.cup)
+	assert_eq(sc.lie_surface(), Surface.Type.GREEN)
+	assert_true(gv.is_open)
+	assert_true(gv.visible, "a different green opens it again")
+	# G shows it again on a hidden green, and hides it again.
+	gv.toggle()
+	assert_false(gv.visible)
+	gv.toggle()
+	assert_true(gv.visible, "G shows it")
+	# A new hole starts (the hole ends): open again on its first green, even the same one.
+	gv.toggle()
+	assert_false(gv.visible)
+	sc.score.holed = true
+	gv.follow(m.free_view_rect())
+	assert_false(gv.is_open, "the hole ended")
+	sc.score.holed = false
+	gv.follow(m.free_view_rect())
+	assert_true(gv.visible, "a new hole opens it again")
 
 
 func test_its_window_is_the_green_and_its_fringe() -> void:

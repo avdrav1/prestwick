@@ -15,7 +15,8 @@ extends Control
 ##
 ## It closes when the ball comes to rest off the green or the hole ends, and stays open while a
 ## putt rolls (the ball is drawn where it is each frame). `toggle_green_view` (G) hides and
-## shows it; the choice holds until it is pressed again. It only reads CourseData.
+## shows it; hidden holds for this green only (E3-S72): it opens again when the ball next rests
+## on a different green or a new hole starts. It only reads CourseData.
 ##
 ## Aiming and putting in it (E3-S53): while it shows, the mouse over the panel aims (the heading
 ## from the ball to the ground point under the cursor, in the panel's top-down space,
@@ -69,8 +70,11 @@ var aim_view: AimView
 ## True while the ball is on a green (or a putt from one is rolling): the view is open,
 ## whether or not the player hid it.
 var is_open: bool = false
-## The player hid it (toggle_green_view).
+## The player hid it (toggle_green_view), for this green only (E3-S72).
 var user_hidden: bool = false
+## The window and hole it was hidden on: a rest on another green, or another hole, shows it.
+var _hidden_window: Rect2i = Rect2i()
+var _hidden_hole: HoleData
 ## The tiles the panel is fitted to: the green's bounding box grown by fringe_tiles, clipped to
 ## the map.
 var window: Rect2i = Rect2i()
@@ -146,11 +150,15 @@ func wants_open() -> bool:
 ## lays it out centred in `free` (the free view, screen px).
 func follow(free: Rect2) -> void:
 	if not wants_open():
+		if control != null and control.is_finished():
+			user_hidden = false  # E3-S72: the next hole opens it again
 		close()
 		return
 	var c := control.course
 	if c != _course or (not control.is_ball_moving() and control.ball_at != _window_for):
 		_open_at(c, control.ball_at)
+		if user_hidden and (window != _hidden_window or control.hole != _hidden_hole):
+			user_hidden = false  # E3-S72: hidden for that green only
 	is_open = true
 	_layout(free)
 	visible = not user_hidden
@@ -165,9 +173,13 @@ func close() -> void:
 	_window_for = Vector2(INF, INF)
 
 
-## Hides or shows the open view (toggle_green_view).
+## Hides or shows the open view (toggle_green_view). Hidden holds for this green and hole only
+## (E3-S72): it opens again when the ball next rests on another green or a new hole starts.
 func toggle() -> void:
 	user_hidden = not user_hidden
+	if user_hidden:
+		_hidden_window = window
+		_hidden_hole = control.hole if control != null else null
 	visible = is_open and not user_hidden
 
 
