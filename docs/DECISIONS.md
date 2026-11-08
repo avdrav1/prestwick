@@ -423,6 +423,7 @@ Options:
 Choice (user, 2026-11-05): also try aims either side. Aim at the cup, pick the club by distance (the Clubs table's flat total times the lie), check it with `ShotPrediction`; skip a blocked club (D20) or one whose perfect swing ends in water or OB; when the straight plan is unsafe try `aim_offsets_deg` +8, -8, +16, -16 and keep the safe one resting nearest the cup; fall back to clubbing down. All predictions are charged to the guest's tick budget.
 Why: pillar 3: guests play a hole the way its designer means it, so a dogleg or a carry over water tells in their scores and reactions. Pillar 2: their plan is the player's own marker. The cost is bounded by the tick budget, so a tricky hole only plays a little slower.
 Affects: docs/design.md Guests and reactions (Club and aim, Guest Ball work); data/guests.json; E3-S3
+Update (2026-11-08, D54, E3-S70): on a dogleg the aim is the turn (D47) while it is ahead and in reach, then the cup; the aims either side are taken from that line and the nearest rest to it is kept.
 
 ## D42: What tastes do guests have, and what does each change? (2026-11-05)
 Question: the design doc gives a guest a taste but says nothing of what it does.

@@ -1225,3 +1225,63 @@ func _path_steps(c: CourseData) -> int:
 			if g.is_walking() and c.get_surface(t.x, t.y) == Surface.Type.CART_PATH:
 				n += 1
 	return n
+
+
+# --- E3-S70 (D54): guests aim along a dogleg's bend ---
+
+const ReactionHoles := preload("res://tests/fixtures/reaction_holes.gd")
+
+
+## A guest on the reaction dogleg aims its full shots at the turn (D47) while the turn is ahead
+## and in reach, then at the cup; the straight fair par 4 never aims anywhere but the cup. The
+## brain measures the turn once a group and hands it to each guest's hole.
+func test_a_guest_on_the_dogleg_aims_at_the_turn_then_the_cup() -> void:
+	var dog: CourseData = ReactionHoles.dogleg_par4()
+	var hole: HoleData = dog.holes[0]
+	var turn: Variant = GuestHole.turn_of(dog, hole)
+	assert_not_null(turn, "the reaction dogleg has a turn")
+	var cup: Vector2 = HeightField.new(dog, model.params).tile_center(hole.cup)
+	var turned_then_cup := 0
+	for i: int in 12:
+		var g := GuestHole.new(dog, hole, 3 + i % 6, GuestHole.hole_seed(40 + i, 1), tuning, model)
+		assert_eq(g.turn, turn, "a guest's hole carries the turn")
+		g.play_out()
+		var first: GuestHole.StrokeRecord = g.strokes[0]
+		assert_true(first.at_turn, "guest %d: the tee shot aims at the turn" % i)
+		var tee := Vector2(first.start.x, first.start.y)
+		var to_turn := rad_to_deg(((turn as Vector2) - tee).angle())
+		assert_almost_eq(first.aim_deg - first.offset_deg, to_turn, 0.01,
+				"guest %d: along the line to the turn" % i)
+		var seen_turn := false
+		for r: GuestHole.StrokeRecord in g.strokes:
+			var at := Vector2(r.start.x, r.start.y)
+			var ahead: bool = at.distance_to(cup) - (turn as Vector2).distance_to(cup) >= tuning.turn_ahead_yd
+			if r.at_turn:
+				assert_true(ahead, "guest %d: only while the turn is ahead" % i)
+				seen_turn = true
+			elif seen_turn and not ahead and r.club_id != "putter":
+				var to_cup := rad_to_deg((cup - at).angle())
+				assert_almost_eq(r.aim_deg - r.offset_deg, to_cup, 0.01,
+						"guest %d: past the turn it aims at the cup" % i)
+				turned_then_cup += 1
+				break
+	assert_gt(turned_then_cup, 6, "most guests play the turn, then the cup")
+	var fair: CourseData = ReactionHoles.fair_par4()
+	assert_null(GuestHole.turn_of(fair, fair.holes[0]), "a straight hole has no turn")
+	for i: int in 4:
+		var s := GuestHole.new(fair, fair.holes[0], 5, GuestHole.hole_seed(70 + i, 1), tuning, model)
+		s.play_out()
+		for r: GuestHole.StrokeRecord in s.strokes:
+			assert_false(r.at_turn, "a straight hole aims at the cup")
+	# The brain hands its guests the turn it measured.
+	var brain := GuestBrain.new(dog, 1, tuning, model)
+	var handed := false
+	for t: int in 200:
+		brain.step()
+		for guest: Guest in brain.guests:
+			if guest.hole != null:
+				assert_eq(guest.hole.turn, turn)
+				handed = true
+		if handed:
+			break
+	assert_true(handed, "a guest started the dogleg")

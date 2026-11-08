@@ -97,6 +97,8 @@ var max_frame_ticks: int = 0
 var held_frames: int = 0
 ## The holes' static checks (blind, interesting), kept per hole until it or the terrain changes.
 var checks: HoleChecks
+## Measures each hole's dogleg turn as a group starts it (D54, GuestHole.turn_of).
+var _validator: CourseValidator = CourseValidator.new()
 ## {hole number: groups that teed off it today} (E3-S8: a day reaches every hole).
 var teed_off: Dictionary = {}
 
@@ -363,6 +365,8 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 		return
 	var h := hole_numbered(g.hole_number)
 	var tee := field.tile_center(h.tee)
+	# D54: the hole's dogleg turn, measured once for the group as its first guest starts the hole.
+	var turn: Variant = GuestHole.FIND_TURN
 	for guest: Guest in g.guests:
 		if guest.hole != null and not guest.hole.hole_still_stands():
 			guest.hole = null  # the tee moved, or the par changed: plan afresh
@@ -374,8 +378,10 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 		if guest.is_walking():
 			_walk(guest, t)
 		if not guest.is_walking() and guest.hole == null:
+			if typeof(turn) == TYPE_STRING:
+				turn = GuestHole.turn_of(course, h, _validator)
 			guest.hole = GuestHole.new(course, h, guest.skill,
-					GuestHole.hole_seed(guest.guest_seed, h.number), tuning, model, _swing_tuning)
+					GuestHole.hole_seed(guest.guest_seed, h.number), tuning, model, _swing_tuning, turn)
 			guest.hole.slot = course.holes.find(h)
 	var clear := tee_clear(g, h)
 	var all_there := true

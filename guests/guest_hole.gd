@@ -41,6 +41,9 @@ extends RefCounted
 
 enum State { PLANNING, READY, FLYING, FINISHED }
 
+## `_init`'s turn argument when the caller has not measured it: GuestHole finds it (turn_of).
+const FIND_TURN: String = "find"
+
 var course: CourseData
 var hole: HoleData
 var skill: int
@@ -71,6 +74,9 @@ var max_second_ticks: int = 0
 ## sets it; E3-S17 review: the feed files the reaction under it, and drops it when Build
 ## edits that slot while the guest plays it).
 var slot: int = -1
+## The hole's dogleg turn in yards (D47) as it stood when the guest started it, null on a
+## straight hole: full shots aim there while it is ahead and in reach (D54, GuestPlan).
+var turn: Variant = null
 
 var _rng := RandomNumberGenerator.new()
 var _seed: int
@@ -88,8 +94,10 @@ class StrokeRecord:
 	var club_id: String = ""
 	var planned_power: float = 0.0
 	var aim_deg: float = 0.0
-	## The plan's aim less the straight line to the cup (0, or one of aim_offsets_deg).
+	## The plan's aim less the straight line to its target (0, or one of aim_offsets_deg).
 	var offset_deg: float = 0.0
+	## The plan aimed at the dogleg's turn, not the cup (D54).
+	var at_turn: bool = false
 	var safe_plan: bool = true
 	## The swing's locked power and accuracy, noise included (Swing.set_result).
 	var power: float = 0.0
@@ -110,9 +118,11 @@ class StrokeRecord:
 ## A guest of `skill` (GuestTuning skill_min to skill_max) on `hole` of `course`, its ball
 ## on the tee marker's centre. `rng_seed` draws its noise and seeds each stroke's Ball: pass
 ## `hole_seed(guest seed, hole number)`, never one seed for all of a guest's holes.
+## `p_turn` is the hole's turn in yards or null (turn_of; GuestBrain measures it once a group);
+## FIND_TURN measures it here.
 func _init(p_course: CourseData, p_hole: HoleData, p_skill: int, rng_seed: int,
 		p_tuning: GuestTuning = null, p_model: ShotModel = null,
-		p_swing_tuning: SwingTuning = null) -> void:
+		p_swing_tuning: SwingTuning = null, p_turn: Variant = FIND_TURN) -> void:
 	course = p_course
 	hole = p_hole
 	tuning = p_tuning if p_tuning != null else GuestTuning.load_default()
@@ -128,9 +138,21 @@ func _init(p_course: CourseData, p_hole: HoleData, p_skill: int, rng_seed: int,
 	_par = hole.par
 	_tee = hole.tee
 	_cup = hole.cup
+	turn = turn_of(course, hole) if typeof(p_turn) == TYPE_STRING else p_turn
 	var tee := field.tile_center(hole.tee)
 	ball_at = Vector3(tee.x, tee.y, field.height_at(tee.x, tee.y))
 	_begin_plan()
+
+
+## `hole`'s dogleg turn on `course` in yards (the tile centre of CourseValidator.turn_point,
+## D47), null when the hole is measured straight. `validator` is reused when given.
+static func turn_of(course: CourseData, hole: HoleData, validator: CourseValidator = null) -> Variant:
+	if validator == null:
+		validator = CourseValidator.new()
+	var t: Variant = validator.turn_point(course, hole)
+	if t == null:
+		return null
+	return ((t as Vector2) + Vector2(0.5, 0.5)) * CourseValidator.YARDS_PER_TILE
 
 
 ## The seed of one guest's play of hole `hole_number` (1 to 9): distinct for every guest seed
@@ -155,10 +177,13 @@ func hole_still_stands() -> bool:
 
 ## E3-S49: Build edited the terrain before this guest struck: its ball goes back on the tee
 ## marker at the tee's height now and the first stroke is planned afresh (HeightField and the
-## plan's predictions read the live CourseData, so the new plan sees the new terrain). Only
+## plan's predictions read the live CourseData, so the new plan sees the new terrain, and the
+## turn is measured again). Only
 ## before the first stroke (a struck hole judges the old terrain and is dropped instead).
 func replan() -> void:
 	assert(strokes.is_empty() and state != State.FLYING, "replan only before the first stroke")
+	# The edit may have moved the dogleg's turn (its fairway): measure it again (D54).
+	turn = turn_of(course, hole)
 	var tee := field.tile_center(hole.tee)
 	ball_at = Vector3(tee.x, tee.y, field.height_at(tee.x, tee.y))
 	_begin_plan()
@@ -215,6 +240,7 @@ func strike() -> void:
 	r.planned_power = plan.power
 	r.aim_deg = plan.aim_deg
 	r.offset_deg = plan.offset_deg
+	r.at_turn = plan.at_turn
 	r.safe_plan = plan.safe
 	r.plan_ticks = plan.ticks
 	r.start = ball_at
@@ -295,5 +321,5 @@ func _ball_rested() -> void:
 func _begin_plan() -> void:
 	plan = GuestPlan.begin(course, field, model, tuning, _putt_tuning,
 			Vector2(ball_at.x, ball_at.y), hole.cup, strokes.is_empty(),
-			stroke_seed(strokes.size() + 1))
+			stroke_seed(strokes.size() + 1), turn)
 	state = State.PLANNING

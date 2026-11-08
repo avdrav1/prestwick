@@ -34,6 +34,7 @@
   "over_par_worst": 2.0,
 
   "aim_offsets_deg": [8.0, -8.0, 16.0, -16.0],
+  "turn_ahead_yd": 30.0,
 
   "guest_ticks_per_s": 480,
   "sim_ticks_per_s": 4800,

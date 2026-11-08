@@ -77,6 +77,10 @@ var over_par_worst: float = 0.0
 
 ## D41: aims tried either side of the cup, degrees, in order, when the straight plan is unsafe.
 var aim_offsets_deg: PackedFloat32Array = PackedFloat32Array()
+## D54 (E3-S70): on a dogleg a full shot aims at the turn (D47) while the ball lies at least
+## this many yards farther from the cup than the turn does (the corner is still ahead) and the
+## longest legal club reaches it; else at the cup.
+var turn_ahead_yd: float = 0.0
 
 ## Guest Ball work: Ball ticks a guest may spend per simulated second, and the whole sim.
 var guest_ticks_per_s: int = 0
@@ -182,6 +186,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.putt_power_sigma_worst = _float(d, "putt_power_sigma_worst", errors)
 	t.guest_min_power = _float(d, "guest_min_power", errors)
 	t.over_par_worst = _float(d, "over_par_worst", errors)
+	t.turn_ahead_yd = _float(d, "turn_ahead_yd", errors)
 	var offsets: Variant = d.get("aim_offsets_deg")
 	if typeof(offsets) == TYPE_ARRAY:
 		for v: Variant in offsets:

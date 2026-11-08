@@ -3,14 +3,17 @@ extends RefCounted
 ## How a guest plans one stroke (D41, docs/design.md Guests and reactions, Club and aim), with
 ## no scene, spread over a tick budget (Guest Ball work).
 ##
-## Off the green: aim at the cup and take the shortest legal club (D13) whose flat total on
+## Off the green: aim at the target and take the shortest legal club (D13) whose flat total on
 ## fairway (GuestClubTable) times the lie reaches the cup, at power distance / (total × lie),
-## at most 100%; when none reaches, the longest legal club at 100%. Each plan is checked with
+## at most 100%; when none reaches, the longest legal club at 100%. The target is the cup, or
+## on a dogleg (D54, E3-S70) its turn (D47, `turn`) while the turn is ahead of the ball (the
+## ball lies `turn_ahead_yd` or more farther from the cup than the turn) and the longest legal
+## club reaches it: guests play round the corner, not over it. Each plan is checked with
 ## the player's marker, a ShotPrediction of a perfect swing (the same Ball step). A plan is
 ## unsafe when the club is blocked (ClubSet.is_blocked, D20) or the perfect swing ends in
 ## water or OB (a penalty, D29's unowned land included). When the straight plan is unsafe the
-## same club is tried at each of `aim_offsets_deg` from the cup, and the safe one resting
-## nearest the cup is kept; when none is safe the guest clubs down one club and tries again,
+## same club is tried at each of `aim_offsets_deg` from the target, and the safe one resting
+## nearest the target is kept; when none is safe the guest clubs down one club and tries again,
 ## straight first. If nothing is safe down to the shortest legal club, that club is played
 ## straight.
 ##
@@ -26,8 +29,12 @@ var club: Club
 var power: float = 1.0
 ## The aim the stroke is played along, degrees.
 var aim_deg: float = 0.0
-## `aim_deg` less the straight line to the cup, degrees (0, or one of aim_offsets_deg).
+## `aim_deg` less the straight line to the target, degrees (0, or one of aim_offsets_deg).
 var offset_deg: float = 0.0
+## True when the stroke aims at the dogleg's turn, not the cup (D54).
+var at_turn: bool = false
+## Where the plan aims, yards: the cup, or the turn (at_turn).
+var target: Vector2 = Vector2.ZERO
 ## The perfect swing's prediction for the chosen plan (the putt solve's best putt on green).
 var prediction: ShotPrediction
 ## False when no plan was safe and the shortest club is played straight anyway.
@@ -44,7 +51,8 @@ var _tuning: GuestTuning
 var _at: Vector2
 var _cup_tile: Vector2i
 var _seed: int
-var _cup_aim: float = 0.0
+## The straight line to the target (the cup, or the turn), degrees.
+var _target_aim: float = 0.0
 
 ## Putts.
 var _putt: PuttAim
@@ -66,9 +74,11 @@ var _straight: ShotPrediction
 ## Sets up the plan for a stroke from `at` (yards) on `course` toward `cup_tile`; nothing is
 ## stepped until `advance`. `driver_stroke` is the hole's first stroke, from its tee marker
 ## (D13). `putt_tuning` is the swing tuning the putt solve uses (GuestTuning.guest_swing_tuning).
+## `turn` is the hole's dogleg turn in yards (D47, CourseValidator.turn_point), null on a
+## straight hole.
 static func begin(course: CourseData, field: HeightField, model: ShotModel, tuning: GuestTuning,
 		putt_tuning: SwingTuning, at: Vector2, cup_tile: Vector2i, driver_stroke: bool,
-		rng_seed: int) -> GuestPlan:
+		rng_seed: int, turn: Variant = null) -> GuestPlan:
 	var p := GuestPlan.new()
 	p._course = course
 	p._field = field
@@ -78,17 +88,29 @@ static func begin(course: CourseData, field: HeightField, model: ShotModel, tuni
 	p._cup_tile = cup_tile
 	p._seed = rng_seed
 	var cup := field.tile_center(cup_tile)
-	p._cup_aim = rad_to_deg((cup - at).angle())
-	p.aim_deg = p._cup_aim
+	p._target_aim = rad_to_deg((cup - at).angle())
+	p.aim_deg = p._target_aim
 	var lie_surface := field.surface_at(at.x, at.y)
 	var legal := model.clubs.legal(lie_surface, driver_stroke)
 	if legal.size() == 1 and legal[0].is_putter():
 		p.club = legal[0]
-		p._putt = PuttAim.begin(course, field, model, putt_tuning, at, p._cup_aim, cup_tile, rng_seed)
+		p._putt = PuttAim.begin(course, field, model, putt_tuning, at, p._target_aim, cup_tile, rng_seed)
 		return p
 	var totals := GuestClubTable.totals(model)
-	var mult := model.lies.measure(field, at, p._cup_aim).carry_multiplier()
-	var d := at.distance_to(cup)
+	p.target = cup
+	if turn != null:
+		var bend: Vector2 = turn
+		if at.distance_to(cup) - bend.distance_to(cup) >= tuning.turn_ahead_yd:
+			var bend_aim := rad_to_deg((bend - at).angle())
+			var reach := float(totals.get(legal[0].id, 0.0)) \
+					* model.lies.measure(field, at, bend_aim).carry_multiplier()
+			if reach >= at.distance_to(bend):
+				p.target = bend
+				p.at_turn = true
+				p._target_aim = bend_aim
+				p.aim_deg = bend_aim
+	var mult := model.lies.measure(field, at, p._target_aim).carry_multiplier()
+	var d := at.distance_to(p.target)
 	var start := 0
 	for i in range(legal.size() - 1, -1, -1):
 		if float(totals.get(legal[i].id, 0.0)) * mult >= d:
@@ -137,7 +159,7 @@ func advance(max_ticks: int) -> int:
 
 
 func _launch() -> void:
-	var aim := _cup_aim + (_tuning.aim_offsets_deg[_oi] if _oi >= 0 else 0.0)
+	var aim := _target_aim + (_tuning.aim_offsets_deg[_oi] if _oi >= 0 else 0.0)
 	# A perfect swing at the planned power (Swing.launch with accuracy at the centre).
 	_shot = _model.full(_field, _clubs[_ci], _powers[_ci], _at, aim)
 	_ball = ShotPrediction.launched(_course, _seed, _shot, _model.params, null, _cup_tile)
@@ -152,7 +174,7 @@ func _judge(p: ShotPrediction) -> void:
 			return
 	elif ok:
 		var rest := Vector2(p.rest.x, p.rest.y)
-		var dist := 0.0 if p.holed else rest.distance_to(_field.tile_center(_cup_tile))
+		var dist := 0.0 if p.holed else rest.distance_to(target)
 		if dist < _best_d:
 			_best = p
 			_best_d = dist
@@ -174,7 +196,7 @@ func _choose(i: int, offset: float, p: ShotPrediction, is_safe: bool) -> void:
 	club = _clubs[i]
 	power = _powers[i]
 	offset_deg = offset
-	aim_deg = _cup_aim + offset
+	aim_deg = _target_aim + offset
 	prediction = p
 	safe = is_safe
 	done = true
