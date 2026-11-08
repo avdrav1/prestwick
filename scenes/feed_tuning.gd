@@ -24,6 +24,9 @@ const PATH: String = "res://scenes/feed_tuning.tres"
 ## E3-S68: the alpha a line draws at once its hole has been edited since it was given
 ## (ReactionFeed.Entry.edited), so an old verdict on a fixed hole reads as history.
 @export var edited_alpha: float = 0.45
+## A map tag whose box covers a guest figure drawn now draws at this alpha (E3-S63), so the
+## golfers it talks about show through it; hovered, it draws in full.
+@export_range(0.0, 1.0) var tag_covered_alpha: float = 0.3
 ## Lines the feed keeps (ReactionFeed.max_entries).
 @export var max_entries: int = 100
 

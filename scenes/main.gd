@@ -77,6 +77,7 @@ func _ready() -> void:
 	feed_panel.bind(guest_sim)
 	feed_panel.hole_requested.connect(_on_hole_link)
 	reaction_tags.bind(guest_sim.feed)
+	reaction_tags.guests = guest_view  # a tag over a golfer fades (E3-S63)
 	tag_clicks.bind(reaction_tags, _on_tag_link, tag_click_taken)
 	hole_panel.bind_feed(guest_sim.feed)
 	_apply_mode()

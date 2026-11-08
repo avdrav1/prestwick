@@ -22,6 +22,11 @@ extends Node2D
 ## The tag under the mouse when a click would be taken (`hovered_slot`, E3-S43, set by
 ## TagClicks) draws a chalk outline round its box, a shape cue as well as a colour, so it reads
 ## as a button.
+##
+## A tag never hides the golfers it talks about (E3-S63): a tag whose box, as drawn, covers a
+## figure GuestView draws now (`guests`, GuestView.figure_rects) draws at FeedTuning
+## `tag_covered_alpha` until no figure is under it (`faded_slots`, checked every frame). The
+## hovered tag draws in full, and clicks are unchanged (slot_at ignores the fade).
 
 ## Colours (art/palette.gpl): ink box, chalk number, sun_yellow praise, flag_red complaints.
 @export var box_color: Color = Color8(26, 28, 34)
@@ -54,10 +59,16 @@ var hovered_slot: int = -1:
 @export var hover_width: float = 2.0
 ## Screen px per canvas unit the tags were last drawn at.
 var _scale: float = 1.0
+## The guests' figures (Main binds it); a tag over one fades (E3-S63). Null: none fade.
+var guests: GuestView
+var tuning: FeedTuning
+## Slots whose tags cover a drawn figure, as last drawn.
+var _faded: Dictionary = {}
 
 
 func _init() -> void:
 	z_index = 2  # over the course layers, as the issue boxes are
+	tuning = FeedTuning.load_default()
 
 
 func bind(p_feed: ReactionFeed) -> void:
@@ -126,6 +137,37 @@ func _process(_delta: float) -> void:
 	if not is_equal_approx(s, _scale):
 		_scale = s
 		queue_redraw()
+	var faded: Dictionary = faded_slots()
+	if faded != _faded:
+		_faded = faded
+		queue_redraw()
+
+
+## {slot: true} for every tag drawn whose box covers a figure GuestView draws now (E3-S63).
+func faded_slots() -> Dictionary:
+	var out := {}
+	if guests == null or not is_visible_in_tree():
+		return out
+	var rects: Array[Rect2] = guests.figure_rects()
+	if rects.is_empty():
+		return out
+	var all: Dictionary = tag_slots()
+	var k: float = 1.0 / _view_scale()
+	for slot: int in all:
+		var box: Rect2 = tag_box(slot, all[slot])
+		var at: Vector2 = anchor_at(slot)
+		var drawn := Rect2(at + box.position * k, box.size * k)
+		for r: Rect2 in rects:
+			if drawn.intersects(r):
+				out[slot] = true
+				break
+	return out
+
+
+## The alpha hole `slot`'s tag draws at now: FeedTuning tag_covered_alpha while it covers a
+## drawn figure, unless it is hovered; else 1.
+func alpha_of(slot: int) -> float:
+	return tuning.tag_covered_alpha if _faded.has(slot) and slot != hovered_slot else 1.0
 
 
 func _view_scale() -> float:
@@ -207,11 +249,15 @@ func _draw() -> void:
 	for slot: int in _draw_order(all):
 		var at: Vector2 = anchor_at(slot)
 		var pieces: PackedStringArray = tag_texts(course.holes[slot].number, all[slot])
-		var colors: Array[Color] = [box_color, praise_color, complaint_color]
-		var text_colors: Array[Color] = [text_color, box_color, text_color]
+		var a: float = alpha_of(slot)
+		var box_c: Color = Color(box_color, box_color.a * a)
+		var colors: Array[Color] = [box_c, Color(praise_color, praise_color.a * a),
+				Color(complaint_color, complaint_color.a * a)]
+		var text_colors: Array[Color] = [Color(text_color, text_color.a * a), box_c,
+				Color(text_color, text_color.a * a)]
 		var widths: Array[float] = _widths(pieces)
 		draw_set_transform(at, 0.0, Vector2.ONE * k)
-		draw_rect(tag_box(slot, all[slot]), box_color)
+		draw_rect(tag_box(slot, all[slot]), box_c)
 		var x: float = tag_box(slot, all[slot]).position.x + 1.0
 		for i: int in pieces.size():
 			if widths[i] <= 0.0:
@@ -223,5 +269,5 @@ func _draw() -> void:
 		if slot == hovered_slot:
 			draw_rect(tag_box(slot, all[slot]).grow(hover_width * 0.5 + 1.0), text_color, false, hover_width)
 		# A short stem down to the pin, so the tag reads as the hole's.
-		draw_line(Vector2.ZERO, Vector2(0.0, stem * _scale), box_color, 2.0)
+		draw_line(Vector2.ZERO, Vector2(0.0, stem * _scale), box_c, 2.0)
 		draw_set_transform(Vector2.ZERO)

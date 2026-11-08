@@ -948,3 +948,69 @@ func test_a_hole_list_rows_tag_picks_and_frames_its_hole() -> void:
 	m.hole_panel.refresh()
 	assert_false((m.hole_panel.shown_rows()[0] as HolePanel.HoleRow).tag_button.visible,
 			"hole 1's row has no tag once its tag is cleared")
+
+
+# --- E3-S63: a tag over a guest fades ---
+
+## Puts the first guest on the course on tile `tile` (Main's GuestView redrawn there, paused).
+func _guest_on(m: Main, tile: Vector2i) -> void:
+	var guest: Guest = m.guest_sim.brain.guests[0]
+	guest.position = m.guest_sim.brain.field.tile_center(tile)
+	m.guest_view.clear()
+	m.guest_view.update_view(1.0 / 60.0, 0.0)
+
+
+func test_a_tag_over_a_guest_fades_until_the_guest_leaves() -> void:
+	var m := _main_in_play()  # hole 1 played: its tag is not drawn
+	m.set_process(false)
+	m.guest_view.set_process(false)
+	m.guest_sim.feed.push(_praise(2), 1, 20, 1)
+	for i in 120:
+		if m.guest_sim.brain != null and not m.guest_sim.brain.guests.is_empty():
+			break
+		m.guest_sim.advance(1.0)
+	assert_false(m.guest_sim.brain.guests.is_empty(), "a guest is on the course")
+	var tags: ReactionTags = m.reaction_tags
+	_show_tag(m, 1)
+	var cup: Vector2i = GuestCourse.HOLES[1][2]
+	# Far from hole 2's green: the tag draws in full.
+	_guest_on(m, Vector2i(4, 20))
+	tags._process(0.0)
+	assert_eq(tags.faded_slots(), {}, "no guest under the tag")
+	assert_eq(tags.alpha_of(1), 1.0)
+	# Behind the cup, where the tag stands over the back of the green.
+	var under := Vector2i(-1, -1)
+	for d: int in range(0, 6):
+		for dx: int in range(-1, 2):
+			var t := cup + Vector2i(dx - d, -d)
+			_guest_on(m, t)
+			if not tags.faded_slots().is_empty():
+				under = t
+				break
+		if under.x >= 0:
+			break
+	assert_ne(under, Vector2i(-1, -1), "some tile behind the cup puts a guest under the tag")
+	var fig: Rect2 = m.guest_view.figure_rects()[0]
+	var box: Rect2 = tags.tag_box(1, tags.tag_slots()[1])
+	var drawn := Rect2(tags.anchor_at(1) + box.position / tags._view_scale(), box.size / tags._view_scale())
+	assert_true(drawn.intersects(fig), "the guest's figure is under the tag's box")
+	tags._process(0.0)
+	assert_eq(tags.faded_slots(), {1: true})
+	assert_eq(tags.alpha_of(1), m.reaction_tags.tuning.tag_covered_alpha, "the tag fades")
+	assert_lt(tags.tuning.tag_covered_alpha, 1.0)
+	# Hovered, it shows in full; the click still finds it.
+	var at: Vector2 = tags.tag_centre(1)
+	assert_eq(m.tag_clicks.hover_at(at), 1, "a faded tag still takes the hover")
+	assert_eq(tags.alpha_of(1), 1.0, "hovered, in full")
+	assert_eq(tags.slot_at(at), 1, "and the click")
+	m.tag_clicks.hover_at(Vector2(-100, -100))
+	assert_eq(tags.alpha_of(1), tags.tuning.tag_covered_alpha)
+	# The guest walks off: the tag returns.
+	_guest_on(m, Vector2i(4, 20))
+	tags._process(0.0)
+	assert_eq(tags.faded_slots(), {})
+	assert_eq(tags.alpha_of(1), 1.0, "back in full once no guest is under it")
+	# Hidden guests (Build, today) fade nothing.
+	_guest_on(m, under)
+	m.guest_view.visible = false
+	assert_eq(tags.faded_slots(), {}, "a figure not drawn fades nothing")

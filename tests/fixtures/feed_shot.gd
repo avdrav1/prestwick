@@ -19,6 +19,9 @@ extends Node2D
 ## that second (Main's builder; the hole opened again), and the day runs on to `run_to_s`: that
 ## hole's lines from before the edit draw dimmed, the lines after at full strength.
 ##   scripts/screenshot.sh tests/fixtures/feed_edited_shot.tscn out.png 30
+## With `fade` (E3-S63), Play stays on at 1x over hole 2's green with a guest stood behind its
+## cup, under hole 2's tag, which fades; hole 3's tag, with no guest under it, draws in full.
+##   scripts/screenshot.sh tests/fixtures/feed_fade_shot.tscn out.png 30
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
@@ -28,6 +31,7 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 @export var hover: bool = false
 @export var edit_on_s: int = 0
 @export var edit_hole: int = 3
+@export var fade: bool = false
 
 var main: Main
 
@@ -73,3 +77,44 @@ func _ready() -> void:
 		slots.sort()
 		if not slots.is_empty():
 			main.tag_clicks.hover_at(tags.tag_centre(slots[0]))
+	if fade:
+		_fade()
+
+
+func _fade() -> void:
+	var feed: ReactionFeed = main.guest_sim.feed
+	var r := GuestReaction.new()
+	r.hole_number = 3
+	r.kind = GuestReaction.Kind.COMPLAINT
+	r.text = "Hole 3: too hard."
+	feed.push(r, 1, run_to_s, 2)
+	var p := GuestReaction.new()
+	p.hole_number = 2
+	p.kind = GuestReaction.Kind.PRAISE
+	p.text = "Hole 2: loved it."
+	feed.push(p, 1, run_to_s, 1)
+	var tags: ReactionTags = main.reaction_tags
+	main.camera.set_zoom_level(1.0)
+	main.camera.has_focus = false
+	var cup2: Vector2i = main.course.holes[1].cup
+	var cup3: Vector2i = main.course.holes[2].cup
+	main.camera.position = main.camera.get_parent().to_local(tags.to_global(tags.anchor_at(1)))
+	main.camera.force_update_scroll()
+	main.guest_view.set_process(false)
+	var guest: Guest = null
+	while guest == null and not main.guest_sim.brain.day_over:
+		for g: Guest in main.guest_sim.brain.guests:
+			if not g.is_done():
+				guest = g
+				break
+		if guest == null:
+			main.guest_sim.brain.step()
+	# The first tile behind hole 2's cup that puts the guest under its tag.
+	for d: int in range(0, 6):
+		guest.position = main.guest_sim.brain.field.tile_center(cup2 - Vector2i(d, d) - Vector2i(0, 0))
+		main.guest_view.clear()
+		main.guest_view.update_view(1.0 / 60.0, 0.0)
+		tags._process(0.0)
+		if tags.faded_slots().has(1):
+			break
+	print("feed_shot fade: faded %s, cups %s %s" % [tags.faded_slots(), cup2, cup3])

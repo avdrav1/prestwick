@@ -11,4 +11,5 @@ width = 300.0
 row_lines = 3
 font_size = 13
 edited_alpha = 0.45
+tag_covered_alpha = 0.3
 max_entries = 100

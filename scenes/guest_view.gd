@@ -448,6 +448,25 @@ func ball_screen(f: Figure) -> Vector2:
 	return _field.ground_screen(f.ball_at)
 
 
+## The box figure `f`'s sprite covers, CourseView space (as _draw_figure lays it out).
+func figure_rect(f: Figure) -> Rect2:
+	var s := figure_scale()
+	var tex := art.frame(f.anim, f.dir, f.frame)
+	return Rect2(figure_screen(f) - Vector2(art.anchor()) * s, tex.get_size() * s)
+
+
+## The boxes of every figure drawn now (E3-S63: a map tag over one fades), CourseView space;
+## none while the view is hidden.
+func figure_rects() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	if _field == null or not is_visible_in_tree():
+		return out
+	for f: Figure in _figures.values():
+		if f.sprite.visible:
+			out.append(figure_rect(f))
+	return out
+
+
 func _draw_figure(piece: Node2D, f: Figure) -> void:
 	var feet := figure_screen(f) - piece.position
 	var s := figure_scale()
