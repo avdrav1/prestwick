@@ -1,0 +1,12 @@
+load average at the start: 39.42, 42.42, 47.78 (1, 5, 15 minutes; 24 logical cores)
+idle frames in Build at 1.0x: median 18.61 ms, mean 21.48, p95 45.96, worst 64.89 (n 298); 176 frames over 16.7 ms, mean 27.78 ms, of which guest work 9.76 and the rest (map draw, engine) 18.02
+  guests at 3x during idle: CPU a frame median 4.77 ms, mean 6.18, p95 17.48, worst 38.05 (n 360); day 1 at 63 s, 12 on the course
+idle frames in Build at 0.5x: median 25.97 ms, mean 29.30, p95 60.63, worst 112.24 (n 298); 269 frames over 16.7 ms, mean 30.91 ms, of which guest work 8.96 and the rest (map draw, engine) 21.96
+  guests at 3x during idle: CPU a frame median 6.31 ms, mean 8.11, p95 24.64, worst 46.67 (n 300); day 1 at 78 s, 14 on the course
+Build frames at 0.17499999701977x, guests at 3x, 16 to 16 figures shown, 16 on the course: median 58.01 ms, mean 66.41, p95 149.36, worst 282.76 (n 298); 298 frames over 16.7 ms, mean 66.41 ms, of which guest work 13.40 and the rest (map draw, engine) 53.00
+  guests at 3x during Build: CPU a frame median 10.71 ms, mean 13.50, p95 38.63, worst 94.95 (n 300); day 1 at 96 s, 16 on the course
+Play frames at 0.17499999701977x, guests at 3x, 16 to 16 figures shown, 16 on the course: median 53.64 ms, mean 59.63, p95 117.40, worst 217.13 (n 298); 298 frames over 16.7 ms, mean 59.63 ms, of which guest work 10.46 and the rest (map draw, engine) 49.17
+  guests at 3x during Play: CPU a frame median 10.15 ms, mean 10.49, p95 25.49, worst 54.73 (n 300); day 1 at 125 s, 16 on the course
+Play frames at 0.5x, guests at 3x, 16 to 16 figures shown, 16 on the course: median 41.66 ms, mean 44.05, p95 82.57, worst 123.40 (n 298); 286 frames over 16.7 ms, mean 45.32 ms, of which guest work 15.19 and the rest (map draw, engine) 30.13
+  guests at 3x during Play: CPU a frame median 13.41 ms, mean 14.58, p95 32.19, worst 71.10 (n 300); day 1 at 140 s, 16 on the course
+  guests at 3x during click edits: CPU a frame median 8.17 ms, mean 10.21, p95 27.82, worst 84.38 (n 401); day 1 at 98 s, 16 on the course

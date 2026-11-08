@@ -1,12 +1,12 @@
 class_name GuestSim
 extends Node
-## Runs the guests' day in Play (E3-S5): owns the GuestBrain of the course on show and turns
+## Runs the guests' day in Build and Play (E3-S5, D53): owns the GuestBrain of the course on show and turns
 ## real time into its simulated seconds at the chosen speed (docs/design.md Economy and time:
 ## pause, 1x, 3x). The brain steps once per simulated second (GuestBrain.advance_real), never
 ## per frame; this node only says how much real time went by and how fast.
 ##
-## The day runs only while `running` (Main sets it in Play); Build holds it where it is, and
-## Play picks it up again. The first day is built the first time it runs, so loading a course
+## The day runs only while `running`: Main sets it in both modes since D53 (E3-S62; E3-S5 held
+## it in Build), so it is off only before Main has shown a course. The first day is built the first time it runs, so loading a course
 ## or a test that never plays pays nothing (GuestClubTable.warm). At dusk the next day starts
 ## at once, with the next day's seed: skipping the night to the morning, and anything a day's
 ## end settles (fees, upkeep), waits for E4.
@@ -36,7 +36,7 @@ var day: int = 0
 var base_seed: int = 0
 ## Simulated seconds a real second: 0 (paused), 1 or 3.
 var speed: float = 1.0
-## True in Play: real time moves the day.
+## True once Main runs it (Build and Play, D53): real time moves the day.
 var running: bool = false
 var tuning: GuestTuning
 ## The reactions of the course's days, for the feed and the map tags (E3-S7).

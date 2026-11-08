@@ -25,6 +25,11 @@ var course: CourseData
 ## The seed of the latest New course's land (new_course), so it can be made again.
 var land_seed: int = -1
 
+## The left column's gap between controls, px (as main.tscn spaces them).
+const SPEED_PANEL_GAP: float = 8.0
+## The speed panel's top as main.tscn places it, for Play (_place_speed_panel); -1 until read.
+var _speed_panel_top: float = -1.0
+
 @onready var mode_label: Label = $HUD/ModeLabel
 @onready var course_view: CourseView = $CourseView
 @onready var camera: CourseCamera = $Camera
@@ -67,6 +72,9 @@ func _ready() -> void:
 	# A row's tag picks and frames its hole as the map tag does (E3-S43).
 	hole_panel.tag_requested.connect(func(number: int, slot: int) -> void: _on_tag_link(number, slot))
 	land_panel.bind(build_tool)
+	# Build stands the speed panel under the land panel, whose height follows its rows (E3-S62).
+	land_panel.resized.connect(_place_speed_panel)
+	land_panel.visibility_changed.connect(_place_speed_panel)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
 	green_view.bind(swing_control, shot_view, aim_view)
@@ -493,7 +501,7 @@ func _on_came_to_rest(_at: Vector3) -> void:
 
 
 ## The build tool, its palette, the hole and land panels, New course, New sandbox and the issue highlights exist
-## only in Build mode; the guests' day (GuestSim, GuestView, its speed panel) only in Play. Play never waits for the validator (pillar 1): a hole that fails a rule
+## only in Build mode; the guests' day (GuestSim, GuestView, its speed panel) in both (D53), its feed panel in Play. Play never waits for the validator (pillar 1): a hole that fails a rule
 ## is still played; the rules only decide whether guests may play it (Open).
 func _apply_mode() -> void:
 	var building: bool = mode == Mode.BUILD
@@ -506,12 +514,15 @@ func _apply_mode() -> void:
 	new_sandbox_button.visible = building
 	new_course_button.visible = building
 	score_card.visible = not building
-	# The guests' day runs, shows and has its speed controls in Play (E3-S5); Build holds it.
-	guest_sim.running = not building
-	guest_view.visible = not building
-	sim_speed_panel.visible = not building
-	# The feed is read in Play, where the day runs; its tags stay on the map in Build (E3-S7).
-	# It shows from the start of Play, so the free view never shifts at its first line (E3-S67).
+	# The guests' day runs, shows and has its speed controls in Build as in Play (D53, E3-S62, as
+	# SimGolf; E3-S5 held it in Build). Pause (P) is Build's quiet mode.
+	guest_sim.running = true
+	guest_view.visible = true
+	sim_speed_panel.visible = true
+	_place_speed_panel()
+	# The feed panel is read in Play (its lines link to Build): it shows from the start of Play,
+	# so the free view never shifts at its first line (E3-S67). In Build the feed still takes every
+	# line, and its map tags and the hole panel's reaction line update as guests finish (E3-S7).
 	feed_panel.set_in_play(not building)
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building
@@ -526,6 +537,26 @@ func _apply_mode() -> void:
 	if building:
 		green_view.close()
 		cup_pointer.hide_marker()
+
+
+## The speed panel stands in the left column under the controls shown (E3-S62): in Play where
+## the scene puts it, under the mode button; in Build under the land panel (or New sandbox when
+## it hides). The land panel changes height with its rows, so it calls this again (_ready
+## connects its resized).
+func _place_speed_panel() -> void:
+	if _speed_panel_top < 0.0:
+		_speed_panel_top = sim_speed_panel.offset_top
+	var top: float = _speed_panel_top
+	if mode == Mode.BUILD:
+		var above: float = mode_button.offset_bottom
+		for c: Control in [new_course_button, new_sandbox_button, land_panel]:
+			if c.visible:
+				above = maxf(above, c.offset_top + maxf(c.offset_bottom - c.offset_top,
+						c.get_combined_minimum_size().y))
+		top = maxf(above + SPEED_PANEL_GAP, _speed_panel_top)
+	var h: float = sim_speed_panel.offset_bottom - sim_speed_panel.offset_top
+	sim_speed_panel.offset_top = top
+	sim_speed_panel.offset_bottom = top + h
 
 
 ## One batch per builder tiles_changed: each issue box is tested once per batch (E3-S16).

@@ -32,6 +32,10 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 @export var edit_on_s: int = 0
 @export var edit_hole: int = 3
 @export var fade: bool = false
+## E3-S62 (D53): stays in Build, where the day now runs and shows: the guests, the speed panel
+## under the land panel, the map tags and the hole panel's reaction line.
+##   scripts/screenshot.sh tests/fixtures/feed_build_shot.tscn out.png 30
+@export var build: bool = false
 
 var main: Main
 
@@ -44,10 +48,11 @@ func _ready() -> void:
 	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(main)
 	main.show_course(b.course)
-	main.set_mode(Main.Mode.PLAY)
-	main.set_process(false)
-	main.swing_panel.visible = false
-	main.aim_view.visible = false
+	if not build:
+		main.set_mode(Main.Mode.PLAY)
+		main.set_process(false)
+		main.swing_panel.visible = false
+		main.aim_view.visible = false
 	main.guest_sim.set_process(false)
 	main.guest_sim.advance(0.0)
 	var edited: bool = edit_on_s <= 0

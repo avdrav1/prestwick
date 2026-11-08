@@ -428,9 +428,6 @@ func test_main_runs_the_day_in_play_with_its_speed_controls() -> void:
 	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(main)
 	main.show_course(GuestCourse.course())
-	assert_false(main.guest_sim.running, "Build holds the day")
-	assert_false(main.sim_speed_panel.visible)
-	assert_false(main.guest_view.visible)
 	main.set_mode(Main.Mode.PLAY)
 	assert_true(main.guest_sim.running)
 	assert_true(main.sim_speed_panel.visible, "speed controls in Play")
@@ -450,11 +447,63 @@ func test_main_runs_the_day_in_play_with_its_speed_controls() -> void:
 	assert_eq(main.guest_sim.speed, 1.0, "1 is 1x")
 	main.guest_sim.advance(1.0)
 	assert_string_contains(main.sim_speed_panel.status_text(), "Day 1")
-	main.set_mode(Main.Mode.BUILD)
-	assert_false(main.guest_sim.running)
+
+
+# E3-S62 (D53): the day runs and shows in Build too, as in SimGolf, with pause and the speeds.
+func test_main_runs_the_day_in_build_with_its_speed_controls() -> void:
+	var main := MAIN_SCENE.instantiate() as Main
+	main.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(main)
+	main.show_course(GuestCourse.course())
+	assert_eq(main.mode, Main.Mode.BUILD)
+	assert_true(main.guest_sim.running, "Build runs the day")
+	assert_true(main.guest_view.visible, "guests are drawn in Build")
+	assert_true(main.sim_speed_panel.visible, "speed controls in Build")
+	main.guest_sim.set_speed(3.0)
+	# Step the day until guests are out: the clock advances in Build.
+	for i: int in 200:
+		main.guest_sim.advance(1.0)
+		if main.guest_sim.guests_on_course() > 0:
+			break
+	assert_gt(main.guest_sim.brain.second, 0, "the clock advances in Build")
+	assert_gt(main.guest_sim.guests_on_course(), 0, "guests are out while you build")
+	main.guest_view.update_view(0.0, main.guest_sim.speed)
+	assert_false(main.guest_view.figure_rects().is_empty(),
+			"their figures are drawn in Build, so the map tags fade over them there too (E3-S63)")
 	var second := main.guest_sim.brain.second
+	await wait_seconds(1.0)
+	assert_gt(main.guest_sim.brain.second, second, "real frames move the day in Build")
+	var key := InputEventAction.new()
+	key.action = &"sim_pause"
+	key.pressed = true
+	main.sim_speed_panel._unhandled_input(key)
+	assert_eq(main.guest_sim.speed, 0.0, "P pauses in Build")
+	second = main.guest_sim.brain.second
 	await wait_physics_frames(5)
-	assert_eq(main.guest_sim.brain.second, second, "Build holds the day where it is")
+	assert_eq(main.guest_sim.brain.second, second, "pause holds the day in Build")
+	(main.sim_speed_panel.buttons[1.0] as Button).pressed.emit()
+	assert_eq(main.guest_sim.speed, 1.0, "the speed buttons work in Build")
+	# The feed takes every line in Build, for the map tags and the hole panel; its panel is Play's.
+	assert_false(main.feed_panel.visible, "the feed panel is Play's")
+	var lines := main.guest_sim.feed.entries.size()
+	main.guest_sim.set_speed(3.0)
+	for i: int in 400:
+		main.guest_sim.advance(1.0)
+		if main.guest_sim.feed.entries.size() > lines:
+			break
+	assert_gt(main.guest_sim.feed.entries.size(), lines, "guests react while you build")
+	main.guest_sim.set_speed(1.0)
+	# The speed panel stands under Build's left column, overlapping none of it.
+	var shown: Array[Control] = [main.mode_button, main.new_course_button, main.new_sandbox_button,
+			main.land_panel]
+	await wait_process_frames(2)
+	for c: Control in shown:
+		if c.visible:
+			assert_false(c.get_global_rect().intersects(main.sim_speed_panel.get_global_rect()),
+					"the speed panel clears %s" % c.name)
+	main.set_mode(Main.Mode.PLAY)
+	assert_true(main.guest_sim.running, "Play runs the same day on")
+	assert_eq(main.guest_sim.speed, 1.0, "the speed carries over")
 
 
 # --- shirts (E3-S28) ---

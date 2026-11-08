@@ -1,6 +1,6 @@
 class_name SimSpeedPanel
 extends PanelContainer
-## The guests' day controls in Play (E3-S5; docs/design.md Economy and time): Pause, 1x and
+## The guests' day controls in Build and Play (E3-S5, D53; docs/design.md Economy and time): Pause, 1x and
 ## 3x (keys P, 1 and 3), and a line with the day, its simulated time and the guests out on the
 ## course. Skip to morning waits for E4, which settles what a day's end pays and costs.
 

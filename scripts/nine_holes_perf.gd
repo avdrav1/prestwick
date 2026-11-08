@@ -14,6 +14,8 @@ extends SceneTree
 ## frames in which a click edit goes through the build tool (press and release, so the view,
 ## the issue markers and the hole panel refresh too), mean and worst frame in ms; then the
 ## same click edits with every hole failing two rules (9 issue boxes of 2 lines, E3-S2 review).
+## E3-S62 (D53): the Build pass at 0.175x runs the main scene's own day at 3x with the whole
+## field out and drawn (_begin_build_field), as Build now runs and shows it.
 ## E3-S9 (D45): idle Build frames at the farthest step, 0.175x, too, and Play frames at 0.175x
 ## and 0.5x with the main scene's own guest day (GuestSim) at 3x, stepped to GUEST_REFRESH_S so
 ## a full field (14 to 16 guests) is on the course and drawn, the camera on the map's centre.
@@ -605,9 +607,10 @@ func _advance_guests() -> void:
 
 func _print_guests(phase: String) -> void:
 	if not _guest_ms.is_empty():
-		var b: GuestBrain = _main.guest_sim.brain if phase == "Play" else _brain
+		var main_day: bool = phase == "Play" or phase == "Build"
+		var b: GuestBrain = _main.guest_sim.brain if main_day else _brain
 		print("  guests at 3x during %s: CPU a frame %s; day %d at %d s, %d on the course" % [
-			phase, _stats(_guest_ms), _main.guest_sim.day if phase == "Play" else _day, b.second,
+			phase, _stats(_guest_ms), _main.guest_sim.day if main_day else _day, b.second,
 			b.on_course().size()])
 	_guest_ms.clear()
 
@@ -693,7 +696,7 @@ func _stats(ms: Array[float]) -> String:
 func _process(_delta: float) -> bool:
 	if _main == null:
 		return false
-	if _phase == 4 or _phase == 5:
+	if _phase == 3 or _phase == 4 or _phase == 5:
 		_advance_main_guests()
 	elif _phase == 9:
 		_advance_budget_guests()
@@ -714,15 +717,24 @@ func _process(_delta: float) -> bool:
 			if _frames > 2:
 				_samples.append(frame_ms)
 				_note_slow(frame_ms)
+				if _phase == 3:
+					_shown.append(_main.guest_view.figures().size())
 			if _frames >= IDLE_FRAMES:
-				print("idle frames in Build at %sx: %s; %s" % [_main.camera.zoom.x, _stats(_samples), _slow_share()])
-				_print_guests("idle")
+				if _phase == 3:
+					_shown.sort()
+					print("Build frames at %sx, guests at 3x, %d to %d figures shown, %d on the course: %s; %s" % [
+						_main.camera.zoom.x, _shown[0], _shown[-1], _main.guest_sim.guests_on_course(),
+						_stats(_samples), _slow_share()])
+					_print_guests("Build")
+					_shown.clear()
+				else:
+					print("idle frames in Build at %sx: %s; %s" % [_main.camera.zoom.x, _stats(_samples), _slow_share()])
+					_print_guests("idle")
 				_next_phase()
 				if _phase == 2:
 					_main.camera.set_zoom_level(0.5)
 				elif _phase == 3:
-					_main.camera.frame(_main.course_view.screen_bounds())
-					_main.camera.set_zoom_index(0)
+					_begin_build_field()
 				else:
 					_begin_play_phase()
 		4, 5:  # E3-S9 (D45): Play at the farthest zoom, then 0.5x, the whole map's guests shown
@@ -1017,6 +1029,23 @@ func _advance_budget_guests() -> void:
 	var stepped: int = _main.guest_sim.advance(1.0 / 60.0)
 	_guest_ms.append((Time.get_ticks_usec() - t1) / 1000.0)
 	_guest_stepped.append(stepped > 0)
+
+
+## E3-S62 (D53): Build at the farthest zoom with the main scene's own guest day, which now runs
+## and shows in Build: stepped until the whole field is out, as _begin_play_phase does, then
+## run at 3x by _advance_main_guests (its own _process off), the camera on the map's centre.
+func _begin_build_field() -> void:
+	var sim: GuestSim = _main.guest_sim
+	sim.set_process(false)
+	sim.set_speed(1.0)
+	for i: int in GUEST_REFRESH_S:
+		sim.advance(1.0)
+	var all: int = _guest_tuning.arrivals_per_day
+	while sim.guests_on_course() < all and sim.brain.second < _guest_tuning.arrival_window_s + 10.0:
+		sim.brain.step()
+	sim.set_speed(3.0)
+	_main.camera.frame(_main.course_view.screen_bounds())
+	_main.camera.set_zoom_index(0)
 
 
 ## E3-S9 (D45): Play on the nine holes with the main scene's own guest day (GuestSim), stepped

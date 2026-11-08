@@ -331,7 +331,8 @@ func _parcel_line(b: CourseBuilder) -> String:
 
 
 ## Puts the confirm by the clicked tile, inside the viewport and clear of the HUD (hud_rects):
-## just above the tile, else just below it, else to its right or left.
+## just above the tile, else just below it, else to its right or left, else right of the HUD
+## beside it.
 ## Of those, the first that covers no HUD and needs no clamping to stay on screen wins; else
 ## the one covering the least HUD, then moved least by the clamp.
 func _place_confirm() -> void:
@@ -348,6 +349,14 @@ func _place_confirm() -> void:
 		Vector2(anchor.x - confirm_gap - size.x, anchor.y - size.y * 0.5),
 	]
 	var hud: Array[Rect2] = hud_rects()
+	# E3-S62: the left column runs deeper in Build since the guests' speed panel stands under the
+	# land panel, so a tile beside it may have no clear side: also try right of the column.
+	var past := wants[2]
+	for _pass: int in 2:
+		for r: Rect2 in hud:
+			if Rect2(past, size).intersects(r):
+				past.x = maxf(past.x, r.end.x + confirm_gap)
+	wants.append(past)
 	var best := Vector2.ZERO
 	var best_cost := Vector3(INF, INF, INF)
 	for i: int in wants.size():
