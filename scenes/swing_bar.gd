@@ -9,6 +9,10 @@ extends Control
 ## sun_yellow triangle above the bar; the locked power is an ink-outlined chalk triangle
 ## below it, and the locked accuracy a diamond. It redraws each frame while a swing is in
 ## progress and on a resize.
+##
+## E3-S73: with the putter, the marker's pace (the power PuttAim solved, the putt the marker
+## shows) is a sun_yellow tick through the bar with a small ring under it, echoing the marker
+## ring; `pace` is NAN (no tick) for a full club. SwingPanel sets it.
 
 @export var bar_width: float = 420.0
 @export var bar_height: float = 18.0
@@ -21,6 +25,8 @@ extends Control
 @export var ink_color: Color = Color8(26, 28, 34)
 
 var swing: Swing
+## E3-S73: the bar position (1.0 = 100%) of the marker's pace, or NAN for none.
+var pace: float = NAN
 
 ## Room above and below the bar for the pointers, px.
 const PAD: float = 10.0
@@ -47,6 +53,11 @@ func _notification(what: int) -> void:
 func x_of(v: float) -> float:
 	var t := swing.tuning
 	return (v - t.bar_min) / (t.max_power - t.bar_min) * bar_width
+
+
+## Screen x of the pace tick (x_of(pace)); NAN when there is none.
+func pace_x() -> float:
+	return NAN if is_nan(pace) else x_of(pace)
 
 
 func _draw() -> void:
@@ -83,6 +94,14 @@ func _draw() -> void:
 	draw_line(Vector2(x_of(0.0), top - 5.0), Vector2(x_of(0.0), bottom + 5.0), mark_color, 2.0)
 	draw_line(Vector2(x100, top - 5.0), Vector2(x100, bottom + 5.0), mark_color, 2.0)
 	draw_rect(Rect2(0, top, bar_width, bar_height), ink_color, false, 1.5)
+	# E3-S73: the marker's pace, a tick through the bar on an ink outline, a ring under it.
+	if not is_nan(pace):
+		var kx := pace_x()
+		draw_line(Vector2(kx, top - 4.0), Vector2(kx, bottom + 2.0), ink_color, 4.0)
+		draw_line(Vector2(kx, top - 4.0), Vector2(kx, bottom + 2.0), cursor_color, 2.0)
+		var ring := Vector2(kx, bottom + 6.0)
+		draw_arc(ring, 3.5, 0.0, TAU, 16, ink_color, 3.0)
+		draw_arc(ring, 3.5, 0.0, TAU, 16, cursor_color, 1.5)
 	# Locked power: a triangle below the bar.
 	if swing.phase == Swing.Phase.ACCURACY or swing.phase == Swing.Phase.DONE:
 		var px := x_of(swing.power)

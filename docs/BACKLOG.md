@@ -1046,11 +1046,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: `GreenView.toggle` records the green window and hole it hid on; a rest on another green window, another hole, or a finished hole clears it. Off the green and back onto the same one stays hidden (recorded in `docs/design.md` Green view). Test `test_g_hides_it_for_this_green_only`: hidden across putts and an off-and-back on one green, open on a second green, G shows and hides it again, open again after the hole ends. Screenshot looked at (the turned view mid-roll, unchanged).
 
-- [ ] E3-S73 Mark the marker's pace on the putter's bar. The player sees where to stop.
+- [x] E3-S73 Mark the marker's pace on the putter's bar. The player sees where to stop.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The putter's bar shows no target (D49).
   - Accept: with the putter, the swing bar shows a tick at the power the marker's `PuttAim` solve needs (`Club.putt_power_for`), moving as the aim changes; full clubs show none.
   - Test: `tests/test_swing.gd` or `tests/test_hud.gd`: the tick sits at the solve's power. Screenshot looked at.
   - Touches: `scenes/`, `golf/` (read only), `tests/`
+  - Done 2026-11-08: `SwingBar.pace` draws a sun_yellow tick with an ink outline and a small ring under it at the solve's power (`SwingControl.aim_power`, the `PuttAim` power the marker shows, already a bar position, so no `putt_power_for` call is needed); `SwingPanel.follow_pace` sets it once a frame and leaves it off for a full club, before a solve's first putt, while the ball moves, and outside Play. Test `test_the_putters_bar_marks_the_markers_pace`: none on the tee with the driver, the tick at the solve's power on the green, moving with a 20 degree aim turn, gone while the putt rolls. A note on D21 records the reversal of "the player still judges the pace", and `docs/design.md` Aim marker. Removed the Icebox entry "Pace mark on the swing bar for putts", which this covers. Screenshot `docs/decisions/e3-s73-pace-tick.png`.
 
 ## E4: Economy — planned
 
@@ -1158,7 +1159,6 @@ Things worth doing that are out of the MVP. Promote only through `/decision`, wh
 - Putt marker while a solve runs (found in E6 review). After a new stroke or a switch to the putter no marker shows until the first putt rests (up to 2 to 3 frames on a steep bank), a cold steep solve spreads over about 1 s, and a marker that trails a sweep gives no sign it is for an older aim (a fade or dash could). Accuracy is measured only on straight two-steps-per-tile risers, not curved or mixed banks. Pillar 2.
 - Default club on short holes (found in playtest 2026-11-03). The tee defaults to the longest legal club, so on a 160 yd par 3 the driver's marker flies past the cup and out of bounds. Proposed: default to the longest club whose marker stays short of the cup. Pillar 2.
 - Camera and HUD in Play (found in playtest 2026-11-03). The user was bothered by the camera or the HUD; candidates from E2-S14: the ease (`centre_time` 0.15 s), the stepped zoom-out of the aim framing, and the swing panel or scorecard hiding the ball or marker near the edges (a per-edge HUD inset). Ask which before fixing. Pillar 2.
-- Pace mark on the swing bar for putts (found in playtest 2026-11-03). D21 shows the line at the cup's pace but not the power, so the player still judges the pace; D21's option (b), a mark on the bar at the solved power, is wanted. Pillar 2.
 - Blocked-club and hazard cues (found in playtest 2026-11-03). The blocked ring (D20), the red landing cross at the tree scatter point, or the 0.8 s `hazard_show_time` pause read as unclear; a splash cue was the open idea. Ask which before fixing. Pillar 2.
 - Campaign plots and goals
 - Unlocks by rating

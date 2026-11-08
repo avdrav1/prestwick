@@ -88,6 +88,33 @@ func refresh() -> void:
 	bar.queue_redraw()
 
 
+func _process(_delta: float) -> void:
+	follow_pace()
+
+
+## E3-S73: puts the marker's pace (pace_of) on the bar, redrawing it when it moves. Once a
+## frame: the putter's solve refines over frames without a `changed` signal.
+func follow_pace() -> void:
+	if bar == null:
+		return
+	var p := pace_of(_control)
+	if is_nan(p) and is_nan(bar.pace) or p == bar.pace:
+		return
+	bar.pace = p
+	bar.queue_redraw()
+
+
+## The bar position of the putt the marker shows (the PuttAim solve's power, SwingControl's
+## aim_power), or NAN: a full club, no putt solved yet, the ball moving, or not in Play.
+static func pace_of(c: SwingControl) -> float:
+	if c == null or not c.active or c.club == null or not c.club.is_putter():
+		return NAN
+	if c.aim_putt == null or c.aim_prediction == null or not c.aim_prediction_is_putt \
+			or c.is_ball_moving() or c.is_finished():
+		return NAN
+	return c.aim_power
+
+
 func _on_speed_changed(value: float) -> void:
 	_control.swing.bar_speed = value
 	refresh()

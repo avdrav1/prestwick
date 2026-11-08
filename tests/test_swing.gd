@@ -732,3 +732,41 @@ func test_a_sweep_of_the_aim_on_a_steep_bank_keeps_the_marker_up() -> void:
 		assert_gte(moves, 6, "%s: the marker moves while the aim sweeps" % label)
 		assert_lte(longest, 10, "%s: never still for more than 10 frames of turning" % label)
 		assert_lte(rad_to_deg(worst_lag), 12.0, "%s: the shown putt trails the aim by little" % label)
+
+
+# --- E3-S73: the marker's pace on the putter's bar ---
+
+func test_the_putters_bar_marks_the_markers_pace() -> void:
+	var made := GreenViewShot.course("contoured")
+	var main := _main_on(made.course)
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	var bar := panel.bar
+	# On the tee with a full club: no pace mark.
+	panel.follow_pace()
+	assert_false(sc.club.is_putter())
+	assert_true(is_nan(bar.pace), "a full club shows none")
+	# On the green with the putter: the mark sits at the solve's power.
+	sc.place_ball(made.ball)
+	sc.aim_at(sc.field.tile_center(made.cup))
+	sc._refresh_aim()
+	sc.settle_aim()
+	panel.follow_pace()
+	assert_true(sc.club.is_putter())
+	assert_almost_eq(bar.pace, sc.aim_putt.power, 1e-6, "the tick at the PuttAim solve's power")
+	assert_almost_eq(bar.pace_x(), bar.x_of(sc.aim_putt.power), 1e-6)
+	assert_gt(bar.pace_x(), bar.x_of(0.0), "inside the bar")
+	assert_lt(bar.pace_x(), bar.x_of(1.0))
+	# The aim turns: the solve moves and the mark with it.
+	var before := bar.pace
+	sc.rotate_aim(20.0)
+	sc._refresh_aim()
+	sc.settle_aim()
+	panel.follow_pace()
+	assert_almost_eq(bar.pace, sc.aim_putt.power, 1e-6, "follows the new solve")
+	assert_ne(bar.pace, before, "and moved")
+	# While the putt rolls: none.
+	sc.swing.set_result(sc.aim_power, 0.0)
+	sc._strike()
+	panel.follow_pace()
+	assert_true(is_nan(bar.pace), "none while the ball moves")
