@@ -110,17 +110,91 @@ func test_the_panel_maps_tiles_and_yards_both_ways() -> void:
 	var gv := m.green_view
 	var made := GreenViewShot.course("flat")
 	_rest(m, made.ball, made.cup)
-	var w := gv.window
-	var r := gv.tile_rect(w.position)
-	assert_eq(r.size, Vector2.ONE * gv.tile_px, "square tiles")
-	assert_eq(gv.tile_rect(w.position + Vector2i(1, 0)).position, r.position + Vector2(gv.tile_px, 0),
-			"+x runs right")
-	assert_eq(gv.tile_rect(w.position + Vector2i(0, 1)).position, r.position + Vector2(0, gv.tile_px),
-			"+y runs down")
+	# E3-S71: the map's top-down drawing turned by `turn`, tiles still square.
 	var p := Vector2(103.0, 71.5)
+	var east := gv.to_panel(p + Vector2(5.0, 0.0)) - gv.to_panel(p)
+	var south := gv.to_panel(p + Vector2(0.0, 5.0)) - gv.to_panel(p)
+	assert_almost_eq(east, Vector2(gv.tile_px, 0.0).rotated(gv.turn), Vector2(0.001, 0.001),
+			"+x runs along the turned panel's x")
+	assert_almost_eq(south, Vector2(0.0, gv.tile_px).rotated(gv.turn), Vector2(0.001, 0.001),
+			"+y along its y, square tiles")
 	assert_almost_eq(gv.to_yards(gv.to_panel(p)).distance_to(p), 0.0, 0.001)
-	assert_almost_eq(gv.to_panel(Vector2(w.position) * 5.0).distance_to(r.position), 0.0, 0.001,
+	# Turned by none (no cup ahead of the ball), the window is the drawn tiles and maps as before.
+	gv.turn_to(0.0)
+	assert_eq(gv.drawn, gv.window, "map-aligned, the panel is the window")
+	assert_almost_eq(gv.to_panel(Vector2(gv.window.position) * 5.0),
+			Vector2(gv.tuning.inset_px, gv.tuning.inset_px + gv.tuning.header_px), Vector2(0.001, 0.001),
 			"a tile's corner in yards is its square's corner")
+	assert_almost_eq(gv.to_yards(gv.to_panel(p)).distance_to(p), 0.0, 0.001)
+
+
+# --- E3-S71: the putt runs up the panel ---
+
+
+func test_the_putt_runs_up_the_panel_for_four_headings() -> void:
+	var made := GreenViewShot.course("flat")
+	var cup: Vector2i = made.cup  # (24, 12)
+	# The ball south, west, north and east of the cup, and one off a diagonal.
+	for tile: Vector2i in [Vector2i(24, 17), Vector2i(19, 12), Vector2i(24, 10), Vector2i(26, 12),
+			Vector2i(20, 16)]:
+		var m := _main()
+		var gv := m.green_view
+		var ball := (Vector2(tile) + Vector2(0.5, 0.5)) * 5.0
+		_rest(m, ball, cup)
+		assert_true(gv.is_open, "open with the ball on %s" % tile)
+		var b := gv.to_panel(ball)
+		var c := gv.to_panel(m.swing_control.field.tile_center(cup))
+		assert_gt(b.y, c.y, "the ball below the cup from %s" % tile)
+		assert_almost_eq(b.x, c.x, 0.01, "straight below it from %s" % tile)
+		assert_almost_eq(gv.ball_panel().distance_to(b), 0.0, 0.001)
+		# The marker and the dots turn with it: the marker is the solve's rest in the turned panel.
+		var rest: Vector3 = m.swing_control.aim_putt.prediction.rest
+		var mp: Variant = gv.marker_panel()
+		assert_not_null(mp)
+		assert_almost_eq((mp as Vector2).distance_to(gv.to_panel(Vector2(rest.x, rest.y))), 0.0, 0.001)
+		# The panel still sits in the free view, and its turned tiles cover it.
+		var free := m.free_view_rect()
+		assert_true(free.encloses(gv.get_rect()), "the panel sits in the free view from %s" % tile)
+		assert_true(gv.drawn.encloses(gv.window), "every tile of the window is drawn")
+		# The window's corners all land inside the panel's content.
+		var content := Rect2(Vector2(gv.tuning.inset_px, gv.tuning.inset_px + gv.tuning.header_px),
+				gv.size - Vector2(2.0 * gv.tuning.inset_px, 2.0 * gv.tuning.inset_px + gv.tuning.header_px))
+		for k: Vector2i in [Vector2i.ZERO, Vector2i(gv.window.size.x, 0), gv.window.size, Vector2i(0, gv.window.size.y)]:
+			var at := gv.to_panel(Vector2(gv.window.position + k) * 5.0)
+			assert_true(content.grow(0.01).has_point(at), "the window's corner %s is in the panel" % k)
+
+
+func test_the_turn_holds_while_the_putt_rolls_and_refits_on_the_next() -> void:
+	var m := _main("contoured")
+	var gv := m.green_view
+	var sc := m.swing_control
+	var made := GreenViewShot.course("contoured")
+	_rest(m, made.ball, made.cup)
+	var turned := gv.turn
+	assert_ne(turned, 0.0, "the contoured putt runs off the map's axes")
+	sc.rotate_aim(12.0)  # miss the cup, so the ball rests on the green elsewhere
+	sc._refresh_aim()
+	sc.settle_aim()
+	sc.swing.set_result(sc.aim_power, 0.0)
+	sc._strike()
+	var frames := 0
+	while sc.is_ball_moving() and frames < 2000:
+		m.shot_view.advance(1.0 / 60.0)
+		gv.follow(m.free_view_rect())
+		if sc.is_ball_moving():
+			assert_eq(gv.turn, turned, "the turn holds while the putt rolls")
+		frames += 1
+	assert_false(sc.score.holed, "the turned aim missed")
+	assert_eq(sc.lie_surface(), Surface.Type.GREEN, "and rested on the green")
+	sc.aim_at(sc.field.tile_center(made.cup))
+	sc._refresh_aim()
+	sc.settle_aim()
+	gv.follow(m.free_view_rect())
+	assert_ne(gv.turn, turned, "the next putt turns the panel again")
+	var b := gv.to_panel(sc.ball_at)
+	var c := gv.to_panel(sc.field.tile_center(made.cup))
+	assert_gt(b.y, c.y, "the ball below the cup again")
+	assert_almost_eq(b.x, c.x, 0.01)
 
 
 func test_a_tiles_slope_arrow_points_downhill_on_a_known_contour() -> void:
@@ -166,12 +240,14 @@ func test_fall_arrows_only_on_steep_tiles() -> void:
 	assert_false(Vector2i(22, 11) in arrows, "none on the flat back tier")
 	for cell: Vector2i in arrows:
 		assert_gte(GreenView.steep_fall_at(field, cell).length(), 2.0 - 0.001)
-	# The contoured green falls one step at a time: no arrows at all, only lines.
+	# The contoured green falls one step at a time: no arrows on it or its fringe, only lines.
+	# (E3-S71: the turned panel also draws the fixture's raised plot's banks past the fringe.)
 	var mc := _main("contoured")
 	var tilt := GreenViewShot.course("contoured")
 	_rest(mc, tilt.ball, tilt.cup)
 	assert_true(mc.green_view.is_open)
-	assert_eq(mc.green_view.arrow_cells().size(), 0)
+	for cell: Vector2i in mc.green_view.arrow_cells():
+		assert_false(mc.green_view.window.has_point(cell), "no arrow in the window: %s" % cell)
 	assert_gt(mc.green_view.contours.size(), 0)
 
 
@@ -189,7 +265,7 @@ func test_its_contours_follow_the_ground_and_a_flat_green_has_none() -> void:
 	_rest(mt, tiered.ball, tiered.cup)
 	var field := mt.swing_control.field
 	var levels: Array[float] = []
-	var area := Rect2(Vector2(gv.window.position) * 5.0, Vector2(gv.window.size) * 5.0).grow(0.001)
+	var area := Rect2(Vector2(gv.drawn.position) * 5.0, Vector2(gv.drawn.size) * 5.0).grow(0.001)
 	for entry: Array in gv.contours:
 		var level: float = entry[0]
 		levels.append(level)
@@ -199,7 +275,7 @@ func test_its_contours_follow_the_ground_and_a_flat_green_has_none() -> void:
 		for line: PackedVector2Array in entry[2]:
 			for p: Vector2 in line:
 				assert_almost_eq(field.height_at(p.x, p.y) / field.yards_per_step, level, 0.001)
-				assert_true(area.has_point(p), "inside the window")
+				assert_true(area.has_point(p), "inside the drawn tiles")
 	# The tiers 5, 3 and 2 (and the rough at 2 round them): every half step from 2.5 to 5.
 	assert_eq(levels, [2.5, 3.0, 3.5, 4.0, 4.5, 5.0] as Array[float])
 
@@ -295,8 +371,11 @@ func test_a_cursor_on_the_panel_aims_at_the_tile_under_it() -> void:
 	var made := GreenViewShot.course("contoured")
 	_rest(m, made.ball, made.cup)
 	await get_tree().process_frame
+	assert_ne(gv.turn, 0.0, "E3-S71: the panel is turned to the putt")
 	for target: Vector2i in [Vector2i(25, 11), Vector2i(19, 12), Vector2i(23, 18)]:
-		_move(m, _screen(gv, gv.tile_rect(target).get_center()))
+		var local := gv.to_panel(sc.field.tile_center(target))
+		assert_almost_eq(gv.to_yards(local).distance_to(sc.field.tile_center(target)), 0.0, 0.001)
+		_move(m, _screen(gv, local))
 		var to := sc.field.tile_center(target) - sc.ball_at
 		assert_almost_eq(sc.aim_deg, fposmod(rad_to_deg(to.angle()), 360.0), 0.01,
 				"the heading from the ball to tile %s" % target)
@@ -327,7 +406,7 @@ func test_a_click_on_the_panel_swings_and_never_reaches_the_map() -> void:
 	await get_tree().process_frame
 	var probe := ClickProbe.new()
 	m.add_child(probe)
-	var at := _screen(gv, gv.tile_rect(gv.window.position + Vector2i(1, 1)).get_center())
+	var at := _screen(gv, gv.to_panel(m.swing_control.field.tile_center(gv.window.get_center())))
 	assert_true(gv.get_global_rect().has_point(at), "the click is on the panel")
 	var before := m.course.content_hash()
 	_click(m, at, true)

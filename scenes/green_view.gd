@@ -27,6 +27,14 @@ extends Control
 ## tag click (TagClicks), no Build switch, no paint, and the cursor over it never aims at the
 ## isometric ground behind it. The middle button and the wheel go on to the camera.
 ##
+## Turned to the putt (E3-S71): when it opens for a putt, the top-down drawing turns, smoothly
+## (any angle, not snapped to quarter turns), so the line from the ball to the cup points up the
+## panel, as in Mean 18: the ball at the bottom, the cup above it. The tiles, contours, ticks,
+## arrows, the dots and the marker turn with it (the cup's flag stays upright). The panel is
+## sized to the turned window's bounding box and draws every map tile under it (`drawn`), so no
+## corner shows the frame. The turn holds while the putt rolls and is taken again at the next
+## rest (`turn_for`). The mouse maps back through the same turn (to_yards).
+##
 ## Drawn in code with art/palette.gpl colours until the final art (E5-S3). Numbers in
 ## scenes/green_view_tuning.tres.
 
@@ -63,8 +71,15 @@ var aim_view: AimView
 var is_open: bool = false
 ## The player hid it (toggle_green_view).
 var user_hidden: bool = false
-## The tiles drawn: the green's bounding box grown by fringe_tiles, clipped to the map.
+## The tiles the panel is fitted to: the green's bounding box grown by fringe_tiles, clipped to
+## the map.
 var window: Rect2i = Rect2i()
+## The tiles drawn (E3-S71): every map tile under the panel's turned content, clipped to the
+## map. Encloses `window`; equal to it at turn 0.
+var drawn: Rect2i = Rect2i()
+## The panel's turn, radians (E3-S71): a ground offset in the map's top-down space (+x right,
+## +y down) is turned by this in the panel. 0 is map-aligned.
+var turn: float = 0.0
 ## A tile's side in the panel, px.
 var tile_px: float = 24.0
 
@@ -77,6 +92,11 @@ var _top: int = 0
 ## The contours of the window, traced when it opens: [level (steps), is an index line,
 ## Array[PackedVector2Array] of polylines in yards] per level, lowest first.
 var contours: Array = []
+## The panel's content (the tiles' area below the title strip), px: the turned window's
+## bounding box at tile_px. Zero until fitted.
+var _span: Vector2 = Vector2.ZERO
+## Clips the terrain and overlay to the content, so turned tiles never cover the frame.
+var _content: Control
 var _terrain: Control
 var _overlay: Control
 
@@ -88,16 +108,21 @@ func _init() -> void:
 	# middle button and wheel go on to the camera, so a drag let go over it never sticks.
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	clip_contents = true
+	_content = Control.new()
+	_content.name = "Content"
+	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_content.clip_contents = true
+	add_child(_content)
 	_terrain = Control.new()
 	_terrain.name = "Terrain"
 	_terrain.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_terrain.draw.connect(_draw_terrain)
-	add_child(_terrain)
+	_content.add_child(_terrain)
 	_overlay = Control.new()
 	_overlay.name = "Overlay"
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.draw.connect(_draw_overlay)
-	add_child(_overlay)
+	_content.add_child(_overlay)
 
 
 ## Reads the ball, the hole and the aim from these.
@@ -176,12 +201,64 @@ func _open_at(c: CourseData, ball: Vector2) -> void:
 	_field = control.field
 	_window_for = ball
 	window = green_window(c, _field, _field.tile_at(ball.x, ball.y), tuning.fringe_tiles)
-	_top = 0
-	for y: int in range(window.position.y, window.end.y):
-		for x: int in range(window.position.x, window.end.x):
-			_top = maxi(_top, c.get_height(x, y))
-	contours = trace_contours(_field, window, tuning)
+	var cup: Variant = cup_point()
+	turn = turn_for(ball, cup as Vector2) if cup != null else 0.0
+	drawn = Rect2i()
+	_span = Vector2.ZERO
 	_terrain.queue_redraw()
+
+
+## The panel's turn that puts the cup straight above the ball (E3-S71), radians in [-PI, PI):
+## the ball-to-cup line turned to point up. 0 when the ball is on the cup.
+static func turn_for(ball: Vector2, cup: Vector2) -> float:
+	var d := cup - ball
+	if d.length() < 0.01:
+		return 0.0
+	return wrapf(-PI * 0.5 - d.angle(), -PI, PI)
+
+
+## Turns the panel by `radians` and fits it again (the open view keeps it until the next rest).
+func turn_to(radians: float) -> void:
+	turn = radians
+	_fit(tile_px)
+
+
+## Sizes the content for the window turned by `turn` at `px` a tile, finds the tiles under it
+## (drawn), and traces them again when they change.
+func _fit(px: float) -> void:
+	tile_px = px
+	_span = turned_box(window.size, turn) * px
+	size = _span + Vector2.ONE * 2.0 * tuning.inset_px + Vector2(0.0, tuning.header_px)
+	_content.position = _origin()
+	_content.size = _span
+	_terrain.size = _span
+	_overlay.size = _span
+	var lo := Vector2(INF, INF)
+	var hi := -lo
+	for k: Vector2 in [Vector2.ZERO, Vector2(_span.x, 0.0), _span, Vector2(0.0, _span.y)]:
+		var t := to_yards(_origin() + k) / _yards_per_tile()
+		lo = lo.min(t)
+		hi = hi.max(t)
+	var a := Vector2i((lo + Vector2.ONE * 1e-4).floor())
+	var b := Vector2i((hi - Vector2.ONE * 1e-4).ceil())
+	var cover := Rect2i(a, b - a).intersection(Rect2i(0, 0, _course.width, _course.height)).merge(window)
+	if cover != drawn:
+		drawn = cover
+		_top = 0
+		for y: int in range(drawn.position.y, drawn.end.y):
+			for x: int in range(drawn.position.x, drawn.end.x):
+				_top = maxi(_top, _course.get_height(x, y))
+		contours = trace_contours(_field, drawn, tuning)
+	_terrain.queue_redraw()
+	queue_redraw()
+
+
+## The bounding box, in tiles, of a `tiles` window turned by `radians`.
+static func turned_box(tiles: Vector2i, radians: float) -> Vector2:
+	var w := Vector2(tiles)
+	var cs := absf(cos(radians))
+	var sn := absf(sin(radians))
+	return Vector2(w.x * cs + w.y * sn, w.x * sn + w.y * cs)
 
 
 ## The contours of `window`: a level every contour_interval steps (from contour_offset; an index
@@ -224,39 +301,45 @@ static func green_window(c: CourseData, field: HeightField, tile: Vector2i, frin
 	return box.intersection(Rect2i(0, 0, c.width, c.height))
 
 
-## Sizes the panel for the window, tiles as large as fit in `free` (less margin_px each side)
-## between min_tile_px and max_tile_px, and centres it in `free`.
+## Sizes the panel for the window turned by `turn` (its bounding box, turned_box), tiles as
+## large as fit in `free` (less margin_px each side) between min_tile_px and max_tile_px, and
+## centres it in `free`.
 func _layout(free: Rect2) -> void:
 	var t := tuning
 	var room := free.size - Vector2.ONE * 2.0 * (t.margin_px + t.inset_px) - Vector2(0.0, t.header_px)
-	var fit := minf(room.x / window.size.x, room.y / window.size.y)
+	var box := turned_box(window.size, turn)
+	var fit := minf(room.x / box.x, room.y / box.y)
 	var px := clampf(floorf(fit), t.min_tile_px, t.max_tile_px)
-	var want := Vector2(window.size) * px + Vector2.ONE * 2.0 * t.inset_px + Vector2(0.0, t.header_px)
-	if px != tile_px:
-		tile_px = px
-		_terrain.queue_redraw()
-	if size != want:
-		size = want
-		_terrain.size = want
-		_overlay.size = want
-		_terrain.queue_redraw()
-		queue_redraw()
-	position = (free.get_center() - want * 0.5).round()
+	if px != tile_px or _span == Vector2.ZERO:
+		_fit(px)
+	position = (free.get_center() - size * 0.5).round()
 
 
-## The panel point (local px) of the ground point `p` (yards).
+## The panel point (local px) of the ground point `p` (yards): its offset from the window's
+## centre turned by `turn`, about the content's centre.
 func to_panel(p: Vector2) -> Vector2:
-	return _origin() + (p / _yards_per_tile() - Vector2(window.position)) * tile_px
+	return _origin() + _span * 0.5 + _local(p).rotated(turn)
 
 
 ## The ground point (yards) under the panel point `local`.
 func to_yards(local: Vector2) -> Vector2:
-	return ((local - _origin()) / tile_px + Vector2(window.position)) * _yards_per_tile()
+	var u := (local - _origin() - _span * 0.5).rotated(-turn)
+	return (u / tile_px + _window_centre()) * _yards_per_tile()
 
 
-## The panel square of tile `cell`.
-func tile_rect(cell: Vector2i) -> Rect2:
-	return Rect2(_origin() + Vector2(cell - window.position) * tile_px, Vector2.ONE * tile_px)
+## The ground point `p` (yards) in the terrain's unturned drawing space: px from the window's
+## centre, +x right, +y down. The terrain draws in it under the turn (_draw_terrain).
+func _local(p: Vector2) -> Vector2:
+	return (p / _yards_per_tile() - _window_centre()) * tile_px
+
+
+## Tile `cell`'s square in the terrain's unturned drawing space (_local).
+func _square(cell: Vector2i) -> Rect2:
+	return Rect2((Vector2(cell) - _window_centre()) * tile_px, Vector2.ONE * tile_px)
+
+
+func _window_centre() -> Vector2:
+	return Vector2(window.position) + Vector2(window.size) * 0.5
 
 
 func _origin() -> Vector2:
@@ -296,8 +379,8 @@ func arrow_cells() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	if _field == null:
 		return out
-	for y: int in range(window.position.y, window.end.y):
-		for x: int in range(window.position.x, window.end.x):
+	for y: int in range(drawn.position.y, drawn.end.y):
+		for x: int in range(drawn.position.x, drawn.end.x):
 			if steep_fall_at(_field, Vector2i(x, y)).length() >= tuning.arrow_steep_fall - 1e-6:
 				out.append(Vector2i(x, y))
 	return out
@@ -380,10 +463,12 @@ func _draw_terrain() -> void:
 	if _course == null:
 		return
 	var ci := _terrain
-	for y: int in range(window.position.y, window.end.y):
-		for x: int in range(window.position.x, window.end.x):
+	# Turned about the content's centre: everything below draws in _local's unturned space.
+	ci.draw_set_transform(_span * 0.5, turn)
+	for y: int in range(drawn.position.y, drawn.end.y):
+		for x: int in range(drawn.position.x, drawn.end.x):
 			var cell := Vector2i(x, y)
-			_draw_tile(ci, tile_rect(cell), _field.surface_of(cell))
+			_draw_tile(ci, _square(cell), _field.surface_of(cell))
 	_draw_shade(ci)
 	_draw_contours(ci)
 	for cell: Vector2i in arrow_cells():
@@ -396,13 +481,13 @@ func _draw_terrain() -> void:
 func _draw_shade(ci: CanvasItem) -> void:
 	var n := maxi(tuning.shade_subdiv, 1)
 	var ypt := _yards_per_tile()
-	var cols := window.size.x * n + 1
-	var rows := window.size.y * n + 1
+	var cols := drawn.size.x * n + 1
+	var rows := drawn.size.y * n + 1
 	var alpha := PackedFloat32Array()
 	alpha.resize(cols * rows)
 	for j: int in rows:
 		for i: int in cols:
-			var p := (Vector2(window.position) + Vector2(i, j) / n) * ypt
+			var p := (Vector2(drawn.position) + Vector2(i, j) / n) * ypt
 			alpha[j * cols + i] = 1.0 - shade_of(_field.height_at(p.x, p.y) / _field.yards_per_step)
 	var pts := PackedVector2Array()
 	var colors := PackedColorArray()
@@ -415,8 +500,8 @@ func _draw_shade(ci: CanvasItem) -> void:
 			var a11 := alpha[(j + 1) * cols + i + 1]
 			if a00 == 0.0 and a10 == 0.0 and a01 == 0.0 and a11 == 0.0:
 				continue
-			var p00 := to_panel((Vector2(window.position) + Vector2(i, j) / n) * ypt)
-			var p11 := to_panel((Vector2(window.position) + Vector2(i + 1, j + 1) / n) * ypt)
+			var p00 := _local((Vector2(drawn.position) + Vector2(i, j) / n) * ypt)
+			var p11 := _local((Vector2(drawn.position) + Vector2(i + 1, j + 1) / n) * ypt)
 			pts.append_array([p00, Vector2(p11.x, p00.y), p11, p00, p11, Vector2(p00.x, p11.y)])
 			colors.append_array([Color(black, a00), Color(black, a10), Color(black, a11),
 					Color(black, a00), Color(black, a11), Color(black, a01)])
@@ -433,13 +518,13 @@ func _draw_contours(ci: CanvasItem) -> void:
 		var index: bool = entry[1]
 		var w := tuning.index_width if index else tuning.contour_width
 		for line: PackedVector2Array in entry[2]:
-			var drawn := PackedVector2Array()
+			var pts := PackedVector2Array()
 			for p: Vector2 in line:
-				drawn.append(to_panel(p))
-			ci.draw_polyline(drawn, INK, w, true)
+				pts.append(_local(p))
+			ci.draw_polyline(pts, INK, w, true)
 			var t := ContourTracer.ticks(line, spacing, length)
 			for k: int in range(0, t.size(), 2):
-				ci.draw_line(to_panel(t[k]), to_panel(t[k + 1]), INK, tuning.contour_width, true)
+				ci.draw_line(_local(t[k]), _local(t[k + 1]), INK, tuning.contour_width, true)
 
 
 func _draw_tile(ci: CanvasItem, r: Rect2, s: Surface.Type) -> void:
@@ -518,7 +603,7 @@ func _draw_arrow(ci: CanvasItem, cell: Vector2i) -> void:
 	var fall := steep_fall_at(_field, cell)
 	var dir := fall.normalized()
 	var length := tile_px * tuning.arrow_length
-	var c := tile_rect(cell).get_center()
+	var c := _square(cell).get_center()
 	var tail := c - dir * length * 0.5
 	var tip := c + dir * length * 0.5
 	var head := maxf(5.0, length * 0.35)
@@ -537,6 +622,8 @@ func _draw_overlay() -> void:
 	if _course == null or control == null:
 		return
 	var ci := _overlay
+	# The overlay draws in panel points (to_panel): the content starts at the panel's _origin.
+	ci.draw_set_transform(-_origin())
 	var cup: Variant = cup_point()
 	if cup != null:
 		var at := to_panel(cup as Vector2)
@@ -560,12 +647,13 @@ func _draw_overlay() -> void:
 
 
 ## The putter's marker as the AimView draws it, round (top-down): a sun_yellow ring on an ink
-## outline, four ticks and a centre dot.
+## outline, four ticks (turned with the panel) and a centre dot.
 func _draw_marker(ci: CanvasItem, at: Vector2) -> void:
 	var r := tuning.marker_radius_px
 	ci.draw_arc(at, r, 0.0, TAU, 32, INK, 4.0)
 	ci.draw_arc(at, r, 0.0, TAU, 32, SUN_YELLOW, 2.0)
-	for dir: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
+	for side: Vector2 in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]:
+		var dir := side.rotated(turn)
 		ci.draw_line(at + dir * (r - 3.0), at + dir * (r + 4.0), INK, 3.0)
 		ci.draw_line(at + dir * (r - 3.0), at + dir * (r + 4.0), SUN_YELLOW, 1.5)
 	ci.draw_circle(at, 2.5, INK)

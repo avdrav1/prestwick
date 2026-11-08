@@ -1032,11 +1032,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Test: `tests/test_guest_brain.gd`: a guest on the dogleg aims at the turn, then the cup; `tests/test_balance_reactions.gd` passes.
   - Touches: `guests/`, `data/`, `tests/`
 
-- [ ] E3-S71 Turn the green view so the putt runs up the panel. Ball at the bottom, cup above it, as in Mean 18.
+- [x] E3-S71 Turn the green view so the putt runs up the panel. Ball at the bottom, cup above it, as in Mean 18.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The panel is map-aligned today (D48, E3-S52).
   - Accept: when the green view opens for a putt, the panel rotates so the line from the ball to the cup points up (snapped or smooth, recorded); contours, ticks, arrows, the dots and the marker turn with it; mouse aim and click-to-swing still map to the right ground point; the rotation holds while the putt rolls and re-fits on the next putt.
   - Test: `tests/test_green_view.gd`: ball below the cup on screen for four headings, and mouse aim lands on the ground point under the cursor after rotation. Screenshots looked at.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: smooth, not snapped (recorded in `docs/design.md` Green view). `GreenView.turn_for` turns the top-down drawing at each rest so the ball-to-cup line points straight up; tiles, shade, contours, ticks, arrows, dots and marker turn with it, the cup's flag stays upright. The panel fits the turned window's bounding box and draws every map tile under it (`GreenView.drawn`), so a diagonal putt makes a larger panel whose corners show ground past the fringe. Tests: ball straight below the cup for five headings (S, W, N, E, a diagonal), with the marker and the window inside the panel; the turn holds through a roll and is taken again at the next rest; the cursor test now runs on a turned panel and aims at the tile under it. Screenshots `docs/decisions/e3-s71-contoured.png`, `e3-s71-nine-3.png`.
 
 - [ ] E3-S72 Reopen the green view on each new green. G hides it for this green only.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). G's choice holds across holes today (E3-S52).
