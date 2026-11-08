@@ -94,6 +94,11 @@ class Step:
 	var holes: Variant = null
 	var land_parcel: Vector2i = NO_PARCEL
 	var land_budget: int = 0
+	## E3-S61: a stroke's kept lines of play as they stood when it began (the builder's
+	## _lines_now and _lines_reads), so its undo, which puts the course back as it was then,
+	## need not measure the turns its tiles moved again. Empty when none were kept.
+	var lines: Dictionary = {}
+	var lines_reads: Dictionary = {}
 
 	func is_empty() -> bool:
 		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL
@@ -159,7 +164,12 @@ var _reach_revision: int = 0
 ## them) or the course is written by someone else (CourseData.revision moved past
 ## `_lines_revision`). Before, every brush paint measured every open hole's line again, a
 ## search through its fairway, so a drag on doglegs held 50 ms frames.
+## E3-S61: each line is kept with the tiles its turn read (turn_point's `reads`), and a write
+## turning a tile to or from fairway drops only the lines that read it: a drag across one
+## hole's fairway no longer measures every other hole's line again.
 var _lines_now: Dictionary = {}
+## The tiles each kept line's turn read ({tile: true}), by the same key.
+var _lines_reads: Dictionary = {}
 var _lines_revision: int = -1
 
 
@@ -270,6 +280,9 @@ func begin_stroke() -> void:
 	end_stroke()
 	_stroke = Step.new()
 	_stroke_lifted = {}
+	if _course.revision == _lines_revision:
+		_stroke.lines = _lines_now.duplicate()
+		_stroke.lines_reads = _lines_reads.duplicate()
 
 
 ## Closes the open stroke, reruns the validator and pushes its undo step if it changed anything.
@@ -616,6 +629,11 @@ func undo() -> bool:
 		_reach = null
 		_course.set_land_budget(step.land_budget)
 		land_changed.emit(step.land_parcel)
+	if not step.lines.is_empty():
+		# The course is as it was when the stroke began: so are the lines kept then.
+		_lines_now = step.lines.duplicate()
+		_lines_reads = step.lines_reads.duplicate()
+		_lines_revision = _course.revision
 	# The course is back as it was before the edit, when every open hole passed (_init closed
 	# any that came in failing), so this rerun refreshes `issues` and usually closes nothing.
 	# An undone purchase may close a hole whose tee or cup (rule 6) or path (rule 3) stands
@@ -653,22 +671,38 @@ func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
 ## Writes one tile and notes it for rule 3's graph and the lines of play (_lines_now).
 func _set_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
 	if (_course.get_surface(c.x, c.y) == Surface.Type.FAIRWAY) != (s == Surface.Type.FAIRWAY):
-		_lines_now.clear()
+		for k: Vector4i in _lines_reads.keys():
+			if (_lines_reads[k] as Dictionary).has(c):
+				_lines_now.erase(k)
+				_lines_reads.erase(k)
 	_course.set_tile(c.x, c.y, h, s)
 	_reach_dirty[c] = true
 	_reach_revision += 1
 	_lines_revision += 1
 
 
+## Every slot's line of play on the course as it is now (CourseValidator.line_of_play), in
+## CourseData.holes order: slot_lines as it would read if the validator ran now, kept per
+## hole while no fairway write lands on a tile its turn reads (_lines_now, E3-S61).
+func lines_now() -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	for h: HoleData in _course.holes:
+		out.append(_line_now(h))
+	return out
+
+
 ## Hole `h`'s line of play on the course as it is now (CourseValidator.line_of_play), kept in
-## _lines_now while no tile turned to or from fairway.
+## _lines_now while no tile its turn read turned to or from fairway.
 func _line_now(h: HoleData) -> PackedVector2Array:
 	if _course.revision != _lines_revision:
 		_lines_now.clear()
+		_lines_reads.clear()
 		_lines_revision = _course.revision
 	var k := Vector4i(h.tee.x, h.tee.y, h.cup.x, h.cup.y)
 	if not _lines_now.has(k):
-		_lines_now[k] = _validator.line_of_play(_course, h)
+		var reads := {}
+		_lines_now[k] = _validator.line_of_play(_course, h, reads)
+		_lines_reads[k] = reads
 	return _lines_now[k]
 
 
@@ -772,8 +806,13 @@ func _rerun(step: Step) -> void:
 	_slot_yards = []
 	_slot_lines = []
 	var turns: Array = []
+	# E3-S61: each hole's turn from its kept line of play (_line_now), measured only where an
+	# edit could have moved it.
+	var known: Array = []
+	for line: PackedVector2Array in lines_now():
+		known.append(line[1] if line.size() == 3 else null)
 	_slot_issues = [] if _course.holes.is_empty() \
-			else _validator.check_slots(_course, _current_reach(), _slot_yards, turns)
+			else _validator.check_slots(_course, _current_reach(), _slot_yards, turns, known)
 	_slot_hints = _validator.hint_slots(_course)
 	for i: int in turns.size():
 		var h: HoleData = _course.holes[i]

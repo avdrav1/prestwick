@@ -529,6 +529,40 @@ func test_terrain_on_a_holes_line_clears_it_and_terrain_elsewhere_does_not() -> 
 	assert_eq(tags.tag_slots(), {1: Vector2i(1, 0)})
 
 
+## E3-S61: the feed reads a drag's tiles once a frame and at its release, not once a paint,
+## against each hole's line now and its line before the drag (CourseBuilder.slot_lines): a
+## drag that takes away the fairway that played a dogleg straight clears it, though the tile
+## painted is off the dogleg's line it now has.
+func test_a_drag_that_brings_back_a_doglegs_turn_clears_its_tally() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var v := CourseValidator.new()
+	var h: HoleData = c.holes[0]
+	var z := Vector2i((v.landing_zone(h) as Vector2).round())
+	assert_true(CourseBuilder.new(c).paint(z, Surface.Type.FAIRWAY, 1))
+	assert_null(v.turn_point(c, h), "fairway in its landing zone plays it straight")
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	m.show_course(c)
+	m.guest_sim.set_process(false)
+	m.feed_panel.set_process(false)
+	var feed: ReactionFeed = m.guest_sim.feed
+	feed.push(_complaint(1, "Hole 1: too hard, 7 on a par 4."), 1, 20, 0)
+	var tags: ReactionTags = m.reaction_tags
+	assert_eq(feed.slot_tallies(c), {0: Vector2i(0, 1)})
+	var b: CourseBuilder = m.build_tool.builder
+	b.begin_stroke()
+	assert_true(b.paint(z, Surface.Type.ROUGH, 1))
+	assert_not_null(v.turn_point(c, h), "a dogleg again")
+	assert_false(v.near_line(b.lines_now()[0], z), "the tile is off the dogleg's line")
+	assert_eq(feed.slot_tallies(c), {0: Vector2i(0, 1)}, "not yet read: once a frame")
+	await wait_process_frames(1)
+	assert_eq(feed.slot_tallies(c), {}, "read at the frame's end against the line before the drag")
+	assert_true(b.paint(Vector2i(66, 57), Surface.Type.BUNKER, 1))
+	b.end_stroke()
+	assert_eq(tags.tag_slots(), {})
+
+
 func test_a_renumber_or_an_open_flag_keeps_the_tally() -> void:
 	var m := _main_with_verdicts()
 	var tags: ReactionTags = m.reaction_tags

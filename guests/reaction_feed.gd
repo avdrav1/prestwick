@@ -228,24 +228,41 @@ func holes_edited(before: Array[HoleData], after: Array[HoleData]) -> void:
 
 
 ## Tiles `cells` of `c` were written: every hole with one of them in its footprint
-## (`validator`, D11) has its tally cleared.
-func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValidator) -> void:
+## (`validator`, D11) has its tally cleared. The footprint follows the line of play (D51) now
+## and, when `before` holds it by slot, the line as it stood before the edit (the builder's
+## latest check, CourseBuilder.slot_lines), so an edit that moves or removes a dogleg's turn
+## clears the hole either way (E3-S61: the cells of a drag come in batches, once a frame).
+## `now`, when it holds every slot, is the lines now as the caller has them
+## (CourseBuilder.lines_now, kept between edits), else they are measured here.
+func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValidator,
+		before: Array[PackedVector2Array] = [], now: Array[PackedVector2Array] = []) -> void:
 	# E3-S16: a cell outside the footprint's bounding box is no nearer the line than its
 	# half width, so it is passed over without the segment tests (an undo of a big drag off
 	# every line tested each of its tiles against each hole's whole line).
 	var pad: float = validator.tuning.footprint_half_width_yd / CourseValidator.YARDS_PER_TILE + 1.0
 	for i: int in c.holes.size():
-		var line: PackedVector2Array = validator.line_of_play(c, c.holes[i])
-		if line.is_empty():
-			continue
-		var box := Rect2(line[0], Vector2.ZERO)
-		for pt: Vector2 in line:
-			box = box.expand(pt)
-		box = box.grow(pad)
-		for cell: Vector2i in cells:
-			if box.has_point(Vector2(cell)) and validator.near_line(line, cell):
+		var lines: Array[PackedVector2Array] = [now[i] if now.size() == c.holes.size()
+				else validator.line_of_play(c, c.holes[i])]
+		if i < before.size() and before[i] != lines[0]:
+			lines.append(before[i])
+		for line: PackedVector2Array in lines:
+			if not line.is_empty() and _touches(line, cells, validator, pad):
 				clear_slot(c.holes, i)
 				break
+
+
+## True when one of `cells` is near `line` (CourseValidator.near_line), testing only the cells
+## inside the line's bounding box grown by `pad` tiles.
+static func _touches(line: PackedVector2Array, cells: Array[Vector2i], validator: CourseValidator,
+		pad: float) -> bool:
+	var box := Rect2(line[0], Vector2.ZERO)
+	for pt: Vector2 in line:
+		box = box.expand(pt)
+	box = box.grow(pad)
+	for cell: Vector2i in cells:
+		if box.has_point(Vector2(cell)) and validator.near_line(line, cell):
+			return true
+	return false
 
 
 ## {slot of `c.holes`: Vector2i(praise, complaints)} for every hole of `c` with a praise or a

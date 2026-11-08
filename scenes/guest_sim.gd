@@ -50,6 +50,13 @@ var _holes_seen: Array[HoleData] = []
 ## The plays under way when Build edited their slot ({GuestHole: true}): their reactions are
 ## pushed uncounted. Emptied with each day.
 var _stale: Dictionary = {}
+## E3-S61: the tiles the watched builder wrote since the feed last read them ({tile: true}),
+## and each slot's line of play as it stood before them (CourseBuilder.slot_lines). The feed
+## reads them once a frame (_flush_cells, deferred) and at every check, not once a paint: a
+## drag paints a tile at a time, and each read measures every hole's line of play, a dogleg's
+## a search through its fairway (52 ms drag frames on PlaytestNine).
+var _cells: Dictionary = {}
+var _cells_lines: Array[PackedVector2Array] = []
 
 
 func _init() -> void:
@@ -93,12 +100,15 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 func watch(builder: CourseBuilder) -> void:
 	_ensure_feed()
 	if _watched != null:
+		_flush_cells()
 		_watched.holes_changed.disconnect(_on_holes_changed)
 		_watched.tiles_changed.disconnect(_on_tiles_changed)
+		_watched.checked.disconnect(_on_checked)
 	_watched = builder
 	_holes_seen = _copy_holes(builder.course)
 	builder.holes_changed.connect(_on_holes_changed)
 	builder.tiles_changed.connect(_on_tiles_changed)
+	builder.checked.connect(_on_checked)
 
 
 func _on_holes_changed() -> void:
@@ -108,7 +118,26 @@ func _on_holes_changed() -> void:
 
 
 func _on_tiles_changed(cells: Array[Vector2i]) -> void:
-	feed.cells_edited(_watched.course, cells, _watched.validator)
+	if _cells.is_empty():
+		_cells_lines = _watched.slot_lines()
+		_flush_cells.call_deferred()
+	for c: Vector2i in cells:
+		_cells[c] = true
+
+
+## Every edit and undo ends in a check (a drag at its release): the feed has its tiles by then.
+func _on_checked(_issues: Dictionary) -> void:
+	_flush_cells()
+
+
+## Hands the feed the tiles written since it last read them (_cells), if any.
+func _flush_cells() -> void:
+	if _cells.is_empty() or _watched == null:
+		return
+	var cells: Array[Vector2i] = []
+	cells.assign(_cells.keys())
+	_cells.clear()
+	feed.cells_edited(_watched.course, cells, _watched.validator, _cells_lines, _watched.lines_now())
 
 
 ## Build edited the hole in slot `slot`: a guest whose group has struck there, its verdict not

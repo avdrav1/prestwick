@@ -239,3 +239,69 @@ func test_par_buttons_set_the_hole_par() -> void:
 	m.build_tool.undo()
 	assert_eq(m.build_tool.builder.hole(1).par, 4)
 	assert_true(panel.par_buttons[1].button_pressed, "the panel follows the undo")
+
+
+# --- a dogleg's line through a drag (E3-S61) ---
+
+## E3-S61: the builder keeps each hole's line of play between paints and measures it again only
+## when a fairway write lands on a tile its turn read (CourseValidator.turn_point's `reads`). A fairway write far off keeps the dogleg's line; one at its landing zone, off the
+## dogleg's footprint, makes it straight, and the hole closes on the line now even though the
+## same stroke had measured (and kept) the dogleg's line a paint before.
+func test_a_dogleg_whose_turn_an_edit_moves_still_closes() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var b := CourseBuilder.new(c)
+	var v := b.validator
+	var h: HoleData = c.holes[0]
+	assert_true(h.open, "the fixture's dogleg opens")
+	var line: PackedVector2Array = b.slot_lines()[0]
+	assert_eq(line.size(), 3, "tee, turn, cup")
+	var reads := {}
+	assert_eq(v.line_of_play(c, h, reads), line)
+	var z := Vector2i((v.landing_zone(h) as Vector2).round())
+	assert_false(v.near_line(line, z), "the landing zone is off the dogleg's footprint")
+	assert_true(reads.has(z), "but its turn reads it")
+	var far := Vector2i(66, 57)
+	assert_false(reads.has(far), "not a corner of the map")
+	assert_false(v.near_line(line, far))
+	b.begin_stroke()
+	assert_true(b.paint(far, Surface.Type.FAIRWAY, 1))
+	assert_true(c.holes[0].open, "fairway far off: still open")
+	assert_eq(b.lines_now()[0], line, "and the dogleg's line is kept")
+	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
+	assert_null(v.turn_point(c, c.holes[0]), "fairway in the landing zone plays it straight")
+	assert_false(c.holes[0].open, "closed: the line now runs over the tile painted")
+	assert_eq(b.lines_now()[0].size(), 2, "measured again, straight")
+	b.end_stroke()
+	assert_eq(b.slot_lines()[0].size(), 2)
+	# Undone, the dogleg is back and open; its line is the dogleg's again.
+	assert_true(b.undo())
+	assert_true(c.holes[0].open)
+	assert_eq(b.lines_now()[0], line)
+
+
+## E3-S61: the tiles turn_point reads hold every tile whose surface can change its answer: a
+## fairway tile painted on any other leaves the turn where it was.
+func test_a_turn_reads_nothing_but_the_tiles_it_names() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var v := CourseValidator.new()
+	var h: HoleData = c.holes[0]
+	var reads := {}
+	var turn: Variant = v.turn_point(c, h, reads)
+	assert_not_null(turn)
+	assert_true(reads.has(Vector2i((turn as Vector2).round())), "the fairway at its turn")
+	var outside := 0
+	for y: int in c.height:
+		for x: int in c.width:
+			if reads.has(Vector2i(x, y)) or c.get_surface(x, y) == Surface.Type.FAIRWAY:
+				continue
+			var was: Surface.Type = c.get_surface(x, y)
+			c.set_tile(x, y, c.get_height(x, y), Surface.Type.FAIRWAY)
+			assert_eq(v.turn_point(c, h), turn, "fairway at (%d, %d) moves nothing" % [x, y])
+			c.set_tile(x, y, c.get_height(x, y), was)
+			outside += 1
+	assert_gt(outside, 1000, "most of the map is not read")
+	# A hole too short to turn reads nothing.
+	var short := HoleData.new(2, 3, Vector2i(6, 6), Vector2i(20, 6), false)
+	var none := {}
+	assert_null(v.turn_point(c, short, none))
+	assert_true(none.is_empty())

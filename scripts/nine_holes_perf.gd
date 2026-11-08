@@ -198,9 +198,17 @@ func _initialize() -> void:
 	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	_viewport.add_child(_main)
 	_main.show_course.call_deferred(_course)
+	_hold_main_day.call_deferred()
 	_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
 	for i: int in GUEST_START_S:
 		_brain.step()
+
+
+## E3-S61: the Build phases other than the 0.175x field pass run the script's own guest day
+## (_advance_guests, timed), so the main scene's day, which runs in Build since D53, is held
+## there (its figures stay drawn): otherwise every Build frame ran two days, one untimed.
+func _hold_main_day() -> void:
+	_main.guest_sim.set_process(false)
 
 
 ## E3-S33: `n` owned tiles off every hole's footprint, far apart, for click edits that leave
@@ -755,7 +763,7 @@ func _process(_delta: float) -> bool:
 					_main.camera.set_zoom_level(0.5)
 				else:
 					_main.set_mode(Main.Mode.BUILD)
-					_main.guest_sim.set_process(true)
+					_main.guest_sim.set_process(false)  # E3-S61: the script's day only (_hold_main_day)
 					_main.camera.frame(_main.course_view.screen_bounds())
 					_main.camera.set_zoom_level(1.0)
 		6:  # a click edit every 10th frame at 1x: time the frame after it was applied
@@ -987,7 +995,7 @@ func _set_play_zoom(level: float) -> void:
 ## Back to Build with every hole but hole 1 failing, and a fresh day of the script's own
 ## guests out on hole 1.
 func _end_budget_play() -> void:
-	_main.guest_sim.set_process(true)
+	_main.guest_sim.set_process(false)  # E3-S61: the script's day only (_hold_main_day)
 	_main.set_mode(Main.Mode.BUILD)
 	_fail_all_but_first_hole()
 	_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
