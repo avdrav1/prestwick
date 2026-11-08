@@ -542,3 +542,23 @@ Options:
 Choice: the third. The script prints the 1-minute load average at its start and end; when either is above `LOAD_HIGH` 4.0 a gate that would fail prints a WARNING line and the run exits 0; otherwise it fails when `GATE_FRAMES_MAX` 3 or more frames of the run pass `frame_guest_ms_max`, or one passes it by `GATE_OVER_SHARE` 25%.
 Why: pillar 4: a perf gate is worth having only if a red run means the code got slower; the bounds are set from this machine's quiet runs (outliers to 10.7 ms, never more than one a run) and the one real regression seen (7 frames, to 12.0 ms).
 Affects: scripts/nine_holes_perf.gd; docs/design.md Guest frame slicing; tests/fixtures/best_time.gd (the timed GUT tests say the load when they fail).
+
+## D53: Does the guests' day run during Build? (2026-11-07)
+Question: E3-S30's playtest item (E3-S5): Build holds the day and hides the guests. Should it keep running and stay visible, as in SimGolf?
+Options:
+- Hold and hide (E3-S5). Cost: Build is a dead world; the course never feels alive while you shape it. Benefit: no edit lands under a moving group.
+- Run but hide. Cost: guests react to edits the player cannot see. Benefit: the clock is honest.
+- Run and show, as SimGolf did, with pause (P) as the quiet mode. Cost: an edit can land under a group in play (E3-S49 already keeps unstruck plays and drops struck ones), and Build's frames carry the guest step and drawing (E3-S31 measured both at 0.175x inside budget).
+Choice: run and show, with pause and the speed buttons available in Build (user, 2026-11-07: "do it like simgolf"). Built in E3-S62.
+Why: pillar 3: the course tells its story through guests, and the story is best while you build; SimGolf's live course is the reference (CLAUDE.md).
+Affects: E3-S5's hold; scenes/main.gd mode switch, guests/ day clock, scenes/guest_view.gd; docs/design.md Guests; E3-S62.
+
+## D54: Where do guests aim on a dogleg? (2026-11-07)
+Question: E3-S30's playtest item (E3-S22, E3-S24, E3-S25): guests aim every full shot at the cup (D41), so on the reaction dogleg they carry the pond, take 0.92 penalty strokes a hole and play about 0.8 over par, slowly.
+Options:
+- Aim at the cup (D41). Cost: doglegs play hard and slow, against their par. Benefit: no change.
+- Lay up short of a hazard they cannot carry. Cost: a carry judgement per shot. Benefit: fewer penalties.
+- Aim along the line of play: at `turn_point` (D47) while the corner is ahead and in reach, then at the cup. Cost: a `/balance reactions` rerun and its targets; D47's sight check reads the same line.
+Choice: aim along the line of play (user, 2026-11-07). Built in E3-S70.
+Why: pillar 3: a dogleg is played round its bend by real golfers, so guests' reactions to it are about its design, not about a line no one would take.
+Affects: D41 (amended for doglegs), D47 (guests' part); guests/ brain and aim; data/guests.json; tests/test_balance_reactions.gd; E3-S70.

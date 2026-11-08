@@ -762,7 +762,7 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Accept: the design doc's guests section matches `docs/design.md` Guests and reactions, and "Guest readability" is closed with D44. Its day length, arrival window, shirt count and rule 4 match D46 and D47.
   - Test: by hand, the two read side by side.
   - Touches: `docs/`
-- [ ] E3-S30 Put the E3 swarm's feel questions to the hand playtest. Questions E3-S5 to E3-S10 left for a person.
+- [x] E3-S30 Put the E3 swarm's feel questions to the hand playtest. Questions E3-S5 to E3-S10 left for a person.
   - Note: (found in E3 review) each item needs a person at the screen, or the user's call.
   - Accept: the user has answered each item below in `docs/playtests/`, and each "no" is filed as a story or at the top of the Icebox with its pillar.
     - `/playtest full` checklist item 3, watch three guests: in Play at 1x and 3x, do two groups sharing a par 4 (the next steps onto the tee once every one of the group ahead has struck, then tees off once the drive's landing area is clear, E3-S22), ready golf, `play_clear`'s spacing and a group held for one on a crossing hole (at most `cross_hold_max_s` 30 s) read naturally? Does a pace complaint after a wait of a few seconds (limits 3 to 12 s) feel fair (E3-S8)? Pillar 3.
@@ -784,6 +784,7 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
     - The user's call on D47's known limits (its Update): a hairpin under 240 yd straight stays straight, and a dogleg whose corner fairway stops more than `turn_cup_reach_yd` 40 yd short of the cup (rough between fairway and green) is measured straight (E3-S25). Pillar 2.
     - The user's call on guest aim: the reaction dogleg plays about +0.8 over par (a 450 yd par 4 under D47) and is slow because guests aim at the cup over the pond (D41, 0.92 penalty strokes a hole), and no `full_sigma_best` brings every spike hole within 0.25 of par (the hilly par 4 with water over at every value, the par 5s under). Should guests aim along the line of play on doglegs (at `turn_point`) or lay up? A "yes" is a `/decision` and a `/balance reactions` rerun (E3-S22, E3-S24, E3-S25). Pillar 3.
   - Test: none. Review the playtest notes.
+  - Done 2026-11-07: answered by the user in `docs/playtests/2026-11-07-e3-hand.md`. Each change filed: D53 and E3-S62 (guests run in Build, as SimGolf), E3-S63 to E3-S69, D54 and E3-S70 (guests aim along a dogleg's bend), E3-S71 to E3-S73 (green view and putter bar). The below-0.5x draw-over question was not asked: D50 changed what hides what.
 
 - [x] E3-S31 Hold the farthest zoom at 60 fps with a full field. 0.175x misses the frame in its worst 5%.
   - Note: (found in E3 review) `scripts/nine_holes_perf.gd` at 0.175x (D45), with a display and other swarm jobs running: Build idle median 6.7 ms against 2.4 at 0.5x (p95 15.5, worst 22.6); Play with the day at 3x and every guest drawn median 6.5 ms against 4.1 (p95 15 to 18, worst 19 to 27). The worst frames are the 3x guest step's peaks on top of about 4 ms more drawing. One edge-cue hide experiment cut the Build median from 5.8 to 4.4 ms, but under load it could not be told apart from noise. Options: fewer y-sorted canvas items at the farthest step (edge cues, the land hatch), or the terrain drawn once into a cached texture below 0.5x. A far-zoom terrain could also fix the rough's stipple, which nearest-sampled turns to a fine speckle at 0.175x (or leave that to E5-S2's art). The Play phase now fits all 16 guests on screen at 0.175x (only 5 to 7 at 0.5x), so it measures E3-S14's slicing against the farthest step too. The E3-S9 Play passes set the zoom with `set_zoom_level`, which the aim fit can step back out (E3-S14 review, `_set_play_zoom`); check they measure the zoom they print.
@@ -979,6 +980,78 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Accept: on `fixture=doglegs` the breaking drag's `drag_to`, release and undo frames stay under 16.7 ms at p95 with guests out, for example by measuring a hole's line again only when a fairway write could reach its turn search, or once per frame of a stroke.
   - Test: `tests/test_builder_holes.gd`: a dogleg whose turn an edit moves still closes; the perf output in the commit.
   - Touches: `course/`, `scripts/`, `tests/`
+
+- [ ] E3-S62 Keep the guests' day running and visible in Build. The course lives while you shape it (D53).
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`) "do it like simgolf". Build holds and hides the day today (E3-S5). E3-S49 keeps a group's unstruck play across an edit and drops struck ones.
+  - Accept: in Build the day clock runs, guests are drawn and move, the feed and tags update, and pause (P) and the speed buttons work in Build as in Play; an edit under a group follows E3-S49's rule; Build's frames stay inside budget at 0.175x with a full field (`scripts/nine_holes_perf.gd`). The player's own round still never interacts with guest groups.
+  - Test: `tests/test_main_mode.gd` (or the existing mode test): the clock advances in Build, guests are visible, pause holds it; perf output in the commit; a Build screenshot with guests looked at.
+  - Touches: `scenes/`, `guests/`, `tests/`
+
+- [ ] E3-S63 Fade a map tag with a guest under it. Tags never hide the golfers they talk about.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Tags stand over the back of greens (E3-S7).
+  - Accept: a tag whose screen box covers a drawn guest fades (alpha in a `.tres`) until no guest is under it; hover still shows it in full; clicks are unchanged.
+  - Test: `tests/test_feed.gd`: a tag fades with a guest under it and returns after. Screenshot looked at.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S64 Point to a framed hole's off-screen cup. A neighbour's flag never reads as this hole's.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Hole 8 shows hole 9's flag when its own cup is off screen (E3-S9).
+  - Accept: in Play, when the current hole's cup is outside the free view, a marker at the free view's edge points to it and carries the hole number; it hides when the cup is on screen.
+  - Test: `tests/test_play_hud.gd` (or the camera test): the marker shows, points at the cup and hides. Screenshot looked at.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S65 Collapse the hole list when the camera frames a hole. The framed hole gets the room.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only a click collapses it today (E3-S10).
+  - Accept: `frame_hole` and jump-to-hole collapse the hole list (the framing then uses the larger free view); the player's own expand still holds until the next framing.
+  - Test: `tests/test_hole_list.gd`: framing collapses the list and the frame reads the collapsed free view.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S66 Keep a tee's hole number clear of the ball on it. The number reads at every zoom.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). At 0.175x the ball on its tee covers the number (E3-S9).
+  - Accept: the tee's number stands beside the tee blocks, never under a ball resting on the tee, at every zoom step (D45).
+  - Test: `tests/test_issue_marker.gd` or `tests/test_course_view.gd`: the number's box and the resting ball's do not overlap at 0.175x to 2x. Screenshot looked at.
+  - Touches: `course/` (view only), `scenes/`, `tests/`
+
+- [ ] E3-S67 Reserve the feed's space in Play from the start. The view never shifts when the first line arrives.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The feed hides until its first line, shrinking the free view then (E3-S27).
+  - Accept: in Play the free view leaves the feed's width from the start (an empty feed shows a quiet placeholder or nothing), so the aim fit and framing never change when the first line arrives.
+  - Test: `tests/test_feed.gd`: the free view rect is the same before and after the first line.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S68 Dim feed lines given before a hole's last edit. Old complaints read as history.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Lines for an edited hole stay and still link to it (E3-S17).
+  - Accept: feed lines whose hole has been edited since they were given draw dimmed (alpha in the feed `.tres`), still link, and new lines draw normally.
+  - Test: `tests/test_feed.gd`: a line before an edit dims, one after does not.
+  - Touches: `guests/`, `scenes/`, `tests/`
+
+- [ ] E3-S69 Show the tally on the hole panel's reason line. The player sees how many guests said it.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only the map tag's +n and !n count reactions (E3-S18).
+  - Accept: the hole panel's reaction line ends with its tally, for example "(1 of 4 complaints)", from the same counts the tag shows.
+  - Test: `tests/test_hole_list.gd`: the tally matches the tag's counts.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S70 Aim guests along a dogleg's bend. They play round the corner, not over it (D54).
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Guests aim every full shot at the cup (D41); the reaction dogleg plays about +0.8 and slow, 0.92 penalty strokes a hole.
+  - Accept: on a dogleg a guest aims a full shot at `turn_point` (D47) while the turn is ahead of the ball and within the club's reach, then at the cup; straight holes are unchanged; `/balance reactions --runs 50 --seed 1` hits every target (retune `data/guests.json` or restate a target by `/decision`), seeds 2 and 3 recorded; `scripts/guest_day.gd -- seeds=1,...,10 quick` still prints every group finished.
+  - Test: `tests/test_guest_brain.gd`: a guest on the dogleg aims at the turn, then the cup; `tests/test_balance_reactions.gd` passes.
+  - Touches: `guests/`, `data/`, `tests/`
+
+- [ ] E3-S71 Turn the green view so the putt runs up the panel. Ball at the bottom, cup above it, as in Mean 18.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The panel is map-aligned today (D48, E3-S52).
+  - Accept: when the green view opens for a putt, the panel rotates so the line from the ball to the cup points up (snapped or smooth, recorded); contours, ticks, arrows, the dots and the marker turn with it; mouse aim and click-to-swing still map to the right ground point; the rotation holds while the putt rolls and re-fits on the next putt.
+  - Test: `tests/test_green_view.gd`: ball below the cup on screen for four headings, and mouse aim lands on the ground point under the cursor after rotation. Screenshots looked at.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S72 Reopen the green view on each new green. G hides it for this green only.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). G's choice holds across holes today (E3-S52).
+  - Accept: G hides and shows the panel; when the ball next comes to rest on a different green (or a new hole starts) it opens again.
+  - Test: `tests/test_green_view.gd`: hidden by G, reopens on the next green.
+  - Touches: `scenes/`, `tests/`
+
+- [ ] E3-S73 Mark the marker's pace on the putter's bar. The player sees where to stop.
+  - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The putter's bar shows no target (D49).
+  - Accept: with the putter, the swing bar shows a tick at the power the marker's `PuttAim` solve needs (`Club.putt_power_for`), moving as the aim changes; full clubs show none.
+  - Test: `tests/test_swing.gd` or `tests/test_hud.gd`: the tick sits at the solve's power. Screenshot looked at.
+  - Touches: `scenes/`, `golf/` (read only), `tests/`
 
 ## E4: Economy — planned
 
