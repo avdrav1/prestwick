@@ -229,6 +229,9 @@ func refresh_holes() -> void:
 				continue
 			var m := HoleMarker.new(pair[0], hole.number, at)
 			m.hole_label = _course.hole_label(slot)
+			# The tee's number stands beside the block away from its cup (E3-S66).
+			if pair[0] == HoleMarker.Kind.TEE and _course.in_bounds(hole.cup.x, hole.cup.y):
+				m.label_side = HoleMarker.side_away_from(hole.tee, hole.cup)
 			m.place(_course)
 			m.text_scale = 1.0 / _view_scale()
 			m.shape_scale = marker_shape_scale(_view_scale())

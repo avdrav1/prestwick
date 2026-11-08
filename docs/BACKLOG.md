@@ -1002,11 +1002,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: `Main.frame_hole` collapses the hole list (`HolePanel.set_collapsed`) before it reads the free view, so jump-to-hole, a tag or feed click and a row's tag frame in the collapsed free view; a pick or the player's expand leaves it until the next framing. `frame_hole(..., collapse = false)` keeps it: `frame_first_hole` uses it, so a course still opens with the list expanded (E3-S10's "the list starts expanded"; the opening frame was not named in the Accept line). Screenshot `docs/decisions/e3-s65-framed.png` (hole 3 of the playtest nine framed). `docs/design.md` Hole list.
 
-- [ ] E3-S66 Keep a tee's hole number clear of the ball on it. The number reads at every zoom.
+- [x] E3-S66 Keep a tee's hole number clear of the ball on it. The number reads at every zoom.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). At 0.175x the ball on its tee covers the number (E3-S9).
   - Accept: the tee's number stands beside the tee blocks, never under a ball resting on the tee, at every zoom step (D45).
   - Test: `tests/test_issue_marker.gd` or `tests/test_course_view.gd`: the number's box and the resting ball's do not overlap at 0.175x to 2x. Screenshot looked at.
   - Touches: `course/` (view only), `scenes/`, `tests/`
+  - Done 2026-11-08: the number moved from between the tee blocks (where the ball rests) to beside them: `HoleMarker.label_origin` puts it `number_gap` 3 px out from the block on `label_side`, level with that block (its slope lift included), and `label_rect` (which the issue boxes and the E3-S40 lift read) follows it. CourseView sets `label_side` to the side away from the hole's cup on screen, so Play's aim line and Build's line of play leave it clear too. `tests/test_issue_marker.gd`: on the guest course's three tees (two running east, one west, a rise by one), at 0.175x, 0.5x, 1x and 2x the number's box misses the resting ball's and stands beside the blocks on the side away from the cup; E3-S40's no-overlap test on nine failing holes still passes. Screenshots `docs/decisions/e3-s66-tee-0175x.png`, `docs/decisions/e3-s66-tee-1x.png`. `docs/design.md` Tee numbers.
 
 - [x] E3-S67 Reserve the feed's space in Play from the start. The view never shifts when the first line arrives.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The feed hides until its first line, shrinking the free view then (E3-S27).

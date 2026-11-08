@@ -12,7 +12,11 @@ extends Node2D
 ## Shape and colour both say what it is (colorblind rule): the tee marker is two
 ## square blocks either side of the tile centre, the pin a dark cup with a pole and a pennant.
 ## Colours are art/palette.gpl entries. With nine holes (E3-S2) the tee marker shows its hole
-## number between its blocks, chalk on an ink outline, so the map says which tee is which.
+## number, chalk on an ink outline, so the map says which tee is which. Since E3-S66 it stands
+## beside a block (number_gap screen px out from it, level with it), not between the blocks,
+## where the ball rests on the tee and covered it at 0.175x: beside the block on the side away
+## from its cup on screen (`label_side`, CourseView sets it), so the aim line and the line of
+## play, which leave the tee toward the cup, do not run over it.
 ##
 ## The number is drawn by a child (`label`, E3-S40) so it can rise over the terrain on its own:
 ## Y-sorted with the marker, ground in front on raised land could cover it at 0.5x and nearer,
@@ -42,6 +46,17 @@ const LIFT_REACH: int = 4
 @export var flag_height: float = 8.0
 ## The tee marker's hole number: font size, screen px at every zoom (text_scale).
 @export var number_font_size: int = 13
+## The gap between the right-hand tee block and its hole number, screen px at every zoom
+## (E3-S66: the number stands beside the blocks, clear of a ball resting on the tee).
+@export var number_gap: float = 3.0
+
+## Which block the number stands beside (E3-S66): 1 the right-hand one, -1 the left. CourseView
+## sets it from its hole's cup (side_away_from).
+var label_side: float = 1.0:
+	set(v):
+		label_side = v
+		if label != null:
+			label.queue_redraw()
 
 var kind: Kind = Kind.TEE
 var hole_number: int = 0
@@ -141,11 +156,31 @@ func label_rect(zoom: float) -> Rect2:
 	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size).x
 	var ascent: float = font.get_ascent(number_font_size)
 	var descent: float = font.get_descent(number_font_size)
-	# Drawn with its baseline ascent / 2 below a point tee_block_radius above the centre (local).
-	var base_y: float = -tee_block_radius * shape_scale * zoom + ascent * 0.5 * text_scale * zoom
+	# Drawn from label_origin, its baseline ascent / 2 below it (local).
+	var o: Vector2 = label_origin(w) * zoom
 	var k: float = text_scale * zoom
-	var r := Rect2(-w * 0.5 * k, base_y - ascent * k, w * k, (ascent + descent) * k)
+	var base_y: float = o.y + ascent * 0.5 * k
+	var r := Rect2(o.x, base_y - ascent * k, w * k, (ascent + descent) * k)
 	return r.grow(LABEL_OUTLINE * 0.5 * k)
+
+
+## Where the hole number's text starts (its left edge, at its vertical middle), local units from
+## the tile centre on the ground (draw_point), for text `text_w` screen px wide: number_gap
+## screen px (and its outline) out from the ink edge of the block on `label_side`, level with
+## that block's centre (E3-S66).
+func label_origin(text_w: float) -> Vector2:
+	var i: int = 1 if label_side >= 0.0 else 0
+	var edge: float = (tee_block_offset + tee_block_radius + 1.0) * shape_scale
+	var out: float = edge + (number_gap + LABEL_OUTLINE * 0.5) * text_scale
+	var x: float = out if i == 1 else -out - text_w * text_scale
+	return Vector2(x, -tee_block_radius * shape_scale - block_lift[i])
+
+
+## The label_side for a tee at `tee` whose cup is at `cup` (E3-S66): the side away from the cup
+## on screen (a tile's screen x runs with x - y), the right-hand one when the cup is straight up
+## or down the screen from it.
+static func side_away_from(tee: Vector2i, cup: Vector2i) -> float:
+	return -1.0 if (cup.x - cup.y) > (tee.x - tee.y) else 1.0
 
 
 ## Whether drawn ground nearer the camera than this tee's row covers any part of its number at
@@ -212,9 +247,9 @@ func _draw_label() -> void:
 		return
 	var at: Vector2 = draw_point() - position
 	var font: Font = ThemeDB.fallback_font
-	var size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size)
-	var base := Vector2(-size.x * 0.5, font.get_ascent(number_font_size) * 0.5)
-	label.draw_set_transform(at + Vector2(0.0, -tee_block_radius * shape_scale), 0.0, Vector2.ONE * text_scale)
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size).x
+	var base := Vector2(0.0, font.get_ascent(number_font_size) * 0.5)
+	label.draw_set_transform(at + label_origin(w), 0.0, Vector2.ONE * text_scale)
 	label.draw_string_outline(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, LABEL_OUTLINE, ink_color)
 	label.draw_string(font, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, number_font_size, pole_color)
 	label.draw_set_transform(Vector2.ZERO)

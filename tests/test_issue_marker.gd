@@ -465,3 +465,49 @@ func test_the_swing_bar_redraws_on_resize_while_idle() -> void:
 	bar.size = bar.size + Vector2(40, 0)
 	await wait_physics_frames(3)
 	assert_gt(draws[0], 0, "a resize redraws it")
+
+
+# --- E3-S66: the tee's number clear of the ball on it ---
+
+## The player's ball resting on each tee of tests/fixtures/guest_course.gd in Play (holes 1 and 2
+## run east, hole 3 west; hole 2's tee has a rise by its blocks): at every zoom step (D45), the
+## tee's number box and the ball's (outline included) do not overlap, and the number stands
+## beside the blocks, on the side away from the cup, so the aim line leaves it clear.
+func test_a_tees_number_stands_clear_of_the_ball_resting_on_it_at_every_zoom() -> void:
+	var guest_course: GDScript = load("res://tests/fixtures/guest_course.gd")
+	var m := (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	var c: CourseData = guest_course.call("course")
+	var b := CourseBuilder.new(c)
+	b.paint(Vector2i(23, 7), Surface.Type.ROUGH, 5)
+	b.paint(Vector2i(25, 5), Surface.Type.ROUGH, 5)
+	m.show_course(c)
+	m.camera.view_size_override = Vector2(1280, 720)
+	for number: int in [1, 2, 3]:
+		m.play_hole(number)
+		m.set_process(false)
+		var h: HoleData = m.swing_control.hole
+		var tee: HoleMarker = m.course_view.hole_marker(number, HoleMarker.Kind.TEE)
+		var shot: ShotView = m.shot_view
+		assert_not_null(shot.ball, "hole %d: the ball is on the tee" % number)
+		var cup_dx: float = Iso.tile_to_screen(Vector2(h.cup), 0.0).x - Iso.tile_to_screen(Vector2(h.tee), 0.0).x
+		assert_eq(tee.label_side, -1.0 if cup_dx > 0.0 else 1.0, "hole %d: the side away from its cup" % number)
+		for z: float in m.camera.tuning.zoom_levels:
+			m.course_view.layout_hole_labels(z)
+			var label: Rect2 = tee.label_rect(z)
+			label.position += tee.draw_point() * z
+			var k: float = HazardCue.screen_k(z)
+			var r: float = (shot.ball_draw_radius(k) + shot.ball_outline_width(k)) * z
+			var at: Vector2 = shot.ball_screen() * z
+			var ball := Rect2(at - Vector2(r, r), Vector2(r, r) * 2.0)
+			assert_false(label.intersects(ball),
+					"hole %d at %.3fx: the number %s clears the ball %s" % [number, z, label, ball])
+			var reach: float = (tee.tee_block_offset + tee.tee_block_radius) * tee.shape_scale * z
+			var x0: float = tee.draw_point().x * z
+			if tee.label_side > 0.0:
+				assert_gt(label.position.x, x0 + reach, "hole %d at %.3fx: beside the right-hand block" % [number, z])
+			else:
+				assert_lt(label.end.x, x0 - reach, "hole %d at %.3fx: beside the left-hand block" % [number, z])
+			assert_true(label.get_center().y > ball.position.y - label.size.y and label.get_center().y < ball.end.y + label.size.y,
+					"hole %d at %.3fx: and level with the tee" % [number, z])
