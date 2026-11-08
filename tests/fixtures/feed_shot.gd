@@ -15,6 +15,10 @@ extends Node2D
 ## With `run_to_s` 0 (E3-S67), Play before any guest has finished a hole: the feed keeps its
 ## room with its placeholder.
 ##   scripts/screenshot.sh tests/fixtures/feed_empty_shot.tscn out.png 30
+## With `edit_on_s` above 0 (E3-S68), a bunker goes halfway along hole `edit_hole`'s line at
+## that second (Main's builder; the hole opened again), and the day runs on to `run_to_s`: that
+## hole's lines from before the edit draw dimmed, the lines after at full strength.
+##   scripts/screenshot.sh tests/fixtures/feed_edited_shot.tscn out.png 30
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
@@ -22,6 +26,8 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 @export var jump: bool = false
 @export var run_to_s: int = 150
 @export var hover: bool = false
+@export var edit_on_s: int = 0
+@export var edit_hole: int = 3
 
 var main: Main
 
@@ -40,7 +46,14 @@ func _ready() -> void:
 	main.aim_view.visible = false
 	main.guest_sim.set_process(false)
 	main.guest_sim.advance(0.0)
+	var edited: bool = edit_on_s <= 0
 	while main.guest_sim.brain.second < run_to_s and not main.guest_sim.brain.day_over:
+		if not edited and main.guest_sim.brain.second >= edit_on_s:
+			edited = true
+			var spec: Array = GuestCourse.HOLES[edit_hole - 1]
+			var mid: Vector2i = (spec[1] + spec[2]) / 2
+			main.build_tool.builder.paint(mid, Surface.Type.BUNKER, 1)
+			main.build_tool.builder.open_hole(edit_hole)
 		main.guest_sim.brain.step()
 	for i: int in 64:
 		main.feed_panel.tick(main.feed_panel.tuning.reveal_interval_s)

@@ -1012,11 +1012,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `scenes/`, `tests/`
   - Done 2026-11-08: `FeedPanel` shows for the whole of Play (Build still hides it), so the free view leaves its room from Play's start; before its first line, and after a new course empties the feed, it shows its title and one quiet placeholder line ("Nothing yet: guests speak as they finish a hole.") in a dim chalk (`placeholder_color`). This undoes E3-S27's hide-until-first-line. `test_the_feed_reserves_its_room_from_the_start_of_play`: the free view rect and both strips are the same before and after the first line and after the feed empties. Screenshot `docs/decisions/e3-s67-feed-empty.png` (`tests/fixtures/feed_empty_shot.tscn`). `docs/design.md` Feed and map tags.
 
-- [ ] E3-S68 Dim feed lines given before a hole's last edit. Old complaints read as history.
+- [x] E3-S68 Dim feed lines given before a hole's last edit. Old complaints read as history.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Lines for an edited hole stay and still link to it (E3-S17).
   - Accept: feed lines whose hole has been edited since they were given draw dimmed (alpha in the feed `.tres`), still link, and new lines draw normally.
   - Test: `tests/test_feed.gd`: a line before an edit dims, one after does not.
   - Touches: `guests/`, `scenes/`, `tests/`
+  - Done 2026-11-08: `ReactionFeed.Entry.edited`, set by `clear_slot` on every line about the slot (the same edits that clear its tally: tee, cup, par, terrain in its footprint, the slot going away) and on a line pushed uncounted (a verdict on the version before the edit); a counted line given after the edit is not, and an edited and a fresh line never fold together. `FeedPanel` draws an edited line at `edited_alpha` 0.45 (`scenes/feed_tuning.tres`) of its colour, refreshing on `slot_cleared`; it still links. `test_a_line_given_before_its_holes_edit_dims_and_one_after_does_not` (renumber dims nothing; lines before a moved cup dim, the line after does not, the uncounted line does; row alphas; a dimmed row still emits its hole). Screenshot `docs/decisions/e3-s68-feed-edited.png` (`tests/fixtures/feed_edited_shot.tscn`). `docs/design.md` Feed and map tags.
 
 - [ ] E3-S69 Show the tally on the hole panel's reason line. The player sees how many guests said it.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Only the map tag's +n and !n count reactions (E3-S18).

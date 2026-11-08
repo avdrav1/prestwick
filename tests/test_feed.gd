@@ -469,6 +469,47 @@ func test_a_moved_cup_clears_its_holes_tag() -> void:
 	assert_false(tags.tag_slots().has(2), "a new par clears hole 3")
 
 
+## E3-S68: a line given before its hole's last edit reads as history: it draws dimmed (the feed
+## tuning's edited_alpha) and still links; a line given after the edit, and every line about a
+## hole not edited, draws at full strength. A renumber is no edit.
+func test_a_line_given_before_its_holes_edit_dims_and_one_after_does_not() -> void:
+	var m := _main_with_verdicts()
+	var feed: ReactionFeed = m.guest_sim.feed
+	var panel: FeedPanel = m.feed_panel
+	var b: CourseBuilder = m.build_tool.builder
+	assert_true(b.renumber_hole(1, 9))
+	for e: ReactionFeed.Entry in feed.entries:
+		assert_false(e.edited, "a renumber dims nothing")
+	assert_true(b.renumber_hole(9, 1))
+	assert_true(b.place_cup(1, Vector2i(18, 6)))
+	assert_true(feed.entries[0].edited, "hole 1's first line was given before the edit")
+	assert_true(feed.entries[1].edited)
+	assert_false(feed.entries[2].edited, "hole 2 was not edited")
+	assert_false(feed.entries[3].edited, "nor hole 3")
+	feed.push(_complaint(1, "Hole 1: too hard, 7 on a par 3."), 2, 5, 0)
+	assert_false(feed.entries[4].edited, "a line given after the edit is not")
+	var uncounted: ReactionFeed.Entry = feed.push(_complaint(1, "Hole 1: on the old cup."), 2, 6, 0, false)
+	assert_true(uncounted.edited, "a verdict on the version before the edit reads as history too")
+	m.set_mode(Main.Mode.PLAY)
+	panel.tick(0.0)
+	# Rows are newest first: the uncounted line, the new line, then hole 3, 2 and 1's.
+	var alpha: float = panel.tuning.edited_alpha
+	assert_lt(alpha, 1.0)
+	var texts := PackedStringArray()
+	for i: int in panel.shown_entries().size():
+		texts.append(panel.rows[i].text)
+	assert_eq(texts[1], "! Hole 1: too hard, 7 on a par 3.")
+	assert_almost_eq(panel.rows[0].get_theme_color("font_color").a, alpha, 0.01, "the old-version line dims")
+	assert_almost_eq(panel.rows[1].get_theme_color("font_color").a, 1.0, 0.01, "the new line does not")
+	assert_almost_eq(panel.rows[2].get_theme_color("font_color").a, 1.0, 0.01, "nor hole 3's")
+	assert_almost_eq(panel.rows[4].get_theme_color("font_color").a, alpha, 0.01, "hole 1's old line dims")
+	assert_eq(panel.rows[4].get_theme_color("font_color").r, panel.complaint_color.r, "keeping its colour")
+	# A dimmed line still links to its hole.
+	watch_signals(panel)
+	panel.rows[4].pressed.emit()
+	assert_signal_emitted_with_parameters(panel, "hole_requested", [1, 0])
+
+
 func test_terrain_on_a_holes_line_clears_it_and_terrain_elsewhere_does_not() -> void:
 	var m := _main_with_verdicts()
 	var tags: ReactionTags = m.reaction_tags

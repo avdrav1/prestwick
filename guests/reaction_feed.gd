@@ -29,6 +29,10 @@ extends RefCounted
 ## the hole when it is edited gives a verdict on the old version: GuestSim pushes it
 ## uncounted (slot_edited, push's `counted`), so it too counts for no hole. Cleared reactions
 ## keep their window place for E4-S5's rating but are left out of its average (rated).
+##
+## History (E3-S68): a line given before its hole's last edit is marked `edited` (clear_slot),
+## and so is a line pushed uncounted (a verdict on the version before the edit); the feed draws
+## those dimmed. They still link. A line given after the edit is not marked.
 
 ## A line was added (or, folded, its count grew); `entry` is the line.
 signal added(entry: Entry)
@@ -62,6 +66,9 @@ class Entry:
 	var failed_text: String = ""
 	## How many guests gave this exact line in this second.
 	var count: int = 1
+	## E3-S68: its hole has been edited since the line was given (or it judged the version
+	## before an edit): the feed draws it dimmed, as history.
+	var edited: bool = false
 
 	func is_praise() -> bool:
 		return kind == GuestReaction.Kind.PRAISE
@@ -116,7 +123,8 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 		var e: Entry = entries[i]
 		if e.day != day or e.second != second:
 			break
-		if e.hole_number == reaction.hole_number and e.slot == slot and e.kind == reaction.kind and e.text == reaction.text:
+		if e.hole_number == reaction.hole_number and e.slot == slot and e.kind == reaction.kind \
+				and e.text == reaction.text and e.edited == not counted:
 			e.count += 1
 			added.emit(e)
 			return e
@@ -130,6 +138,7 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	entry.kind = reaction.kind
 	entry.text = reaction.text
 	entry.failed_text = "" if reaction.is_praise() else reaction.failed_line()
+	entry.edited = not counted
 	entries.append(entry)
 	if entries.size() > max_entries:
 		entries = entries.slice(entries.size() - max_entries)
@@ -180,8 +189,9 @@ static func _resolve_in(holes: Array[HoleData], slot: int, number: int) -> int:
 
 ## Clears the tally of the hole in slot `slot` of `holes` (the course's holes when the
 ## reactions were given): every reaction in the window given at that slot, or slotless and
-## standing for it by its number, counts for no hole from now on (CLEARED). With `unlink`, the lines that link to
-## it link to none (the hole is gone). Emits slot_cleared when anything changed.
+## standing for it by its number, counts for no hole from now on (CLEARED), and every line about
+## it so far is marked `edited` (E3-S68). With `unlink`, the lines that link to it link to none
+## (the hole is gone). Emits slot_cleared when anything changed.
 func clear_slot(holes: Array[HoleData], slot: int, unlink: bool = false) -> void:
 	slot_edited.emit(slot)
 	var changed: bool = false
@@ -191,9 +201,12 @@ func clear_slot(holes: Array[HoleData], slot: int, unlink: bool = false) -> void
 			continue
 		recent_slots[i] = CLEARED
 		changed = true
-	if unlink:
-		for e: Entry in entries:
-			if e.slot == slot or (e.slot == -1 and _resolve_in(holes, -1, e.hole_number) == slot):
+	for e: Entry in entries:
+		if e.slot == slot or (e.slot == -1 and _resolve_in(holes, -1, e.hole_number) == slot):
+			if not e.edited:
+				e.edited = true
+				changed = true
+			if unlink:
 				e.slot = CLEARED
 				changed = true
 	if changed:

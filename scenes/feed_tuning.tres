@@ -10,4 +10,5 @@ highlight_s = 1.5
 width = 300.0
 row_lines = 3
 font_size = 13
+edited_alpha = 0.45
 max_entries = 100

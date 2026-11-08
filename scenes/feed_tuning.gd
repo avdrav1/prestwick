@@ -21,6 +21,9 @@ const PATH: String = "res://scenes/feed_tuning.tres"
 @export var row_lines: int = 3
 ## Font size of a line, px.
 @export var font_size: int = 13
+## E3-S68: the alpha a line draws at once its hole has been edited since it was given
+## (ReactionFeed.Entry.edited), so an old verdict on a fixed hole reads as history.
+@export var edited_alpha: float = 0.45
 ## Lines the feed keeps (ReactionFeed.max_entries).
 @export var max_entries: int = 100
 

@@ -21,7 +21,9 @@ extends PanelContainer
 ## backlog longer than the list shows at once. The newest line is highlighted for
 ## `highlight_s`. A line several guests gave in the same second shows once, with its count
 ## (ReactionFeed). Shape and colour both tell the verdict (colourblind rule): a praise line
-## starts "+" in sun_yellow, a complaint "!" in a light flag_red.
+## starts "+" in sun_yellow, a complaint "!" in a light flag_red. A line given before its
+## hole's last edit (ReactionFeed.Entry.edited, E3-S68) draws at `edited_alpha`, as history; it
+## still links.
 ##
 ## The feed reads real time only to pace what it shows; the day itself never waits on it.
 
@@ -125,6 +127,7 @@ func bind(p_sim: GuestSim) -> void:
 	sim = p_sim
 	sim.feed.added.connect(_on_added)
 	sim.feed.cleared.connect(_on_cleared)
+	sim.feed.slot_cleared.connect(func(_slot: int) -> void: _refresh())
 	shown_id = sim.feed.newest_id()
 	if is_node_ready():
 		_refresh()
@@ -243,6 +246,8 @@ func _refresh() -> void:
 		var n: int = number_now(e)
 		b.tooltip_text = row_tip(e, n)
 		var c: Color = praise_color if e.is_praise() else complaint_color
+		if e.edited:
+			c.a *= tuning.edited_alpha
 		for state: String in ["font_color", "font_hover_color", "font_pressed_color"]:
 			b.add_theme_color_override(state, c)
 		if i == 0 and highlight_left > 0.0:
