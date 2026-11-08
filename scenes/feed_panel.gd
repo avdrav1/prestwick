@@ -10,10 +10,11 @@ extends PanelContainer
 ## under way or the ball is moving, so a line never ends a shot.
 ##
 ## The panel keeps one height in Play, the full list's (`row_lines` lines a row), so a line
-## coming in never grows it over the map under a cursor that has not moved. It hides until its
-## first line comes in (E3-S27), so Play opens on no empty box, and again when a new course
-## empties the feed; Main says when it is Play's (set_in_play), and the free view counts it only
-## while it shows.
+## coming in never grows it over the map under a cursor that has not moved. It shows for the
+## whole of Play, from before its first line (E3-S67): the free view leaves its room from the
+## start, so the aim fit and hole framing never change when the first line comes in. With no
+## line yet (and after a new course empties the feed) it shows its title and one quiet
+## placeholder line. Main says when it is Play's (set_in_play); Build hides it.
 ##
 ## Readable when several guests finish at once: a burst comes in one line at a time, at most
 ## one every `reveal_interval_s` real seconds (tick), so the list moves one row at a time; a
@@ -36,12 +37,16 @@ const COMPLAINT_MARK: String = "!"
 @export var complaint_color: Color = Color8(240, 160, 150)
 ## The highlighted (newest) line's border: chalk.
 @export var highlight_color: Color = Color8(240, 236, 224)
+## The placeholder shown before the first line (E3-S67): a dim chalk, quieter than any line.
+@export var placeholder_color: Color = Color8(240, 236, 224, 110)
 
 ## Null loads scenes/feed_tuning.tres.
 var tuning: FeedTuning
 var sim: GuestSim
 var title_label: Label
-## True while Main shows the Play HUD (set_in_play): the panel shows then, once it has a line.
+## Shown in place of the rows while the feed has no line yet (E3-S67).
+var placeholder_label: Label
+## True while Main shows the Play HUD (set_in_play): the panel shows then.
 var in_play: bool = false
 ## One button per visible row, top (newest) first; the first shown_entries().size() are shown.
 var rows: Array[Button] = []
@@ -66,6 +71,14 @@ func _ready() -> void:
 	title_label.name = "Title"
 	title_label.text = "Guests say"
 	box.add_child(title_label)
+	placeholder_label = Label.new()
+	placeholder_label.name = "Placeholder"
+	placeholder_label.text = "Nothing yet: guests speak as they finish a hole."
+	placeholder_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	placeholder_label.custom_minimum_size = Vector2(tuning.width, 0)
+	placeholder_label.add_theme_font_size_override("font_size", tuning.font_size)
+	placeholder_label.add_theme_color_override("font_color", placeholder_color)
+	box.add_child(placeholder_label)
 	_highlight_box = StyleBoxFlat.new()
 	_highlight_box.bg_color = Color(0.2, 0.2, 0.24)
 	_highlight_box.border_color = highlight_color
@@ -97,11 +110,12 @@ func full_height() -> float:
 	var row: float = line * tuning.row_lines + b.get_theme_stylebox("normal").get_minimum_size().y
 	row = maxf(row, line * tuning.row_lines + _highlight_box.get_minimum_size().y)
 	var sep: float = (get_child(0) as VBoxContainer).get_theme_constant("separation")
+	# The placeholder (one line, hidden once a line is in) fits in the rows' room.
 	return title_label.get_combined_minimum_size().y + (row + sep) * tuning.visible_rows
 
 
-## Main shows (true, Play) or hides (false, Build) the feed. In Play it shows once it has a
-## line; until then, and in Build, it is hidden.
+## Main shows (true, Play) or hides (false, Build) the feed. In Play it shows from the start,
+## with a placeholder until its first line (E3-S67).
 func set_in_play(value: bool) -> void:
 	in_play = value
 	_refresh()
@@ -216,7 +230,8 @@ func _refresh() -> void:
 	if rows.is_empty():
 		return
 	_row_entries = shown_entries()
-	visible = in_play and not _row_entries.is_empty()
+	visible = in_play
+	placeholder_label.visible = _row_entries.is_empty()
 	for i: int in rows.size():
 		var b: Button = rows[i]
 		if i >= _row_entries.size():

@@ -169,7 +169,8 @@ func test_a_burst_comes_in_one_line_at_a_time_newest_on_top() -> void:
 	var panel: FeedPanel = m.feed_panel
 	var feed: ReactionFeed = m.guest_sim.feed
 	assert_true(panel.in_play, "the feed is on the Play HUD")
-	assert_false(panel.visible, "hidden until its first line (E3-S27)")
+	assert_true(panel.visible, "shown from the start of Play (E3-S67)")
+	assert_true(panel.placeholder_label.visible, "with a quiet placeholder before its first line")
 	var step: float = panel.tuning.reveal_interval_s
 	panel.tick(step)
 	# A group of three finishes hole 2 in one step.
@@ -180,6 +181,7 @@ func test_a_burst_comes_in_one_line_at_a_time_newest_on_top() -> void:
 	assert_eq(_texts(panel.shown_entries()), PackedStringArray(["Hole 2: a."]), "the first line comes in at once")
 	assert_eq(panel.waiting(), 2)
 	assert_true(panel.visible, "shown with its first line")
+	assert_false(panel.placeholder_label.visible, "the placeholder gives way to the line")
 	panel.tick(step * 0.5)
 	assert_eq(panel.shown_entries().size(), 1, "the next waits its turn")
 	panel.tick(step * 0.5)
@@ -394,25 +396,36 @@ func test_the_feed_keeps_one_height_as_lines_come_in() -> void:
 			"the full list takes the room the one-line panel kept, so no row grows under the cursor")
 
 
-## E3-S27: Play opens with no empty feed box over the map; the first line shows it, the free
-## view counts it only then, Build hides it and a new course's empty feed hides it again.
-func test_the_feed_hides_until_its_first_line() -> void:
+## E3-S67 (was E3-S27's hide-until-first-line): the feed keeps its room for the whole of Play,
+## so the free view, and the aim fit and framing that read it, are the same before and after the
+## first line; Build hides it and a new course's empty feed shows the placeholder again.
+func test_the_feed_reserves_its_room_from_the_start_of_play() -> void:
 	var m := _main_in_play()
 	var panel: FeedPanel = m.feed_panel
 	panel.tick(1.0)
-	assert_false(panel.visible, "no line yet: no box")
-	assert_false(panel in m.hud_controls(), "and the free view does not count it")
+	await get_tree().process_frame
+	assert_true(panel.visible, "no line yet: the panel still shows")
+	assert_true(panel.placeholder_label.visible, "a quiet placeholder")
+	assert_true(panel in m.hud_controls(), "and the free view counts it")
+	var before: Rect2 = m.free_view_rect()
+	var before_strips: Array[Rect2] = m.free_view_rects()
 	var feed: ReactionFeed = m.guest_sim.feed
 	feed.push(_complaint(3, "Hole 3: too hard, 6 on a par 3."), 1, 30)
 	panel.tick(0.0)
-	assert_true(panel.visible, "the first line shows it")
-	assert_true(panel in m.hud_controls())
+	await get_tree().process_frame
+	assert_true(panel.visible, "the first line shows in it")
+	assert_false(panel.placeholder_label.visible)
+	assert_eq(m.free_view_rect(), before, "the free view is the same after the first line")
+	assert_eq(m.free_view_rects(), before_strips, "both strips are")
 	m.set_mode(Main.Mode.BUILD)
 	assert_false(panel.visible, "Build hides it")
 	m.set_mode(Main.Mode.PLAY)
 	assert_true(panel.visible, "back in Play with its lines")
 	feed.clear()
-	assert_false(panel.visible, "an emptied feed hides it again")
+	await get_tree().process_frame
+	assert_true(panel.visible, "an emptied feed keeps its room")
+	assert_true(panel.placeholder_label.visible, "with the placeholder again")
+	assert_eq(m.free_view_rect(), before)
 
 
 # --- E3-S17: reactions stay on the hole that earned them ---

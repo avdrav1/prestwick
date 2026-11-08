@@ -1005,11 +1005,12 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Test: `tests/test_issue_marker.gd` or `tests/test_course_view.gd`: the number's box and the resting ball's do not overlap at 0.175x to 2x. Screenshot looked at.
   - Touches: `course/` (view only), `scenes/`, `tests/`
 
-- [ ] E3-S67 Reserve the feed's space in Play from the start. The view never shifts when the first line arrives.
+- [x] E3-S67 Reserve the feed's space in Play from the start. The view never shifts when the first line arrives.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). The feed hides until its first line, shrinking the free view then (E3-S27).
   - Accept: in Play the free view leaves the feed's width from the start (an empty feed shows a quiet placeholder or nothing), so the aim fit and framing never change when the first line arrives.
   - Test: `tests/test_feed.gd`: the free view rect is the same before and after the first line.
   - Touches: `scenes/`, `tests/`
+  - Done 2026-11-08: `FeedPanel` shows for the whole of Play (Build still hides it), so the free view leaves its room from Play's start; before its first line, and after a new course empties the feed, it shows its title and one quiet placeholder line ("Nothing yet: guests speak as they finish a hole.") in a dim chalk (`placeholder_color`). This undoes E3-S27's hide-until-first-line. `test_the_feed_reserves_its_room_from_the_start_of_play`: the free view rect and both strips are the same before and after the first line and after the feed empties. Screenshot `docs/decisions/e3-s67-feed-empty.png` (`tests/fixtures/feed_empty_shot.tscn`). `docs/design.md` Feed and map tags.
 
 - [ ] E3-S68 Dim feed lines given before a hole's last edit. Old complaints read as history.
   - Note: (user, E3-S30 hand playtest, 2026-11-07; `docs/playtests/2026-11-07-e3-hand.md`). Lines for an edited hole stay and still link to it (E3-S17).

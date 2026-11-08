@@ -488,7 +488,7 @@ func _apply_mode() -> void:
 	guest_view.visible = not building
 	sim_speed_panel.visible = not building
 	# The feed is read in Play, where the day runs; its tags stay on the map in Build (E3-S7).
-	# It shows once its first line comes in (E3-S27).
+	# It shows from the start of Play, so the free view never shifts at its first line (E3-S67).
 	feed_panel.set_in_play(not building)
 	mode_button.text = "Back to Build (Tab)" if not building else "Play hole (Tab)"
 	course_view.issues_visible = building

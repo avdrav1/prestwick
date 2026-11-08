@@ -12,6 +12,9 @@ extends Node2D
 ## With `hover` (E3-S43), the day then goes back to Build with the tags' holes framed and the
 ## mouse over the first tag: its highlight, and each hole-list row's tag.
 ##   scripts/screenshot.sh tests/fixtures/feed_hover_shot.tscn out.png 30
+## With `run_to_s` 0 (E3-S67), Play before any guest has finished a hole: the feed keeps its
+## room with its placeholder.
+##   scripts/screenshot.sh tests/fixtures/feed_empty_shot.tscn out.png 30
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
