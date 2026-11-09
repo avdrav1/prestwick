@@ -554,7 +554,7 @@ Done when: a new course opens on generated natural land, the player owns a start
   - Test: `tests/test_validator.gd` (the shipped `course/validator_tuning.tres` keeps the order; a tuning with `zone_from_yd` above `par4_min_yd` is caught).
   - Touches: `course/`, `tests/`, `.claude/skills/course-file/`
 
-## E3: Nine holes and guests — active
+## E3: Nine holes and guests — done
 
 Ships as 0.4.0 (D19). Serves pillar 3: the course tells a story through its guests. No money yet, so arrivals are a flat number until E4 connects rating.
 
@@ -1074,7 +1074,7 @@ Planning notes (E2-S19, from the E2 review; `/next-epic` read these on 2026-11-0
   - Touches: `guests/`, `scripts/`, `docs/`
   - Done: the A/B (display, quiet, alternating, 5 runs a side a fixture; `docs/decisions/e3-s75-gate-perf.txt`) says noise near the line, not a regression nor a display-only cost: bed8a77 passed 3 of 5 on the bare nine and 3 of 5 on doglegs (10 and 14 gated frames), main 4 of 5 and 1 of 5 (10 and 17; one run a side went past load 4 and counts as failed). Most gated frames come from the lattice and flooded days, which play the bare nine's land whichever fixture is run; none ran a step, so E3-S70's `turn_of` is not in them, and the Ball tick cost is the same on E3-S34, before E3-S70, bed8a77 and main (26.0 to 26.4 us, headless whole days). A scratch profile found each gated frame to be a full frame of Ball work (about 7 ms) in which one ordinary tick took 1 to 5 ms; a control of plain GDScript arithmetic stalls the same way (26 stalls of 1 to 5.3 ms in 60 s). So the fix makes a full frame cheaper, not the gate looser: `CourseData.get_height`, `get_surface` and `is_owned` spell out their bounds check and index (the same reads, the same days tick for tick), and a tick costs 20.6 us (-21%). After: 4 of 5 pass on the bare nine (3 gated frames; the one fail had 3, worst 13.3) and 5 of 5 on doglegs (2). D52 and `frame_guest_ms_max` unchanged. Test: `tests/test_course_data.gd` checks `is_owned` against `is_parcel_owned(parcel_of)` tile by tile on a ragged 37 x 21 map, and off-map ownership.
 
-## E4: Economy — planned
+## E4: Economy — active
 
 Ships as 0.5.0 (D19). Gives building a budget and reactions a consequence. Serves pillar 3, and stays deliberately thin: one input, one output.
 
