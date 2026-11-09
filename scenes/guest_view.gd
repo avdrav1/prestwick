@@ -390,14 +390,18 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 		# A striker that stood aside for the last stroke steps back to its ball as its own
 		# spread closes, so it neither jumps nor swings off its ball.
 		room *= f.spread
-	f.room = f.room.move_toward(room, step)
-	f.at += f.room
 	var aside := Vector2.ZERO
 	if walker:
-		aside = pass_room(f, f.at, (f.to - f.from).normalized()) * walk_share
+		aside = pass_room(f, f.at + f.room.move_toward(room, step), (f.to - f.from).normalized()) * walk_share
 	else:
 		f.pass_sides = {}
-	f.aside = f.aside.move_toward(aside, step)
+	# E4-S10: the step back and the sidestep move together no faster than a walk, not each at a
+	# walk: a walker that stops beside a striker still holding its sidestep and then strikes
+	# itself drops the sidestep as it takes up the step back, in the same frame.
+	var shift := _together(room - f.room, aside - f.aside, step)
+	f.room += shift[0]
+	f.at += f.room
+	f.aside += shift[1]
 	f.at += f.aside
 	var moving := walking and f.from.distance_squared_to(f.to) > 1e-6
 	var d := -1
@@ -419,6 +423,14 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 		f.frame = floori(_time * tuning.idle_fps) + g.id
 	_place(f.sprite, Vector3(f.at.x, f.at.y, 0.0))
 	_update_ball(f, delta, speed)
+
+
+## E4-S10: moves `a` and `b` (yards) cut by one share, so that each, and the two together, are
+## no longer than `step`: [a, b] as cut.
+static func _together(a: Vector2, b: Vector2, step: float) -> Array[Vector2]:
+	var longest := maxf(maxf(a.length(), b.length()), (a + b).length())
+	var k := 1.0 if longest <= step else step / longest
+	return [a * k, b * k]
 
 
 func _update_ball(f: Figure, delta: float, speed: float) -> void:

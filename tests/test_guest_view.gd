@@ -359,36 +359,52 @@ func test_a_figure_waits_for_its_ball_to_rest_on_screen_before_it_walks() -> voi
 	assert_gt(seen.walks, 200, "and of guests walking to their balls")
 
 
+## E4-S10: a day draws as many guests as its rating and fee bring (E4-S5, E4-S6), so the
+## check runs at 16 (E3), 18 (the $60 start fee at 3 stars), 20 (free) and 24 (the cap).
+const SWING_START_ARRIVALS: Array[int] = [16, 18, 20, 24]
+
+
+## A sim on the guest course whose day draws `arrivals` guests, whatever its rating and fee.
+func _sim_drawing(arrivals: int, day_seed_base: int) -> GuestSim:
+	var sim := _sim(GuestCourse.course(), day_seed_base)
+	var e := EconomyTuning.load_default()
+	e.arrivals_base = arrivals
+	e.arrivals_per_star = 0
+	e.arrivals_max = maxi(e.arrivals_max, arrivals)
+	sim.economy = e
+	sim.set_fee(0)
+	return sim
+
+
 func test_no_figure_jumps_at_the_start_of_a_swing() -> void:
-	for speed: float in [1.0, 3.0]:
-		var sim := _sim(GuestCourse.course(), 7)
-		# E4-S6: free, so the day draws 20 guests as it did under E4-S5. At the $60 start fee it
-		# draws 18, and guest 3 moves 0.81 yd (more than a walk step) as it begins a swing at 1x:
-		# E4-S10.
-		sim.set_fee(0)
-		sim.set_speed(speed)
-		var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
-		var step_yd := view.guest_tuning.walk_yd_per_s * speed * FRAME + 0.01
-		var seen := {"starts": 0, "worst": 0.0, "prev": {}, "anim": {}}
-		var check := func() -> bool:
-			var prev: Dictionary = seen.prev
-			var anim: Dictionary = seen.anim
-			for f: GuestView.Figure in view.figures().values():
-				var id := f.guest.id
-				if prev.has(id) and (f.anim == GolferArt.Anim.SWING
-						or f.guest.state == Guest.State.PLAYING):
-					if anim.get(id, -1) != GolferArt.Anim.SWING and f.anim == GolferArt.Anim.SWING:
-						seen.starts += 1
-					var d: float = f.at.distance_to(prev[id])
-					seen.worst = maxf(seen.worst, d)
-					assert_lte(d, step_yd, "guest %d moved %.2f yd as it began its swing" % [id, d])
-				prev[id] = f.at
-				anim[id] = f.anim
-			return false
-		_run(sim, view, check, int(60 * 150 / speed))
-		assert_gt(seen.starts, 20, "%sx: many swings begun" % speed)
-		gut.p("%sx: %d swings begun, the most a figure moved in a frame while striking %.2f yd (a walk step %.2f)"
-				% [speed, seen.starts, seen.worst, step_yd])
+	for arrivals: int in SWING_START_ARRIVALS:
+		for speed: float in [1.0, 3.0]:
+			var sim := _sim_drawing(arrivals, 7)
+			sim.set_speed(speed)
+			var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
+			var step_yd := view.guest_tuning.walk_yd_per_s * speed * FRAME + 0.01
+			var seen := {"starts": 0, "worst": 0.0, "prev": {}, "anim": {}}
+			var check := func() -> bool:
+				var prev: Dictionary = seen.prev
+				var anim: Dictionary = seen.anim
+				for f: GuestView.Figure in view.figures().values():
+					var id := f.guest.id
+					if prev.has(id) and (f.anim == GolferArt.Anim.SWING
+							or f.guest.state == Guest.State.PLAYING):
+						if anim.get(id, -1) != GolferArt.Anim.SWING and f.anim == GolferArt.Anim.SWING:
+							seen.starts += 1
+						var d: float = f.at.distance_to(prev[id])
+						seen.worst = maxf(seen.worst, d)
+						assert_lte(d, step_yd, "%d guests, %sx: guest %d moved %.2f yd as it began its swing"
+								% [arrivals, speed, id, d])
+					prev[id] = f.at
+					anim[id] = f.anim
+				return false
+			_run(sim, view, check, int(60 * 150 / speed))
+			assert_eq(sim.day_arrivals, arrivals, "the day drew %d guests" % arrivals)
+			assert_gt(seen.starts, 20, "%d guests, %sx: many swings begun" % [arrivals, speed])
+			gut.p("%d guests, %sx: %d swings begun, the most a figure moved in a frame while striking %.2f yd (a walk step %.2f)"
+					% [arrivals, speed, seen.starts, seen.worst, step_yd])
 
 
 func test_guest_balls_are_smaller_than_the_players_and_figures_read_at_half_zoom() -> void:
