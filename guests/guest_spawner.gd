@@ -4,22 +4,22 @@ extends RefCounted
 ## and patience draw), all drawn from the day's seed, never the clock:
 ##
 ## - group sizes, each of `group_size_min` to `group_size_max` equally likely, until
-##   `arrivals_per_day` guests (the last group cut to fit);
+##   `arrivals` guests (the last group cut to fit): the game's arrivals by rating (E4-S5,
+##   GuestSim.arrivals_today), else E3's flat `arrivals_per_day` (tests and scripts);
 ## - group i of n arrives at i × `arrival_window_s` / n seconds from morning (D46: seconds,
 ##   whatever `day_s` is);
 ## - then, guest by guest in arrival order: skill (`skill_min` to `skill_max`), patience
 ##   (`patience_min` to `patience_max`), each whole value equally likely; taste by
 ##   `taste_weights`; and a seed of its own for its holes.
-##
-## E4-S5 replaces `arrivals_per_day` with arrivals by rating.
 
 
-## The groups of the day of `day_seed`, in arrival order, every guest numbered.
-static func day(tuning: GuestTuning, day_seed: int) -> Array[GuestGroup]:
+## The groups of the day of `day_seed`, in arrival order, every guest numbered: `arrivals`
+## guests, or `arrivals_per_day` when it is below 0.
+static func day(tuning: GuestTuning, day_seed: int, arrivals: int = -1) -> Array[GuestGroup]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = day_seed
 	var sizes: Array[int] = []
-	var left := tuning.arrivals_per_day
+	var left := tuning.arrivals_per_day if arrivals < 0 else arrivals
 	while left > 0:
 		var n := mini(rng.randi_range(tuning.group_size_min, tuning.group_size_max), left)
 		sizes.append(n)

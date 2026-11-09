@@ -9,6 +9,11 @@ extends RefCounted
 const PATH: String = "res://data/economy.json"
 ## The reaction kinds rating_points names, in GuestReaction.Kind's reading order.
 const POINT_KINDS: PackedStringArray = ["praise", "neutral", "complaint"]
+## E4-S5: the stars shown step by half a star (D58: the sim's display, which the arrivals and,
+## from E4-S6, the fee ceiling read).
+const STAR_STEP: float = 0.5
+const STARS_MIN: float = 1.0
+const STARS_MAX: float = 5.0
 
 ## Dollars to paint one tile, by Surface.Type (index = the enum value).
 var tile_price: PackedInt32Array = PackedInt32Array()
@@ -97,6 +102,12 @@ static func _read_share(data: Dictionary, key: String, e: Array[String]) -> floa
 ## Dollars to paint one tile with `surface` (a Surface.Type).
 func price_of(surface: int) -> int:
 	return tile_price[surface]
+
+
+## E4-S5: the stars shown for a course rating `rating` (ReactionFeed.rating): to the nearest
+## half star, 1 to 5. Arrivals and the fee ceiling go by these, as the economy sim runs them.
+static func stars_of(rating: float) -> float:
+	return clampf(roundf(rating / STAR_STEP) * STAR_STEP, STARS_MIN, STARS_MAX)
 
 
 ## The fee ceiling per round at `stars`.

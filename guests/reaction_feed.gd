@@ -28,7 +28,7 @@ extends RefCounted
 ## later at the same slot starts with none and an old line never jumps to it. A guest playing
 ## the hole when it is edited gives a verdict on the old version: GuestSim pushes it
 ## uncounted (slot_edited, push's `counted`), so it too counts for no hole. Cleared reactions
-## keep their window place for E4-S5's rating but are left out of its average (rated).
+## keep their window place and count as neutral in the course rating (rating, D58).
 ##
 ## History (E3-S68): a line given before its hole's last edit is marked `edited` (clear_slot),
 ## and so is a line pushed uncounted (a verdict on the version before the edit); the feed draws
@@ -43,6 +43,9 @@ signal slot_cleared(slot: int)
 ## The hole in slot `slot` was edited (or went away): emitted on every clear_slot, whether or
 ## not the window held a reaction for it, so GuestSim can drop the plays under way there.
 signal slot_edited(slot: int)
+## E4-S5: the window changed (a push, neutrals included, a clear, a clear_slot that cleared a
+## reaction, a copy_from), so the course rating (rating) may have moved.
+signal changed
 
 ## The slot of a reaction or a line whose hole was edited or removed since (E3-S17): it counts
 ## for no hole and links to none.
@@ -122,6 +125,7 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 		recent = recent.slice(recent.size() - window)
 		recent_slots = recent_slots.slice(recent_slots.size() - window)
 		recent_days = recent_days.slice(recent_days.size() - window)
+	changed.emit()
 	if reaction.kind == GuestReaction.Kind.NEUTRAL:
 		return null
 	for i: int in range(entries.size() - 1, -1, -1):
@@ -160,6 +164,7 @@ func clear() -> void:
 	total = 0
 	_next_id = 1
 	cleared.emit()
+	changed.emit()
 
 
 ## E4-S7: the feed as the game save keeps it (GameSave), as it stood at the morning of day
@@ -260,6 +265,7 @@ func copy_from(other: ReactionFeed) -> void:
 	cleared.emit()
 	if not entries.is_empty():
 		added.emit(entries[entries.size() - 1])
+	changed.emit()
 
 
 ## The newest `n` lines, newest first.
@@ -300,23 +306,27 @@ static func _resolve_in(holes: Array[HoleData], slot: int, number: int) -> int:
 ## (the hole is gone). Emits slot_cleared when anything changed.
 func clear_slot(holes: Array[HoleData], slot: int, unlink: bool = false) -> void:
 	slot_edited.emit(slot)
-	var changed: bool = false
+	var any: bool = false
+	var rated_changed: bool = false
 	for i: int in recent.size():
 		var at: int = recent_slots[i]
 		if at != slot and (at != -1 or _resolve_in(holes, -1, recent[i].hole_number) != slot):
 			continue
 		recent_slots[i] = CLEARED
-		changed = true
+		any = true
+		rated_changed = true
 	for e: Entry in entries:
 		if e.slot == slot or (e.slot == -1 and _resolve_in(holes, -1, e.hole_number) == slot):
 			if not e.edited:
 				e.edited = true
-				changed = true
+				any = true
 			if unlink:
 				e.slot = CLEARED
-				changed = true
-	if changed:
+				any = true
+	if any:
 		slot_cleared.emit(slot)
+	if rated_changed:
+		changed.emit()
 
 
 ## The course's holes went from `before` to `after` (copies, by slot): a slot whose tee, cup or
@@ -392,14 +402,27 @@ func slot_tallies(c: CourseData) -> Dictionary:
 
 
 ## The reactions in the window that still count (not CLEARED), oldest first, neutrals
-## included: the ones E4-S5's course rating averages. A cleared reaction holds its window
-## place, so the average reads fewer than `window` until newer ones push it out.
+## included. A cleared reaction holds its window place until newer ones push it out; the
+## course rating (rating) counts it as neutral (D58).
 func rated() -> Array[GuestReaction]:
 	var out: Array[GuestReaction] = []
 	for i: int in recent.size():
 		if recent_slots[i] != CLEARED:
 			out.append(recent[i])
 	return out
+
+
+## E4-S5 (D58): the course rating, the mean of `points` (praise, neutral and complaint, in
+## GuestReaction.Kind order: EconomyTuning.rating_points) over the full window of `window`
+## reactions. A window short of `window` is filled with neutrals, so a new course rates the
+## neutral's points (3 stars), and a reaction cleared by an edit counts as neutral, so the
+## mean always divides by `window`.
+func rating(points: PackedFloat32Array) -> float:
+	var neutral: float = points[GuestReaction.Kind.NEUTRAL]
+	var sum: float = neutral * maxi(window - recent.size(), 0)
+	for i: int in recent.size():
+		sum += neutral if recent_slots[i] == CLEARED else points[recent[i].kind]
+	return sum / window
 
 
 ## Hole `number`'s tally in the window, by the number guests named: Vector2i(praise, complaints),

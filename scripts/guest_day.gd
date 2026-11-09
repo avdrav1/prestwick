@@ -16,6 +16,8 @@ extends SceneTree
 ## same day with a skill-1 foursome in each arrival slot in turn (D46 review); and the groups alone run on a day
 ## long enough to finish, so their whole round is measured. `day_s=N` plays the days at that
 ## length instead of data/guests.json's (`arrival_window_s=N` likewise); `quick` leaves out the statics and the 60 fps runs.
+## E4-S5: `arrivals=N` draws N guests a day instead of `arrivals_per_day` (the game draws 12 to
+## 24 by rating, D58), to check every group still finishes.
 ## E3-S32: `frames` runs only the statics and each seed's day in 60 fps frames at 1x and 3x (the
 ## CPU a frame, E3-S23's figures), with the load average at the start and end.
 ## E3-S22: `--lines` prints each day's reaction lines as they came (the feed's text, neutrals
@@ -24,7 +26,7 @@ extends SceneTree
 ## behind its own queue, or held for a group on another hole, on the tee or the hole).
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
-##       [day_s=540] [arrival_window_s=90] [quick] [--lines]
+##       [day_s=540] [arrival_window_s=90] [arrivals=24] [quick] [--lines]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
@@ -57,13 +59,15 @@ func _initialize() -> void:
 			tuning = _tuning_with({"day_s": float(arg.substr(6))}, tuning)
 		elif arg.begins_with("arrival_window_s="):
 			tuning = _tuning_with({"arrival_window_s": float(arg.substr(17))}, tuning)
+		elif arg.begins_with("arrivals="):
+			tuning = _tuning_with({"arrivals_per_day": int(arg.substr(9))}, tuning)
 		elif arg == "quick":
 			quick = true
 		elif arg == "--lines" or arg == "lines":
 			lines = true
 		elif arg == "frames":
 			frames_only = true
-	print("day_s %d s (arrivals over the first %d s)" % [tuning.day_s, tuning.arrival_window_s])
+	print("day_s %d s (%d guests a day, arriving over the first %d s)" % [tuning.day_s, tuning.arrivals_per_day, tuning.arrival_window_s])
 	GuestClubTable.warm(model)
 	if not quick:
 		_statics(course, tuning, model)
@@ -384,6 +388,7 @@ func _tuning_with(changes: Dictionary, base: GuestTuning) -> GuestTuning:
 	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GuestTuning.PATH))
 	d["day_s"] = base.day_s
 	d["arrival_window_s"] = base.arrival_window_s
+	d["arrivals_per_day"] = base.arrivals_per_day
 	d.merge(changes, true)
 	var errors: Array[String] = []
 	var t := GuestTuning.from_dict(d, errors)

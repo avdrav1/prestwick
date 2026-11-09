@@ -28,6 +28,13 @@ extends Node
 ## undone away takes its tally and links with it. A guest playing the hole when it is edited
 ## judges the old version: its reaction comes in uncounted (E3-S17 review, _on_slot_edited),
 ## unless its group had not struck there yet: it replans on the new version and counts (E3-S49).
+##
+## The rating (E4-S5, D58): rating() is the feed's mean points over its full window
+## (ReactionFeed.rating, EconomyTuning.rating_points), stars() the stars shown for it (to the
+## half star, EconomyTuning.stars_of). Each morning draws arrivals_today() guests, 8 + 4 a star
+## at most 24 (EconomyTuning.arrivals) at the stars of that morning, replacing E3's flat
+## `arrivals_per_day`; a day keeps its count whatever the rating does during it. The same
+## seed and the same feed give the same day, so a skip, a run and a load's replay agree.
 
 signal day_started(day: int)
 ## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
@@ -39,6 +46,8 @@ signal guest_arrived(guest: Guest)
 signal speed_changed(speed: float)
 ## E4-S3: a skip to morning started or stopped.
 signal skip_changed(skipping: bool)
+## E4-S5: the course rating may have moved (the feed's window changed).
+signal rating_changed(rating: float)
 
 ## Pause, 1x, 3x.
 const SPEEDS: Array[float] = [0.0, 1.0, 3.0]
@@ -60,6 +69,10 @@ var tuning: GuestTuning
 var feed: ReactionFeed
 ## Null loads scenes/feed_tuning.tres.
 var feed_tuning: FeedTuning
+## E4-S5: the economy's numbers (rating points, arrivals). Null loads data/economy.json.
+var economy: EconomyTuning
+## E4-S5: the guests the day under way drew at its morning (arrivals_today then).
+var day_arrivals: int = 0
 
 ## The builder whose edits clear the feed's tallies (watch), and the holes as it last left them.
 var _watched: CourseBuilder
@@ -92,9 +105,32 @@ func _ensure_feed() -> void:
 		tuning = GuestTuning.load_default()
 	if feed_tuning == null:
 		feed_tuning = FeedTuning.load_default()
+	if economy == null:
+		economy = EconomyTuning.load_default()
 	if feed == null:
 		feed = ReactionFeed.new(tuning.rating_window, feed_tuning.max_entries)
 		feed.slot_edited.connect(_on_slot_edited)
+		feed.changed.connect(_on_feed_changed)
+
+
+## E4-S5: the course rating now, 1 to 5 (ReactionFeed.rating over `rating_window`, D58).
+func rating() -> float:
+	_ensure_feed()
+	return feed.rating(economy.rating_points)
+
+
+## E4-S5: the stars shown now, to the half star (EconomyTuning.stars_of).
+func stars() -> float:
+	return EconomyTuning.stars_of(rating())
+
+
+## E4-S5: the guests a day starting now draws: EconomyTuning.arrivals at stars(), free.
+func arrivals_today() -> int:
+	return economy.arrivals(stars(), 0.0)
+
+
+func _on_feed_changed() -> void:
+	rating_changed.emit(rating())
 
 
 ## The seed of day `d` of a course seeded `base`.
@@ -296,7 +332,8 @@ func _new_day(d: int) -> void:
 	_ensure_feed()
 	day = d
 	_stale.clear()
-	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning)
+	day_arrivals = arrivals_today()
+	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals)
 	brain.reacted.connect(_on_reacted.bind(brain))
 	brain.guest_arrived.connect(func(g: Guest) -> void: guest_arrived.emit(g))
 	day_started.emit(day)

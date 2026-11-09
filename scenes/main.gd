@@ -27,7 +27,8 @@ var mode: Mode = Mode.BUILD
 var course: CourseData
 ## The seed of the latest New course's land (new_course), so it can be made again.
 var land_seed: int = -1
-## The course rating at each day's end, oldest first: E4-S5 fills it; a save carries it (E4-S7).
+## The course rating (GuestSim.rating, 1 to 5) at each day's end, oldest first (E4-S5,
+## _on_day_ended); a new course empties it and a save carries it (E4-S7).
 var rating_history: Array[float] = []
 ## E4-S4: today's green fees and the balance at the morning; its last line is the morning report.
 var ledger := DayLedger.new()
@@ -45,6 +46,8 @@ var _speed_panel_top: float = -1.0
 var _feed_panel_top: float = -1.0
 
 @onready var mode_label: Label = $HUD/ModeLabel
+## E4-S5: the course rating, on the mode label's line.
+@onready var rating_row: RatingRow = $HUD/RatingRow
 @onready var course_view: CourseView = $CourseView
 @onready var camera: CourseCamera = $Camera
 @onready var build_tool: BuildTool = $BuildTool
@@ -105,6 +108,7 @@ func _ready() -> void:
 	score_card.bind(swing_control)
 	guest_view.bind(guest_sim)
 	sim_speed_panel.bind(guest_sim)
+	rating_row.bind(guest_sim)
 	feed_panel.bind(guest_sim)
 	feed_panel.hole_requested.connect(_on_hole_link)
 	reaction_tags.bind(guest_sim.feed)
@@ -303,7 +307,7 @@ func hud_controls() -> Array[Control]:
 
 func _hud_groups() -> Array:
 	return [
-		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel,
+		[mode_label, rating_row, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel,
 				sim_speed_panel, feed_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
@@ -502,6 +506,8 @@ func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
 		if h.open:
 			open += 1
 	var upkeep: int = open * b.economy.upkeep_per_open_hole
+	# E4-S5: the closing rating goes on the history (the rating the next morning's arrivals read).
+	rating_history.append(guest_sim.rating())
 	ledger.close(b.balance(), upkeep)
 	b.debit(upkeep)
 	money_panel.refresh()

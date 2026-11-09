@@ -124,10 +124,12 @@ var _terrain_key: String = ""
 
 
 ## The day of `day_seed` on `course`. `p_groups` replaces the drawn arrivals (tests, scripts).
-## Measures the guests' club table now (GuestClubTable.warm), before any guest ticks.
+## `p_arrivals` 0 or more is how many guests the day draws (E4-S5: GuestSim's arrivals by
+## rating), else `arrivals_per_day`. Measures the guests' club table now
+## (GuestClubTable.warm), before any guest ticks.
 func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 		p_model: ShotModel = null, p_groups: Array[GuestGroup] = [],
-		p_swing_tuning: SwingTuning = null) -> void:
+		p_swing_tuning: SwingTuning = null, p_arrivals: int = -1) -> void:
 	course = p_course
 	day_seed = p_day_seed
 	tuning = p_tuning if p_tuning != null else GuestTuning.load_default()
@@ -135,7 +137,7 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 	_swing_tuning = p_swing_tuning if p_swing_tuning != null else SwingTuning.load_default()
 	field = HeightField.new(course, model.params)
 	checks = HoleChecks.new(tuning, model.params)
-	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed)
+	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed, p_arrivals)
 	GuestClubTable.warm(model)
 
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -23,6 +23,7 @@
 [ext_resource type="Script" path="res://scenes/cup_pointer.gd" id="cup_pointer"]
 [ext_resource type="Script" path="res://scenes/save_notice.gd" id="save_notice"]
 [ext_resource type="Script" path="res://scenes/money_panel.gd" id="money_panel"]
+[ext_resource type="Script" path="res://scenes/rating_row.gd" id="rating_row"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -64,9 +65,16 @@ script = ExtResource("3_camera")
 [node name="ModeLabel" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 200.0
+offset_right = 96.0
 offset_bottom = 40.0
 text = "BUILD"
+
+[node name="RatingRow" type="HBoxContainer" parent="HUD"]
+offset_left = 104.0
+offset_top = 16.0
+offset_right = 310.0
+offset_bottom = 40.0
+script = ExtResource("rating_row")
 
 [node name="BuildPalette" type="PanelContainer" parent="HUD"]
 anchors_preset = 7

@@ -45,6 +45,10 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## next morning shows the balance after the day's fees and upkeep and the day's line in Play.
 ##   scripts/screenshot.sh tests/fixtures/money_day_shot.tscn out.png 30
 @export var money: int = -1
+## E4-S5: with `extra_praise` above 0, that many praises of hole 2 go into the feed after the
+## day's run, so the speed panel's Rating row shows a half star (13 on top of the day: 3.5).
+##   scripts/screenshot.sh tests/fixtures/rating_shot.tscn out.png 30
+@export var extra_praise: int = 0
 
 var main: Main
 
@@ -81,6 +85,12 @@ func _ready() -> void:
 			if not main.guest_sim.skipping:
 				break
 			main.guest_sim.skip_frame()
+	for i: int in extra_praise:
+		var p := GuestReaction.new()
+		p.hole_number = 2
+		p.kind = GuestReaction.Kind.PRAISE
+		p.text = "Hole 2: loved it."
+		main.guest_sim.feed.push(p, 1, run_to_s, 1)
 	for i: int in 64:
 		main.feed_panel.tick(main.feed_panel.tuning.reveal_interval_s)
 	main.camera.tracking = false

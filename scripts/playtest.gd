@@ -289,8 +289,10 @@ func _check_guests() -> void:
 			"it names hole %d" % hole)
 	_check(sim.feed.total >= 1, "the feed holds it")
 	# The same seed gives the same day: a headless brain of the day's seed, stepped once a
-	# simulated second, gives the same first reaction at the same second.
-	var brain := GuestBrain.new(_main.course, GuestSim.day_seed(sim.base_seed, 1))
+	# simulated second, gives the same first reaction at the same second. It draws the day's
+	# guests by the morning's rating, as the sim did (E4-S5).
+	var brain := GuestBrain.new(_main.course, GuestSim.day_seed(sim.base_seed, 1), null, null, [],
+			null, sim.day_arrivals)
 	# The handler must not hold the brain (a reference cycle through its own signal).
 	var first: Array[GuestReaction] = []
 	brain.reacted.connect(func(_g: Guest, x: GuestReaction) -> void:

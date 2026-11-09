@@ -315,8 +315,8 @@ func test_confirm_keeps_clear_of_the_hud() -> void:
 	assert_true(_panel.get_global_rect().grow(4.0).has_point(_panel.confirm_anchor(clicked)),
 			"the clicked tile is under the land panel")
 	var box: Rect2 = _panel.confirm_box.get_global_rect()
-	assert_eq(_panel.hud_rects().size(), 1 + 8,
-			"the land panel and the eight HUD controls (E3-S62: the guests' speed panel in Build; E4-S2: the balance)")
+	assert_eq(_panel.hud_rects().size(), 1 + 9,
+			"the land panel and the nine HUD controls (E3-S62: the guests' speed panel in Build; E4-S2: the balance; E4-S5: the rating)")
 	for r: Rect2 in _panel.hud_rects():
 		assert_false(box.intersects(r), "the confirm %s clears the HUD %s" % [box, r])
 	assert_true(_panel.get_viewport_rect().encloses(box), "and stays on screen")
