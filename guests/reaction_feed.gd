@@ -110,6 +110,10 @@ var window: int = 50
 var max_entries: int = 100
 ## Every reaction pushed, neutrals included.
 var total: int = 0
+## E4-S12: `total` as it stood at the morning of each day a reaction was pushed on (before the
+## day's first push), by day. to_save keeps the saved day's morning total, so a load that replays
+## the day counts its reactions once, even those the day itself pushed out of the window.
+var morning_totals: Dictionary = {}
 
 var _next_id: int = 1
 
@@ -125,6 +129,8 @@ func _init(p_window: int = 50, p_max_entries: int = 100) -> void:
 ## E3-S17 review): it takes its window place CLEARED, its line still linking to `slot`. Returns
 ## the line it made or grew, or null for a neutral (counted in the tags' window, not shown).
 func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counted: bool = true) -> Entry:
+	if not morning_totals.has(day):
+		morning_totals[day] = total
 	total += 1
 	recent.append(reaction)
 	recent_slots.append(slot if counted else CLEARED)
@@ -192,6 +198,7 @@ func clear() -> void:
 	recent_days.clear()
 	_clear_spill()
 	total = 0
+	morning_totals.clear()
 	_next_id = 1
 	cleared.emit()
 	changed.emit()
@@ -200,7 +207,7 @@ func clear() -> void:
 ## E4-S7: the feed as the game save keeps it (GameSave), as it stood at the morning of day
 ## `before_day`: the lines and window reactions of earlier days only. A load resumes at that
 ## morning and the day plays again from its seed, so its own lines come in again rather than
-## twice. E4-S11: a reaction of that day that pushed an older one out of the window puts it back
+## twice (E4-S12: its total too, morning_total). E4-S11: a reaction of that day that pushed an older one out of the window puts it back
 ## (spilled), so the window is the morning's whole and the load's morning has its stars.
 func to_save(before_day: int) -> Dictionary:
 	var lines: Array = []
@@ -217,18 +224,26 @@ func to_save(before_day: int) -> Dictionary:
 				sr["slot"] = spilled_slots[i]
 				sr["day"] = spilled_days[i]
 				window_out.append(sr)
-	var dropped := 0
 	for i: int in recent.size():
 		var d: int = recent_days[i] if i < recent_days.size() else 0
 		if d >= before_day:
-			dropped += 1
 			continue
 		var r: Dictionary = recent[i].to_save()
 		r["slot"] = recent_slots[i]
 		r["day"] = d
 		window_out.append(r)
 	var next_id: int = 1 if lines.is_empty() else int(lines[lines.size() - 1]["id"]) + 1
-	return {"lines": lines, "window": window_out, "total": maxi(total - dropped, 0), "next_id": next_id}
+	return {"lines": lines, "window": window_out, "total": morning_total(before_day), "next_id": next_id}
+
+
+## E4-S12: `total` as it stood at the morning of day `day`: before the first reaction pushed on
+## that day or a later one, every reaction pushed when none has been since.
+func morning_total(day: int) -> int:
+	var first := -1
+	for d: int in morning_totals:
+		if d >= day and (first < 0 or d < first):
+			first = d
+	return total if first < 0 else int(morning_totals[first])
 
 
 ## A feed of `window` and `max_entries` holding what `d` (to_save) holds, or null with the
@@ -299,6 +314,7 @@ func copy_from(other: ReactionFeed) -> void:
 	recent_days = other.recent_days.duplicate()
 	_clear_spill()
 	total = other.total
+	morning_totals = other.morning_totals.duplicate()
 	_next_id = other._next_id
 	cleared.emit()
 	if not entries.is_empty():

@@ -133,6 +133,32 @@ func test_the_saved_window_is_the_mornings_even_when_the_day_pushed_reactions_ou
 	assert_eq(back.recent_days, [1, 2, 2, 2] as Array[int])
 
 
+## E4-S12: the saved total is the morning's, even when the saved day's own reactions have
+## passed the window (pushed out by later ones of the same day), so a load that replays the day
+## ends with the uninterrupted day's total.
+func test_the_saved_total_is_the_mornings_when_the_day_pushed_its_own_reactions_out() -> void:
+	var feed := ReactionFeed.new(4, 100)
+	for i in 4:
+		feed.push(_reaction(1, GuestReaction.Kind.COMPLAINT, "Hole 1: day one %d." % i), 1, i, 0)
+	for i in 6:
+		feed.push(_reaction(2, GuestReaction.Kind.PRAISE, "Hole 2: day two %d." % i), 2, i, 1)
+	assert_eq(feed.recent_days, [2, 2, 2, 2] as Array[int], "day 2 pushed two of its own out")
+	var d: Dictionary = feed.to_save(2)
+	assert_eq(d["total"], 4, "the morning's four, none of day 2's")
+	var errors: Array[String] = []
+	var back := ReactionFeed.from_save(d, 4, 100, errors)
+	assert_eq(errors, [] as Array[String])
+	for i in 6:
+		back.push(_reaction(2, GuestReaction.Kind.PRAISE, "Hole 2: day two %d." % i), 2, i, 1)
+	assert_eq(back.total, feed.total, "the replayed day ends with the uninterrupted day's total")
+	# A save the next morning, before day 3 has pushed anything, keeps every reaction.
+	assert_eq(feed.to_save(3)["total"], 10)
+	# A new course starts the count afresh.
+	feed.clear()
+	feed.push(_reaction(1, GuestReaction.Kind.PRAISE, "Hole 1: day five."), 5, 0, 0)
+	assert_eq(feed.to_save(5)["total"], 0)
+
+
 func test_a_file_that_is_not_a_whole_save_is_refused_with_a_reason() -> void:
 	var good := GameSave.State.new()
 	good.course = GuestCourse.course()
