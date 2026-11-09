@@ -1146,6 +1146,11 @@ Done when: a player starts with $5,000, funds the course from green fees, and ca
   - Accept: the test passes at 16, 18, 20 and 24 arrivals on that course.
   - Test: `tests/test_guest_view.gd`
   - Touches: `scenes/`, `tests/`
+- [ ] E4-S11 Save the morning's fee. A load replays the saved day with the fee it began with.
+  - Note: (found in E4-S6) `GameSave` stores the fee as it is when the game saves, but a load replays the saved day from its morning (E4-S7), and that morning drew its arrivals from the fee then (D58). A player who moves the slider mid-day and then saves gets a different count of guests on the replay, so the day's fees and reactions differ from the run they saved. E4-S4 already saves the balance as of the morning for the same reason.
+  - Accept: a save made after a mid-day fee change, loaded, replays the day with the morning's arrivals and ends on the same balance, feed and rating as the uninterrupted day; the slider then shows the fee the player had set.
+  - Test: `tests/test_save.gd` (or `tests/test_fee.gd`).
+  - Touches: `course/`, `scenes/`, `tests/`
 
 ## E5: Polish and share — planned
 
