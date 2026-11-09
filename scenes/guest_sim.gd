@@ -7,9 +7,16 @@ extends Node
 ##
 ## The day runs only while `running`: Main sets it in both modes since D53 (E3-S62; E3-S5 held
 ## it in Build), so it is off only before Main has shown a course. The first day is built the first time it runs, so loading a course
-## or a test that never plays pays nothing (GuestClubTable.warm). At dusk the next day starts
-## at once, with the next day's seed: skipping the night to the morning, and anything a day's
-## end settles (fees, upkeep), waits for E4.
+## or a test that never plays pays nothing (GuestClubTable.warm).
+##
+## The day clock (E4-S3): a day is `day_s` simulated seconds, 9 real minutes at 1x and 3 at 3x.
+## Day end: at dusk the day ends once, through `day_ended(day, brain)`, with the finished
+## day's brain still `brain` while it runs: the one hook a day's end settles through (E4-S4's
+## upkeep attaches here). Then the next morning starts at once (`day_started`), with the next
+## day's seed. Skip to morning (`skip_to_morning`) runs the rest of the day over frames, as
+## fast as `skip_frame_ticks` and `skip_steps_per_frame` allow (GuestBrain.advance_skip), the
+## same steps as at any speed, so the end-of-day state is the same; the speed is kept, so a
+## skip from pause lands on the morning paused, and choosing a speed stops a skip where it is.
 ##
 ## The same seed gives the same day: day `d` of a course is GuestBrain's day of
 ## day_seed(base_seed, d), whatever the speed, the frame rate or what the camera looks at.
@@ -23,7 +30,11 @@ extends Node
 ## unless its group had not struck there yet: it replans on the new version and counts (E3-S49).
 
 signal day_started(day: int)
+## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
+signal day_ended(day: int, finished: GuestBrain)
 signal speed_changed(speed: float)
+## E4-S3: a skip to morning started or stopped.
+signal skip_changed(skipping: bool)
 
 ## Pause, 1x, 3x.
 const SPEEDS: Array[float] = [0.0, 1.0, 3.0]
@@ -38,6 +49,8 @@ var base_seed: int = 0
 var speed: float = 1.0
 ## True once Main runs it (Build and Play, D53): real time moves the day.
 var running: bool = false
+## E4-S3: skipping to the morning (skip_to_morning): frames run the day as fast as they can.
+var skipping: bool = false
 var tuning: GuestTuning
 ## The reactions of the course's days, for the feed and the map tags (E3-S7).
 var feed: ReactionFeed
@@ -90,6 +103,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	base_seed = p_base_seed
 	brain = null
 	day = 0
+	_set_skipping(false)
 	_stale.clear()
 	feed.clear()
 
@@ -158,7 +172,9 @@ static func _copy_holes(c: CourseData) -> Array[HoleData]:
 	return out
 
 
+## Chooses a speed; a skip under way stops where it is, the day running on at `s` (E4-S3).
 func set_speed(s: float) -> void:
+	_set_skipping(false)
 	if is_equal_approx(s, speed):
 		return
 	speed = s
@@ -175,20 +191,67 @@ func effective_speed() -> float:
 
 
 func _process(delta: float) -> void:
-	if running:
+	if skipping:
+		skip_frame()
+	elif running:
 		advance(delta)
 
 
-## `delta` real seconds of Play: builds the day if needed, starts the next one at dusk, and
-## runs the brain at `speed`. Returns the simulated seconds stepped.
+## `delta` real seconds of Play: builds the day if needed, runs the brain at `speed`, and at
+## dusk ends the day and starts the next morning. Returns the simulated seconds stepped.
 func advance(delta: float) -> int:
-	if course == null:
+	if not _ready_day():
 		return 0
+	var stepped := brain.advance_real(delta, speed)
+	if brain.day_over:
+		_end_day()
+	return stepped
+
+
+## Skip to morning (E4-S3): from the next frame the rest of the day runs as fast as a frame
+## allows (skip_frame), whatever the speed, until the next morning starts.
+func skip_to_morning() -> void:
+	if skipping or not _ready_day():
+		return
+	_set_skipping(true)
+
+
+## One frame of a skip: up to `skip_frame_ticks` of Ball work and `skip_steps_per_frame`
+## seconds; at dusk the day ends and the skip stops on the next morning. Returns the steps.
+func skip_frame() -> int:
+	if not skipping or not _ready_day():
+		return 0
+	var stepped := brain.advance_skip(tuning.skip_frame_ticks, tuning.skip_steps_per_frame)
+	if brain.day_over:
+		_end_day()
+		_set_skipping(false)
+	return stepped
+
+
+func _set_skipping(on: bool) -> void:
+	if skipping == on:
+		return
+	skipping = on
+	skip_changed.emit(on)
+
+
+## Builds day 1 if none is yet, and ends a day its brain finished on its own (run_day). False
+## with no course.
+func _ready_day() -> bool:
+	if course == null:
+		return false
 	if brain == null:
 		_new_day(1)
 	elif brain.day_over:
-		_new_day(day + 1)
-	return brain.advance_real(delta, speed)
+		_end_day()
+	return true
+
+
+## The day's end (E4-S3): `day_ended` with the finished brain, then the next morning. The one
+## place a day ends, so whatever a day's end settles (E4-S4's upkeep) runs once a day.
+func _end_day() -> void:
+	day_ended.emit(day, brain)
+	_new_day(day + 1)
 
 
 ## The simulated time of the day now, seconds (with the share of the second gone by).

@@ -149,13 +149,18 @@ func advance_real(delta: float, speed: float) -> int:
 	frame_ticks = 0
 	if day_over or speed <= 0.0 or delta <= 0.0:
 		return 0
+	if dusk_due():
+		# E4-S3: dusk falls in the frame after the day's last second, owing no Ball work, so a
+		# day at 1x takes `day_s` real seconds and a frame, not a second more.
+		step()
+		return 1
 	_clock = minf(_clock + delta * speed, float(tuning.max_steps_per_frame))
 	# E3-S35: the frame's budget goes with its length (frame_ticks_per_real_s), so a day takes
 	# the same real time at 30 fps as at 60.
 	var budget := mini(ceili(tuning.frame_ticks_per_real_s * delta - 1e-6), tuning.frame_ticks_max)
 	var left := budget
 	var stepped := 0
-	while _clock >= 1.0 - CLOCK_EPS and not day_over:
+	while _clock >= 1.0 - CLOCK_EPS and not day_over and not dusk_due():
 		left -= serve(left)
 		if not second_served():
 			held_frames += 1  # the step waits for its work: the day runs late
@@ -163,7 +168,7 @@ func advance_real(delta: float, speed: float) -> int:
 		_clock = maxf(_clock - 1.0, 0.0)
 		step()
 		stepped += 1
-	if not day_over and left > 0:
+	if not day_over and not dusk_due() and left > 0:
 		var due := ceili(minf(_clock, 1.0) * _need)
 		if due > _sim_used:
 			left -= serve(left, due - _sim_used)
@@ -190,9 +195,42 @@ func run_day() -> void:
 		step()
 
 
-## One simulated second: finishes the second's Ball work, then moves every guest.
+## Skip to morning (E4-S3): runs the day on as fast as one frame allows, the same steps
+## `step` and `advance_real` run, so the day is the same. Serves up to `max_ticks` of Ball work
+## (counted as the frame budget counts it, putt ticks at `putt_tick_weight`) and steps each
+## second it finishes, at most `max_steps` of them; a second whose work is not yet served
+## waits for the next call. `frame_ticks` holds what it served. Real time is not read: the
+## clock's share of a second (`step_fraction`) is left where it was. Returns the steps run.
+func advance_skip(max_ticks: int, max_steps: int) -> int:
+	frame_ticks = 0
+	var left := max_ticks
+	var stepped := 0
+	while not day_over and stepped < max_steps:
+		if not dusk_due():
+			left -= serve(left)
+			if not second_served():
+				break
+		step()
+		stepped += 1
+	frame_ticks = max_ticks - left
+	return stepped
+
+
+## True when every second of the day has been played and only dusk is left (E4-S3): it is
+## due at once (advance_real's next frame), so a day at 1x takes `day_s` real seconds, not one more.
+func dusk_due() -> bool:
+	return not day_over and second >= tuning.day_s
+
+
+## One simulated second: finishes the second's Ball work, then moves every guest. Past the
+## day's last second it is dusk (D38): everyone still out leaves; no Ball work is owed, since
+## no stroke still in the air can give a record (E4-S3).
 func step() -> void:
 	if day_over:
+		return
+	if dusk_due():
+		_dusk(second)
+		second += 1
 		return
 	serve(-1)
 	max_second_ticks = maxi(max_second_ticks, _sim_used)

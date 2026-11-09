@@ -36,6 +36,11 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## under the land panel, the map tags and the hole panel's reaction line.
 ##   scripts/screenshot.sh tests/fixtures/feed_build_shot.tscn out.png 30
 @export var build: bool = false
+## E4-S3: with `skip_frames` above 0, Build at `run_to_s`, then a skip to morning started and
+## run for that many frames: the speed panel with its Skip to morning button resting and the
+## status line skipping.
+##   scripts/screenshot.sh tests/fixtures/feed_skip_shot.tscn out.png 30
+@export var skip_frames: int = 0
 
 var main: Main
 
@@ -64,6 +69,10 @@ func _ready() -> void:
 			main.build_tool.builder.paint(mid, Surface.Type.BUNKER, 1)
 			main.build_tool.builder.open_hole(edit_hole)
 		main.guest_sim.brain.step()
+	if skip_frames > 0:
+		main.guest_sim.skip_to_morning()
+		for i: int in skip_frames:
+			main.guest_sim.skip_frame()
 	for i: int in 64:
 		main.feed_panel.tick(main.feed_panel.tuning.reveal_interval_s)
 	main.camera.tracking = false
