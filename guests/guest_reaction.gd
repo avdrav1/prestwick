@@ -265,3 +265,57 @@ func _taste_line(c: int) -> String:
 			return "I want risk and reward."
 		_:
 			return ""
+
+
+## E4-S7: this reaction as the game save keeps it (GameSave, the feed's window): what the tags,
+## the hole panel's line and E4-S5's rating read. The hole's statics are not kept: they only
+## build the line, which is kept whole (`text` and its lead and rest).
+func to_save() -> Dictionary:
+	return {
+		"hole": hole_number, "guest": guest_id, "taste": int(taste), "kind": int(kind),
+		"passed": passed.duplicate(), "weights": weights.duplicate(), "fail_weight": fail_weight,
+		"score": score, "par": par, "expected": expected, "wait_s": wait_s,
+		"wait_limit_s": wait_limit_s, "walk_yd": walk_yd, "walk_limit_yd": walk_limit_yd,
+		"text": text, "lead": _lead, "rest": _rest,
+	}
+
+
+## The reaction `d` (to_save) holds, or null with the reasons appended to `errors`.
+static func from_save(d: Variant, errors: Array[String], context: String = "reaction") -> GuestReaction:
+	if typeof(d) != TYPE_DICTIONARY:
+		errors.append("%s must be an object" % context)
+		return null
+	var data: Dictionary = d
+	var start := errors.size()
+	var r := GuestReaction.new()
+	r.hole_number = CourseData.read_int(data, "hole", errors, context)
+	r.guest_id = CourseData.read_int(data, "guest", errors, context)
+	var t := CourseData.read_int(data, "taste", errors, context)
+	var k := CourseData.read_int(data, "kind", errors, context)
+	if t < 0 or t >= Guest.Taste.size():
+		errors.append("%s: taste %d is not a taste" % [context, t])
+	if k < 0 or k >= Kind.size():
+		errors.append("%s: kind %d is not a kind" % [context, k])
+	r.taste = t as Guest.Taste
+	r.kind = k as Kind
+	var p: Variant = data.get("passed")
+	var w: Variant = data.get("weights")
+	if typeof(p) != TYPE_ARRAY or (p as Array).size() != Check.size() \
+			or typeof(w) != TYPE_ARRAY or (w as Array).size() != Check.size():
+		errors.append("%s: passed and weights must list %d checks" % [context, Check.size()])
+	else:
+		for c: int in Check.size():
+			r.passed[c] = bool(p[c])
+			r.weights[c] = int(w[c])
+	r.fail_weight = CourseData.read_int(data, "fail_weight", errors, context)
+	r.score = CourseData.read_int(data, "score", errors, context)
+	r.par = CourseData.read_int(data, "par", errors, context)
+	r.wait_s = CourseData.read_int(data, "wait_s", errors, context)
+	r.expected = float(data.get("expected", 0.0))
+	r.wait_limit_s = float(data.get("wait_limit_s", 0.0))
+	r.walk_yd = float(data.get("walk_yd", -1.0))
+	r.walk_limit_yd = float(data.get("walk_limit_yd", 0.0))
+	r.text = str(data.get("text", ""))
+	r._lead = str(data.get("lead", ""))
+	r._rest = str(data.get("rest", ""))
+	return null if errors.size() > start else r

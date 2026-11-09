@@ -90,6 +90,9 @@ var entries: Array[Entry] = []
 var recent: Array[GuestReaction] = []
 ## The slot each of `recent` was given at (-1 when unknown, CLEARED after an edit), by index.
 var recent_slots: Array[int] = []
+## The day each of `recent` was given on, by index (E4-S7: a save keeps the window as it stood at
+## the morning of the saved day, to_save).
+var recent_days: Array[int] = []
 ## How many reactions a tag counts (GuestTuning.rating_window).
 var window: int = 50
 ## How many lines the feed keeps.
@@ -114,9 +117,11 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	total += 1
 	recent.append(reaction)
 	recent_slots.append(slot if counted else CLEARED)
+	recent_days.append(day)
 	if recent.size() > window:
 		recent = recent.slice(recent.size() - window)
 		recent_slots = recent_slots.slice(recent_slots.size() - window)
+		recent_days = recent_days.slice(recent_days.size() - window)
 	if reaction.kind == GuestReaction.Kind.NEUTRAL:
 		return null
 	for i: int in range(entries.size() - 1, -1, -1):
@@ -151,9 +156,110 @@ func clear() -> void:
 	entries.clear()
 	recent.clear()
 	recent_slots.clear()
+	recent_days.clear()
 	total = 0
 	_next_id = 1
 	cleared.emit()
+
+
+## E4-S7: the feed as the game save keeps it (GameSave), as it stood at the morning of day
+## `before_day`: the lines and window reactions of earlier days only. A load resumes at that
+## morning and the day plays again from its seed, so its own lines come in again rather than
+## twice. A reaction of that day that pushed an older one out of the window leaves the older one
+## out (the window is the newest `window` of what is kept).
+func to_save(before_day: int) -> Dictionary:
+	var lines: Array = []
+	for e: Entry in entries:
+		if e.day < before_day:
+			lines.append({"id": e.id, "day": e.day, "second": e.second, "hole": e.hole_number,
+					"slot": e.slot, "kind": int(e.kind), "text": e.text, "failed": e.failed_text,
+					"count": e.count, "edited": e.edited})
+	var window_out: Array = []
+	var dropped := 0
+	for i: int in recent.size():
+		var d: int = recent_days[i] if i < recent_days.size() else 0
+		if d >= before_day:
+			dropped += 1
+			continue
+		var r: Dictionary = recent[i].to_save()
+		r["slot"] = recent_slots[i]
+		r["day"] = d
+		window_out.append(r)
+	var next_id: int = 1 if lines.is_empty() else int(lines[lines.size() - 1]["id"]) + 1
+	return {"lines": lines, "window": window_out, "total": maxi(total - dropped, 0), "next_id": next_id}
+
+
+## A feed of `window` and `max_entries` holding what `d` (to_save) holds, or null with the
+## reasons appended to `errors`. Nothing is emitted: copy_from hands it to the feed on show.
+static func from_save(d: Variant, p_window: int, p_max_entries: int, errors: Array[String]) -> ReactionFeed:
+	if typeof(d) != TYPE_DICTIONARY:
+		errors.append("feed must be an object")
+		return null
+	var data: Dictionary = d
+	var start := errors.size()
+	var f := ReactionFeed.new(p_window, p_max_entries)
+	var lines: Variant = data.get("lines")
+	var win: Variant = data.get("window")
+	if typeof(lines) != TYPE_ARRAY or typeof(win) != TYPE_ARRAY:
+		errors.append("feed: lines and window must be lists")
+		return null
+	for i: int in (lines as Array).size():
+		var l: Variant = lines[i]
+		var ctx := "feed line %d" % (i + 1)
+		if typeof(l) != TYPE_DICTIONARY:
+			errors.append("%s must be an object" % ctx)
+			continue
+		var ld: Dictionary = l
+		var e := Entry.new()
+		e.id = CourseData.read_int(ld, "id", errors, ctx)
+		e.day = CourseData.read_int(ld, "day", errors, ctx)
+		e.second = CourseData.read_int(ld, "second", errors, ctx)
+		e.hole_number = CourseData.read_int(ld, "hole", errors, ctx)
+		e.slot = CourseData.read_int(ld, "slot", errors, ctx)
+		var k := CourseData.read_int(ld, "kind", errors, ctx)
+		if k < 0 or k >= GuestReaction.Kind.size():
+			errors.append("%s: kind %d is not a kind" % [ctx, k])
+		e.kind = k as GuestReaction.Kind
+		e.text = str(ld.get("text", ""))
+		e.failed_text = str(ld.get("failed", ""))
+		e.count = maxi(CourseData.read_int(ld, "count", errors, ctx), 1)
+		e.edited = bool(ld.get("edited", false))
+		f.entries.append(e)
+	for i: int in (win as Array).size():
+		var ctx := "feed reaction %d" % (i + 1)
+		var r := GuestReaction.from_save(win[i], errors, ctx)
+		if r == null:
+			continue
+		var rd: Dictionary = win[i]
+		f.recent.append(r)
+		f.recent_slots.append(CourseData.read_int(rd, "slot", errors, ctx))
+		f.recent_days.append(CourseData.read_int(rd, "day", errors, ctx))
+	f.total = CourseData.read_int(data, "total", errors, "feed")
+	f._next_id = maxi(CourseData.read_int(data, "next_id", errors, "feed"), 1)
+	if errors.size() > start:
+		return null
+	if f.entries.size() > f.max_entries:
+		f.entries = f.entries.slice(f.entries.size() - f.max_entries)
+	if f.recent.size() > f.window:
+		var cut := f.recent.size() - f.window
+		f.recent = f.recent.slice(cut)
+		f.recent_slots = f.recent_slots.slice(cut)
+		f.recent_days = f.recent_days.slice(cut)
+	return f
+
+
+## Takes `other`'s lines, window and counts (a loaded game, E4-S7) and tells the views:
+## `cleared`, then `added` for the newest line, so each redraws from what it now holds.
+func copy_from(other: ReactionFeed) -> void:
+	entries = other.entries.duplicate()
+	recent = other.recent.duplicate()
+	recent_slots = other.recent_slots.duplicate()
+	recent_days = other.recent_days.duplicate()
+	total = other.total
+	_next_id = other._next_id
+	cleared.emit()
+	if not entries.is_empty():
+		added.emit(entries[entries.size() - 1])
 
 
 ## The newest `n` lines, newest first.

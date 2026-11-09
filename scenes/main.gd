@@ -9,6 +9,9 @@ signal mode_changed(new_mode: Mode)
 const TOGGLE_ACTION: StringName = &"toggle_mode"
 ## Fires the debug shot in Play, in debug builds only (E2-S8; F3).
 const DEBUG_SHOT_ACTION: StringName = &"debug_shot"
+## Save and load the game (E4-S7; F5 and F9 until E5's menus).
+const SAVE_ACTION: StringName = &"save_game"
+const LOAD_ACTION: StringName = &"load_game"
 
 ## Course loaded at start (E2-S8). Empty, the default, starts on a New course (E6-S6,
 ## CourseBuilder.new_course: generated land, the starting block, the land budget); a failed
@@ -24,6 +27,8 @@ var mode: Mode = Mode.BUILD
 var course: CourseData
 ## The seed of the latest New course's land (new_course), so it can be made again.
 var land_seed: int = -1
+## The course rating at each day's end, oldest first: E4-S5 fills it; a save carries it (E4-S7).
+var rating_history: Array[float] = []
 
 ## The left column's gap between controls, px (as main.tscn spaces them).
 const SPEED_PANEL_GAP: float = 8.0
@@ -57,6 +62,8 @@ var _speed_panel_top: float = -1.0
 ## The off-screen cup's edge marker (E3-S64): Play only, while the played hole's cup is outside
 ## the free view.
 @onready var cup_pointer: CupPointer = $HUD/CupPointer
+## The save and load notice (E4-S7).
+@onready var save_notice: SaveNotice = $HUD/SaveNotice
 
 
 func _ready() -> void:
@@ -109,6 +116,7 @@ func _ready() -> void:
 ## one with none frames the course centre at the player's zoom.
 func show_course(c: CourseData) -> void:
 	course = c
+	rating_history.clear()
 	shot_view.clear()
 	# The guests' day of this course (E3-S5): day 1 starts when Play first runs it.
 	guest_sim.start(c, maxi(land_seed, 0))
@@ -387,9 +395,66 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(TOGGLE_ACTION):
 		toggle_mode()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(SAVE_ACTION):
+		save_game()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(LOAD_ACTION):
+		load_game()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(DEBUG_SHOT_ACTION) and mode == Mode.PLAY and OS.is_debug_build():
 		fire_debug_shot()
 		get_viewport().set_input_as_handled()
+
+
+## Saves the game to `path` (E4-S7, GameSave): the course, the guests' seed, the morning of the
+## day under way, the economy (economy_to_save) and the feed as it stood that morning. The notice
+## says so, and names any half-placed hole the file leaves out.
+func save_game(path: String = GameSave.PATH) -> Error:
+	var s := GameSave.State.new()
+	s.course = course
+	s.seed_value = guest_sim.base_seed
+	s.day = guest_sim.morning_day()
+	s.feed_data = guest_sim.feed.to_save(s.day)
+	economy_to_save(s)
+	var dropped: Array[int] = []
+	var err := GameSave.save_file(s, path, dropped)
+	save_notice.show_lines(SaveNotice.save_lines(err, s.day, dropped, course))
+	return err
+
+
+## Loads the game saved at `path` (E4-S7): the course with a fresh builder, the morning of the
+## saved day, its feed and economy; the notice lists every hole the builder closed on load with
+## its reason (D35, D47). A missing or faulty save changes nothing but the notice. True when
+## it loaded.
+func load_game(path: String = GameSave.PATH) -> bool:
+	var errors: Array[String] = []
+	var s := GameSave.load_file(path, errors, guest_sim.tuning.rating_window,
+			guest_sim.feed_tuning.max_entries)
+	if s == null:
+		save_notice.show_lines(SaveNotice.load_lines(errors, 0, []))
+		return false
+	land_seed = s.seed_value
+	show_course(s.course)
+	guest_sim.resume_at(s.day)
+	guest_sim.feed.copy_from(s.feed)
+	economy_from_save(s)
+	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.closed_on_load))
+	return true
+
+
+## The save's economy fields (E4-S7's interface): E4-S2 sets `money` from the balance and E4-S5
+## `rating_history` from the rating. Until E4-S2 the money is the land budget.
+func economy_to_save(s: GameSave.State) -> void:
+	s.unlimited_money = course.has_unlimited_budget()
+	s.money = 0 if s.unlimited_money else course.land_budget
+	s.rating_history = rating_history.duplicate()
+
+
+## Takes the economy back from a loaded save (economy_to_save's other half). Until E4-S2 the
+## money is the land budget, which came back with the course (CourseSave), so only the rating
+## history is taken here.
+func economy_from_save(s: GameSave.State) -> void:
+	rating_history = s.rating_history.duplicate()
 
 
 ## Keeps the camera on a moving ball (E2-S8), unless the player panned away to scout.

@@ -59,6 +59,8 @@ var feed_tuning: FeedTuning
 
 ## The builder whose edits clear the feed's tallies (watch), and the holes as it last left them.
 var _watched: CourseBuilder
+## The day built when the sim first runs (start: 1; resume_at: a loaded game's day, E4-S7).
+var _first_day: int = 1
 var _holes_seen: Array[HoleData] = []
 ## The plays under way when Build edited their slot ({GuestHole: true}): their reactions are
 ## pushed uncounted. Emptied with each day.
@@ -104,8 +106,31 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	brain = null
 	day = 0
 	_set_skipping(false)
+	_first_day = 1
 	_stale.clear()
 	feed.clear()
+
+
+## E4-S7: a loaded game resumes at the morning of day `d` (from 1): the next day built is `d`,
+## from its own seed, as if the days before it had run. Guests out at the save are not kept.
+func resume_at(d: int) -> void:
+	brain = null
+	_set_skipping(false)
+	_first_day = maxi(d, 1)
+	day = _first_day
+	_stale.clear()
+
+
+## E4-S7: the day a save made now resumes at the morning of: the day under way, or 1 (or a
+## loaded game's day) before the first is built. A day whose dusk has come but has not ended yet
+## (run_day) ends first (_end_day, so its day_ended accounting runs once), and the save is the
+## next morning's.
+func morning_day() -> int:
+	if brain == null:
+		return maxi(day, _first_day)
+	if brain.day_over:
+		_end_day()
+	return day
 
 
 ## Clears the feed's tallies on the edits `builder` makes to the course (E3-S17): its holes'
@@ -241,7 +266,7 @@ func _ready_day() -> bool:
 	if course == null:
 		return false
 	if brain == null:
-		_new_day(1)
+		_new_day(_first_day)
 	elif brain.day_over:
 		_end_day()
 	return true

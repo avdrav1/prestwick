@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -21,6 +21,7 @@
 [ext_resource type="Script" path="res://scenes/tag_clicks.gd" id="19_tag_clicks"]
 [ext_resource type="Script" path="res://scenes/green_view.gd" id="20_green_view"]
 [ext_resource type="Script" path="res://scenes/cup_pointer.gd" id="cup_pointer"]
+[ext_resource type="Script" path="res://scenes/save_notice.gd" id="save_notice"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -172,6 +173,16 @@ script = ExtResource("20_green_view")
 visible = false
 mouse_filter = 2
 script = ExtResource("cup_pointer")
+
+[node name="SaveNotice" type="PanelContainer" parent="HUD"]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_top = 16.0
+offset_bottom = 16.0
+grow_horizontal = 2
+script = ExtResource("save_notice")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")
