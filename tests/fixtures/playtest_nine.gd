@@ -32,6 +32,10 @@ extends RefCounted
 ## its tee.
 ## FILLS are the land's ponds a hole needs the ground of: their water is painted rough and
 ## raised one step, to the ground round them.
+## Sight lines (E4-S9, D43 and D55): every tee shot but two is seen from the tee. Holes 4, 5
+## and 7 stand on raised tees (4, 3 and 2 steps) to see over the rise in front of them, and
+## the land's lone trees on holes 2 and 6's lines are cleared. Hole 1 (its turn round the hill,
+## behind the trees) and hole 8 (its landing area past the south hill's crest) stay blind.
 ##
 ## Build order: heights first (greens, tees and ponds set, FILLS raised, the land's other ponds
 ## kept, the ground round them eased so neighbours differ by one step and at most one riser
@@ -74,7 +78,7 @@ const HOLES: Array = [
 		"bunkers": [[Vector2(79, 8), 1.5, 1.2, 0.0]],
 		"water": [],
 		"trees": [],
-		"clear": [],
+		"clear": [[[Vector2(78, 4), Vector2(80, 4)], 3.0]],
 	},
 	{
 		# Dogleg right, sweeping round a pond and the trees inside the bend.
@@ -89,7 +93,7 @@ const HOLES: Array = [
 	},
 	{
 		# A gentle sweep down the east edge.
-		"n": 4, "par": 4, "tee": Vector2i(123, 59), "cup": Vector2i(116, 124), "tee_lift": 0,
+		"n": 4, "par": 4, "tee": Vector2i(123, 59), "cup": Vector2i(116, 124), "tee_lift": 4,
 		"fairway": [Vector2(123, 64), Vector2(125, 92), Vector2(117, 118)], "curve": true,
 		"width": 5.0,
 		"green": [Vector2(116, 124), 4.0, 3.0, 0.0, 1, Vector2(-1, -0.3), 1, 1, 0.5],
@@ -101,7 +105,7 @@ const HOLES: Array = [
 	{
 		# Dogleg left, the par 5: north past the pond, sweeping left round the big hill and the
 		# trees on it, then north-west to a green below the first green.
-		"n": 5, "par": 5, "tee": Vector2i(108, 114), "cup": Vector2i(62, 24), "tee_lift": 0,
+		"n": 5, "par": 5, "tee": Vector2i(108, 114), "cup": Vector2i(62, 24), "tee_lift": 3,
 		"fairway": [Vector2(106, 109), Vector2(106, 50), Vector2(66, 29)], "curve": true,
 		"width": 6.0,
 		"green": [Vector2(62, 24), 4.5, 3.0, 28.0, 0, Vector2(-1, -0.3), 1, 1, 0.5],
@@ -119,10 +123,10 @@ const HOLES: Array = [
 		"bunkers": [[Vector2(17, 80), 1.2, 2.5, 0.0], [Vector2(27, 105), 1.2, 2.0, 0.0]],
 		"water": [],
 		"trees": [[Vector2(33, 72), 3.0, 2.5, 0.0]],
-		"clear": [],
+		"clear": [[[Vector2(33, 56), Vector2(35, 56)], 3.0]],
 	},
 	{
-		"n": 7, "par": 3, "tee": Vector2i(30, 100), "cup": Vector2i(60, 98), "tee_lift": 1,
+		"n": 7, "par": 3, "tee": Vector2i(30, 100), "cup": Vector2i(60, 98), "tee_lift": 2,
 		"fairway": [],
 		"width": 5.0,
 		"green": [Vector2(60, 98), 4.5, 3.0, 0.0, 0, Vector2(-1, 0), 2, 2, -1.0],

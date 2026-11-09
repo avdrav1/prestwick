@@ -128,6 +128,57 @@ func test_a_long_hole_aims_at_its_landing_zone() -> void:
 	assert_true(checks.measure(c, h).blind, "a ridge before the zone hides it")
 
 
+## E4-S9 (D55): a dogleg's sight line runs to its turn, where guests aim their tee shots (D54),
+## not to the straight line's zone inside the bend. The reaction dogleg with trees in place of
+## its pond: the straight zone is behind them, the turn is in plain sight.
+func test_a_dogleg_aims_its_sight_line_at_the_turn() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var h: HoleData = c.holes[0]
+	_rect(c, ReactionHoles.DOG_POND, Surface.Type.TREES, ReactionHoles.GROUND)
+	var turn: Variant = CourseValidator.new().turn_point(c, h)
+	assert_not_null(turn, "the hole turns")
+	var s := checks.measure(c, h)
+	assert_true(s.target_is_zone, "the landing area, not the flag")
+	assert_eq(s.turn, turn)
+	assert_almost_eq(s.target.distance_to(((turn as Vector2) + Vector2(0.5, 0.5)) * 5.0), 0.0, 0.01,
+			"the target is the turn's centre")
+	assert_false(s.blind, "the turn is seen down the first leg; the trees inside the bend do not count")
+	_column(c, 30, 3, 9, Surface.Type.TREES, ReactionHoles.GROUND)
+	assert_true(checks.measure(c, h).blind, "trees across the first leg hide the turn")
+
+
+## D55: a fairway edit measures a hole's statics again only when it moves the turn.
+func test_a_fairway_edit_measures_again_only_when_it_moves_the_turn() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var h: HoleData = c.holes[0]
+	_rect(c, ReactionHoles.DOG_POND, Surface.Type.TREES, ReactionHoles.GROUND)
+	var first := checks.statics(c, h)
+	assert_false(first.blind)
+	assert_eq(checks.measured, 1)
+	c.set_tile(68, 58, ReactionHoles.GROUND, Surface.Type.FAIRWAY)
+	assert_same(checks.statics(c, h), first, "fairway far from the corner keeps the turn and the statics")
+	assert_eq(checks.measured, 1)
+	# The corner painted out: the turn moves down the second leg and is measured again.
+	_rect(c, Rect2i(40, 3, 19, 7), Surface.Type.ROUGH, ReactionHoles.GROUND)
+	var moved := checks.statics(c, h)
+	assert_eq(checks.measured, 2, "a moved turn measures again")
+	assert_ne(moved.turn, first.turn)
+	assert_eq(moved.turn, CourseValidator.new().turn_point(c, h))
+
+
+## D55: the line is judged against the drawn ground (HeightField.drawn_steps, D50), not tile
+## tops. A five-step tower beside the line's tiles never stands on one, so on terraces it hid
+## nothing; the smooth ground rising toward it from the next tile does hide the flag.
+func test_the_sight_line_reads_the_drawn_ground() -> void:
+	var c := _strip(40, 12)
+	var h := _hole(c, 1, 3, Vector2i(2, 6), Vector2i(30, 7))
+	assert_false(checks.measure(c, h).blind, "level ground")
+	c.set_tile(15, 7, 6, Surface.Type.ROUGH)
+	var s := checks.measure(c, h)
+	assert_true(s.blind, "the slope up to the tower crosses the line")
+	assert_eq(s.blind_at.y, 6, "where the line meets it, on the row beside the tower")
+
+
 # --- interesting ---
 
 func test_interesting_fails_with_nothing_on_the_line() -> void:

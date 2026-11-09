@@ -1,11 +1,12 @@
 class_name HoleChecks
 extends RefCounted
 ## The static half of the four checks (E3-S6; docs/design.md Guests and reactions, Fair and
-## Interesting): whether a hole's tee shot is blind (D43) and whether the hole is interesting
-## (E3-S1). Both read only the course (CourseData's getters) and the hole's tee and cup, never
-## a guest, so they are measured once per hole and kept until the hole's tee or cup or the
-## terrain they read (heights, hazard surfaces, owned land: terrain_key) changes. Pace and challenge read the
-## guest's own play (GuestReaction).
+## Interesting): whether a hole's tee shot is blind (D43, D55) and whether the hole is
+## interesting (E3-S1). Both read only the course (CourseData's getters) and the hole's tee and
+## cup, never a guest, so they are measured once per hole and kept until the hole's tee or cup
+## or the terrain they read (heights, hazard surfaces, owned land: terrain_key) changes, or a
+## fairway edit moves a dogleg's turn (the sight line's target, D55). Pace and challenge read
+## the guest's own play (GuestReaction).
 ##
 ## A reader only: like the validator, it never writes the course.
 
@@ -23,10 +24,16 @@ class Statics:
 	var blind: bool = false
 	## The tile where the sight line first meets ground or trees (when blind).
 	var blind_at: Vector2i = Vector2i(-1, -1)
-	## The sight line's target, in yards (the landing zone's centre or the cup).
+	## The sight line's target, in yards (a dogleg's turn, the landing zone's centre or the cup).
 	var target: Vector2 = Vector2.ZERO
-	## True when the target is the landing zone's centre (holes of zone_from_yd or more).
+	## True when the target is where tee shots land, not the cup: a dogleg's turn (D55) or the
+	## landing zone's centre (holes of zone_from_yd or more).
 	var target_is_zone: bool = false
+	## The dogleg turn the target was taken from (CourseValidator.turn_point, in tiles), or
+	## null on a hole measured straight, and the fairway revision it was found at: a fairway
+	## edit looks again and measures the hole afresh only if the turn moved.
+	var turn: Variant = null
+	var fairway_revision: int = -1
 	## The tee-to-cup line (rule 3's walk) crosses a hazard tile.
 	var hazard_on_line: bool = false
 	## A path of non-hazard tiles joins tee to cup (4 neighbours).
@@ -44,6 +51,8 @@ var validator_tuning: ValidatorTuning
 var surfaces: SurfaceTable
 var yards_per_tile: float
 var yards_per_step: float
+var _params: BallParams
+var _validator: CourseValidator
 ## How many times a hole's statics were measured (tests read it to see the cache work).
 var measured: int = 0
 
@@ -88,11 +97,12 @@ class Parts:
 func _init(p_tuning: GuestTuning = null, p_params: BallParams = null,
 		p_validator_tuning: ValidatorTuning = null, p_surfaces: SurfaceTable = null) -> void:
 	tuning = p_tuning if p_tuning != null else GuestTuning.load_default()
-	var params := p_params if p_params != null else BallParams.load_default()
-	yards_per_tile = params.yards_per_tile
-	yards_per_step = params.yards_per_step
+	_params = p_params if p_params != null else BallParams.load_default()
+	yards_per_tile = _params.yards_per_tile
+	yards_per_step = _params.yards_per_step
 	validator_tuning = p_validator_tuning if p_validator_tuning != null \
 			else ValidatorTuning.load_default()
+	_validator = CourseValidator.new(validator_tuning)
 	surfaces = p_surfaces if p_surfaces != null else SurfaceTable.load_default()
 
 
@@ -121,8 +131,17 @@ func statics(course: CourseData, hole: HoleData, key: String = "") -> Statics:
 		_parts = null
 		_terrain_key = key
 	var k := Vector4i(hole.tee.x, hole.tee.y, hole.cup.x, hole.cup.y)
-	if not _cache.has(k):
-		_cache[k] = measure(course, hole, true)
+	if _cache.has(k):
+		var kept: Statics = _cache[k]
+		var rev := course.surface_revision(Surface.Type.FAIRWAY)
+		if kept.fairway_revision == rev:
+			return kept
+		# D55: fairway paint can move a dogleg's turn, the sight line's target. Painting that
+		# leaves the turn where it was (any edit on a straight hole) keeps the statics.
+		if kept.turn == _validator.turn_point(course, hole):
+			kept.fairway_revision = rev
+			return kept
+	_cache[k] = measure(course, hole, true)
 	return _cache[k]
 
 
@@ -146,21 +165,27 @@ func measure(course: CourseData, hole: HoleData, cached: bool = false) -> Static
 	return s
 
 
-## Fair (D43): the line from an eye `eye_height_yd` above the tee tile's drawn top to a mark
-## `mark_height_yd` above the target tile's drawn top, sampled every `sight_step_yd` from one
-## step past the tee up to the target, is at or below the drawn top of the tile under it, or
-## under its top plus `block_height` on a trees tile (painted trees block wherever they stand,
-## as they do for the ball).
+## Fair (D43, D55): the line from an eye `eye_height_yd` above the drawn ground at the tee
+## marker to a mark `mark_height_yd` above the drawn ground at the target, sampled every
+## `sight_step_yd` from one step past the tee up to the target, stays above the drawn ground
+## under it (HeightField.drawn_steps, the smooth surface the course view draws and the ball
+## plays, D50), and on a trees tile above the tile's top plus `block_height` (painted trees
+## block wherever they stand, as they do for the ball, Ball._blocks). The target is a
+## dogleg's turn (CourseValidator.turn_point, where guests aim their tee shots, D54), else the
+## landing zone's centre on a hole of zone_from_yd or more, else the cup.
 func _sight(course: CourseData, hole: HoleData, s: Statics) -> void:
+	var field := HeightField.new(course, _params)
 	var eye := _center(hole.tee)
-	var zone: Variant = CourseValidator.new(validator_tuning).landing_zone(hole)
+	s.fairway_revision = course.surface_revision(Surface.Type.FAIRWAY)
+	s.turn = _validator.turn_point(course, hole)
+	var zone: Variant = s.turn if s.turn != null else _validator.landing_zone(hole)
 	if zone != null:
 		s.target = ((zone as Vector2) + Vector2(0.5, 0.5)) * yards_per_tile
 		s.target_is_zone = true
 	else:
 		s.target = _center(hole.cup)
-	var eye_z := _top(course, hole.tee) + tuning.eye_height_yd
-	var mark_z := _top(course, _tile_at(s.target)) + tuning.mark_height_yd
+	var eye_z := _ground(field, eye) + tuning.eye_height_yd
+	var mark_z := _ground(field, s.target) + tuning.mark_height_yd
 	var length := eye.distance_to(s.target)
 	if length <= 0.0 or tuning.sight_step_yd <= 0.0:
 		return
@@ -171,8 +196,8 @@ func _sight(course: CourseData, hole: HoleData, s: Statics) -> void:
 		var p := eye.lerp(s.target, f)
 		var z := lerpf(eye_z, mark_z, f)
 		var t := _tile_at(p)
-		var top := _top(course, t)
-		if z <= top or (course.get_surface(t.x, t.y) == Surface.Type.TREES and z < top + trees):
+		if z <= _ground(field, p) or (course.get_surface(t.x, t.y) == Surface.Type.TREES
+				and z < _top(course, t) + trees):
 			s.blind = true
 			s.blind_at = t
 			return
@@ -353,6 +378,12 @@ func _tile_at(p: Vector2) -> Vector2i:
 	return Vector2i(floori(p.x / yards_per_tile), floori(p.y / yards_per_tile))
 
 
-## The drawn top of `tile` in yards (its whole height; off the map, 0).
+## The top of `tile` in yards (its whole height; off the map, 0): where its trees stand for
+## the ball (Ball._blocks) and so for the sight line.
 func _top(course: CourseData, tile: Vector2i) -> float:
 	return course.get_height(tile.x, tile.y) * yards_per_step
+
+
+## The drawn ground at `p` (yards) in yards (D50: height_at, a water tile flat at its level).
+func _ground(field: HeightField, p: Vector2) -> float:
+	return field.drawn_steps(p.x, p.y) * yards_per_step

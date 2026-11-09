@@ -4,7 +4,8 @@ extends GutTest
 ## rule passing, at least four doglegs (hole 1, the hole the game opens on, among them) whose
 ## fairways sweep 35 to 75 degrees in smooth arcs, no sharp corner, and whose line of play
 ## (D47) sets their par, every hole's fairway at least 3 tiles from every other hole's,
-## contoured greens D7 holds a ball on, and the file in step with the fixture.
+## contoured greens D7 holds a ball on, every tee shot but holes 1 and 8 seen from the tee
+## (E4-S9), and the file in step with the fixture.
 
 var _v: CourseValidator
 var _c: CourseData
@@ -252,3 +253,19 @@ func test_round_trips_through_course_save() -> void:
 	assert_eq(again.holes.size(), _c.holes.size())
 	for i: int in _c.holes.size():
 		assert_eq(again.holes[i].to_dict(), _c.holes[i].to_dict())
+
+
+## E4-S9: guests see most of the nine's tee shots land (D43, D55), so the nine can be praised
+## and reach 3 stars. Holes 1 (round the hill, behind its trees) and 8 (over the south hill's
+## crest) are blind by their routing; every other hole is seen from the tee.
+const BLIND_HOLES: Array[int] = [1, 8]
+
+
+func test_most_tee_shots_are_seen_from_the_tee() -> void:
+	var checks := HoleChecks.new()
+	for h: HoleData in _c.holes:
+		var s := checks.measure(_c, h)
+		if h.number in BLIND_HOLES:
+			assert_true(s.blind, "hole %d blind by its routing" % h.number)
+		else:
+			assert_true(s.fair(), "hole %d seen from the tee (blind at %s)" % [h.number, s.blind_at])
