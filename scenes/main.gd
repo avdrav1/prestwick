@@ -29,6 +29,13 @@ var course: CourseData
 var land_seed: int = -1
 ## The course rating at each day's end, oldest first: E4-S5 fills it; a save carries it (E4-S7).
 var rating_history: Array[float] = []
+## E4-S4: today's green fees and the balance at the morning; its last line is the morning report.
+var ledger := DayLedger.new()
+
+## E4-S4's green fee until E4-S6's slider: this share of the fee ceiling at PLACEHOLDER_STARS,
+## the fee that earns most under D58's curve. Lane B (E4-S5, E4-S6) replaces green_fee's body.
+const PLACEHOLDER_FEE_SHARE: float = 0.8
+const PLACEHOLDER_STARS: float = 3.0
 
 ## The left column's gap between controls, px (as main.tscn spaces them).
 const SPEED_PANEL_GAP: float = 8.0
@@ -104,6 +111,10 @@ func _ready() -> void:
 	reaction_tags.guests = guest_view  # a tag over a golfer fades (E3-S63)
 	tag_clicks.bind(reaction_tags, _on_tag_link, tag_click_taken)
 	hole_panel.bind_feed(guest_sim.feed)
+	# E4-S4: fees at the first tee, upkeep at the day's end, the ledger each morning.
+	guest_sim.guest_arrived.connect(_on_guest_arrived)
+	guest_sim.day_ended.connect(_on_day_ended)
+	guest_sim.day_started.connect(_on_day_started)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -144,7 +155,8 @@ func show_course(c: CourseData) -> void:
 	build_tool.select_hole(first.number if first != null else 1)
 	frame_first_hole()
 	land_panel.watch(builder)
-	money_panel.watch(builder)
+	ledger.clear(builder.balance(), builder.has_unlimited_money())
+	money_panel.watch(builder, ledger)
 	# New sandbox (and every version 1 file) has an unlimited budget and owns every parcel:
 	# nothing to buy, so the Buy land tool is hidden (E6-S6).
 	build_palette.set_buying(not c.has_unlimited_budget())
@@ -449,20 +461,56 @@ func load_game(path: String = GameSave.PATH) -> bool:
 	return true
 
 
-## The save's economy fields (E4-S7's interface): `money` is the balance (E4-S2) and E4-S5
-## fills `rating_history` from the rating.
+## The save's economy fields (E4-S7's interface): `money` is the balance (E4-S2) as of the
+## morning the load replays from (E4-S4): less the fees taken today, which the replayed day takes
+## again; what was built today stays paid for. E4-S5 fills `rating_history` from the rating.
 func economy_to_save(s: GameSave.State) -> void:
 	var b: CourseBuilder = build_tool.builder
 	s.unlimited_money = b.has_unlimited_money()
-	s.money = 0 if s.unlimited_money else b.balance()
+	s.money = 0 if s.unlimited_money else b.balance() - ledger.fees
 	s.rating_history = rating_history.duplicate()
 
 
 ## Takes the economy back from a loaded save (economy_to_save's other half): the balance, through
-## the builder (CourseBuilder.restore_balance), and the rating history.
+## the builder (CourseBuilder.restore_balance), an empty ledger, and the rating history.
 func economy_from_save(s: GameSave.State) -> void:
 	build_tool.builder.restore_balance(s.money, s.unlimited_money)
+	ledger.clear(build_tool.builder.balance(), build_tool.builder.has_unlimited_money())
+	money_panel.refresh()
 	rating_history = s.rating_history.duplicate()
+
+
+## The green fee a guest pays at the first tee (E4-S4). The one place the fee is read: E4-S6's
+## slider replaces this body. Until then 80% of D56's ceiling at 3 stars ($60, D58's best fee).
+func green_fee() -> int:
+	return roundi(PLACEHOLDER_FEE_SHARE * build_tool.builder.economy.fee_ceiling(PLACEHOLDER_STARS))
+
+
+## A guest arrived at the first tee (E4-S4): it pays the green fee.
+func _on_guest_arrived(_guest: Guest) -> void:
+	var fee: int = green_fee()
+	build_tool.builder.credit(fee)
+	ledger.add_fee(fee)
+
+
+## The day's end (E4-S4, GuestSim.day_ended): upkeep for each hole open at dusk, and the day's
+## line for the next morning.
+func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
+	var b: CourseBuilder = build_tool.builder
+	var open: int = 0
+	for h: HoleData in course.holes:
+		if h.open:
+			open += 1
+	var upkeep: int = open * b.economy.upkeep_per_open_hole
+	ledger.close(b.balance(), upkeep)
+	b.debit(upkeep)
+	money_panel.refresh()
+
+
+## A new morning (E4-S4): the ledger starts on it.
+func _on_day_started(d: int) -> void:
+	var b: CourseBuilder = build_tool.builder
+	ledger.start(d, b.balance(), b.has_unlimited_money())
 
 
 ## Keeps the camera on a moving ball (E2-S8), unless the player panned away to scout.

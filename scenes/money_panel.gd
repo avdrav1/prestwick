@@ -5,12 +5,18 @@ extends PanelContainer
 ## building paused" in the refusal colour (CourseBuilder.money_refusal). It replaced the land
 ## panel's land budget line, since parcels and building come out of the one balance. A view
 ## onto the builder: it never writes the course. Main hands it every fresh builder (watch).
+##
+## E4-S4: under it, from the second morning on, the last day's income and costs (DayLedger's
+## line): "Day 3: fees +$1,200 (20 guests), upkeep -$45, building -$300".
 
 ## A balance below 0: the land panel's refusal colour (a light flag_red).
 @export var owing_font_color: Color = Color8(240, 160, 150)
 
 var balance_label: Label
+## E4-S4: the last day's line, hidden until a day has ended.
+var day_label: Label
 var builder: CourseBuilder
+var ledger: DayLedger
 
 
 func _ready() -> void:
@@ -20,12 +26,18 @@ func _ready() -> void:
 	balance_label = Label.new()
 	balance_label.name = "Balance"
 	box.add_child(balance_label)
+	day_label = Label.new()
+	day_label.name = "Day"
+	day_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	day_label.custom_minimum_size.x = 278.0
+	box.add_child(day_label)
 	refresh()
 
 
 ## Follows `b` (Main.show_course's fresh builder) from now on.
-func watch(b: CourseBuilder) -> void:
+func watch(b: CourseBuilder, p_ledger: DayLedger = null) -> void:
 	builder = b
+	ledger = p_ledger
 	b.money_changed.connect(func(_balance: int) -> void: refresh())
 	refresh()
 
@@ -44,6 +56,8 @@ func refresh() -> void:
 	if balance_label == null:
 		return
 	balance_label.text = balance_text(builder)
+	day_label.text = ledger.last_line if ledger != null else ""
+	day_label.visible = not day_label.text.is_empty()
 	if builder != null and not builder.has_unlimited_money() and builder.balance() < 0:
 		balance_label.add_theme_color_override("font_color", owing_font_color)
 	else:

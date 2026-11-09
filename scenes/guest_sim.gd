@@ -32,6 +32,10 @@ extends Node
 signal day_started(day: int)
 ## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
 signal day_ended(day: int, finished: GuestBrain)
+## E4-S4: a guest of the day under way arrived at the first open hole's tee (GuestBrain's
+## guest_arrived, forwarded): where it pays its green fee (Main). Connected before day_started
+## fires, so it runs ahead of any handler a day_started listener connects to the brain itself.
+signal guest_arrived(guest: Guest)
 signal speed_changed(speed: float)
 ## E4-S3: a skip to morning started or stopped.
 signal skip_changed(skipping: bool)
@@ -294,6 +298,7 @@ func _new_day(d: int) -> void:
 	_stale.clear()
 	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning)
 	brain.reacted.connect(_on_reacted.bind(brain))
+	brain.guest_arrived.connect(func(g: Guest) -> void: guest_arrived.emit(g))
 	day_started.emit(day)
 
 

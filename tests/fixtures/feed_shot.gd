@@ -41,6 +41,10 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## status line skipping.
 ##   scripts/screenshot.sh tests/fixtures/feed_skip_shot.tscn out.png 30
 @export var skip_frames: int = 0
+## E4-S4: with `money` 0 or more, the course has that balance (not unlimited), so a skip to the
+## next morning shows the balance after the day's fees and upkeep and the day's line in Play.
+##   scripts/screenshot.sh tests/fixtures/money_day_shot.tscn out.png 30
+@export var money: int = -1
 
 var main: Main
 
@@ -49,6 +53,8 @@ func _ready() -> void:
 	var b: CourseBuilder = GuestCourse.build()
 	b.paint(Vector2i(32, 6), Surface.Type.BUNKER, 1)
 	b.open_hole(2)
+	if money >= 0:
+		b.course.set_land_budget(money)
 	main = MAIN_SCENE.instantiate() as Main
 	main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(main)
@@ -72,6 +78,8 @@ func _ready() -> void:
 	if skip_frames > 0:
 		main.guest_sim.skip_to_morning()
 		for i: int in skip_frames:
+			if not main.guest_sim.skipping:
+				break
 			main.guest_sim.skip_frame()
 	for i: int in 64:
 		main.feed_panel.tick(main.feed_panel.tuning.reveal_interval_s)

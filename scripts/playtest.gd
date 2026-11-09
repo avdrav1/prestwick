@@ -14,12 +14,14 @@ extends SceneTree
 ##   E3 Guests           Play on courses/example_par3.json at 3x: the day's first guest
 ##                       arrives, plays hole 1 and leaves a reaction naming it, the same
 ##                       one a headless GuestBrain of that day's seed gives.     (here)
-##   E4 Economy          run one in-game day, it ends with money changed.
+##   E4 Economy          on the E3 course with a balance, skip the rest of day 1 to the
+##                       morning: the day ends with money changed by its fees less its
+##                       upkeep, and the morning report shows.                   (here)
 ##
 ## Exit code 0 when every check passes, 1 when one fails. Prints one line per check.
 
 ## The last milestone whose smoke stage exists in this script.
-const BUILT_MILESTONE: int = 3
+const BUILT_MILESTONE: int = 4
 const MAIN_SCENE := "res://scenes/main.tscn"
 ## What each stage expects, from docs/design.md. Kept as data so the numbers are not
 ## literals here, and so a silent fallback course or a physics change fails the smoke.
@@ -29,7 +31,7 @@ const MAX_FRAMES: int = 4000
 ## E2: the most strokes the scripted player may take (double par on a par 5).
 const MAX_STROKES: int = 10
 
-enum Phase { START, FLYING, E2_START, E2_SWING, E2_FLYING, E3_START, E3_RUN, DONE }
+enum Phase { START, FLYING, E2_START, E2_SWING, E2_FLYING, E3_START, E3_RUN, E4_RUN, DONE }
 
 var _main: Main
 var _phase: Phase = Phase.START
@@ -47,6 +49,9 @@ var _expect_e3: Dictionary = {}
 var _e3_reaction: GuestReaction = null
 var _e3_second: int = -1
 var _e3_arrived: int = 0
+var _expect_e4: Dictionary = {}
+## E4: when day 1 ended (Main's upkeep already paid): the balance and the day's fees.
+var _e4_ended: Array[int] = []
 
 
 func _initialize() -> void:
@@ -54,13 +59,15 @@ func _initialize() -> void:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(EXPECT_PATH))
 	if not parsed is Dictionary or not (parsed as Dictionary).get("e1") is Dictionary \
 			or not (parsed as Dictionary).get("e2") is Dictionary \
-			or not (parsed as Dictionary).get("e3") is Dictionary:
+			or not (parsed as Dictionary).get("e3") is Dictionary \
+			or not (parsed as Dictionary).get("e4") is Dictionary:
 		_fail("expectations load (%s)" % EXPECT_PATH)
 		_finish()
 		return
 	_expect = (parsed as Dictionary)["e1"]
 	_expect_e2 = (parsed as Dictionary)["e2"]
 	_expect_e3 = (parsed as Dictionary)["e3"]
+	_expect_e4 = (parsed as Dictionary)["e4"]
 	if not _add_main(_expect["course_path"]):
 		_finish()
 
@@ -104,6 +111,11 @@ func _process(_delta: float) -> bool:
 			_frames += 1
 			if _e3_reaction != null or _frames >= _e3_max_frames():
 				_check_guests()
+				_start_day_end()
+		Phase.E4_RUN:
+			_frames += 1
+			if not _e4_ended.is_empty() or _frames >= int(_expect_e4["max_frames"]):
+				_check_day_end()
 				_finish()
 	return false
 
@@ -242,6 +254,8 @@ func _start_guests() -> void:
 		_finish()
 		return
 	var sim := _main.guest_sim
+	# E4: the example course is a version 1 file (unlimited money): give it a balance first.
+	_main.build_tool.builder.restore_balance(int(_expect_e4["balance"]))
 	sim.day_started.connect(func(_d: int) -> void:
 		sim.brain.guest_arrived.connect(func(_g: Guest) -> void: _e3_arrived += 1)
 		sim.brain.reacted.connect(func(_g: Guest, r: GuestReaction) -> void:
@@ -292,6 +306,42 @@ func _check_guests() -> void:
 	_check(h.guest_id == r.guest_id and h.kind == r.kind and h.text == r.text and at == _e3_second,
 			"the same reaction as a headless day of seed %d (guest %d, second %d)" % [
 				GuestSim.day_seed(sim.base_seed, 1), h.guest_id, at])
+
+
+# --- E4: the day ends with money changed ---
+
+## Skips the rest of day 1 to the morning (the speed panel's Morning).
+func _start_day_end() -> void:
+	var sim := _main.guest_sim
+	sim.day_ended.connect(func(_d: int, _b: GuestBrain) -> void:
+		if _e4_ended.is_empty():
+			_e4_ended.append_array([_main.build_tool.builder.balance(), _main.ledger.fees]))
+	_main.sim_speed_panel.skip_button.pressed.emit()
+	_check(sim.skipping, "E4: Morning skips the rest of the day")
+	_frames = 0
+	_phase = Phase.E4_RUN
+
+
+func _check_day_end() -> void:
+	var b := _main.build_tool.builder
+	var start := int(_expect_e4["balance"])
+	_check(not _e4_ended.is_empty(), "day 1 ends within %d frames (%d)" % [int(_expect_e4["max_frames"]), _frames])
+	if _e4_ended.is_empty():
+		return
+	var open := 0
+	for h: HoleData in _main.course.holes:
+		open += 1 if h.open else 0
+	var upkeep: int = open * b.economy.upkeep_per_open_hole
+	var at_end: int = _e4_ended[0]
+	var fees: int = _e4_ended[1]
+	print("  %s" % _main.ledger.last_line)
+	_check(fees > 0 and fees % _main.green_fee() == 0, "guests paid %s at the first tee" % LandPrices.money(fees))
+	_check(at_end != start, "the day ends with money changed (%s to %s)" % [
+			LandPrices.money(start), LandPrices.money(at_end)])
+	_check(at_end == start + fees - upkeep, "by its fees (%s) less its upkeep (%s)" % [
+			LandPrices.money(fees), LandPrices.money(upkeep)])
+	_check(_main.money_panel.day_label.visible and _main.money_panel.day_label.text.begins_with("Day 1:"),
+			"the morning shows the day's income and costs")
 
 
 # --- reporting ---
