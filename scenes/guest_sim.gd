@@ -42,6 +42,12 @@ extends Node
 ## under the fee, the fee comes down to the ceiling (and stays there when the rating recovers).
 ## The morning's arrivals take the fee's share of the ceiling through D58's curve
 ## (EconomyTuning.arrivals). Main.green_fee() reads it when a guest pays at the first tee.
+##
+## The replay (E4-S11): a load replays the saved day from its morning, so it must be the day the
+## player saved. resume_at takes the arrivals that morning drew (morning_arrivals), not those
+## the fee and stars at the load would draw; restore_fee takes the fee as the player left it and
+## holds it against a falling ceiling until the replay reaches the second the save was made at
+## (save_second), since the uninterrupted day's fee only met those ceilings after it.
 
 signal day_started(day: int)
 ## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
@@ -84,6 +90,11 @@ var economy: EconomyTuning
 var day_arrivals: int = 0
 ## E4-S6: the green fee a round, dollars, 0 to fee_ceiling() (set_fee). -1 until the first start.
 var fee: int = -1
+## E4-S11: the arrivals a loaded day's morning drew (resume_at), -1 to draw them at the morning.
+var _resume_arrivals: int = -1
+## E4-S11: the second of the loaded day the save was made at (restore_fee); until the replay
+## reaches it a falling ceiling leaves the fee alone. -1 when no fee is held.
+var _fee_hold_s: int = -1
 
 ## The builder whose edits clear the feed's tallies (watch), and the holes as it last left them.
 var _watched: CourseBuilder
@@ -151,6 +162,7 @@ func fee_ceiling() -> int:
 ## E4-S6: sets the fee to `f` dollars, held from 0 to fee_ceiling(). Emits fee_changed when it
 ## moved.
 func set_fee(f: int) -> void:
+	_fee_hold_s = -1
 	var held := clampi(f, 0, fee_ceiling())
 	if held == fee:
 		return
@@ -158,9 +170,50 @@ func set_fee(f: int) -> void:
 	fee_changed.emit(fee)
 
 
+## E4-S11: sets the fee a loaded game saved, `f` dollars, as the player left it at second
+## `save_s` of the saved day (save_second), and holds it there until the replay reaches that
+## second, even over the ceiling at the morning: the stars may have risen before the save. A save
+## at the morning (`save_s` 0) holds nothing: the fee is set as set_fee does.
+func restore_fee(f: int, save_s: int) -> void:
+	if save_s <= 0:
+		set_fee(f)
+		return
+	_fee_hold_s = save_s
+	var held := maxi(f, 0)
+	if held == fee:
+		return
+	fee = held
+	fee_changed.emit(fee)
+
+
+## E4-S11: true while the replay of a loaded day has not reached the second its save was made at.
+func fee_held() -> bool:
+	if _fee_hold_s < 0:
+		return false
+	if brain != null and (day != _first_day or brain.second >= _fee_hold_s):
+		_fee_hold_s = -1
+		return false
+	return true
+
+
+## E4-S11: the second of the day under way a save made now holds the fee to (restore_fee): the
+## seconds it has run, or, while a loaded day's replay is short of its own save, that save's.
+## Read after morning_day().
+func save_second() -> int:
+	var s := 0 if brain == null else brain.second
+	return maxi(s, _fee_hold_s) if fee_held() else s
+
+
+## E4-S11: the arrivals of the day a save made now resumes at: those its morning drew, or a
+## loaded day's still to come (-1 when its morning will draw them). Read after morning_day().
+func morning_arrivals() -> int:
+	return _resume_arrivals if brain == null else day_arrivals
+
+
 func _on_feed_changed() -> void:
-	# A falling rating that drops the ceiling under the fee lowers the fee (E4-S6).
-	if fee > fee_ceiling():
+	# A falling rating that drops the ceiling under the fee lowers the fee (E4-S6), unless a
+	# loaded day's replay is still short of its save (E4-S11).
+	if fee > fee_ceiling() and not fee_held():
 		set_fee(fee)
 	rating_changed.emit(rating())
 
@@ -181,17 +234,21 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_first_day = 1
 	_stale.clear()
 	feed.clear()
+	_resume_arrivals = -1
 	set_fee(economy.start_fee)
 
 
 ## E4-S7: a loaded game resumes at the morning of day `d` (from 1): the next day built is `d`,
 ## from its own seed, as if the days before it had run. Guests out at the save are not kept.
-func resume_at(d: int) -> void:
+## E4-S11: `arrivals` are the guests day `d`'s morning drew (morning_arrivals; -1: draw them).
+func resume_at(d: int, arrivals: int = -1) -> void:
 	brain = null
 	_set_skipping(false)
 	_first_day = maxi(d, 1)
 	day = _first_day
 	_stale.clear()
+	_resume_arrivals = arrivals
+	_fee_hold_s = -1
 
 
 ## E4-S7: the day a save made now resumes at the morning of: the day under way, or 1 (or a
@@ -365,7 +422,9 @@ func _new_day(d: int) -> void:
 	_ensure_feed()
 	day = d
 	_stale.clear()
-	day_arrivals = arrivals_today()
+	var resumed := _resume_arrivals >= 0 and d == _first_day
+	day_arrivals = _resume_arrivals if resumed else arrivals_today()
+	_resume_arrivals = -1
 	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals)
 	brain.reacted.connect(_on_reacted.bind(brain))
 	brain.guest_arrived.connect(func(g: Guest) -> void: guest_arrived.emit(g))

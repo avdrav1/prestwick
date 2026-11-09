@@ -96,6 +96,14 @@ var recent_slots: Array[int] = []
 ## The day each of `recent` was given on, by index (E4-S7: a save keeps the window as it stood at
 ## the morning of the saved day, to_save).
 var recent_days: Array[int] = []
+## E4-S11: the window reactions of earlier days that reactions of day `spill_day` pushed out,
+## oldest first, with their slots and days (parallel, like `recent`). to_save puts them back, so
+## a save keeps the window whole as it stood that morning: the stars its arrivals were drawn at.
+## An edit clears them as it clears the window (clear_slot). A new day's first push-out drops them.
+var spilled: Array[GuestReaction] = []
+var spilled_slots: Array[int] = []
+var spilled_days: Array[int] = []
+var spill_day: int = 0
 ## How many reactions a tag counts (GuestTuning.rating_window).
 var window: int = 50
 ## How many lines the feed keeps.
@@ -122,6 +130,7 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	recent_slots.append(slot if counted else CLEARED)
 	recent_days.append(day)
 	if recent.size() > window:
+		_spill(recent.size() - window, day)
 		recent = recent.slice(recent.size() - window)
 		recent_slots = recent_slots.slice(recent_slots.size() - window)
 		recent_days = recent_days.slice(recent_days.size() - window)
@@ -155,12 +164,33 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	return entry
 
 
+## E4-S11: keeps the oldest `n` window reactions, which a reaction of day `day` is pushing out,
+## when they were given on an earlier day (spilled).
+func _spill(n: int, day: int) -> void:
+	if day != spill_day:
+		_clear_spill()
+		spill_day = day
+	for i: int in n:
+		if recent_days[i] < day:
+			spilled.append(recent[i])
+			spilled_slots.append(recent_slots[i])
+			spilled_days.append(recent_days[i])
+
+
+func _clear_spill() -> void:
+	spilled.clear()
+	spilled_slots.clear()
+	spilled_days.clear()
+	spill_day = 0
+
+
 ## Empties the feed and the tags (a new course).
 func clear() -> void:
 	entries.clear()
 	recent.clear()
 	recent_slots.clear()
 	recent_days.clear()
+	_clear_spill()
 	total = 0
 	_next_id = 1
 	cleared.emit()
@@ -170,8 +200,8 @@ func clear() -> void:
 ## E4-S7: the feed as the game save keeps it (GameSave), as it stood at the morning of day
 ## `before_day`: the lines and window reactions of earlier days only. A load resumes at that
 ## morning and the day plays again from its seed, so its own lines come in again rather than
-## twice. A reaction of that day that pushed an older one out of the window leaves the older one
-## out (the window is the newest `window` of what is kept).
+## twice. E4-S11: a reaction of that day that pushed an older one out of the window puts it back
+## (spilled), so the window is the morning's whole and the load's morning has its stars.
 func to_save(before_day: int) -> Dictionary:
 	var lines: Array = []
 	for e: Entry in entries:
@@ -180,6 +210,13 @@ func to_save(before_day: int) -> Dictionary:
 					"slot": e.slot, "kind": int(e.kind), "text": e.text, "failed": e.failed_text,
 					"count": e.count, "edited": e.edited})
 	var window_out: Array = []
+	if spill_day >= before_day:
+		for i: int in spilled.size():
+			if spilled_days[i] < before_day:
+				var sr: Dictionary = spilled[i].to_save()
+				sr["slot"] = spilled_slots[i]
+				sr["day"] = spilled_days[i]
+				window_out.append(sr)
 	var dropped := 0
 	for i: int in recent.size():
 		var d: int = recent_days[i] if i < recent_days.size() else 0
@@ -260,6 +297,7 @@ func copy_from(other: ReactionFeed) -> void:
 	recent = other.recent.duplicate()
 	recent_slots = other.recent_slots.duplicate()
 	recent_days = other.recent_days.duplicate()
+	_clear_spill()
 	total = other.total
 	_next_id = other._next_id
 	cleared.emit()
@@ -315,6 +353,11 @@ func clear_slot(holes: Array[HoleData], slot: int, unlink: bool = false) -> void
 		recent_slots[i] = CLEARED
 		any = true
 		rated_changed = true
+	# E4-S11: the morning's reactions already pushed out are about the hole as it was too.
+	for i: int in spilled.size():
+		var at: int = spilled_slots[i]
+		if at == slot or (at == -1 and _resolve_in(holes, -1, spilled[i].hole_number) == slot):
+			spilled_slots[i] = CLEARED
 	for e: Entry in entries:
 		if e.slot == slot or (e.slot == -1 and _resolve_in(holes, -1, e.hole_number) == slot):
 			if not e.edited:

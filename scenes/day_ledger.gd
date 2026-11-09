@@ -7,13 +7,16 @@ extends RefCounted
 ## line the next morning shows (MoneyPanel). A reader of the balance only; the builder moves it.
 ##
 ## A save made mid-day holds the balance less today's fees (Main.economy_to_save), the balance
-## as of the morning the load replays from, so the replayed day's fees come in once.
+## as of the morning the load replays from, so the replayed day's fees come in once; E4-S11: and
+## what each guest paid so far (paid), so the replayed guests pay what they paid.
 
 ## The day the ledger is on, from 1 (0 before the first morning).
 var day: int = 0
 ## Dollars taken in green fees today, and from how many guests.
 var fees: int = 0
 var guests: int = 0
+## E4-S11: what each guest who paid today paid, in arrival order.
+var paid: Array[int] = []
 ## The balance when today's morning started.
 var morning_balance: int = 0
 ## True when the balance is unlimited (New sandbox): fees and upkeep are reported, nothing spent.
@@ -28,6 +31,7 @@ func start(d: int, balance: int, p_unlimited: bool) -> void:
 	day = d
 	fees = 0
 	guests = 0
+	paid.clear()
 	morning_balance = balance
 	unlimited = p_unlimited
 
@@ -43,6 +47,7 @@ func clear(balance: int, p_unlimited: bool) -> void:
 func add_fee(amount: int) -> void:
 	fees += amount
 	guests += 1
+	paid.append(amount)
 
 
 ## Closes the day: `balance` is the balance before upkeep, `upkeep` what the day's end charges.

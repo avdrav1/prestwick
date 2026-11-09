@@ -3,7 +3,8 @@ extends RefCounted
 ## The game save (E4-S7, docs/design.md Save and load): one versioned JSON file in `user://`
 ## holding the course (course format v2, through CourseSave, so the land owned and the land
 ## budget come with it), the guests' seed, the day to resume at the morning of, the money, the
-## rating history, the green fee (E4-S6) and the guest feed. Only course/ save code writes CourseData on load
+## rating history, the green fee (E4-S6), the guest feed, and (E4-S11) what the saved day's
+## morning drew and its guests paid so far, so its replay is the day the player saved. Only course/ save code writes CourseData on load
 ## (CLAUDE.md): the course is read by CourseSave.from_dict and nothing here writes it.
 ##
 ## Guests out on the course are not saved (D38: none stays overnight), so a load resumes at the
@@ -38,6 +39,15 @@ class State:
 	var rating_history: Array[float] = []
 	## E4-S6: the green fee a round (GuestSim.fee); -1 in a save from before it (the start fee).
 	var fee: int = -1
+	## E4-S11: the guests the saved day's morning drew (GuestSim.morning_arrivals); -1 when its
+	## morning has not come, or in a save from before it: the load's morning draws them.
+	var arrivals: int = -1
+	## E4-S11: what each guest of the saved day paid before the save, in arrival order
+	## (DayLedger.paid): the replay's first guests pay these, the rest the fee.
+	var fees_paid: Array[int] = []
+	## E4-S11: the second of the saved day the save was made at (GuestSim.save_second): the load
+	## holds `fee` against a falling ceiling until the replay reaches it. 0 at a morning.
+	var second: int = 0
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
@@ -71,6 +81,12 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 	}
 	if state.fee >= 0:
 		data["fee"] = state.fee
+	if state.arrivals >= 0:
+		data["arrivals"] = state.arrivals
+	if not state.fees_paid.is_empty():
+		data["fees_paid"] = state.fees_paid.duplicate()
+	if state.second > 0:
+		data["second"] = state.second
 	return JSON.stringify(data, "  ", false)
 
 
@@ -134,6 +150,25 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 		s.fee = CourseData.read_int(data, "fee", errors)
 		if s.fee < 0:
 			errors.append("fee must be 0 or more, got %d" % s.fee)
+	# E4-S11: new fields with defaults, as `fee`.
+	if data.has("arrivals"):
+		s.arrivals = CourseData.read_int(data, "arrivals", errors)
+		if s.arrivals < 0:
+			errors.append("arrivals must be 0 or more, got %d" % s.arrivals)
+	if data.has("fees_paid"):
+		var paid: Variant = data["fees_paid"]
+		if typeof(paid) != TYPE_ARRAY:
+			errors.append("fees_paid must be a list")
+		else:
+			for v: Variant in paid:
+				if (typeof(v) != TYPE_FLOAT and typeof(v) != TYPE_INT) or v != floorf(v) or v < 0:
+					errors.append("fees_paid must hold whole dollars, 0 or more")
+					break
+				s.fees_paid.append(int(v))
+	if data.has("second"):
+		s.second = CourseData.read_int(data, "second", errors)
+		if s.second < 0:
+			errors.append("second must be 0 or more, got %d" % s.second)
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
 	if typeof(data.get("course")) != TYPE_DICTIONARY:
 		errors.append("course must be an object")

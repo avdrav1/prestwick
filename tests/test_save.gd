@@ -103,6 +103,36 @@ func test_the_feed_is_saved_as_it_stood_at_the_morning_of_the_saved_day() -> voi
 	assert_eq(d["next_id"], 2)
 
 
+## E4-S11: the morning's stars drew its arrivals and set its fee ceiling, so the saved window is
+## the morning's whole: a reaction of the saved day that pushed an older one out puts it back.
+func test_the_saved_window_is_the_mornings_even_when_the_day_pushed_reactions_out() -> void:
+	var points := EconomyTuning.load_default().rating_points
+	var feed := ReactionFeed.new(4, 100)
+	for i in 4:
+		feed.push(_reaction(1, GuestReaction.Kind.COMPLAINT, "Hole 1: day one %d." % i), 1, i, 0)
+	var morning := feed.rating(points)
+	assert_eq(morning, 1.0)
+	for i in 3:
+		feed.push(_reaction(2, GuestReaction.Kind.PRAISE, "Hole 2: day two %d." % i), 2, i, 1)
+	assert_gt(feed.rating(points), morning, "day 2 pushed three of day 1's out")
+	var errors: Array[String] = []
+	var back := ReactionFeed.from_save(feed.to_save(2), 4, 100, errors)
+	assert_eq(errors, [] as Array[String])
+	assert_eq(back.recent.size(), 4, "the morning's window, whole")
+	assert_eq(back.rating(points), morning, "so the load's morning has the stars the day began with")
+	assert_eq(back.recent_days, [1, 1, 1, 1] as Array[int])
+	# An edit made today clears the morning's verdicts on that hole, pushed out or not (E4-S7).
+	feed.clear_slot(GuestCourse.course().holes, 0)
+	back = ReactionFeed.from_save(feed.to_save(2), 4, 100, errors)
+	assert_eq(back.recent_slots, [ReactionFeed.CLEARED, ReactionFeed.CLEARED, ReactionFeed.CLEARED,
+			ReactionFeed.CLEARED] as Array[int], "hole 1's verdicts count for no hole")
+	# A new day's spill starts afresh: day 3's morning held day 1's last and day 2's three, not
+	# the day 1 reactions day 2 had already pushed out.
+	feed.push(_reaction(2, GuestReaction.Kind.PRAISE, "Hole 2: day three."), 3, 0, 1)
+	back = ReactionFeed.from_save(feed.to_save(3), 4, 100, errors)
+	assert_eq(back.recent_days, [1, 2, 2, 2] as Array[int])
+
+
 func test_a_file_that_is_not_a_whole_save_is_refused_with_a_reason() -> void:
 	var good := GameSave.State.new()
 	good.course = GuestCourse.course()

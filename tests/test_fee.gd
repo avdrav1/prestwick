@@ -197,3 +197,138 @@ func test_a_loaded_fee_over_the_loaded_ceiling_is_lowered() -> void:
 	s.fee = 100
 	m.economy_from_save(s)
 	assert_eq(m.green_fee(), 75, "3 stars: $75 at most")
+
+
+# --- E4-S11: a load replays the day with the fee it began with ---
+
+const SAVE_PATH := "user://test_fee_save.json"
+const START: int = 5000
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
+
+
+## Main on the guest course with START dollars and seed 3, the day driven by the test.
+func _day_main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	var c := GuestCourse.course()
+	c.set_land_budget(START)
+	m.land_seed = 3
+	m.show_course(c)
+	m.guest_sim.set_process(false)
+	m.feed_panel.set_process(false)
+	return m
+
+
+## Runs day 1 until `n` guests or more have paid at the first tee (a group arrives at once).
+func _until_paid(m: Main, n: int) -> void:
+	while m.ledger.guests < n and m.guest_sim.day == 1:
+		m.guest_sim.advance(1.0)
+	assert_gte(m.ledger.guests, n, "%d guests paid on day 1" % n)
+
+
+func _skip(m: Main) -> void:
+	m.guest_sim.skip_to_morning()
+	var frames := 0
+	while m.guest_sim.skipping and frames < 100000:
+		m.guest_sim.skip_frame()
+		frames += 1
+	assert_eq(m.guest_sim.day, 2, "the skip reaches day 2's morning")
+
+
+func _lines(m: Main) -> PackedStringArray:
+	var out := PackedStringArray()
+	for e: ReactionFeed.Entry in m.guest_sim.feed.entries:
+		out.append("%d %d %s x%d" % [e.day, e.second, e.text, e.count])
+	return out
+
+
+## Day 1 until a group has paid the start fee and the next group $75, the fee moved between.
+func _day_with_a_fee_change(m: Main) -> void:
+	m.guest_sim.advance(0.0)
+	_until_paid(m, 1)
+	m.fee_panel.slider.value = 75
+	assert_eq(m.green_fee(), 75)
+	_until_paid(m, m.ledger.guests + 1)
+
+
+func test_a_load_after_a_fee_change_replays_the_day_the_player_saved() -> void:
+	# The day run through, the fee moved part way.
+	var a := _day_main()
+	_day_with_a_fee_change(a)
+	var drawn: int = a.guest_sim.day_arrivals
+	assert_ne(drawn, a.guest_sim.economy.arrivals(a.guest_sim.stars(), 1.0),
+			"the morning's $60 drew more guests than $75 would")
+	_skip(a)
+	# The same day saved at the same point, loaded into a fresh game and run to its end.
+	var b := _day_main()
+	_day_with_a_fee_change(b)
+	assert_eq(b.save_game(SAVE_PATH), OK)
+	var n := _day_main()
+	assert_true(n.load_game(SAVE_PATH))
+	assert_eq(n.guest_sim.fee, 75, "the fee the player had set")
+	assert_eq(n.fee_panel.slider.value, 75.0, "and the slider shows it")
+	assert_eq(n.green_fee(), 75)
+	n.guest_sim.advance(0.0)
+	assert_eq(n.guest_sim.day_arrivals, drawn, "the replay draws the morning's arrivals")
+	_skip(n)
+	assert_eq(n.build_tool.builder.balance(), a.build_tool.builder.balance(),
+			"the same balance: the guests before the save paid what they paid")
+	assert_eq(n.money_panel.day_label.text, a.money_panel.day_label.text, "the same day's line")
+	assert_eq(_lines(n), _lines(a), "the same feed")
+	assert_eq(n.rating_history, a.rating_history, "the same rating")
+	assert_eq(n.guest_sim.fee, a.guest_sim.fee, "and the same fee into day 2")
+
+
+func test_a_save_of_a_loaded_day_keeps_what_the_load_replays() -> void:
+	var a := _day_main()
+	_day_with_a_fee_change(a)
+	_skip(a)
+	var b := _day_main()
+	_day_with_a_fee_change(b)
+	assert_eq(b.save_game(SAVE_PATH), OK)
+	var first: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	# Loaded, then saved again before the replay passes the first save.
+	var n := _day_main()
+	assert_true(n.load_game(SAVE_PATH))
+	assert_eq(n.save_game(SAVE_PATH), OK)
+	var again: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	for key: String in ["money", "fee", "arrivals", "fees_paid", "second", "feed"]:
+		assert_eq(again[key], first[key], "a load saved at once saves the same %s" % key)
+	n.guest_sim.advance(0.0)
+	_until_paid(n, 1)
+	assert_eq(n.save_game(SAVE_PATH), OK)
+	var o := _day_main()
+	assert_true(o.load_game(SAVE_PATH))
+	o.guest_sim.advance(0.0)
+	_skip(o)
+	assert_eq(o.build_tool.builder.balance(), a.build_tool.builder.balance())
+	assert_eq(o.rating_history, a.rating_history)
+
+
+func test_a_fee_raised_past_the_mornings_ceiling_loads_as_set() -> void:
+	var m := _day_main()
+	m.guest_sim.advance(0.0)
+	_until_paid(m, 1)
+	# The rating rises during the day (here, by hand) and the player takes the higher ceiling.
+	_push(m.guest_sim.feed, GuestReaction.Kind.PRAISE, 50)
+	assert_eq(m.guest_sim.fee_ceiling(), 125)
+	m.fee_panel.slider.value = 110
+	var saved_at: int = m.guest_sim.brain.second
+	assert_eq(m.save_game(SAVE_PATH), OK)
+	var n := _day_main()
+	assert_true(n.load_game(SAVE_PATH))
+	assert_eq(n.guest_sim.fee_ceiling(), 75, "the morning's 3 stars")
+	assert_eq(n.green_fee(), 110, "the fee the player set, not the morning's ceiling")
+	assert_eq(n.fee_panel.slider.value, 110.0)
+	n.guest_sim.advance(0.0)
+	_push(n.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 1)
+	assert_eq(n.green_fee(), 110, "held while the replay is short of the save")
+	while n.guest_sim.brain.second < saved_at:
+		n.guest_sim.brain.step()
+	_push(n.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 1)
+	assert_eq(n.green_fee(), n.guest_sim.fee_ceiling(), "past it, a ceiling under the fee lowers it again")

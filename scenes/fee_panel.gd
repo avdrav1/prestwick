@@ -58,7 +58,9 @@ func refresh() -> void:
 		return
 	var ceiling := sim.fee_ceiling()
 	slider.set_block_signals(true)
-	slider.max_value = ceiling
+	# E4-S11: a loaded day's fee can stand over the morning's ceiling until its replay reaches
+	# the save (GuestSim.restore_fee): the slider's end takes it in.
+	slider.max_value = maxi(ceiling, sim.fee)
 	slider.value = sim.fee
 	slider.set_block_signals(false)
 	fee_label.text = "Fee %s" % LandPrices.money(sim.fee)

@@ -32,6 +32,9 @@ var land_seed: int = -1
 var rating_history: Array[float] = []
 ## E4-S4: today's green fees and the balance at the morning; its last line is the morning report.
 var ledger := DayLedger.new()
+## E4-S11: what the guests of a loaded day paid before its save, in arrival order: its replay's
+## first guests pay these (they paid them in the day the player saved), the rest the fee.
+var _replay_fees: Array[int] = []
 
 ## The left column's gap between controls, px (as main.tscn spaces them).
 const SPEED_PANEL_GAP: float = 8.0
@@ -136,6 +139,7 @@ func _ready() -> void:
 func show_course(c: CourseData) -> void:
 	course = c
 	rating_history.clear()
+	_replay_fees.clear()
 	shot_view.clear()
 	# The guests' day of this course (E3-S5): day 1 starts when Play first runs it.
 	guest_sim.start(c, maxi(land_seed, 0))
@@ -436,6 +440,9 @@ func save_game(path: String = GameSave.PATH) -> Error:
 	s.seed_value = guest_sim.base_seed
 	s.day = guest_sim.morning_day()
 	s.feed_data = guest_sim.feed.to_save(s.day)
+	# E4-S11: what that morning drew and the second the save is at, for the replay.
+	s.arrivals = guest_sim.morning_arrivals()
+	s.second = guest_sim.save_second()
 	economy_to_save(s)
 	var dropped: Array[int] = []
 	var err := GameSave.save_file(s, path, dropped)
@@ -456,7 +463,7 @@ func load_game(path: String = GameSave.PATH) -> bool:
 		return false
 	land_seed = s.seed_value
 	show_course(s.course)
-	guest_sim.resume_at(s.day)
+	guest_sim.resume_at(s.day, s.arrivals)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
 	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.closed_on_load))
@@ -466,34 +473,43 @@ func load_game(path: String = GameSave.PATH) -> bool:
 ## The save's economy fields (E4-S7's interface): `money` is the balance (E4-S2) as of the
 ## morning the load replays from (E4-S4): less the fees taken today, which the replayed day takes
 ## again; what was built today stays paid for. E4-S5 fills `rating_history` from the rating.
+## E4-S11: what each of today's guests paid (with a loaded day's still to replay), so the
+## replayed guests pay it again, and the fee as the player left it.
 func economy_to_save(s: GameSave.State) -> void:
 	var b: CourseBuilder = build_tool.builder
 	s.unlimited_money = b.has_unlimited_money()
 	s.money = 0 if s.unlimited_money else b.balance() - ledger.fees
 	s.rating_history = rating_history.duplicate()
 	s.fee = guest_sim.fee
+	s.fees_paid = ledger.paid.duplicate()
+	s.fees_paid.append_array(_replay_fees)
 
 
 ## Takes the economy back from a loaded save (economy_to_save's other half): the balance, through
-## the builder (CourseBuilder.restore_balance), an empty ledger, the rating history and the fee.
+## the builder (CourseBuilder.restore_balance), an empty ledger, the rating history and the fee
+## (E4-S11: held as the player left it until the replay reaches the save, GuestSim.restore_fee),
+## and what the replayed day's first guests paid.
 func economy_from_save(s: GameSave.State) -> void:
 	build_tool.builder.restore_balance(s.money, s.unlimited_money)
 	ledger.clear(build_tool.builder.balance(), build_tool.builder.has_unlimited_money())
 	money_panel.refresh()
 	rating_history = s.rating_history.duplicate()
-	# E4-S6: the saved fee (an E4-S7 save has none: the start fee), held under the loaded ceiling.
-	guest_sim.set_fee(s.fee if s.fee >= 0 else guest_sim.economy.start_fee)
+	# E4-S6: the saved fee (an E4-S7 save has none: the start fee), held under the loaded ceiling
+	# unless the save was made part way through its day (E4-S11).
+	guest_sim.restore_fee(s.fee if s.fee >= 0 else guest_sim.economy.start_fee, s.second)
+	_replay_fees = s.fees_paid.duplicate()
 
 
 ## The green fee a guest pays at the first tee (E4-S4): the fee slider's setting (E4-S6,
-## GuestSim.fee, at most the ceiling at the stars shown). The one place the fee is read.
+## GuestSim.fee, at most the ceiling at the stars shown). The one place the fee is read; a
+## loaded day's replayed guests pay what they paid instead (E4-S11, _on_guest_arrived).
 func green_fee() -> int:
 	return maxi(guest_sim.fee, 0)
 
 
 ## A guest arrived at the first tee (E4-S4): it pays the green fee.
 func _on_guest_arrived(_guest: Guest) -> void:
-	var fee: int = green_fee()
+	var fee: int = green_fee() if _replay_fees.is_empty() else _replay_fees.pop_front()
 	build_tool.builder.credit(fee)
 	ledger.add_fee(fee)
 
@@ -510,6 +526,7 @@ func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
 	# E4-S5: the closing rating goes on the history (the rating the next morning's arrivals read).
 	rating_history.append(guest_sim.rating())
 	ledger.close(b.balance(), upkeep)
+	_replay_fees.clear()
 	b.debit(upkeep)
 	money_panel.refresh()
 
