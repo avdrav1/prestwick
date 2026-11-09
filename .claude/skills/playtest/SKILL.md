@@ -28,6 +28,8 @@ The full bar (holed out, guest reaction, money changed) is the E4 smoke, built i
 
 A scripted session drives the real main scene through one milestone's player flow and prints what happened; Claude writes the findings to `docs/playtests/` by hand. `scripts/land_playtest.gd` (E6-S8) starts a New course, buys two parcels with Buy land, builds a par 4 across them, plays it with the scripted player and sweeps the tee for D29's OB reading: `godot --headless --path . --fixed-fps 60 -s res://scripts/land_playtest.gd -- --seed 1`. It exits 0 only when every check passes. It is not part of the smoke.
 
+`scripts/e4_playtest.gd` (E4-S8) runs the scripted parts of the eight Full checklist items on the real main scene (a par 3 built and played on a New course, guests on it, a par 5 with water priced, two days at 3x on the playtest nine, the fee at the ceiling, save, quit and load into a fresh scene): `godot --headless --path . --fixed-fps 60 -s res://scripts/e4_playtest.gd -- --seed 1`. It exits 0 only when every check passes; what it cannot judge stays with the user (`docs/playtests/2026-11-09-e4-full.md` has the hand checklist).
+
 ## Full
 
 A guided session with the user at the keyboard. Claude drives the checklist, the user plays.
