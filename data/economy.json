@@ -1,0 +1,29 @@
+{
+  "_doc": "The economy's numbers (E4-S1; D56, D57, D58; docs/design.md Economy and time has a line for each), read by course/economy_tuning.gd (EconomyTuning). Dollars unless named. tile_price is what painting one tile with that surface costs: the fitted T4 table (fairway 5, rough 2, green 25, tee 15, bunker 20, water 30, trees 10, cart path 8, oob 2, $10 a height step) times the money scale 0.61 (D56), rounded to whole dollars; oob costs rough's price. height_step_price is one step raised or lowered on one tile. Tee markers and cups are free. Repainting charges the new surface and refunds nothing for the old; undo refunds exactly what its step charged (D56). The starting balance is land_budget in data/land.json (D57), the rating window rating_window in data/guests.json. Arrivals a day: arrivals_base + arrivals_per_star x stars, at most arrivals_max, times the fee curve: 1 up to fee_full_arrivals_share of the ceiling, then a straight drop to ceiling_arrivals_share at the ceiling (D58). The ceiling is fee_ceiling_per_star x stars per round. Rating: the mean of rating_points over the window; a window short of rating_window is padded with neutral reactions and a reaction cleared by an edit counts as neutral (D58). E4-S8 tunes these against Balance targets, economy (/balance economy).",
+  "tile_price": {
+    "fairway": 3,
+    "rough": 1,
+    "green": 15,
+    "tee": 9,
+    "bunker": 12,
+    "water": 18,
+    "trees": 6,
+    "cart_path": 5,
+    "oob": 1
+  },
+  "height_step_price": 6,
+  "tee_marker_price": 0,
+  "cup_price": 0,
+  "upkeep_per_open_hole": 5,
+  "fee_ceiling_per_star": 25,
+  "arrivals_base": 8,
+  "arrivals_per_star": 4,
+  "arrivals_max": 24,
+  "fee_full_arrivals_share": 0.7,
+  "ceiling_arrivals_share": 0.6667,
+  "rating_points": {
+    "praise": 5,
+    "neutral": 3,
+    "complaint": 1
+  }
+}

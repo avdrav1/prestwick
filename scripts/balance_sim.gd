@@ -365,6 +365,7 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var left := 0
 	var span := 0.0
 	var clamped := 0
+	var floored := 0
 	var prices: Array[int] = []
 	var cut_sum := 0.0
 	var cut_max := 0
@@ -382,9 +383,12 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 				var tally := parcel_tally(c, parcel)
 				var raw: int = lp.base_price + lp.relief_step_price * tally.relief \
 						+ lp.tree_tile_price * tally.trees + lp.water_tile_price * tally.water
-				if raw < lp.min_price or raw > lp.max_price:
+				if raw > lp.max_price:
 					clamped += 1
-				var cut: int = -(lp.tree_tile_price * tally.trees + lp.water_tile_price * tally.water)
+				elif raw < lp.min_price:
+					floored += 1
+				var cut: int = roundi(-(lp.tree_tile_price * tally.trees + lp.water_tile_price * tally.water)
+						* lp.price_scale)
 				cut_sum += cut
 				cut_max = maxi(cut_max, cut)
 				var price := b.parcel_price(parcel)
@@ -421,8 +425,13 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 			"%d to %d; %s left on average, of %s" % [bought_min, bought_max,
 				LandPrices.money(roundi(left / float(n))), LandPrices.money(lp.land_budget)]))
 	rows.append(row("land: parcels at the price clamp (share)", clamped / float(maxi(prices.size(), 1)),
-			LAND_NO_SEED, "%s to %s guards tuned values only" % [
-				LandPrices.money(lp.min_price), LandPrices.money(lp.max_price)]))
+			LAND_NO_SEED, "%s guards tuned values only" % LandPrices.money(
+				lp.scaled(lp.max_price))))
+	# Since D57 the water discount is a pond's filling, so the wettest parcels reach the floor:
+	# recorded, not a target.
+	rows.append(row("land: parcels at the price floor (share)", floored / float(maxi(prices.size(), 1)),
+			Vector2(-INF, INF), "%s, the wettest parcels (D57)" % LandPrices.money(
+				lp.scaled(lp.min_price))))
 	if not prices.is_empty():
 		rows.append(row("land: median parcel price ($)", prices[prices.size() / 2], Vector2(-INF, INF),
 				"%s to %s; 10th to 90th percentile %s to %s" % [LandPrices.money(prices[0]),

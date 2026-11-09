@@ -9,10 +9,13 @@ extends RefCounted
 ## hazards about $6,000, 9 holes and 3 stars in 25 to 35 days without going negative, a
 ## $5,000 start, upkeep $5 an open hole a day).
 ##
-## Nothing here is a tunable the game reads: these are proposals to put to the user
-## (docs/playtests/2026-11-09-e4-economy-options.md). The values the game will read go in
-## data/ in E4-S2 once a candidate is chosen; so the bands below are copies of the targets
-## and the candidates are constants here, not data.
+## The chosen economy (D56 to D58, E4-S1's close) is read from data/economy.json
+## (EconomyTuning) and data/land.json (LandPrices, its price_scale included): the "chosen:" rows
+## come first and are the only ones with targets, the design doc's hole bands times the money
+## scale and Balance targets, economy. Every row after them is the options pass the user chose
+## from (docs/playtests/2026-11-09-e4-economy-options.md), kept so E4-S8 can see the slack: the
+## candidate tables, incomes and rules are constants here, not data, their land is data/land.json's
+## before the money scale, and they print with no target.
 ##
 ## What a hole costs is measured, not estimated: each fixture is built through CourseBuilder
 ## (tests/fixtures, course/course_generator.gd) and diffed tile by tile against the land it
@@ -33,6 +36,12 @@ const PlaytestNineFx := preload("res://tests/fixtures/playtest_nine.gd")
 ## and bunkers about $6,000. "About" read as within a third either way.
 const PAR3_TARGET := Vector2(1000.0, 2000.0)
 const PAR5_TARGET := Vector2(4000.0, 8000.0)
+## The same bands at D56's money scale 0.61, rounded to $100 (docs/design.md Balance targets,
+## economy): a basic par 3 $600 to $1,200, a par 5 with hazards $2,400 to $4,900.
+const CHOSEN_PAR3_TARGET := Vector2(600.0, 1200.0)
+const CHOSEN_PAR5_TARGET := Vector2(2400.0, 4900.0)
+## The fee the run's player sets, as a share of the ceiling: D58's curve earns most there.
+const CHOSEN_FEE_SHARE: float = 0.8
 ## docs/design.md Balance targets, economy: 9 holes and 3 stars in 25 to 35 days at one hole
 ## per 2 days, never negative. Read here as money pacing the builder (design doc, Management
 ## layer: "it exists to pace the builder"): the player builds the next hole 2 days after the
@@ -116,7 +125,12 @@ const RUN_START: String = "3 stars, padded to 50"
 ## Arrivals per day the capacity probe plays on PlaytestNine's nine.
 const CAPACITY_ARRIVALS: Array[int] = [16, 20, 24, 32]
 
-var land: LandPrices = LandPrices.load_default()
+## data/land.json before the money scale: the options' land, which each candidate scales.
+var land: LandPrices = _unscaled_land()
+## The chosen economy and its land, scaled.
+var economy: EconomyTuning = EconomyTuning.load_default()
+var chosen_land: LandPrices = LandPrices.load_default()
+var rating_window: int = GuestTuning.load_default().rating_window
 ## Each income model's run log at its fitted scale, from the last measure().
 var run_logs: Dictionary = {}
 
@@ -124,6 +138,28 @@ var run_logs: Dictionary = {}
 ## Rows {name, measured, target, ok, note}, as BalanceSim.row.
 static func row(row_name: String, measured: float, target: Vector2, note: String = "") -> Dictionary:
 	return BalanceSim.row(row_name, measured, target, note)
+
+
+static func _unscaled_land() -> LandPrices:
+	var lp := LandPrices.load_default()
+	lp.price_scale = 1.0
+	return lp
+
+
+## The chosen tile table in COST_TABLES' shape: dollars by surface name, and "step".
+func chosen_table() -> Dictionary:
+	var t := {"step": economy.height_step_price}
+	for i in Surface.COUNT:
+		t[Surface.NAMES[i]] = economy.tile_price[i]
+	return t
+
+
+## The chosen income as an INCOMES model, run at CHOSEN_FEE_SHARE.
+func chosen_income() -> Dictionary:
+	return {"arrivals": "chosen", "tuning": economy, "cap": economy.arrivals_max,
+			"ceiling": float(economy.fee_ceiling_per_star), "fee_share": CHOSEN_FEE_SHARE,
+			"curve": "chosen", "start": chosen_land.land_budget, "upkeep": economy.upkeep_per_open_hole,
+			"window": rating_window}
 
 
 # --- what a hole costs ---
@@ -261,8 +297,8 @@ static func _to_line(p: Vector2, pts: Array) -> float:
 
 
 ## What `parcels` cost on `c`'s land at data/land.json's prices.
-func parcels_price(c: CourseData, parcels: Array[Vector2i]) -> int:
-	var b := CourseBuilder.new(c, null, null, land)
+func parcels_price(c: CourseData, parcels: Array[Vector2i], lp: LandPrices = null) -> int:
+	var b := CourseBuilder.new(c, null, null, land if lp == null else lp)
 	var total := 0
 	for p: Vector2i in parcels:
 		total += b.parcel_price(p)
@@ -271,11 +307,13 @@ func parcels_price(c: CourseData, parcels: Array[Vector2i]) -> int:
 
 ## The median price of every parcel outside the starting block on New courses of `seeds`
 ## seeds from 1.
-func median_parcel(seeds: int) -> int:
+func median_parcel(seeds: int, lp: LandPrices = null) -> int:
+	if lp == null:
+		lp = land
 	var prices: Array[int] = []
 	for s in range(1, seeds + 1):
-		var c := CourseBuilder.new_course(s, land)
-		var b := CourseBuilder.new(c, null, null, land)
+		var c := CourseBuilder.new_course(s, lp)
+		var b := CourseBuilder.new(c, null, null, lp)
 		for q: int in c.parcels_high:
 			for p: int in c.parcels_wide:
 				if not c.is_parcel_owned(Vector2i(p, q)):
@@ -399,6 +437,8 @@ static func arrivals(e: Dictionary, stars: float, holes: int) -> float:
 static func guests_for(e: Dictionary, stars: float, holes: int) -> int:
 	if holes <= 0:
 		return 0
+	if e.has("tuning"):
+		return (e.tuning as EconomyTuning).arrivals(stars, float(e.fee_share))
 	var n := arrivals(e, stars, holes) * curve_share(String(e.curve), float(e.fee_share))
 	return mini(roundi(n), int(e.cap))
 
@@ -430,7 +470,9 @@ func plan_costs(fx: Array[Dictionary], table: Dictionary, parcel: int, scale: fl
 ## {nine_day, star_day, min_money, money, stalled, log}.
 func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 		start: Array) -> Dictionary:
-	var money := START_MONEY
+	var money: int = e.get("start", START_MONEY)
+	var upkeep_each: int = e.get("upkeep", UPKEEP_PER_HOLE)
+	var size: int = e.get("window", WINDOW)
 	var open := 0
 	var next_build := 1
 	var window: Array[float] = []
@@ -458,7 +500,7 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 		var fee := float(e.ceiling) * stars * float(e.fee_share)
 		var guests := guests_for(e, stars, open)
 		var income := roundi(guests * fee)
-		var upkeep := UPKEEP_PER_HOLE * open
+		var upkeep := upkeep_each * open
 		money += income - upkeep
 		min_money = mini(min_money, money)
 		for i in guests * open:
@@ -472,7 +514,7 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 				window.append(float(pts[2]))
 			else:
 				window.append(float(pts[1]))
-		while window.size() > WINDOW:
+		while window.size() > size:
 			window.pop_front()
 		var after := stars_of(_rating(window, float(start[0]), int(start[1])))
 		if star_day < 0 and open == plan.size() and after >= STAR_TARGET:
@@ -498,12 +540,12 @@ static func _rating(window: Array[float], start: float, prior: int) -> float:
 ## DAYS_AIM, with 3 stars by the end of DAYS_TARGET and never negative. {scale, run}, or
 ## scale -1 when none does.
 func fit_scale(e: Dictionary, fx: Array[Dictionary], parcel: int, mix: Array[float], pts: Array,
-		start: Array) -> Dictionary:
+		start: Array, table: Dictionary = COST_TABLES[RUN_TABLE]) -> Dictionary:
 	var best := {"scale": -1.0, "run": {}}
 	var best_gap := INF
 	for i in range(1, 301):
 		var s := i / 100.0
-		var r := run(e, plan_costs(fx, COST_TABLES[RUN_TABLE], parcel, s), mix, pts, start)
+		var r := run(e, plan_costs(fx, table, parcel, s), mix, pts, start)
 		if int(r.nine_day) < 0 or int(r.min_money) < 0:
 			continue
 		if int(r.star_day) < 0 or r.star_day > DAYS_TARGET.y:
@@ -525,16 +567,13 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var fx := fixtures()
 	var nn := nine()
 	var parcel := median_parcel(10)
-	# Hole costs under each table.
+	var mix := measure_mix(maxi(runs, 1), rng_seed)
+	rows.append_array(measure_chosen(fx, nn, mix))
+	# The options (E4-S1's pass, no targets). Hole costs under each table.
 	for t: String in COST_TABLES:
 		var table: Dictionary = COST_TABLES[t]
 		for f: Dictionary in fx:
-			var target := any
-			if String(f.name).begins_with("par 3"):
-				target = PAR3_TARGET
-			elif String(f.name).begins_with("par 5"):
-				target = PAR5_TARGET
-			rows.append(row("cost %s: %s ($)" % [t, f.name], price(f.diff, table), target,
+			rows.append(row("cost %s: %s ($)" % [t, f.name], price(f.diff, table), any,
 					_tiles_note(f.diff)))
 		var nine_cost := 0
 		var land_cost := 0
@@ -544,7 +583,7 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 			nine_cost += hc
 			land_cost += lc
 			rows.append(row("cost %s: PlaytestNine hole %d, par %d, %d yd ($)" % [t, h.n, h.par, h.yd],
-					hc, PAR5_TARGET if int(h.par) == 5 else any, "%s; land %d parcels %s" % [
+					hc, any, "%s; land %d parcels %s" % [
 						_tiles_note(h.diff), (h.parcels as Array).size(), LandPrices.money(lc)]))
 		rows.append(row("cost %s: PlaytestNine, nine holes ($)" % t, nine_cost, any,
 				"its land %s more (it spreads over the whole map); %s" % [LandPrices.money(land_cost),
@@ -566,7 +605,6 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 		rows.append(row("height at $%d a step: PlaytestNine's shaping ($)" % step,
 				int(nn.total.steps) * step, any, "%d steps; by hole %s" % [nn.total.steps, ", ".join(per)]))
 	# Guests: the measured mix as the nine opens, and a day's capacity.
-	var mix := measure_mix(maxi(runs, 1), rng_seed)
 	for m: Dictionary in mix:
 		var sh := shares(m)
 		rows.append(row("guests: PlaytestNine holes 1 to %d open, complaint share" % m.k, sh[2], any,
@@ -615,7 +653,7 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 					"%d guests at $%.2f, upkeep $%d" % [g, fee, UPKEEP_PER_HOLE * 9]))
 		var at1 := run(e, plan_costs(fx, table, parcel, 1.0), MID_MIX, POINTS[RUN_POINTS], STARTS[RUN_START])
 		rows.append(row("run %s: 3-star course at the %s table, day the nine opens" % [name, RUN_TABLE],
-				at1.nine_day if int(at1.nine_day) > 0 else INF, DAYS_TARGET,
+				at1.nine_day if int(at1.nine_day) > 0 else INF, any,
 				"stalled %d days for money; 3 stars day %d; lowest $%d" % [at1.stalled, at1.star_day, at1.min_money]))
 		for case: Array in [["3-star course", MID_MIX, RUN_START], ["4.5-star fair course", FAIR_MIX, RUN_START],
 				["3-star course, start 1 star", MID_MIX, "1 star, padded to 50"],
@@ -634,6 +672,93 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 						r.nine_day, r.star_day, r.stalled, r.min_money, p3, p5, roundi(parcel * s)]))
 			if case[0] == "3-star course":
 				run_logs["%s at scale %.2f" % [name, s]] = r.log
+	return rows
+
+
+## The chosen economy's rows (D56 to D58; data/economy.json, data/land.json), against the
+## targets: what each fixture costs at the chosen table and land, a day's net, and the run.
+func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary]) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var any := Vector2(-INF, INF)
+	var table := chosen_table()
+	var parts: PackedStringArray = []
+	for sname in SURFACES:
+		parts.append("%s %d" % [sname, table[sname]])
+	parts.append("$%d a step, tee marker $%d, cup $%d" % [table.step, economy.tee_marker_price,
+			economy.cup_price])
+	var parcel := median_parcel(10, chosen_land)
+	rows.append(row("chosen: median parcel, New courses seeds 1 to 10 ($)", parcel, any,
+			"price_scale %.2f; table %s" % [chosen_land.price_scale, ", ".join(parts)]))
+	for f: Dictionary in fx:
+		var target := any
+		if String(f.name).begins_with("par 3"):
+			target = CHOSEN_PAR3_TARGET
+		elif String(f.name).begins_with("par 5"):
+			target = CHOSEN_PAR5_TARGET
+		rows.append(row("chosen: %s ($)" % f.name, price(f.diff, table), target, _tiles_note(f.diff)))
+	var nine_cost := 0
+	var nine_land := 0
+	for h: Dictionary in nn.holes:
+		var hc := price(h.diff, table)
+		var lc := parcels_price(nn.after, h.parcels, chosen_land)
+		nine_cost += hc
+		nine_land += lc
+		rows.append(row("chosen: PlaytestNine hole %d, par %d, %d yd ($)" % [h.n, h.par, h.yd], hc,
+				CHOSEN_PAR5_TARGET if int(h.par) == 5 else any, "%s; land %d parcels %s" % [
+					_tiles_note(h.diff), (h.parcels as Array).size(), LandPrices.money(lc)]))
+	rows.append(row("chosen: PlaytestNine, nine holes ($)", nine_cost, any,
+			"its land %s more (it spreads over the whole map)" % LandPrices.money(nine_land)))
+	var plan := plan_costs(fx, table, parcel, 1.0)
+	var build := 0
+	var lnd := 0
+	for h: Dictionary in plan:
+		build += int(h.build)
+		lnd += int(h.land)
+	rows.append(row("chosen: frugal nine, holes ($)", build, any,
+			"land %s more (%d parcels at the median %s)" % [LandPrices.money(lnd),
+				ceili(_plan_parcels() - BLOCK_PARCELS), LandPrices.money(parcel)]))
+	var e := chosen_income()
+	for stars: float in [1.0, 3.0, 5.0]:
+		var g := guests_for(e, stars, 9)
+		var fee := economy.fee_ceiling(stars) * CHOSEN_FEE_SHARE
+		rows.append(row("chosen: a day, 9 holes at %.0f stars, fee 80%%, net ($)" % stars,
+				roundi(g * fee) - economy.upkeep_per_open_hole * 9, any,
+				"%d guests at $%.2f (ceiling $%.0f), upkeep $%d" % [g, fee, economy.fee_ceiling(stars),
+					economy.upkeep_per_open_hole * 9]))
+	var pts: Array = Array(economy.rating_points)
+	# D58: 3 stars to start (the neutral points), a short window padded with neutral reactions.
+	var start: Array = [float(economy.rating_points[1]), rating_window]
+	var r3 := run(e, plan, MID_MIX, pts, start)
+	run_logs["chosen economy, 3-star course"] = r3.log
+	rows.append(row("chosen: 3-star course, day the nine opens",
+			r3.nine_day if int(r3.nine_day) > 0 else INF, DAYS_TARGET,
+			"stalled %d days for money; a hole every %d days at the soonest" % [r3.stalled,
+				BUILD_EVERY_DAYS]))
+	rows.append(row("chosen: 3-star course, day 3 stars with nine open",
+			r3.star_day if int(r3.star_day) > 0 else INF, DAYS_TARGET, "mix %.2f/%.2f/%.2f" % [
+				MID_MIX[0], MID_MIX[1], MID_MIX[2]]))
+	rows.append(row("chosen: 3-star course, lowest balance ($)", r3.min_money, Vector2(0.0, INF),
+			"balance on day %d %s" % [RUN_DAYS, LandPrices.money(r3.money)]))
+	var fit := fit_scale(e, fx, parcel, MID_MIX, pts, start, table)
+	rows.append(row("chosen: 3-star course, cost scale on the chosen table nearest day 30",
+			fit.scale, any, "1.00 is the table as chosen; E4-S8's slack" if float(fit.scale) > 0.0
+				else "none fits"))
+	var r45 := run(e, plan, FAIR_MIX, pts, start)
+	rows.append(row("chosen: 4.5-star fair course, day the nine opens",
+			r45.nine_day if int(r45.nine_day) > 0 else INF, any,
+			"stalled %d days; lowest %s; recorded, not a target" % [r45.stalled,
+				LandPrices.money(r45.min_money)]))
+	var pmix := shares(mix[8])
+	var pn := run(e, plan, pmix, pts, start)
+	rows.append(row("chosen: PlaytestNine's measured mix, day the nine opens",
+			pn.nine_day if int(pn.nine_day) > 0 else INF, any,
+			"mix %.2f/%.2f/%.2f, %.1f stars; stalled %d days; 3 stars day %d; recorded, not a target" % [
+				pmix[0], pmix[1], pmix[2], stars_of(mean_points(pmix, pts)), pn.stalled, pn.star_day]))
+	var pfit := fit_scale(e, fx, parcel, pmix, pts, start, table)
+	rows.append(row("chosen: PlaytestNine's measured mix, cost scale on the chosen table nearest day 30",
+			pfit.scale, any, ("nine opens day %d, 3 stars day %d, stalled %d days" % [
+				pfit.run.nine_day, pfit.run.star_day, pfit.run.stalled]) if float(pfit.scale) > 0.0
+				else "none fits: the mix never holds 3 stars"))
 	return rows
 
 

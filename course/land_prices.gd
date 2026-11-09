@@ -1,14 +1,16 @@
 class_name LandPrices
 extends RefCounted
-## Parcel prices and the New course land budget (D28, docs/design.md Land), every number read
-## from res://data/land.json. Reads a course; never writes one.
+## Parcel prices and the New course land budget (D28, D57, docs/design.md Land), every number
+## read from res://data/land.json. Reads a course; never writes one.
 ##
-##   price = base_price + relief_step_price * relief + tree_tile_price * trees
-##           + water_tile_price * water,
-##   clamped to min_price..max_price and rounded to the nearest price_round,
+##   price = price_scale * (base_price + relief_step_price * relief + tree_tile_price * trees
+##           + water_tile_price * water),
+##   clamped to price_scale * min_price..price_scale * max_price and rounded to the nearest
+##   price_round,
 ##
 ## where relief is the parcel's highest tile height minus its lowest, and trees and water are
-## its tile counts of those surfaces.
+## its tile counts of those surfaces. The terms are D28's dollars before the money scale (D56);
+## price_scale is that scale, so land moves with the build costs (D57).
 
 const PATH: String = "res://data/land.json"
 
@@ -21,6 +23,8 @@ var water_tile_price: int = 0
 var min_price: int = 0
 var max_price: int = 0
 var price_round: int = 1
+## The money scale on every term above (D56, D57): 0.61.
+var price_scale: float = 1.0
 
 
 ## The prices in data/land.json. Fails an assert, and keeps the zero defaults, when the file
@@ -41,6 +45,11 @@ static func load_default() -> LandPrices:
 	lp.min_price = CourseData.read_int(data, "min_price", errors)
 	lp.max_price = CourseData.read_int(data, "max_price", errors)
 	lp.price_round = maxi(CourseData.read_int(data, "price_round", errors), 1)
+	var scale: Variant = data.get("price_scale")
+	if typeof(scale) in [TYPE_INT, TYPE_FLOAT] and float(scale) > 0.0:
+		lp.price_scale = float(scale)
+	else:
+		errors.append("price_scale must be a number above 0, got %s" % scale)
 	assert(errors.is_empty(), "%s: %s" % [PATH, errors])
 	return lp
 
@@ -64,9 +73,13 @@ func price(course: CourseData, p: Vector2i) -> int:
 					trees += 1
 				Surface.Type.WATER:
 					water += 1
-	var raw: int = base_price + relief_step_price * (hi - lo) + tree_tile_price * trees \
-			+ water_tile_price * water
-	var clamped: int = clampi(raw, min_price, max_price)
+	return scaled(base_price + relief_step_price * (hi - lo) + tree_tile_price * trees \
+			+ water_tile_price * water)
+
+
+## A raw price (D28's formula before the scale) scaled, clamped and rounded, in dollars.
+func scaled(raw: int) -> int:
+	var clamped: float = clampf(raw * price_scale, min_price * price_scale, max_price * price_scale)
 	return roundi(clamped / float(price_round)) * price_round
 
 
