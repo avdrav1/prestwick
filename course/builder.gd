@@ -44,6 +44,19 @@ extends RefCounted
 ## takes the price from the budget and is one undo step; undoing it gives the parcel up and
 ## the price back, and reruns the validator. Land is never sold back (D27).
 ##
+## Money (E4-S2, D56, D57; docs/design.md Economy and time): the course's one balance
+## (CourseData.land_budget) pays for building as for parcels. Painting charges the new surface's
+## EconomyTuning.price_of for each tile it changes (a surface over itself changes nothing and
+## costs nothing); raising or lowering charges height_step_price for each tile that moves. Tee
+## markers, cups, pars, opening and closing are free. An edit that costs more than the balance
+## is refused whole, emitting `refused` with money_refusal's reason, so a negative balance
+## (upkeep, E4-S4) pauses building and nothing else: the game never ends on it. Repainting
+## refunds nothing for the old surface; undo gives back exactly what its step charged (a
+## stroke's whole drag, or a parcel's price), whatever the balance did since. An unlimited
+## balance (New sandbox) charges nothing. credit, debit and restore_balance move the balance
+## outside the undo stack (fees and upkeep, E4-S4; a load, E4-S7); every change emits
+## money_changed.
+##
 ## Rule 3's graph (E3-S12): the builder keeps the validator's CourseValidator.Reach between
 ## checks and hands it the tiles written since the last one, so a check after an edit that
 ## changes no crossing (most paint, every raise and lower) reuses what rule 3 found. A write the
@@ -66,8 +79,11 @@ signal checked(issues: Dictionary)
 ## Emitted after a parcel was bought, or a purchase undone, with that parcel.
 signal land_changed(parcel: Vector2i)
 ## Emitted when an edit or a tee or cup placement did nothing because of a rule the player
-## can act on (E6-S4: "not your land"), with that one-line reason.
+## can act on (E6-S4: "not your land"; E4-S2: money_refusal), with that one-line reason.
 signal refused(reason: String)
+## Emitted after the balance changed (a charge, a refund, credit, debit or restore_balance),
+## with the balance now (CourseData.UNLIMITED_BUDGET when unlimited).
+signal money_changed(balance: int)
 
 ## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
 ## OB ground from E2-S3 (D9).
@@ -85,15 +101,17 @@ const TOO_MANY_HOLES: String = "a course has at most %d holes"
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
-## before the step when it changed them (null when it did not), and for a purchase the parcel
-## bought and the land budget before it (land_parcel NO_PARCEL when the step bought none).
+## before the step when it changed them (null when it did not), for a purchase the parcel
+## bought (land_parcel NO_PARCEL when the step bought none), and the dollars the step charged
+## (E4-S2: its paint, ground moved and parcel; 0 when the balance is unlimited), which undo
+## gives back.
 class Step:
 	extends RefCounted
 	const NO_PARCEL: Vector2i = Vector2i(-1, -1)
 	var tiles: Dictionary = {}
 	var holes: Variant = null
 	var land_parcel: Vector2i = NO_PARCEL
-	var land_budget: int = 0
+	var charged: int = 0
 	## E3-S61: a stroke's kept lines of play as they stood when it began (the builder's
 	## _lines_now and _lines_reads), so its undo, which puts the course back as it was then,
 	## need not measure the turns its tiles moved again. Empty when none were kept.
@@ -116,6 +134,10 @@ var validator: CourseValidator:
 var prices: LandPrices:
 	get:
 		return _prices
+## The build costs (E4-S2, data/economy.json).
+var economy: EconomyTuning:
+	get:
+		return _economy
 ## The latest validator run: every hole's failing rules, keyed by hole number
 ## (CourseValidator.check_course). Read-only.
 var issues: Dictionary:
@@ -134,6 +156,7 @@ var _course: CourseData
 var _tuning: BuilderTuning
 var _validator: CourseValidator
 var _prices: LandPrices
+var _economy: EconomyTuning
 var _issues: Dictionary = {}
 ## The latest validator run per slot (CourseValidator.check_slots), in CourseData.holes order.
 var _slot_issues: Array = []
@@ -174,11 +197,12 @@ var _lines_revision: int = -1
 
 
 func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null,
-		p_prices: LandPrices = null) -> void:
+		p_prices: LandPrices = null, p_economy: EconomyTuning = null) -> void:
 	_course = p_course
 	_tuning = p_tuning if p_tuning != null else BuilderTuning.load_default()
 	_validator = p_validator if p_validator != null else CourseValidator.new()
 	_prices = p_prices if p_prices != null else LandPrices.load_default()
+	_economy = p_economy if p_economy != null else EconomyTuning.load_default()
 	# A loaded course may bring in an open hole that fails a rule (a hand-edited or older
 	# file): close it now, before anyone reads the open flag. Not an undo step.
 	var was_open: Array[bool] = []
@@ -250,17 +274,38 @@ func place_refusal(cell: Vector2i) -> String:
 	return ""
 
 
-## Paints `surface` on the owned tiles under the brush. Returns true when any tile changed;
-## false, emitting `refused`, when none of the brush is owned (edit_refusal).
+## Paints `surface` on the owned tiles under the brush, charging its price for each tile that
+## changes (E4-S2). Returns true when any tile changed; false, emitting `refused`, when none of
+## the brush is owned (edit_refusal) or it costs more than the balance (money_refusal).
 func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 	assert(Surface.is_valid(surface), "surface out of range")
 	if _refuse(edit_refusal(center, size)):
 		return false
+	var cells: Array[Vector2i] = _paint_cells(center, surface, size)
+	var cost: int = cells.size() * _economy.price_of(surface)
+	if _refuse(money_refusal(cost)):
+		return false
 	var tiles := {}
-	for c: Vector2i in _owned_cells(brush_cells(center, size)):
-		if _course.get_surface(c.x, c.y) != surface:
-			_write(tiles, c, _course.get_height(c.x, c.y), surface)
-	return _commit(tiles)
+	for c: Vector2i in cells:
+		_write(tiles, c, _course.get_height(c.x, c.y), surface)
+	return _commit(tiles, cost)
+
+
+## What painting `surface` with a brush of `size` on `center` would cost now (E4-S2): its price
+## for each owned tile under it that is not that surface already. 0 when the balance is unlimited.
+func paint_cost(center: Vector2i, surface: Surface.Type, size: int) -> int:
+	if _course.has_unlimited_budget():
+		return 0
+	return _paint_cells(center, surface, size).size() * _economy.price_of(surface)
+
+
+## What raising (`delta` 1) or lowering (-1) the ground under a brush of `size` on `center`
+## would cost now (E4-S2): height_step_price for each owned tile that would move (not at the
+## clamp, not already moved by the open stroke). 0 when the balance is unlimited.
+func lift_cost(center: Vector2i, size: int, delta: int) -> int:
+	if _course.has_unlimited_budget():
+		return 0
+	return _lift_cells(center, size, delta).size() * _economy.height_step_price
 
 
 ## Raises the owned ground under the brush one step, clamped at MAX_HEIGHT. True when any
@@ -307,6 +352,66 @@ func stroke_start_heights() -> Dictionary:
 		var packed: int = _stroke.tiles[c]
 		out[c] = packed >> 4
 	return out
+
+
+# --- money ---
+
+## The balance (CourseData.land_budget, D57): dollars to build and buy land with, below 0 when
+## upkeep took it there, or CourseData.UNLIMITED_BUDGET (has_unlimited_money).
+func balance() -> int:
+	return _course.land_budget
+
+
+## True when nothing is charged (New sandbox, D10).
+func has_unlimited_money() -> bool:
+	return _course.has_unlimited_budget()
+
+
+## Why an edit costing `cost` dollars cannot be made now, or "" when it can (E4-S2): with the
+## balance below 0, "building is paused: the balance is -$X"; with less than `cost`, "costs $X,
+## you have $Y" (D27's words for a parcel). Never refused when it costs nothing or the balance
+## is unlimited.
+func money_refusal(cost: int) -> String:
+	if cost <= 0 or _course.has_unlimited_budget() or cost <= _course.land_budget:
+		return ""
+	if _course.land_budget < 0:
+		return "building is paused: the balance is %s" % LandPrices.money(_course.land_budget)
+	return "costs %s, you have %s" % [LandPrices.money(cost), LandPrices.money(_course.land_budget)]
+
+
+## Adds `amount` dollars to the balance (E4-S4: a green fee). Not an undo step. Nothing when the
+## balance is unlimited or `amount` is 0.
+func credit(amount: int) -> void:
+	_add_money(amount)
+
+
+## Takes `amount` dollars from the balance, below 0 if need be (E4-S4: upkeep). Not an undo step.
+func debit(amount: int) -> void:
+	_add_money(-amount)
+
+
+## Sets the balance to `amount`, or unlimited (a load, E4-S7: the saved balance). Not an undo step.
+func restore_balance(amount: int, unlimited: bool = false) -> void:
+	var to: int = CourseData.UNLIMITED_BUDGET if unlimited else amount
+	if to == _course.land_budget:
+		return
+	_course.set_land_budget(to)
+	money_changed.emit(to)
+
+
+func _add_money(amount: int) -> void:
+	if amount == 0 or _course.has_unlimited_budget():
+		return
+	_course.set_land_budget(_course.land_budget + amount)
+	money_changed.emit(_course.land_budget)
+
+
+## Takes `cost` from the balance for `step`, which undo gives back (nothing when unlimited).
+func _charge(step: Step, cost: int) -> void:
+	if cost <= 0 or _course.has_unlimited_budget():
+		return
+	step.charged += cost
+	_add_money(-cost)
 
 
 # --- holes ---
@@ -557,7 +662,8 @@ func parcel_price(parcel: Vector2i) -> int:
 
 ## Why parcel `parcel` cannot be bought now, or "" when it can: "no such parcel", "already
 ## yours", "not next to your land" (no owned parcel shares an edge with it; a corner is not
-## enough), or "costs $X, you have $Y" (D27). Checked in that order.
+## enough), or money_refusal's reason: "costs $X, you have $Y" (D27), or building is paused by
+## a balance below 0 (E4-S2). Checked in that order.
 func buy_refusal(parcel: Vector2i) -> String:
 	if not _course.parcel_in_bounds(parcel):
 		return "no such parcel"
@@ -570,11 +676,7 @@ func buy_refusal(parcel: Vector2i) -> String:
 			break
 	if not next_to_owned:
 		return "not next to your land"
-	if not _course.has_unlimited_budget():
-		var cost: int = parcel_price(parcel)
-		if cost > _course.land_budget:
-			return "costs %s, you have %s" % [LandPrices.money(cost), LandPrices.money(_course.land_budget)]
-	return ""
+	return money_refusal(parcel_price(parcel))
 
 
 ## Buys parcel `parcel`: owns it and takes its price from the land budget (nothing when the
@@ -586,9 +688,7 @@ func buy_parcel(parcel: Vector2i) -> bool:
 	end_stroke()
 	var step := Step.new()
 	step.land_parcel = parcel
-	step.land_budget = _course.land_budget
-	if not _course.has_unlimited_budget():
-		_course.set_land_budget(_course.land_budget - parcel_price(parcel))
+	_charge(step, parcel_price(parcel))
 	_course.set_parcel_owned(parcel, true)
 	_reach = null
 	land_changed.emit(parcel)
@@ -627,8 +727,9 @@ func undo() -> bool:
 	if step.land_parcel != Step.NO_PARCEL:
 		_course.set_parcel_owned(step.land_parcel, false)
 		_reach = null
-		_course.set_land_budget(step.land_budget)
 		land_changed.emit(step.land_parcel)
+	# E4-S2: exactly what the step charged comes back, whatever the balance did since (D56, D27).
+	_add_money(step.charged)
 	if not step.lines.is_empty():
 		# The course is as it was when the stroke began: so are the lines kept then.
 		_lines_now = step.lines.duplicate()
@@ -648,17 +749,38 @@ func undo() -> bool:
 func _lift(center: Vector2i, size: int, delta: int) -> bool:
 	if _refuse(edit_refusal(center, size)):
 		return false
+	var cells: Array[Vector2i] = _lift_cells(center, size, delta)
+	var cost: int = cells.size() * _economy.height_step_price
+	if _refuse(money_refusal(cost)):
+		return false
 	var tiles := {}
+	for c: Vector2i in cells:
+		_write(tiles, c, _course.get_height(c.x, c.y) + delta, _course.get_surface(c.x, c.y))
+		if _stroke != null:
+			_stroke_lifted[c] = true
+	return _commit(tiles, cost)
+
+
+## The owned tiles under the brush that painting `surface` would change.
+func _paint_cells(center: Vector2i, surface: Surface.Type, size: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
+		if _course.get_surface(c.x, c.y) != surface:
+			out.append(c)
+	return out
+
+
+## The owned tiles under the brush that raising or lowering by `delta` would move: not at the
+## clamp, and not moved already by the open stroke.
+func _lift_cells(center: Vector2i, size: int, delta: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
 	for c: Vector2i in _owned_cells(brush_cells(center, size)):
 		if _stroke != null and _stroke_lifted.has(c):
 			continue
 		var h: int = _course.get_height(c.x, c.y)
-		var to: int = clampi(h + delta, 0, CourseData.MAX_HEIGHT)
-		if to != h:
-			_write(tiles, c, to, _course.get_surface(c.x, c.y))
-			if _stroke != null:
-				_stroke_lifted[c] = true
-	return _commit(tiles)
+		if clampi(h + delta, 0, CourseData.MAX_HEIGHT) != h:
+			out.append(c)
+	return out
 
 
 ## Records the tile's old value in `tiles` (first write wins) and writes the new one.
@@ -707,12 +829,14 @@ func _line_now(h: HoleData) -> PackedVector2Array:
 
 
 ## Files the tiles one terrain edit wrote into its step (the open stroke's, or a new one),
-## closes every open hole whose footprint they touch, and announces them. Outside a stroke
-## the step is finished at once; a stroke's is finished when it ends. False when empty.
-func _commit(tiles: Dictionary) -> bool:
+## charges its `cost` there (E4-S2), closes every open hole whose footprint they touch, and
+## announces them. Outside a stroke the step is finished at once; a stroke's is finished when
+## it ends. False when empty.
+func _commit(tiles: Dictionary, cost: int = 0) -> bool:
 	if tiles.is_empty():
 		return false
 	var step: Step = _stroke if _stroke != null else Step.new()
+	_charge(step, cost)
 	for c: Vector2i in tiles:
 		if not step.tiles.has(c):
 			step.tiles[c] = tiles[c]

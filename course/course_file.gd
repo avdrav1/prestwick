@@ -9,8 +9,8 @@ extends SceneTree
 ## validate runs the game's own validator (course/validator.gd) on the file and prints each
 ## rule of each hole as pass or FAIL, with the tile at fault and the reason. generate writes
 ## a CourseGenerator course (hilly: over LandGenerator heights), by default to courses/gen_par<par>_<terrain>_<water>.json.
-## inspect prints the size, the height range, the tile count of each surface present, and
-## the owned parcel grid and the land budget left (or "unlimited"), and one line per hole
+## inspect prints the size, the height range, the tile count of each surface present, the
+## build cost of painting them (E4-S2, _inspect_cost), and the owned parcel grid and the land budget left (or "unlimited"), and one line per hole
 ## (par, yardage, open or closed, the validator's PASS or FAIL) with a line for each failing rule. Paths without res:// or user:// are taken from the project folder.
 ##
 ## Exit code: 0 when every rule passes (or the file was written, or inspected), 1 when a rule
@@ -95,6 +95,7 @@ static func inspect(path: String, out: Array[String]) -> int:
 		if counts[s] > 0:
 			parts.append("%s %d" % [Surface.name_of(s), counts[s]])
 	out.append("surfaces: %s" % ", ".join(parts))
+	_inspect_cost(counts, EconomyTuning.load_default(), out)
 	_inspect_land(course, out)
 	out.append("holes: %d" % course.holes.size())
 	var validator := CourseValidator.new()
@@ -108,6 +109,24 @@ static func inspect(path: String, out: Array[String]) -> int:
 		for issue: CourseValidator.Issue in issues:
 			out.append("  rule %d FAIL at (%d, %d): %s" % [issue.rule, issue.tile.x, issue.tile.y, issue.reason])
 	return 0
+
+
+## The build cost lines of inspect (E4-S2): what painting the course's tiles costs at
+## data/economy.json's tile_price, on land of plain rough (the land a file starts from is not in
+## it, so every tile not rough counts as painted, and height moved is not counted), then one
+## line per surface painted: its tiles, price and dollars.
+static func _inspect_cost(counts: Array[int], economy: EconomyTuning, out: Array[String]) -> void:
+	var total: int = 0
+	var lines: Array[String] = []
+	for s: int in counts.size():
+		if s == Surface.Type.ROUGH or counts[s] == 0:
+			continue
+		var cost: int = counts[s] * economy.price_of(s)
+		total += cost
+		lines.append("  %s: %d x %s = %s" % [Surface.name_of(s), counts[s],
+				LandPrices.money(economy.price_of(s)), LandPrices.money(cost)])
+	out.append("build cost: %s to paint every tile not rough (heights not counted)" % LandPrices.money(total))
+	out.append_array(lines)
 
 
 ## The land lines of inspect (E6-S20): the parcel count, how many are owned, the owned grid

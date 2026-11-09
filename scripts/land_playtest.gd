@@ -85,8 +85,8 @@ func _build() -> bool:
 		return false
 	var lp := LandPrices.load_default()
 	_check(c.land_budget == lp.land_budget, "with the land budget, %s" % LandPrices.money(lp.land_budget))
-	_check(_main.land_panel.budget_label.text.contains(LandPrices.money(lp.land_budget)),
-			"the land panel shows it: \"%s\"" % _main.land_panel.budget_label.text)
+	_check(_main.money_panel.balance_label.text.contains(LandPrices.money(lp.land_budget)),
+			"the HUD shows it: \"%s\"" % _main.money_panel.balance_label.text)
 	_check(_main.build_palette.buy_button.visible, "Buy land is on the palette")
 	var b: CourseBuilder = _main.build_tool.builder
 	var block := LandGenerator.start_block(c.width, c.height)

@@ -30,7 +30,7 @@ Surface enum: 0 fairway, 1 rough, 2 green, 3 tee, 4 bunker, 5 water, 6 trees, 7 
 
 Holes (E3-S2): at most `max_holes` (9, `course/builder_tuning.tres`), each numbered 1 to 9. A file with more holes, or a number outside 1 to 9, does not load (`validate` exits 2 and says why). Two holes sharing a number load and fail rule 1.
 
-Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 tiles, `CourseData.PARCEL_TILES`), top row first, one character per parcel, `"1"` owned and `"0"` not, so a 40 x 40 map has 3 rows of 3 (the last parcels partial). `land_budget` is the whole dollars left to buy parcels with, or `null` for no limit (New sandbox). Version 1 files (no `owned`, no `land_budget`) still load: `course/save.gd` migrates them with every parcel owned and `land_budget` null, and saves them as version 2. `generate` writes every parcel owned and `null`.
+Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 tiles, `CourseData.PARCEL_TILES`), top row first, one character per parcel, `"1"` owned and `"0"` not, so a 40 x 40 map has 3 rows of 3 (the last parcels partial). `land_budget` is the balance (E4-S2, D57: the one balance that building and parcels both come out of) in whole dollars, below 0 when upkeep took it there, or `null` for no limit (New sandbox). Version 1 files (no `owned`, no `land_budget`) still load: `course/save.gd` migrates them with every parcel owned and `land_budget` null, and saves them as version 2. `generate` writes every parcel owned and `null`.
 
 ## Headless entry point
 
@@ -55,7 +55,7 @@ Writes `courses/gen_par<par>_<terrain>_<water>.json` (or `--out=<path>`): a tee 
 
 ## inspect
 
-Prints the size in tiles and yards, the height range, the tile count of each surface present, the land (`land: <w>x<h> parcels of 16 tiles, <n> owned`, then the owned grid one parcel row per line as in `owned`, then `land budget: $4,200` or `land budget: unlimited`), and one line per hole: par, yardage, open or closed, and the validator's PASS or FAIL, then a line for each failing rule with its tile and reason. Build cost at the rates in `docs/design.md` is not printed yet: tile costs get a resource in E4.
+Prints the size in tiles and yards, the height range, the tile count of each surface present, the land (`land: <w>x<h> parcels of 16 tiles, <n> owned`, then the owned grid one parcel row per line as in `owned`, then `land budget: $4,200` or `land budget: unlimited`), and one line per hole: par, yardage, open or closed, and the validator's PASS or FAIL, then a line for each failing rule with its tile and reason. After the surfaces, the build cost (E4-S2): `build cost: $957 to paint every tile not rough (heights not counted)` at `data/economy.json`'s `tile_price` (D56), then one line per painted surface, `  green: 45 x $15 = $675`. The file does not say what land it was built on, so every tile not rough counts as painted (a generated land's own trees and water too) and height moved is left out.
 
 ## Rules
 

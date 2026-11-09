@@ -43,14 +43,16 @@ func _price(parcel: Vector2i) -> int:
 	return _tool.builder.parcel_price(parcel)
 
 
-func test_budget_is_always_on_the_build_hud() -> void:
+## E4-S2: the land budget line became the balance, shown in Build and Play (MoneyPanel).
+func test_budget_is_always_on_the_hud() -> void:
 	assert_true(_panel.visible)
-	assert_eq(_panel.budget_label.text, "Land budget: $5,000")
+	assert_eq(_main.money_panel.balance_label.text, "Balance: $5,000")
 	_main.toggle_mode()
-	assert_false(_panel.visible, "Build HUD only")
+	assert_false(_panel.visible, "the land panel is Build's")
+	assert_true(_main.money_panel.visible, "the balance shows in Play too")
 	_main.toggle_mode()
 	_main.new_sandbox()
-	assert_eq(_panel.budget_label.text, "Land budget: unlimited")
+	assert_eq(_main.money_panel.balance_label.text, "Balance: unlimited")
 
 
 func test_hover_shows_price_and_whether_it_can_be_bought() -> void:
@@ -76,7 +78,7 @@ func test_buy_waits_for_the_confirm() -> void:
 	_panel.confirm_button.pressed.emit()
 	assert_true(_main.course.is_parcel_owned(BUYABLE))
 	assert_eq(_main.course.land_budget, 5000 - cost)
-	assert_eq(_panel.budget_label.text, "Land budget: %s" % LandPrices.money(5000 - cost))
+	assert_eq(_main.money_panel.balance_label.text, "Balance: %s" % LandPrices.money(5000 - cost))
 	assert_false(_panel.confirm_box.visible)
 	var cell: Vector2i = _tile_in(BUYABLE)
 	assert_true((_main.course_view.chunk_at(cell).parts[cell][4] as PackedVector2Array).is_empty(),
@@ -163,7 +165,7 @@ func test_undo_gives_the_parcel_back_on_the_hud() -> void:
 	assert_true(_panel.confirm_buy())
 	assert_true(_tool.undo())
 	assert_false(_main.course.is_parcel_owned(BUYABLE))
-	assert_eq(_panel.budget_label.text, "Land budget: $5,000")
+	assert_eq(_main.money_panel.balance_label.text, "Balance: $5,000")
 	var cell: Vector2i = _tile_in(BUYABLE)
 	assert_false((_main.course_view.chunk_at(cell).parts[cell][4] as PackedVector2Array).is_empty(), "hatched again")
 
@@ -313,8 +315,8 @@ func test_confirm_keeps_clear_of_the_hud() -> void:
 	assert_true(_panel.get_global_rect().grow(4.0).has_point(_panel.confirm_anchor(clicked)),
 			"the clicked tile is under the land panel")
 	var box: Rect2 = _panel.confirm_box.get_global_rect()
-	assert_eq(_panel.hud_rects().size(), 1 + 7,
-			"the land panel and the seven HUD controls (E3-S62: the guests' speed panel in Build)")
+	assert_eq(_panel.hud_rects().size(), 1 + 8,
+			"the land panel and the eight HUD controls (E3-S62: the guests' speed panel in Build; E4-S2: the balance)")
 	for r: Rect2 in _panel.hud_rects():
 		assert_false(box.intersects(r), "the confirm %s clears the HUD %s" % [box, r])
 	assert_true(_panel.get_viewport_rect().encloses(box), "and stays on screen")

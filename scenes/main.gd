@@ -34,6 +34,8 @@ var rating_history: Array[float] = []
 const SPEED_PANEL_GAP: float = 8.0
 ## The speed panel's top as main.tscn places it, for Play (_place_speed_panel); -1 until read.
 var _speed_panel_top: float = -1.0
+## The feed panel's top as main.tscn places it (E4-S2: Play moves it under the balance).
+var _feed_panel_top: float = -1.0
 
 @onready var mode_label: Label = $HUD/ModeLabel
 @onready var course_view: CourseView = $CourseView
@@ -64,6 +66,8 @@ var _speed_panel_top: float = -1.0
 @onready var cup_pointer: CupPointer = $HUD/CupPointer
 ## The save and load notice (E4-S7).
 @onready var save_notice: SaveNotice = $HUD/SaveNotice
+## The balance, in Build and Play (E4-S2).
+@onready var money_panel: MoneyPanel = $HUD/MoneyPanel
 
 
 func _ready() -> void:
@@ -82,6 +86,8 @@ func _ready() -> void:
 	# Build stands the speed panel under the land panel, whose height follows its rows (E3-S62).
 	land_panel.resized.connect(_place_speed_panel)
 	land_panel.visibility_changed.connect(_place_speed_panel)
+	money_panel.resized.connect(_place_speed_panel)
+	sim_speed_panel.resized.connect(_place_speed_panel)
 	swing_control.bind(shot_view, aim_view)
 	swing_panel.bind(swing_control)
 	green_view.bind(swing_control, shot_view, aim_view)
@@ -138,6 +144,7 @@ func show_course(c: CourseData) -> void:
 	build_tool.select_hole(first.number if first != null else 1)
 	frame_first_hole()
 	land_panel.watch(builder)
+	money_panel.watch(builder)
 	# New sandbox (and every version 1 file) has an unlimited budget and owns every parcel:
 	# nothing to buy, so the Buy land tool is hidden (E6-S6).
 	build_palette.set_buying(not c.has_unlimited_budget())
@@ -284,8 +291,8 @@ func hud_controls() -> Array[Control]:
 
 func _hud_groups() -> Array:
 	return [
-		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, sim_speed_panel,
-				feed_panel],
+		[mode_label, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel,
+				sim_speed_panel, feed_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
 	]
@@ -442,18 +449,19 @@ func load_game(path: String = GameSave.PATH) -> bool:
 	return true
 
 
-## The save's economy fields (E4-S7's interface): E4-S2 sets `money` from the balance and E4-S5
-## `rating_history` from the rating. Until E4-S2 the money is the land budget.
+## The save's economy fields (E4-S7's interface): `money` is the balance (E4-S2) and E4-S5
+## fills `rating_history` from the rating.
 func economy_to_save(s: GameSave.State) -> void:
-	s.unlimited_money = course.has_unlimited_budget()
-	s.money = 0 if s.unlimited_money else course.land_budget
+	var b: CourseBuilder = build_tool.builder
+	s.unlimited_money = b.has_unlimited_money()
+	s.money = 0 if s.unlimited_money else b.balance()
 	s.rating_history = rating_history.duplicate()
 
 
-## Takes the economy back from a loaded save (economy_to_save's other half). Until E4-S2 the
-## money is the land budget, which came back with the course (CourseSave), so only the rating
-## history is taken here.
+## Takes the economy back from a loaded save (economy_to_save's other half): the balance, through
+## the builder (CourseBuilder.restore_balance), and the rating history.
 func economy_from_save(s: GameSave.State) -> void:
+	build_tool.builder.restore_balance(s.money, s.unlimited_money)
 	rating_history = s.rating_history.duplicate()
 
 
@@ -584,6 +592,8 @@ func _apply_mode() -> void:
 	guest_sim.running = true
 	guest_view.visible = true
 	sim_speed_panel.visible = true
+	# The balance shows in Build and Play (E4-S2).
+	money_panel.visible = true
 	_place_speed_panel()
 	# The feed panel is read in Play (its lines link to Build): it shows from the start of Play,
 	# so the free view never shifts at its first line (E3-S67). In Build the feed still takes every
@@ -606,22 +616,37 @@ func _apply_mode() -> void:
 
 ## The speed panel stands in the left column under the controls shown (E3-S62): in Play where
 ## the scene puts it, under the mode button; in Build under the land panel (or New sandbox when
-## it hides). The land panel changes height with its rows, so it calls this again (_ready
-## connects its resized).
+## it hides). The balance (E4-S2) stands just above it in both, so in Play the feed panel moves
+## down under the speed panel by the balance's height. The land panel changes height with its
+## rows, so it calls this again (_ready connects its resized, and the money and speed panels').
 func _place_speed_panel() -> void:
 	if _speed_panel_top < 0.0:
 		_speed_panel_top = sim_speed_panel.offset_top
+		_feed_panel_top = feed_panel.offset_top
 	var top: float = _speed_panel_top
 	if mode == Mode.BUILD:
 		var above: float = mode_button.offset_bottom
 		for c: Control in [new_course_button, new_sandbox_button, land_panel]:
 			if c.visible:
-				above = maxf(above, c.offset_top + maxf(c.offset_bottom - c.offset_top,
-						c.get_combined_minimum_size().y))
+				above = maxf(above, _bottom_of(c))
 		top = maxf(above + SPEED_PANEL_GAP, _speed_panel_top)
-	var h: float = sim_speed_panel.offset_bottom - sim_speed_panel.offset_top
-	sim_speed_panel.offset_top = top
-	sim_speed_panel.offset_bottom = top + h
+	top = _stack(money_panel, top)
+	top = _stack(sim_speed_panel, top)
+	if mode == Mode.PLAY:
+		_stack(feed_panel, maxf(top, _feed_panel_top))
+
+
+## Puts `c` at `top` keeping its height, and returns where the next control under it goes.
+func _stack(c: Control, top: float) -> float:
+	var h: float = c.offset_bottom - c.offset_top
+	c.offset_top = top
+	c.offset_bottom = top + h
+	return _bottom_of(c) + SPEED_PANEL_GAP
+
+
+## Where `c`'s bottom will be: its top plus its anchored height, at least its minimum height.
+func _bottom_of(c: Control) -> float:
+	return c.offset_top + maxf(c.offset_bottom - c.offset_top, c.get_combined_minimum_size().y)
 
 
 ## One batch per builder tiles_changed: each issue box is tested once per batch (E3-S16).

@@ -5,8 +5,10 @@ extends Resource
 ##
 ## Land (D26, E6-S3): the map is split into parcels of PARCEL_TILES x PARCEL_TILES tiles,
 ## parcel (p, q) holding tiles x 16p to 16p + 15 and y 16q to 16q + 15, clipped to the map.
-## Each parcel has one owned flag, and next to the flags the course holds the land budget left
-## in whole dollars, or UNLIMITED_BUDGET (New sandbox, and every version 1 file).
+## Each parcel has one owned flag, and next to the flags the course holds the balance (E4-S2,
+## D57: the one balance, still named land_budget, which building and parcels both come out of)
+## in whole dollars, below 0 when upkeep took it there, or UNLIMITED_BUDGET (New sandbox, and
+## every version 1 file).
 ##
 ## Readers (renderer, ball, guests, validator) use only the getters:
 ##   width, height, in_bounds(x, y), get_height(x, y), get_surface(x, y) (off-map
@@ -23,7 +25,7 @@ extends Resource
 ## Serialised as course format version 2 (.claude/skills/course-file/SKILL.md):
 ## tiles are row-major (index = y * width + x), one byte each, (height << 4) | surface,
 ## base64 encoded; "owned" is one string per parcel row (q), one "1" or "0" per parcel (p);
-## "land_budget" is the dollars left, or null for unlimited. from_dict reads version 2 only:
+## "land_budget" is the balance in dollars (below 0 allowed, E4-S2), or null for unlimited. from_dict reads version 2 only:
 ## course/save.gd migrates a version 1 file first (CourseSave.migrate).
 
 const FORMAT_VERSION: int = 2
@@ -31,8 +33,9 @@ const MAX_HEIGHT: int = 7
 ## Tiles along a parcel's edge (D26). A format constant, not a tunable: the saved owned flags
 ## are indexed by it, so changing it needs a new format version and a migration.
 const PARCEL_TILES: int = 16
-## land_budget when there is no limit (New sandbox, version 1 files): null in a file.
-const UNLIMITED_BUDGET: int = -1
+## land_budget when there is no limit (New sandbox, version 1 files): null in a file. Far below
+## any balance, since a balance may go below 0 (E4-S2: negative balance pauses building).
+const UNLIMITED_BUDGET: int = -(1 << 62)
 
 var width: int:
 	get:
@@ -60,7 +63,8 @@ var parcels_wide: int:
 var parcels_high: int:
 	get:
 		return ceili(_height / float(PARCEL_TILES))
-## Dollars left to buy parcels with, or UNLIMITED_BUDGET.
+## The balance (E4-S2, D57): dollars left to build and buy parcels with, below 0 when upkeep
+## took it there, or UNLIMITED_BUDGET.
 var land_budget: int:
 	get:
 		return _land_budget
@@ -310,9 +314,10 @@ func set_parcel_owned(p: Vector2i, owned: bool) -> void:
 	_revision += 1
 
 
-## Sets the land budget left: whole dollars, 0 or more, or UNLIMITED_BUDGET.
+## Sets the balance (the land budget, D57): whole dollars, below 0 allowed (E4-S2), or
+## UNLIMITED_BUDGET.
 func set_land_budget(budget: int) -> void:
-	assert(budget >= 0 or budget == UNLIMITED_BUDGET, "budget must be 0 or more, or unlimited")
+	assert(budget > UNLIMITED_BUDGET or budget == UNLIMITED_BUDGET, "balance out of range")
 	_land_budget = budget
 
 
@@ -371,8 +376,9 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 		errors.append("land_budget is missing (null for unlimited)")
 	elif data["land_budget"] != null:
 		budget = read_int(data, "land_budget", errors)
-		if errors.size() == start and budget < 0:
-			errors.append("land_budget must be 0 or more, or null, got %d" % budget)
+		# A balance may be below 0 (E4-S2), never as low as the unlimited marker.
+		if errors.size() == start and budget <= UNLIMITED_BUDGET:
+			errors.append("land_budget must be whole dollars, or null, got %d" % budget)
 	if errors.size() > start:
 		return null
 

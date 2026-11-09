@@ -100,7 +100,7 @@ func test_main_starts_on_a_new_course() -> void:
 	assert_eq(_owned(m.course), _block_parcels())
 	assert_eq(m.course.land_budget, 5000)
 	assert_same(m.build_tool.builder.course, m.course)
-	assert_eq(m.land_panel.budget_label.text, "Land budget: $5,000")
+	assert_eq(m.money_panel.balance_label.text, "Balance: $5,000")
 	assert_true(m.build_palette.buy_button.visible, "buying shows on a New course")
 
 
@@ -136,7 +136,7 @@ func test_main_new_sandbox_hides_buying() -> void:
 	assert_eq(_owned(m.course).size(), 64, "every parcel owned")
 	assert_false(m.build_palette.buy_button.visible, "no Buy land tool in New sandbox")
 	assert_ne(m.build_tool.tool, BuildTool.Tool.BUY, "a selected Buy land tool steps back to paint")
-	assert_eq(m.land_panel.budget_label.text, "Land budget: unlimited")
+	assert_eq(m.money_panel.balance_label.text, "Balance: unlimited")
 	m.new_course(7)
 	assert_true(m.build_palette.buy_button.visible, "back on a New course")
 

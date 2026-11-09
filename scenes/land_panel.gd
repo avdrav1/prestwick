@@ -1,7 +1,6 @@
 class_name LandPanel
 extends PanelContainer
-## The Build-mode land panel (E6-S5, D26 to D29, docs/design.md Land): the land budget, always;
-## the hovered parcel's price and whether it can be bought; a tool's hint before the click
+## The Build-mode land panel (E6-S5, D26 to D29, docs/design.md Land): the hovered parcel's price and whether it can be bought; a tool's hint before the click
 ## when it would do nothing on the hovered tile ("Paint: not your land"); the builder's
 ## refusal after a click that did nothing; and the confirm for a purchase. A view onto a
 ## BuildTool and its builder: it never writes the course, and a confirmed purchase goes
@@ -15,6 +14,9 @@ extends PanelContainer
 ## there; kept on screen and clear of the HUD, opaque), and Enter (buy_confirm) buys while
 ## Esc (buy_cancel) cancels. Parcels are named by parcel_name, a compass point and a distance from the map's
 ## centre, where the starting block is, never by grid coordinates.
+##
+## E4-S2: the land budget line moved to the MoneyPanel, the one balance shown in Build and Play,
+## which building and parcels both come out of (D57).
 
 const NONE: Vector2i = TilePicker.NONE
 ## Keys for a pending purchase (project.godot: Enter and keypad Enter, Esc).
@@ -31,7 +33,6 @@ const TOOL_NAMES: Dictionary = {
 	BuildTool.Tool.TEE: "Tee", BuildTool.Tool.CUP: "Cup", BuildTool.Tool.BUY: "Buy",
 }
 
-var budget_label: Label
 ## The hovered parcel: "NW parcel, 130 yd out: $1,150, click to buy".
 var parcel_label: Label
 ## The current tool's refusal on the hovered tile, before the click.
@@ -70,8 +71,6 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	add_child(box)
-	budget_label = Label.new()
-	box.add_child(budget_label)
 	parcel_label = Label.new()
 	box.add_child(parcel_label)
 	hint_label = _warning_label(box)
@@ -278,20 +277,16 @@ func cancel_buy() -> void:
 		refresh()
 
 
-## Shows the budget, the hovered parcel and the hints as the builder has them now.
+## Shows the hovered parcel and the hints as the builder has them now.
 func refresh() -> void:
-	if budget_label == null:
+	if parcel_label == null:
 		return
 	var b: CourseBuilder = _builder()
 	if b == null:
-		budget_label.text = ""
 		parcel_label.visible = false
 		hint_label.visible = false
 		message_label.visible = false
 		return
-	var c: CourseData = b.course
-	budget_label.text = "Land budget: %s" % ("unlimited" if c.has_unlimited_budget()
-			else LandPrices.money(c.land_budget))
 	parcel_label.text = _parcel_line(b)
 	parcel_label.visible = not parcel_label.text.is_empty()
 	var hint: String = "" if _tool.tool == BuildTool.Tool.BUY else _tool.hover_hint()

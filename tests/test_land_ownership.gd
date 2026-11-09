@@ -201,7 +201,8 @@ func test_undo_gives_the_parcel_up_and_the_price_back() -> void:
 	watch_signals(b)
 	assert_true(b.undo())
 	assert_false(c.is_parcel_owned(Vector2i(4, 5)))
-	assert_eq(c.land_budget, 5000)
+	assert_eq(c.land_budget, 5000 - b.economy.price_of(Surface.Type.FAIRWAY),
+			"the price back; the paint stays paid for (E4-S2)")
 	assert_eq(c.content_hash(), after_paint, "the purchase alone is undone")
 	assert_signal_emitted_with_parameters(b, "land_changed", [Vector2i(4, 5)])
 	assert_true(b.undo())
@@ -310,7 +311,7 @@ func test_v2_rejects_bad_ownership_and_budget() -> void:
 	d.erase("owned")
 	_rejected(d, "owned")
 	d = good.duplicate(true)
-	d["land_budget"] = -5
+	d["land_budget"] = CourseData.UNLIMITED_BUDGET
 	_rejected(d, "land_budget")
 	d = good.duplicate(true)
 	d["land_budget"] = 10.5
@@ -318,6 +319,10 @@ func test_v2_rejects_bad_ownership_and_budget() -> void:
 	d = good.duplicate(true)
 	d.erase("land_budget")
 	_rejected(d, "land_budget")
+	d = good.duplicate(true)
+	d["land_budget"] = -120
+	var owing := CourseData.from_dict(d, [] as Array[String])
+	assert_true(owing != null and owing.land_budget == -120, "a balance below 0 loads (E4-S2)")
 	d = good.duplicate(true)
 	d["land_budget"] = 2500.0
 	var errors: Array[String] = []

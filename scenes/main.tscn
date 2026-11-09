@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://scenes/green_view.gd" id="20_green_view"]
 [ext_resource type="Script" path="res://scenes/cup_pointer.gd" id="cup_pointer"]
 [ext_resource type="Script" path="res://scenes/save_notice.gd" id="save_notice"]
+[ext_resource type="Script" path="res://scenes/money_panel.gd" id="money_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -148,6 +149,13 @@ offset_right = -16.0
 offset_bottom = 16.0
 grow_horizontal = 0
 script = ExtResource("12_score_card")
+
+[node name="MoneyPanel" type="PanelContainer" parent="HUD"]
+offset_left = 16.0
+offset_top = 88.0
+offset_right = 196.0
+offset_bottom = 88.0
+script = ExtResource("money_panel")
 
 [node name="SimSpeedPanel" type="PanelContainer" parent="HUD"]
 visible = false

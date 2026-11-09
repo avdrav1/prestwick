@@ -29,9 +29,9 @@ class State:
 	var seed_value: int = 0
 	## The day to resume at the morning of, from 1 (GuestSim.morning_day).
 	var day: int = 1
-	## Dollars (may be below 0 once E4-S2 lets the balance go negative), unless
-	## `unlimited_money` (null in the file: New sandbox). Until E4-S2 it is the land budget, which
-	## the course also carries.
+	## The balance in dollars (E4-S2; below 0 when upkeep took it there), unless
+	## `unlimited_money` (null in the file: New sandbox). The course carries a balance too
+	## (land_budget); a load takes this one (Main.economy_from_save).
 	var money: int = 0
 	var unlimited_money: bool = false
 	## The course rating at the end of each day so far, oldest first (E4-S5 fills it).
