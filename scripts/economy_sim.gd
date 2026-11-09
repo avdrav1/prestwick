@@ -36,10 +36,13 @@ const PlaytestNineFx := preload("res://tests/fixtures/playtest_nine.gd")
 ## and bunkers about $6,000. "About" read as within a third either way.
 const PAR3_TARGET := Vector2(1000.0, 2000.0)
 const PAR5_TARGET := Vector2(4000.0, 8000.0)
-## The same bands at D56's money scale 0.61, rounded to $100 (docs/design.md Balance targets,
-## economy): a basic par 3 $600 to $1,200, a par 5 with hazards $2,400 to $4,900.
-const CHOSEN_PAR3_TARGET := Vector2(600.0, 1200.0)
-const CHOSEN_PAR5_TARGET := Vector2(2400.0, 4900.0)
+## The same bands at the money scale (D56; data/land.json's price_scale), rounded to $100
+## (docs/design.md Balance targets, economy): at 0.63 (E4-S8) a basic par 3 $600 to $1,300, a
+## par 5 with hazards $2,500 to $5,000.
+func chosen_band(band: Vector2) -> Vector2:
+	var s := chosen_land.price_scale
+	return Vector2(roundf(band.x * s / 100.0) * 100.0, roundf(band.y * s / 100.0) * 100.0)
+
 ## The fee the run's player sets, as a share of the ceiling: D58's curve earns most there.
 const CHOSEN_FEE_SHARE: float = 0.8
 ## docs/design.md Balance targets, economy: 9 holes and 3 stars in 25 to 35 days at one hole
@@ -443,9 +446,25 @@ static func guests_for(e: Dictionary, stars: float, holes: int) -> int:
 	return mini(roundi(n), int(e.cap))
 
 
-## Stars shown for a rating: to the half star, 1 to 5.
+## Stars shown for a rating: to the half star, 1 to 5 (the game's, EconomyTuning.stars_of).
 static func stars_of(rating: float) -> float:
-	return clampf(roundf(rating * 2.0) / 2.0, 1.0, 5.0)
+	return EconomyTuning.stars_of(rating)
+
+
+## E4-S8: the fee the chosen income's player sets at `stars`, as the game holds it
+## (GuestSim.fee_ceiling, set_fee): Vector2(fee, its share of the ceiling), the fee `fee_share`
+## of the ceiling in whole dollars down, the ceiling `fee_ceiling_per_star` x stars in whole
+## dollars down. `fee_share` < 0 is a player who leaves the slider at `start_fee`, which a
+## falling ceiling lowers and a rising one leaves (GuestSim._on_feed_changed).
+static func chosen_fee(e: Dictionary, stars: float, held: int = -1) -> Vector2:
+	var t: EconomyTuning = e.tuning
+	var ceiling := floori(t.fee_ceiling(stars))
+	var fee: int
+	if float(e.fee_share) < 0.0:
+		fee = mini(t.start_fee if held < 0 else held, ceiling)
+	else:
+		fee = floori(ceiling * float(e.fee_share) + 1e-9)
+	return Vector2(fee, 0.0 if ceiling <= 0 else float(fee) / ceiling)
 
 
 # --- the run ---
@@ -482,6 +501,7 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 	var star_day := -1
 	var log: PackedStringArray = []
 	var acc := [0.0, 0.0]
+	var held_fee := -1
 	for day in range(1, RUN_DAYS + 1):
 		var built := ""
 		if open < plan.size() and day >= next_build:
@@ -499,6 +519,13 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 		var stars := stars_of(_rating(window, float(start[0]), int(start[1])))
 		var fee := float(e.ceiling) * stars * float(e.fee_share)
 		var guests := guests_for(e, stars, open)
+		if e.has("tuning"):
+			# E4-S8: the game's fee (GuestSim): whole dollars, under a ceiling of whole dollars
+			# down, the morning's arrivals at the fee's share of that ceiling.
+			var fp := chosen_fee(e, stars, held_fee)
+			fee = fp.x
+			held_fee = int(fp.x)
+			guests = 0 if open <= 0 else (e.tuning as EconomyTuning).arrivals(stars, fp.y)
 		var income := roundi(guests * fee)
 		var upkeep := upkeep_each * open
 		money += income - upkeep
@@ -692,9 +719,9 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 	for f: Dictionary in fx:
 		var target := any
 		if String(f.name).begins_with("par 3"):
-			target = CHOSEN_PAR3_TARGET
+			target = chosen_band(PAR3_TARGET)
 		elif String(f.name).begins_with("par 5"):
-			target = CHOSEN_PAR5_TARGET
+			target = chosen_band(PAR5_TARGET)
 		rows.append(row("chosen: %s ($)" % f.name, price(f.diff, table), target, _tiles_note(f.diff)))
 	var nine_cost := 0
 	var nine_land := 0
@@ -704,7 +731,7 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 		nine_cost += hc
 		nine_land += lc
 		rows.append(row("chosen: PlaytestNine hole %d, par %d, %d yd ($)" % [h.n, h.par, h.yd], hc,
-				CHOSEN_PAR5_TARGET if int(h.par) == 5 else any, "%s; land %d parcels %s" % [
+				chosen_band(PAR5_TARGET) if int(h.par) == 5 else any, "%s; land %d parcels %s" % [
 					_tiles_note(h.diff), (h.parcels as Array).size(), LandPrices.money(lc)]))
 	rows.append(row("chosen: PlaytestNine, nine holes ($)", nine_cost, any,
 			"its land %s more (it spreads over the whole map)" % LandPrices.money(nine_land)))
@@ -719,11 +746,12 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 				ceili(_plan_parcels() - BLOCK_PARCELS), LandPrices.money(parcel)]))
 	var e := chosen_income()
 	for stars: float in [1.0, 3.0, 5.0]:
-		var g := guests_for(e, stars, 9)
-		var fee := economy.fee_ceiling(stars) * CHOSEN_FEE_SHARE
+		var fp := chosen_fee(e, stars)
+		var g := economy.arrivals(stars, fp.y)
+		var fee := int(fp.x)
 		rows.append(row("chosen: a day, 9 holes at %.0f stars, fee 80%%, net ($)" % stars,
-				roundi(g * fee) - economy.upkeep_per_open_hole * 9, any,
-				"%d guests at $%.2f (ceiling $%.0f), upkeep $%d" % [g, fee, economy.fee_ceiling(stars),
+				g * fee - economy.upkeep_per_open_hole * 9, any,
+				"%d guests at $%d (ceiling $%d), upkeep $%d" % [g, fee, floori(economy.fee_ceiling(stars)),
 					economy.upkeep_per_open_hole * 9]))
 	var pts: Array = Array(economy.rating_points)
 	# D58: 3 stars to start (the neutral points), a short window padded with neutral reactions.
@@ -743,6 +771,15 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 	rows.append(row("chosen: 3-star course, cost scale on the chosen table nearest day 30",
 			fit.scale, any, "1.00 is the table as chosen; E4-S8's slack" if float(fit.scale) > 0.0
 				else "none fits"))
+	# E4-S8: a player who never moves the slider (start_fee, lowered by a falling ceiling).
+	var passive := e.duplicate()
+	passive.fee_share = -1.0
+	var rp := run(passive, plan, MID_MIX, pts, start)
+	run_logs["chosen economy, 3-star course, fee left at the start fee"] = rp.log
+	rows.append(row("chosen: 3-star course, fee left at the start fee, day the nine opens",
+			rp.nine_day if int(rp.nine_day) > 0 else INF, any,
+			"3 stars day %d, stalled %d days, lowest %s; recorded, not a target" % [rp.star_day,
+				rp.stalled, LandPrices.money(rp.min_money)]))
 	var r45 := run(e, plan, FAIR_MIX, pts, start)
 	rows.append(row("chosen: 4.5-star fair course, day the nine opens",
 			r45.nine_day if int(r45.nine_day) > 0 else INF, any,

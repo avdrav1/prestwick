@@ -16,20 +16,20 @@ func test_the_shipped_file_reads_with_no_errors() -> void:
 func test_the_tile_table_is_t4_times_the_money_scale_in_whole_dollars() -> void:
 	var t := EconomyTuning.load_default()
 	# T4 before scaling (D56): fairway 5, rough 2, green 25, tee 15, bunker 20, water 30,
-	# trees 10, cart path 8, oob 2, $10 a step; times 0.61, rounded.
+	# trees 10, cart path 8, oob 2, $10 a step; times the money scale 0.63 (E4-S8), rounded.
 	var t4 := {Surface.Type.FAIRWAY: 5, Surface.Type.ROUGH: 2, Surface.Type.GREEN: 25,
 			Surface.Type.TEE: 15, Surface.Type.BUNKER: 20, Surface.Type.WATER: 30,
 			Surface.Type.TREES: 10, Surface.Type.CART_PATH: 8, Surface.Type.OOB: 2}
 	for s: int in t4:
-		assert_eq(t.price_of(s), roundi(t4[s] * 0.61), Surface.NAMES[s])
-	assert_eq(t.height_step_price, roundi(10 * 0.61))
+		assert_eq(t.price_of(s), roundi(t4[s] * 0.63), Surface.NAMES[s])
+	assert_eq(t.height_step_price, roundi(10 * 0.63))
 	assert_eq(t.price_of(Surface.Type.OOB), t.price_of(Surface.Type.ROUGH), "oob costs rough's price")
 	assert_eq([t.tee_marker_price, t.cup_price], [0, 0], "tee markers and cups are free")
 
 
 func test_land_moves_with_the_same_money_scale() -> void:
 	var lp := LandPrices.load_default()
-	assert_almost_eq(lp.price_scale, 0.61, 1e-9)
+	assert_almost_eq(lp.price_scale, 0.63, 1e-9)
 	# The discounts are what clearing costs before the scale: a tree to rough, a pond tile to
 	# rough and one step up.
 	assert_eq(lp.tree_tile_price, -2)

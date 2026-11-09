@@ -23,7 +23,7 @@ var water_tile_price: int = 0
 var min_price: int = 0
 var max_price: int = 0
 var price_round: int = 1
-## The money scale on every term above (D56, D57): 0.61.
+## The money scale on every term above (D56, D57): 0.63 since E4-S8 (0.61 before).
 var price_scale: float = 1.0
 
 

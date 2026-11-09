@@ -47,7 +47,7 @@ func _builder(c: CourseData) -> CourseBuilder:
 
 func test_the_rates_are_d56s_from_data() -> void:
 	assert_eq(_econ.price_of(Surface.Type.FAIRWAY), 3)
-	assert_eq(_econ.price_of(Surface.Type.GREEN), 15)
+	assert_eq(_econ.price_of(Surface.Type.GREEN), 16, "D56 at the money scale 0.63 (E4-S8)")
 	assert_eq(_econ.height_step_price, 6)
 	assert_eq(LandPrices.load_default().land_budget, 5000, "the one starting balance (D57)")
 
@@ -346,5 +346,5 @@ func test_inspect_prints_the_build_cost() -> void:
 	var text := "\n".join(out)
 	assert_string_contains(text, "build cost: %s to paint every tile not rough" % LandPrices.money(expected))
 	assert_string_contains(text, "  green: ")
-	assert_between(expected, 600, 1200, "a basic par 3 in the design doc's band times 0.61 (D56)")
+	assert_between(expected, 600, 1300, "a basic par 3 in the design doc's band times the money scale 0.63 (D56, E4-S8)")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

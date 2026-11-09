@@ -588,6 +588,7 @@ Choice: (a) money paces the builder, as in SimGolf. M3: the fee ceiling is $25 p
 Why: pillar 4: one scale on one table, no ledger of tile prices, and building as the one thing money waits on. Pillar 1: placing a hole costs nothing beyond its tiles, so a placed hole is still playable at once.
 Amends: the Claude Docs design doc's cost table (Course builder, Terrain: fairway 40, rough 10, green 120, tee 80, bunker 60, water 90, trees 30, cart path 20), its basic par 3 about $1,500 and par 5 about $6,000 (now about $1,000 and $2,700 to $4,000; the sim's bands are the doc's times 0.61: $600 to $1,200 and $2,400 to $4,900), and its fee ceiling of $10 per star per round (Management layer, Money).
 Affects: data/economy.json (`EconomyTuning`, course/economy_tuning.gd), docs/design.md Economy and time and Balance targets, docs/BACKLOG.md E4-S2, E4-S6, E4-S8, scripts/economy_sim.gd, the Claude Docs design doc (Course builder; Management layer)
+Update (2026-11-09, E4-S8, `/balance economy`): the money scale is 0.63, not 0.61. With the sim checked against the game's fee (whole dollars under a ceiling of whole dollars down), 0.61 opened the 3-star run's ninth hole on day 28, not day 30 as chosen; 0.63 is the smallest scale that opens it on day 30 (0.62: day 29). At 0.63 the table moves on three tiles (green $16, bunker $13, water $19; the rest round as before) and the bands are the doc's times 0.63: a basic par 3 $600 to $1,300 ($994 measured), a par 5 with hazards $2,500 to $5,000 ($2,704). The choice stands as decided.
 
 ## D57: How does land fold into the one balance? (2026-11-09)
 Question: E4-S1 (Settles 4, D19, D28's Note): E6's $5,000 land budget is spent on parcels only, and at D28's prices land is the frugal nine's largest cost ($32,550 against $24,755 of holes at T4).
@@ -601,6 +602,7 @@ Choice: L2. One $5,000 balance (the land budget becomes the balance, not $5,000 
 Why: pillar 4: one balance and one scale. Pillar 3: a wet or wooded parcel is a bargain with work in it, priced by the same table that charges the work.
 Amends: D28 (the discounts, and its clamp, whose floor now binds on the wettest parcels), D19's "E4-S1 folds it into the one balance" (now settled), the Claude Docs design doc's land prices (Economy).
 Affects: data/land.json, course/land_prices.gd (`price_scale`, `LandPrices.scaled`), scripts/balance_sim.gd (land rows), tests/test_land_ownership.gd, docs/design.md Land and Balance targets, docs/BACKLOG.md E4-S2
+Update (2026-11-09, E4-S8): `price_scale` is 0.63 with D56's scale (D56's update), so a flat parcel is $650 (was $600) and $5,000 buys 7 flat parcels (was 8). The choice stands as decided.
 
 ## D58: How many guests come, what do they pay, and how do reactions make stars? (2026-11-09)
 Question: E4-S1 (Settles 5 to 7, and E4-S5's Note): arrivals by rating, the arrivals curve below the ceiling, rating points per reaction, and the rating before 50 reactions exist.

@@ -1,0 +1,486 @@
+-- run chosen economy, 3-star course
+day  1: 1 open, 18 guests at $60.00, +$1080 -$5, balance $5081, 3.0 stars built hole 1 ($994 + land $0)
+day  2: 1 open, 18 guests at $60.00, +$1080 -$5, balance $6156, 3.0 stars
+day  3: 2 open, 18 guests at $60.00, +$1080 -$10, balance $3622, 3.0 stars built hole 2 ($1654 + land $1950)
+day  4: 2 open, 18 guests at $60.00, +$1080 -$10, balance $4692, 3.0 stars
+day  5: 3 open, 18 guests at $60.00, +$1080 -$15, balance $3463, 3.0 stars built hole 3 ($994 + land $1300)
+day  6: 3 open, 18 guests at $60.00, +$1080 -$15, balance $4528, 3.0 stars
+day  7: 4 open, 18 guests at $60.00, +$1080 -$20, balance $1334, 3.0 stars built hole 4 ($1654 + land $2600)
+day  8: 4 open, 18 guests at $60.00, +$1080 -$20, balance $2394, 3.0 stars
+day  9: 4 open, 18 guests at $60.00, +$1080 -$20, balance $3454, 3.0 stars
+day 10: 4 open, 18 guests at $60.00, +$1080 -$20, balance $4514, 3.0 stars
+day 11: 4 open, 18 guests at $60.00, +$1080 -$20, balance $5574, 3.0 stars
+day 12: 4 open, 18 guests at $60.00, +$1080 -$20, balance $6634, 3.0 stars
+day 13: 5 open, 18 guests at $60.00, +$1080 -$25, balance $1735, 3.0 stars built hole 5 ($2704 + land $3250)
+day 14: 5 open, 18 guests at $60.00, +$1080 -$25, balance $2790, 3.0 stars
+day 15: 6 open, 18 guests at $60.00, +$1080 -$30, balance $1546, 3.0 stars built hole 6 ($994 + land $1300)
+day 16: 6 open, 18 guests at $60.00, +$1080 -$30, balance $2596, 3.0 stars
+day 17: 6 open, 18 guests at $60.00, +$1080 -$30, balance $3646, 3.0 stars
+day 18: 6 open, 18 guests at $60.00, +$1080 -$30, balance $4696, 3.0 stars
+day 19: 6 open, 18 guests at $60.00, +$1080 -$30, balance $5746, 3.0 stars
+day 20: 7 open, 18 guests at $60.00, +$1080 -$35, balance $1677, 3.0 stars built hole 7 ($1864 + land $3250)
+day 21: 7 open, 18 guests at $60.00, +$1080 -$35, balance $2722, 3.0 stars
+day 22: 7 open, 18 guests at $60.00, +$1080 -$35, balance $3767, 3.0 stars
+day 23: 7 open, 18 guests at $60.00, +$1080 -$35, balance $4812, 3.0 stars
+day 24: 8 open, 18 guests at $60.00, +$1080 -$40, balance $1598, 3.0 stars built hole 8 ($1654 + land $2600)
+day 25: 8 open, 18 guests at $60.00, +$1080 -$40, balance $2638, 3.0 stars
+day 26: 8 open, 18 guests at $60.00, +$1080 -$40, balance $3678, 3.0 stars
+day 27: 8 open, 18 guests at $60.00, +$1080 -$40, balance $4718, 3.0 stars
+day 28: 8 open, 18 guests at $60.00, +$1080 -$40, balance $5758, 3.0 stars
+day 29: 8 open, 18 guests at $60.00, +$1080 -$40, balance $6798, 3.0 stars
+day 30: 9 open, 18 guests at $60.00, +$1080 -$45, balance $1229, 3.0 stars built hole 9 ($2704 + land $3900)
+day 31: 9 open, 18 guests at $60.00, +$1080 -$45, balance $2264, 3.0 stars
+day 32: 9 open, 18 guests at $60.00, +$1080 -$45, balance $3299, 3.0 stars
+day 33: 9 open, 18 guests at $60.00, +$1080 -$45, balance $4334, 3.0 stars
+day 34: 9 open, 18 guests at $60.00, +$1080 -$45, balance $5369, 3.0 stars
+day 35: 9 open, 18 guests at $60.00, +$1080 -$45, balance $6404, 3.0 stars
+day 36: 9 open, 18 guests at $60.00, +$1080 -$45, balance $7439, 3.0 stars
+day 37: 9 open, 18 guests at $60.00, +$1080 -$45, balance $8474, 3.0 stars
+day 38: 9 open, 18 guests at $60.00, +$1080 -$45, balance $9509, 3.0 stars
+day 39: 9 open, 18 guests at $60.00, +$1080 -$45, balance $10544, 3.0 stars
+day 40: 9 open, 18 guests at $60.00, +$1080 -$45, balance $11579, 3.0 stars
+day 41: 9 open, 18 guests at $60.00, +$1080 -$45, balance $12614, 3.0 stars
+day 42: 9 open, 18 guests at $60.00, +$1080 -$45, balance $13649, 3.0 stars
+day 43: 9 open, 18 guests at $60.00, +$1080 -$45, balance $14684, 3.0 stars
+day 44: 9 open, 18 guests at $60.00, +$1080 -$45, balance $15719, 3.0 stars
+day 45: 9 open, 18 guests at $60.00, +$1080 -$45, balance $16754, 3.0 stars
+-- run chosen economy, 3-star course, fee left at the start fee
+day  1: 1 open, 18 guests at $60.00, +$1080 -$5, balance $5081, 3.0 stars built hole 1 ($994 + land $0)
+day  2: 1 open, 18 guests at $60.00, +$1080 -$5, balance $6156, 3.0 stars
+day  3: 2 open, 18 guests at $60.00, +$1080 -$10, balance $3622, 3.0 stars built hole 2 ($1654 + land $1950)
+day  4: 2 open, 18 guests at $60.00, +$1080 -$10, balance $4692, 3.0 stars
+day  5: 3 open, 18 guests at $60.00, +$1080 -$15, balance $3463, 3.0 stars built hole 3 ($994 + land $1300)
+day  6: 3 open, 18 guests at $60.00, +$1080 -$15, balance $4528, 3.0 stars
+day  7: 4 open, 18 guests at $60.00, +$1080 -$20, balance $1334, 3.0 stars built hole 4 ($1654 + land $2600)
+day  8: 4 open, 18 guests at $60.00, +$1080 -$20, balance $2394, 3.0 stars
+day  9: 4 open, 18 guests at $60.00, +$1080 -$20, balance $3454, 3.0 stars
+day 10: 4 open, 18 guests at $60.00, +$1080 -$20, balance $4514, 3.0 stars
+day 11: 4 open, 18 guests at $60.00, +$1080 -$20, balance $5574, 3.0 stars
+day 12: 4 open, 18 guests at $60.00, +$1080 -$20, balance $6634, 3.0 stars
+day 13: 5 open, 18 guests at $60.00, +$1080 -$25, balance $1735, 3.0 stars built hole 5 ($2704 + land $3250)
+day 14: 5 open, 18 guests at $60.00, +$1080 -$25, balance $2790, 3.0 stars
+day 15: 6 open, 18 guests at $60.00, +$1080 -$30, balance $1546, 3.0 stars built hole 6 ($994 + land $1300)
+day 16: 6 open, 18 guests at $60.00, +$1080 -$30, balance $2596, 3.0 stars
+day 17: 6 open, 18 guests at $60.00, +$1080 -$30, balance $3646, 3.0 stars
+day 18: 6 open, 18 guests at $60.00, +$1080 -$30, balance $4696, 3.0 stars
+day 19: 6 open, 18 guests at $60.00, +$1080 -$30, balance $5746, 3.0 stars
+day 20: 7 open, 18 guests at $60.00, +$1080 -$35, balance $1677, 3.0 stars built hole 7 ($1864 + land $3250)
+day 21: 7 open, 18 guests at $60.00, +$1080 -$35, balance $2722, 3.0 stars
+day 22: 7 open, 18 guests at $60.00, +$1080 -$35, balance $3767, 3.0 stars
+day 23: 7 open, 18 guests at $60.00, +$1080 -$35, balance $4812, 3.0 stars
+day 24: 8 open, 18 guests at $60.00, +$1080 -$40, balance $1598, 3.0 stars built hole 8 ($1654 + land $2600)
+day 25: 8 open, 18 guests at $60.00, +$1080 -$40, balance $2638, 3.0 stars
+day 26: 8 open, 18 guests at $60.00, +$1080 -$40, balance $3678, 3.0 stars
+day 27: 8 open, 18 guests at $60.00, +$1080 -$40, balance $4718, 3.0 stars
+day 28: 8 open, 18 guests at $60.00, +$1080 -$40, balance $5758, 3.0 stars
+day 29: 8 open, 18 guests at $60.00, +$1080 -$40, balance $6798, 3.0 stars
+day 30: 9 open, 18 guests at $60.00, +$1080 -$45, balance $1229, 3.0 stars built hole 9 ($2704 + land $3900)
+day 31: 9 open, 18 guests at $60.00, +$1080 -$45, balance $2264, 3.0 stars
+day 32: 9 open, 18 guests at $60.00, +$1080 -$45, balance $3299, 3.0 stars
+day 33: 9 open, 18 guests at $60.00, +$1080 -$45, balance $4334, 3.0 stars
+day 34: 9 open, 18 guests at $60.00, +$1080 -$45, balance $5369, 3.0 stars
+day 35: 9 open, 18 guests at $60.00, +$1080 -$45, balance $6404, 3.0 stars
+day 36: 9 open, 18 guests at $60.00, +$1080 -$45, balance $7439, 3.0 stars
+day 37: 9 open, 18 guests at $60.00, +$1080 -$45, balance $8474, 3.0 stars
+day 38: 9 open, 18 guests at $60.00, +$1080 -$45, balance $9509, 3.0 stars
+day 39: 9 open, 18 guests at $60.00, +$1080 -$45, balance $10544, 3.0 stars
+day 40: 9 open, 18 guests at $60.00, +$1080 -$45, balance $11579, 3.0 stars
+day 41: 9 open, 18 guests at $60.00, +$1080 -$45, balance $12614, 3.0 stars
+day 42: 9 open, 18 guests at $60.00, +$1080 -$45, balance $13649, 3.0 stars
+day 43: 9 open, 18 guests at $60.00, +$1080 -$45, balance $14684, 3.0 stars
+day 44: 9 open, 18 guests at $60.00, +$1080 -$45, balance $15719, 3.0 stars
+day 45: 9 open, 18 guests at $60.00, +$1080 -$45, balance $16754, 3.0 stars
+-- run I1 E3 traffic, fee at the $10 ceiling at scale 0.24
+day  1: 1 open, 11 guests at $30.00, +$330 -$5, balance $4942, 3.0 stars built hole 1 ($383 + land $0)
+day  2: 1 open, 11 guests at $30.00, +$330 -$5, balance $5267, 3.0 stars
+day  3: 2 open, 11 guests at $30.00, +$330 -$10, balance $4218, 3.0 stars built hole 2 ($649 + land $720)
+day  4: 2 open, 11 guests at $30.00, +$330 -$10, balance $4538, 3.0 stars
+day  5: 3 open, 11 guests at $30.00, +$330 -$15, balance $3990, 3.0 stars built hole 3 ($383 + land $480)
+day  6: 3 open, 11 guests at $30.00, +$330 -$15, balance $4305, 3.0 stars
+day  7: 4 open, 11 guests at $30.00, +$330 -$20, balance $3008, 3.0 stars built hole 4 ($647 + land $960)
+day  8: 4 open, 11 guests at $30.00, +$330 -$20, balance $3318, 3.0 stars
+day  9: 5 open, 11 guests at $30.00, +$330 -$25, balance $1367, 3.0 stars built hole 5 ($1056 + land $1200)
+day 10: 5 open, 11 guests at $30.00, +$330 -$25, balance $1672, 3.0 stars
+day 11: 6 open, 11 guests at $30.00, +$330 -$30, balance $1109, 3.0 stars built hole 6 ($383 + land $480)
+day 12: 6 open, 11 guests at $30.00, +$330 -$30, balance $1409, 3.0 stars
+day 13: 6 open, 11 guests at $30.00, +$330 -$30, balance $1709, 3.0 stars
+day 14: 6 open, 11 guests at $30.00, +$330 -$30, balance $2009, 3.0 stars
+day 15: 7 open, 11 guests at $30.00, +$330 -$35, balance $368, 3.0 stars built hole 7 ($736 + land $1200)
+day 16: 7 open, 11 guests at $30.00, +$330 -$35, balance $663, 3.0 stars
+day 17: 7 open, 11 guests at $30.00, +$330 -$35, balance $958, 3.0 stars
+day 18: 7 open, 11 guests at $30.00, +$330 -$35, balance $1253, 3.0 stars
+day 19: 7 open, 11 guests at $30.00, +$330 -$35, balance $1548, 3.0 stars
+day 20: 7 open, 11 guests at $30.00, +$330 -$35, balance $1843, 3.0 stars
+day 21: 8 open, 11 guests at $30.00, +$330 -$40, balance $524, 3.0 stars built hole 8 ($649 + land $960)
+day 22: 8 open, 11 guests at $30.00, +$330 -$40, balance $814, 3.0 stars
+day 23: 8 open, 11 guests at $30.00, +$330 -$40, balance $1104, 3.0 stars
+day 24: 8 open, 11 guests at $30.00, +$330 -$40, balance $1394, 3.0 stars
+day 25: 8 open, 11 guests at $30.00, +$330 -$40, balance $1684, 3.0 stars
+day 26: 8 open, 11 guests at $30.00, +$330 -$40, balance $1974, 3.0 stars
+day 27: 8 open, 11 guests at $30.00, +$330 -$40, balance $2264, 3.0 stars
+day 28: 8 open, 11 guests at $30.00, +$330 -$40, balance $2554, 3.0 stars
+day 29: 9 open, 11 guests at $30.00, +$330 -$45, balance $343, 3.0 stars built hole 9 ($1056 + land $1440)
+day 30: 9 open, 11 guests at $30.00, +$330 -$45, balance $628, 3.0 stars
+day 31: 9 open, 11 guests at $30.00, +$330 -$45, balance $913, 3.0 stars
+day 32: 9 open, 11 guests at $30.00, +$330 -$45, balance $1198, 3.0 stars
+day 33: 9 open, 11 guests at $30.00, +$330 -$45, balance $1483, 3.0 stars
+day 34: 9 open, 11 guests at $30.00, +$330 -$45, balance $1768, 3.0 stars
+day 35: 9 open, 11 guests at $30.00, +$330 -$45, balance $2053, 3.0 stars
+day 36: 9 open, 11 guests at $30.00, +$330 -$45, balance $2338, 3.0 stars
+day 37: 9 open, 11 guests at $30.00, +$330 -$45, balance $2623, 3.0 stars
+day 38: 9 open, 11 guests at $30.00, +$330 -$45, balance $2908, 3.0 stars
+day 39: 9 open, 11 guests at $30.00, +$330 -$45, balance $3193, 3.0 stars
+day 40: 9 open, 11 guests at $30.00, +$330 -$45, balance $3478, 3.0 stars
+day 41: 9 open, 11 guests at $30.00, +$330 -$45, balance $3763, 3.0 stars
+day 42: 9 open, 11 guests at $30.00, +$330 -$45, balance $4048, 3.0 stars
+day 43: 9 open, 11 guests at $30.00, +$330 -$45, balance $4333, 3.0 stars
+day 44: 9 open, 11 guests at $30.00, +$330 -$45, balance $4618, 3.0 stars
+day 45: 9 open, 11 guests at $30.00, +$330 -$45, balance $4903, 3.0 stars
+-- run I2 by star 8 + 4 a star, $10 ceiling, fee 80% at scale 0.29
+day  1: 1 open, 18 guests at $24.00, +$432 -$5, balance $4964, 3.0 stars built hole 1 ($463 + land $0)
+day  2: 1 open, 18 guests at $24.00, +$432 -$5, balance $5391, 3.0 stars
+day  3: 2 open, 18 guests at $24.00, +$432 -$10, balance $4159, 3.0 stars built hole 2 ($784 + land $870)
+day  4: 2 open, 18 guests at $24.00, +$432 -$10, balance $4581, 3.0 stars
+day  5: 3 open, 18 guests at $24.00, +$432 -$15, balance $3955, 3.0 stars built hole 3 ($463 + land $580)
+day  6: 3 open, 18 guests at $24.00, +$432 -$15, balance $4372, 3.0 stars
+day  7: 4 open, 18 guests at $24.00, +$432 -$20, balance $2842, 3.0 stars built hole 4 ($782 + land $1160)
+day  8: 4 open, 18 guests at $24.00, +$432 -$20, balance $3254, 3.0 stars
+day  9: 5 open, 18 guests at $24.00, +$432 -$25, balance $935, 3.0 stars built hole 5 ($1276 + land $1450)
+day 10: 5 open, 18 guests at $24.00, +$432 -$25, balance $1342, 3.0 stars
+day 11: 6 open, 18 guests at $24.00, +$432 -$30, balance $701, 3.0 stars built hole 6 ($463 + land $580)
+day 12: 6 open, 18 guests at $24.00, +$432 -$30, balance $1103, 3.0 stars
+day 13: 6 open, 18 guests at $24.00, +$432 -$30, balance $1505, 3.0 stars
+day 14: 6 open, 18 guests at $24.00, +$432 -$30, balance $1907, 3.0 stars
+day 15: 6 open, 18 guests at $24.00, +$432 -$30, balance $2309, 3.0 stars
+day 16: 6 open, 18 guests at $24.00, +$432 -$30, balance $2711, 3.0 stars
+day 17: 7 open, 18 guests at $24.00, +$432 -$35, balance $769, 3.0 stars built hole 7 ($889 + land $1450)
+day 18: 7 open, 18 guests at $24.00, +$432 -$35, balance $1166, 3.0 stars
+day 19: 7 open, 18 guests at $24.00, +$432 -$35, balance $1563, 3.0 stars
+day 20: 7 open, 18 guests at $24.00, +$432 -$35, balance $1960, 3.0 stars
+day 21: 8 open, 18 guests at $24.00, +$432 -$40, balance $408, 3.0 stars built hole 8 ($784 + land $1160)
+day 22: 8 open, 18 guests at $24.00, +$432 -$40, balance $800, 3.0 stars
+day 23: 8 open, 18 guests at $24.00, +$432 -$40, balance $1192, 3.0 stars
+day 24: 8 open, 18 guests at $24.00, +$432 -$40, balance $1584, 3.0 stars
+day 25: 8 open, 18 guests at $24.00, +$432 -$40, balance $1976, 3.0 stars
+day 26: 8 open, 18 guests at $24.00, +$432 -$40, balance $2368, 3.0 stars
+day 27: 8 open, 18 guests at $24.00, +$432 -$40, balance $2760, 3.0 stars
+day 28: 8 open, 18 guests at $24.00, +$432 -$40, balance $3152, 3.0 stars
+day 29: 9 open, 18 guests at $24.00, +$432 -$45, balance $523, 3.0 stars built hole 9 ($1276 + land $1740)
+day 30: 9 open, 18 guests at $24.00, +$432 -$45, balance $910, 3.0 stars
+day 31: 9 open, 18 guests at $24.00, +$432 -$45, balance $1297, 3.0 stars
+day 32: 9 open, 18 guests at $24.00, +$432 -$45, balance $1684, 3.0 stars
+day 33: 9 open, 18 guests at $24.00, +$432 -$45, balance $2071, 3.0 stars
+day 34: 9 open, 18 guests at $24.00, +$432 -$45, balance $2458, 3.0 stars
+day 35: 9 open, 18 guests at $24.00, +$432 -$45, balance $2845, 3.0 stars
+day 36: 9 open, 18 guests at $24.00, +$432 -$45, balance $3232, 3.0 stars
+day 37: 9 open, 18 guests at $24.00, +$432 -$45, balance $3619, 3.0 stars
+day 38: 9 open, 18 guests at $24.00, +$432 -$45, balance $4006, 3.0 stars
+day 39: 9 open, 18 guests at $24.00, +$432 -$45, balance $4393, 3.0 stars
+day 40: 9 open, 18 guests at $24.00, +$432 -$45, balance $4780, 3.0 stars
+day 41: 9 open, 18 guests at $24.00, +$432 -$45, balance $5167, 3.0 stars
+day 42: 9 open, 18 guests at $24.00, +$432 -$45, balance $5554, 3.0 stars
+day 43: 9 open, 18 guests at $24.00, +$432 -$45, balance $5941, 3.0 stars
+day 44: 9 open, 18 guests at $24.00, +$432 -$45, balance $6328, 3.0 stars
+day 45: 9 open, 18 guests at $24.00, +$432 -$45, balance $6715, 3.0 stars
+-- run I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80% at scale 0.20
+day  1: 1 open,  4 guests at $24.00, +$96 -$5, balance $4772, 3.0 stars built hole 1 ($319 + land $0)
+day  2: 1 open,  4 guests at $24.00, +$96 -$5, balance $4863, 3.0 stars
+day  3: 2 open,  4 guests at $24.00, +$96 -$10, balance $3808, 3.0 stars built hole 2 ($541 + land $600)
+day  4: 2 open,  4 guests at $24.00, +$96 -$10, balance $3894, 3.0 stars
+day  5: 3 open,  5 guests at $24.00, +$120 -$15, balance $3280, 3.0 stars built hole 3 ($319 + land $400)
+day  6: 3 open,  5 guests at $24.00, +$120 -$15, balance $3385, 3.0 stars
+day  7: 4 open,  7 guests at $24.00, +$168 -$20, balance $2194, 3.0 stars built hole 4 ($539 + land $800)
+day  8: 4 open,  7 guests at $24.00, +$168 -$20, balance $2342, 3.0 stars
+day  9: 5 open,  9 guests at $24.00, +$216 -$25, balance $653, 3.0 stars built hole 5 ($880 + land $1000)
+day 10: 5 open,  9 guests at $24.00, +$216 -$25, balance $844, 3.0 stars
+day 11: 6 open, 11 guests at $24.00, +$264 -$30, balance $359, 3.0 stars built hole 6 ($319 + land $400)
+day 12: 6 open, 11 guests at $24.00, +$264 -$30, balance $593, 3.0 stars
+day 13: 6 open, 11 guests at $24.00, +$264 -$30, balance $827, 3.0 stars
+day 14: 6 open, 11 guests at $24.00, +$264 -$30, balance $1061, 3.0 stars
+day 15: 6 open, 11 guests at $24.00, +$264 -$30, balance $1295, 3.0 stars
+day 16: 6 open, 11 guests at $24.00, +$264 -$30, balance $1529, 3.0 stars
+day 17: 6 open, 11 guests at $24.00, +$264 -$30, balance $1763, 3.0 stars
+day 18: 7 open, 12 guests at $24.00, +$288 -$35, balance $403, 3.0 stars built hole 7 ($613 + land $1000)
+day 19: 7 open, 12 guests at $24.00, +$288 -$35, balance $656, 3.0 stars
+day 20: 7 open, 12 guests at $24.00, +$288 -$35, balance $909, 3.0 stars
+day 21: 7 open, 12 guests at $24.00, +$288 -$35, balance $1162, 3.0 stars
+day 22: 7 open, 12 guests at $24.00, +$288 -$35, balance $1415, 3.0 stars
+day 23: 8 open, 14 guests at $24.00, +$336 -$40, balance $370, 3.0 stars built hole 8 ($541 + land $800)
+day 24: 8 open, 14 guests at $24.00, +$336 -$40, balance $666, 3.0 stars
+day 25: 8 open, 14 guests at $24.00, +$336 -$40, balance $962, 3.0 stars
+day 26: 8 open, 14 guests at $24.00, +$336 -$40, balance $1258, 3.0 stars
+day 27: 8 open, 14 guests at $24.00, +$336 -$40, balance $1554, 3.0 stars
+day 28: 8 open, 14 guests at $24.00, +$336 -$40, balance $1850, 3.0 stars
+day 29: 8 open, 14 guests at $24.00, +$336 -$40, balance $2146, 3.0 stars
+day 30: 9 open, 16 guests at $24.00, +$384 -$45, balance $405, 3.0 stars built hole 9 ($880 + land $1200)
+day 31: 9 open, 16 guests at $24.00, +$384 -$45, balance $744, 3.0 stars
+day 32: 9 open, 16 guests at $24.00, +$384 -$45, balance $1083, 3.0 stars
+day 33: 9 open, 16 guests at $24.00, +$384 -$45, balance $1422, 3.0 stars
+day 34: 9 open, 16 guests at $24.00, +$384 -$45, balance $1761, 3.0 stars
+day 35: 9 open, 16 guests at $24.00, +$384 -$45, balance $2100, 3.0 stars
+day 36: 9 open, 16 guests at $24.00, +$384 -$45, balance $2439, 3.0 stars
+day 37: 9 open, 16 guests at $24.00, +$384 -$45, balance $2778, 3.0 stars
+day 38: 9 open, 16 guests at $24.00, +$384 -$45, balance $3117, 3.0 stars
+day 39: 9 open, 16 guests at $24.00, +$384 -$45, balance $3456, 3.0 stars
+day 40: 9 open, 16 guests at $24.00, +$384 -$45, balance $3795, 3.0 stars
+day 41: 9 open, 16 guests at $24.00, +$384 -$45, balance $4134, 3.0 stars
+day 42: 9 open, 16 guests at $24.00, +$384 -$45, balance $4473, 3.0 stars
+day 43: 9 open, 16 guests at $24.00, +$384 -$45, balance $4812, 3.0 stars
+day 44: 9 open, 16 guests at $24.00, +$384 -$45, balance $5151, 3.0 stars
+day 45: 9 open, 16 guests at $24.00, +$384 -$45, balance $5490, 3.0 stars
+-- run I4 by star 8 + 4 a star, $15 ceiling, fee 80% at scale 0.41
+day  1: 1 open, 18 guests at $36.00, +$648 -$5, balance $4989, 3.0 stars built hole 1 ($654 + land $0)
+day  2: 1 open, 18 guests at $36.00, +$648 -$5, balance $5632, 3.0 stars
+day  3: 2 open, 18 guests at $36.00, +$648 -$10, balance $3931, 3.0 stars built hole 2 ($1109 + land $1230)
+day  4: 2 open, 18 guests at $36.00, +$648 -$10, balance $4569, 3.0 stars
+day  5: 3 open, 18 guests at $36.00, +$648 -$15, balance $3728, 3.0 stars built hole 3 ($654 + land $820)
+day  6: 3 open, 18 guests at $36.00, +$648 -$15, balance $4361, 3.0 stars
+day  7: 4 open, 18 guests at $36.00, +$648 -$20, balance $2244, 3.0 stars built hole 4 ($1105 + land $1640)
+day  8: 4 open, 18 guests at $36.00, +$648 -$20, balance $2872, 3.0 stars
+day  9: 4 open, 18 guests at $36.00, +$648 -$20, balance $3500, 3.0 stars
+day 10: 4 open, 18 guests at $36.00, +$648 -$20, balance $4128, 3.0 stars
+day 11: 5 open, 18 guests at $36.00, +$648 -$25, balance $897, 3.0 stars built hole 5 ($1804 + land $2050)
+day 12: 5 open, 18 guests at $36.00, +$648 -$25, balance $1520, 3.0 stars
+day 13: 6 open, 18 guests at $36.00, +$648 -$30, balance $664, 3.0 stars built hole 6 ($654 + land $820)
+day 14: 6 open, 18 guests at $36.00, +$648 -$30, balance $1282, 3.0 stars
+day 15: 6 open, 18 guests at $36.00, +$648 -$30, balance $1900, 3.0 stars
+day 16: 6 open, 18 guests at $36.00, +$648 -$30, balance $2518, 3.0 stars
+day 17: 6 open, 18 guests at $36.00, +$648 -$30, balance $3136, 3.0 stars
+day 18: 6 open, 18 guests at $36.00, +$648 -$30, balance $3754, 3.0 stars
+day 19: 7 open, 18 guests at $36.00, +$648 -$35, balance $1060, 3.0 stars built hole 7 ($1257 + land $2050)
+day 20: 7 open, 18 guests at $36.00, +$648 -$35, balance $1673, 3.0 stars
+day 21: 7 open, 18 guests at $36.00, +$648 -$35, balance $2286, 3.0 stars
+day 22: 7 open, 18 guests at $36.00, +$648 -$35, balance $2899, 3.0 stars
+day 23: 8 open, 18 guests at $36.00, +$648 -$40, balance $758, 3.0 stars built hole 8 ($1109 + land $1640)
+day 24: 8 open, 18 guests at $36.00, +$648 -$40, balance $1366, 3.0 stars
+day 25: 8 open, 18 guests at $36.00, +$648 -$40, balance $1974, 3.0 stars
+day 26: 8 open, 18 guests at $36.00, +$648 -$40, balance $2582, 3.0 stars
+day 27: 8 open, 18 guests at $36.00, +$648 -$40, balance $3190, 3.0 stars
+day 28: 8 open, 18 guests at $36.00, +$648 -$40, balance $3798, 3.0 stars
+day 29: 8 open, 18 guests at $36.00, +$648 -$40, balance $4406, 3.0 stars
+day 30: 9 open, 18 guests at $36.00, +$648 -$45, balance $745, 3.0 stars built hole 9 ($1804 + land $2460)
+day 31: 9 open, 18 guests at $36.00, +$648 -$45, balance $1348, 3.0 stars
+day 32: 9 open, 18 guests at $36.00, +$648 -$45, balance $1951, 3.0 stars
+day 33: 9 open, 18 guests at $36.00, +$648 -$45, balance $2554, 3.0 stars
+day 34: 9 open, 18 guests at $36.00, +$648 -$45, balance $3157, 3.0 stars
+day 35: 9 open, 18 guests at $36.00, +$648 -$45, balance $3760, 3.0 stars
+day 36: 9 open, 18 guests at $36.00, +$648 -$45, balance $4363, 3.0 stars
+day 37: 9 open, 18 guests at $36.00, +$648 -$45, balance $4966, 3.0 stars
+day 38: 9 open, 18 guests at $36.00, +$648 -$45, balance $5569, 3.0 stars
+day 39: 9 open, 18 guests at $36.00, +$648 -$45, balance $6172, 3.0 stars
+day 40: 9 open, 18 guests at $36.00, +$648 -$45, balance $6775, 3.0 stars
+day 41: 9 open, 18 guests at $36.00, +$648 -$45, balance $7378, 3.0 stars
+day 42: 9 open, 18 guests at $36.00, +$648 -$45, balance $7981, 3.0 stars
+day 43: 9 open, 18 guests at $36.00, +$648 -$45, balance $8584, 3.0 stars
+day 44: 9 open, 18 guests at $36.00, +$648 -$45, balance $9187, 3.0 stars
+day 45: 9 open, 18 guests at $36.00, +$648 -$45, balance $9790, 3.0 stars
+-- run I5 by star 8 + 4 a star, $25 ceiling, fee 80% at scale 0.62
+day  1: 1 open, 18 guests at $60.00, +$1080 -$5, balance $5086, 3.0 stars built hole 1 ($989 + land $0)
+day  2: 1 open, 18 guests at $60.00, +$1080 -$5, balance $6161, 3.0 stars
+day  3: 2 open, 18 guests at $60.00, +$1080 -$10, balance $3694, 3.0 stars built hole 2 ($1677 + land $1860)
+day  4: 2 open, 18 guests at $60.00, +$1080 -$10, balance $4764, 3.0 stars
+day  5: 3 open, 18 guests at $60.00, +$1080 -$15, balance $3600, 3.0 stars built hole 3 ($989 + land $1240)
+day  6: 3 open, 18 guests at $60.00, +$1080 -$15, balance $4665, 3.0 stars
+day  7: 4 open, 18 guests at $60.00, +$1080 -$20, balance $1574, 3.0 stars built hole 4 ($1671 + land $2480)
+day  8: 4 open, 18 guests at $60.00, +$1080 -$20, balance $2634, 3.0 stars
+day  9: 4 open, 18 guests at $60.00, +$1080 -$20, balance $3694, 3.0 stars
+day 10: 4 open, 18 guests at $60.00, +$1080 -$20, balance $4754, 3.0 stars
+day 11: 4 open, 18 guests at $60.00, +$1080 -$20, balance $5814, 3.0 stars
+day 12: 4 open, 18 guests at $60.00, +$1080 -$20, balance $6874, 3.0 stars
+day 13: 5 open, 18 guests at $60.00, +$1080 -$25, balance $2101, 3.0 stars built hole 5 ($2728 + land $3100)
+day 14: 5 open, 18 guests at $60.00, +$1080 -$25, balance $3156, 3.0 stars
+day 15: 6 open, 18 guests at $60.00, +$1080 -$30, balance $1977, 3.0 stars built hole 6 ($989 + land $1240)
+day 16: 6 open, 18 guests at $60.00, +$1080 -$30, balance $3027, 3.0 stars
+day 17: 6 open, 18 guests at $60.00, +$1080 -$30, balance $4077, 3.0 stars
+day 18: 6 open, 18 guests at $60.00, +$1080 -$30, balance $5127, 3.0 stars
+day 19: 7 open, 18 guests at $60.00, +$1080 -$35, balance $1172, 3.0 stars built hole 7 ($1900 + land $3100)
+day 20: 7 open, 18 guests at $60.00, +$1080 -$35, balance $2217, 3.0 stars
+day 21: 7 open, 18 guests at $60.00, +$1080 -$35, balance $3262, 3.0 stars
+day 22: 7 open, 18 guests at $60.00, +$1080 -$35, balance $4307, 3.0 stars
+day 23: 8 open, 18 guests at $60.00, +$1080 -$40, balance $1190, 3.0 stars built hole 8 ($1677 + land $2480)
+day 24: 8 open, 18 guests at $60.00, +$1080 -$40, balance $2230, 3.0 stars
+day 25: 8 open, 18 guests at $60.00, +$1080 -$40, balance $3270, 3.0 stars
+day 26: 8 open, 18 guests at $60.00, +$1080 -$40, balance $4310, 3.0 stars
+day 27: 8 open, 18 guests at $60.00, +$1080 -$40, balance $5350, 3.0 stars
+day 28: 8 open, 18 guests at $60.00, +$1080 -$40, balance $6390, 3.0 stars
+day 29: 8 open, 18 guests at $60.00, +$1080 -$40, balance $7430, 3.0 stars
+day 30: 9 open, 18 guests at $60.00, +$1080 -$45, balance $2017, 3.0 stars built hole 9 ($2728 + land $3720)
+day 31: 9 open, 18 guests at $60.00, +$1080 -$45, balance $3052, 3.0 stars
+day 32: 9 open, 18 guests at $60.00, +$1080 -$45, balance $4087, 3.0 stars
+day 33: 9 open, 18 guests at $60.00, +$1080 -$45, balance $5122, 3.0 stars
+day 34: 9 open, 18 guests at $60.00, +$1080 -$45, balance $6157, 3.0 stars
+day 35: 9 open, 18 guests at $60.00, +$1080 -$45, balance $7192, 3.0 stars
+day 36: 9 open, 18 guests at $60.00, +$1080 -$45, balance $8227, 3.0 stars
+day 37: 9 open, 18 guests at $60.00, +$1080 -$45, balance $9262, 3.0 stars
+day 38: 9 open, 18 guests at $60.00, +$1080 -$45, balance $10297, 3.0 stars
+day 39: 9 open, 18 guests at $60.00, +$1080 -$45, balance $11332, 3.0 stars
+day 40: 9 open, 18 guests at $60.00, +$1080 -$45, balance $12367, 3.0 stars
+day 41: 9 open, 18 guests at $60.00, +$1080 -$45, balance $13402, 3.0 stars
+day 42: 9 open, 18 guests at $60.00, +$1080 -$45, balance $14437, 3.0 stars
+day 43: 9 open, 18 guests at $60.00, +$1080 -$45, balance $15472, 3.0 stars
+day 44: 9 open, 18 guests at $60.00, +$1080 -$45, balance $16507, 3.0 stars
+day 45: 9 open, 18 guests at $60.00, +$1080 -$45, balance $17542, 3.0 stars
+== /balance economy, 3 runs, seed 1
+chosen: median parcel, New courses seeds 1 to 10 ($)         650.000   target -                       price_scale 0.63; table fairway 3, rough 1, green 16, tee 9, bunker 13, water 19, trees 6, cart_path 5, oob 1, $6 a step, tee marker $0, cup $0
+chosen: par 3 basic (generate 3 flat dry, 160 yd) ($)        994.000   target 600.000 to 1300.000 ok   fairway 107, green 37, tee 9, steps 0
+chosen: par 4 (generate 4 flat dry, 380 yd) ($)             1654.000   target -                       fairway 327, green 37, tee 9, steps 0
+chosen: par 5 with water (generate 5 flat water, 520 yd) ($)  2704.000   target 2500.000 to 5000.000 ok   fairway 452, green 37, tee 9, water 27, steps 27
+chosen: par 3 tee and green only, no fairway (160 yd) ($)    673.000   target 600.000 to 1300.000 ok   green 37, tee 9, steps 0
+chosen: fair par 4 with cross bunker (ReactionHoles, 380 yd) ($)  1654.000   target -                       fairway 365, green 25, tee 9, bunker 6, steps 0
+chosen: dogleg par 4 round a pond (ReactionHoles, 450 yd) ($)  1864.000   target -                       fairway 461, green 25, tee 9, steps 0
+chosen: PlaytestNine hole 1, par 4, 340 yd ($)              4493.000   target -                       fairway 318, rough 79, green 49, tee 9, bunker 21, trees 83, steps 304, trees cleared 4, water filled 112; land 12 parcels $8,650
+chosen: PlaytestNine hole 2, par 3, 130 yd ($)               781.000   target -                       rough 7, green 35, tee 9, bunker 1, steps 20, trees cleared 37; land 2 parcels $1,300
+chosen: PlaytestNine hole 3, par 4, 347 yd ($)              4027.000   target -                       fairway 315, green 47, tee 9, bunker 26, water 39, trees 67, steps 128, trees cleared 11; land 8 parcels $5,000
+chosen: PlaytestNine hole 4, par 4, 327 yd ($)              3738.000   target -                       fairway 295, green 35, tee 9, bunker 16, trees 39, steps 295, trees cleared 45; land 5 parcels $3,300
+chosen: PlaytestNine hole 5, par 5, 524 yd ($)              4423.000   target 2500.000 to 5000.000 ok   fairway 583, rough 58, green 45, tee 9, bunker 15, trees 60, steps 210, trees cleared 77, water filled 78; land 8 parcels $5,450
+chosen: PlaytestNine hole 6, par 4, 447 yd ($)              2921.000   target -                       fairway 415, rough 2, green 47, tee 9, bunker 19, trees 23, steps 76, trees cleared 65; land 8 parcels $4,750
+chosen: PlaytestNine hole 7, par 3, 150 yd ($)              1533.000   target -                       green 43, tee 9, bunker 8, steps 110, trees cleared 2; land 4 parcels $2,400
+chosen: PlaytestNine hole 8, par 4, 320 yd ($)              2812.000   target -                       fairway 386, green 43, tee 9, bunker 15, trees 90, steps 25, trees cleared 33; land 4 parcels $2,750
+chosen: PlaytestNine hole 9, par 3, 230 yd ($)               802.000   target -                       rough 19, green 33, tee 9, bunker 6, steps 16, trees cleared 26; land 2 parcels $950
+chosen: PlaytestNine, nine holes ($)                       25530.000   target -                       its land $34,550 more (it spreads over the whole map)
+chosen: frugal nine, holes ($)                             15216.000   target -                       land $20,150 more (31 parcels at the median $650)
+chosen: a day, 9 holes at 1 stars, fee 80%, net ($)          175.000   target -                       11 guests at $20 (ceiling $25), upkeep $45
+chosen: a day, 9 holes at 3 stars, fee 80%, net ($)         1035.000   target -                       18 guests at $60 (ceiling $75), upkeep $45
+chosen: a day, 9 holes at 5 stars, fee 80%, net ($)         2355.000   target -                       24 guests at $100 (ceiling $125), upkeep $45
+chosen: 3-star course, day the nine opens                     30.000   target 25.000 to 35.000   ok   stalled 13 days for money; a hole every 2 days at the soonest
+chosen: 3-star course, day 3 stars with nine open             30.000   target 25.000 to 35.000   ok   mix 0.25/0.50/0.25
+chosen: 3-star course, lowest balance ($)                   1229.000   target at least 0.000     ok   balance on day 45 $16,754
+chosen: 3-star course, cost scale on the chosen table nearest day 30     0.980   target -                       1.00 is the table as chosen; E4-S8's slack
+chosen: 3-star course, fee left at the start fee, day the nine opens    30.000   target -                       3 stars day 30, stalled 13 days, lowest $1,229; recorded, not a target
+chosen: 4.5-star fair course, day the nine opens              17.000   target -                       stalled 0 days; lowest $2,027; recorded, not a target
+chosen: PlaytestNine's measured mix, day the nine opens       30.000   target -                       mix 0.34/0.36/0.29, 3.0 stars; stalled 13 days; 3 stars day 30; recorded, not a target
+chosen: PlaytestNine's measured mix, cost scale on the chosen table nearest day 30     0.980   target -                       nine opens day 30, 3 stars day 30, stalled 13 days
+cost doc: par 3 basic (generate 3 flat dry, 160 yd) ($)     9440.000   target -                       fairway 107, green 37, tee 9, steps 0
+cost doc: par 4 (generate 4 flat dry, 380 yd) ($)          18240.000   target -                       fairway 327, green 37, tee 9, steps 0
+cost doc: par 5 with water (generate 5 flat water, 520 yd) ($) 25670.000   target -                       fairway 452, green 37, tee 9, water 27, steps 27
+cost doc: par 3 tee and green only, no fairway (160 yd) ($)  5160.000   target -                       green 37, tee 9, steps 0
+cost doc: fair par 4 with cross bunker (ReactionHoles, 380 yd) ($) 18680.000   target -                       fairway 365, green 25, tee 9, bunker 6, steps 0
+cost doc: dogleg par 4 round a pond (ReactionHoles, 450 yd) ($) 22160.000   target -                       fairway 461, green 25, tee 9, steps 0
+cost doc: PlaytestNine hole 1, par 4, 340 yd ($)           23860.000   target -                       fairway 318, rough 79, green 49, tee 9, bunker 21, trees 83, steps 304, trees cleared 4, water filled 112; land 12 parcels $13,700
+cost doc: PlaytestNine hole 2, par 3, 130 yd ($)            5050.000   target -                       rough 7, green 35, tee 9, bunker 1, steps 20, trees cleared 37; land 2 parcels $2,050
+cost doc: PlaytestNine hole 3, par 4, 347 yd ($)           26040.000   target -                       fairway 315, green 47, tee 9, bunker 26, water 39, trees 67, steps 128, trees cleared 11; land 8 parcels $7,850
+cost doc: PlaytestNine hole 4, par 4, 327 yd ($)           18850.000   target -                       fairway 295, green 35, tee 9, bunker 16, trees 39, steps 295, trees cleared 45; land 5 parcels $5,200
+cost doc: PlaytestNine hole 5, par 5, 524 yd ($)           32720.000   target -                       fairway 583, rough 58, green 45, tee 9, bunker 15, trees 60, steps 210, trees cleared 77, water filled 78; land 8 parcels $8,750
+cost doc: PlaytestNine hole 6, par 4, 447 yd ($)           24810.000   target -                       fairway 415, rough 2, green 47, tee 9, bunker 19, trees 23, steps 76, trees cleared 65; land 8 parcels $7,650
+cost doc: PlaytestNine hole 7, par 3, 150 yd ($)            6360.000   target -                       green 43, tee 9, bunker 8, steps 110, trees cleared 2; land 4 parcels $3,900
+cost doc: PlaytestNine hole 8, par 4, 320 yd ($)           24920.000   target -                       fairway 386, green 43, tee 9, bunker 15, trees 90, steps 25, trees cleared 33; land 4 parcels $4,450
+cost doc: PlaytestNine hole 9, par 3, 230 yd ($)            5230.000   target -                       rough 19, green 33, tee 9, bunker 6, steps 16, trees cleared 26; land 2 parcels $1,550
+cost doc: PlaytestNine, nine holes ($)                     167840.000   target -                       its land $55,100 more (it spreads over the whole map); fairway 2312, rough 165, green 377, tee 81, bunker 127, water 39, trees 362, steps 1184, trees cleared 300, water filled 190
+cost doc: frugal nine, holes ($)                           157420.000   target -                       3 par 3, 4 par 4, 2 par 5 from the fixtures; land $31,000 more (31 parcels at the median $1,000)
+cost doc/10: par 3 basic (generate 3 flat dry, 160 yd) ($)   944.000   target -                       fairway 107, green 37, tee 9, steps 0
+cost doc/10: par 4 (generate 4 flat dry, 380 yd) ($)        1824.000   target -                       fairway 327, green 37, tee 9, steps 0
+cost doc/10: par 5 with water (generate 5 flat water, 520 yd) ($)  2702.000   target -                       fairway 452, green 37, tee 9, water 27, steps 27
+cost doc/10: par 3 tee and green only, no fairway (160 yd) ($)   516.000   target -                       green 37, tee 9, steps 0
+cost doc/10: fair par 4 with cross bunker (ReactionHoles, 380 yd) ($)  1868.000   target -                       fairway 365, green 25, tee 9, bunker 6, steps 0
+cost doc/10: dogleg par 4 round a pond (ReactionHoles, 450 yd) ($)  2216.000   target -                       fairway 461, green 25, tee 9, steps 0
+cost doc/10: PlaytestNine hole 1, par 4, 340 yd ($)         3906.000   target -                       fairway 318, rough 79, green 49, tee 9, bunker 21, trees 83, steps 304, trees cleared 4, water filled 112; land 12 parcels $13,700
+cost doc/10: PlaytestNine hole 2, par 3, 130 yd ($)          605.000   target -                       rough 7, green 35, tee 9, bunker 1, steps 20, trees cleared 37; land 2 parcels $2,050
+cost doc/10: PlaytestNine hole 3, par 4, 347 yd ($)         3244.000   target -                       fairway 315, green 47, tee 9, bunker 26, water 39, trees 67, steps 128, trees cleared 11; land 8 parcels $7,850
+cost doc/10: PlaytestNine hole 4, par 4, 327 yd ($)         3360.000   target -                       fairway 295, green 35, tee 9, bunker 16, trees 39, steps 295, trees cleared 45; land 5 parcels $5,200
+cost doc/10: PlaytestNine hole 5, par 5, 524 yd ($)         4322.000   target -                       fairway 583, rough 58, green 45, tee 9, bunker 15, trees 60, steps 210, trees cleared 77, water filled 78; land 8 parcels $8,750
+cost doc/10: PlaytestNine hole 6, par 4, 447 yd ($)         2861.000   target -                       fairway 415, rough 2, green 47, tee 9, bunker 19, trees 23, steps 76, trees cleared 65; land 8 parcels $7,650
+cost doc/10: PlaytestNine hole 7, par 3, 150 yd ($)         1186.000   target -                       green 43, tee 9, bunker 8, steps 110, trees cleared 2; land 4 parcels $3,900
+cost doc/10: PlaytestNine hole 8, par 4, 320 yd ($)         2617.000   target -                       fairway 386, green 43, tee 9, bunker 15, trees 90, steps 25, trees cleared 33; land 4 parcels $4,450
+cost doc/10: PlaytestNine hole 9, par 3, 230 yd ($)          603.000   target -                       rough 19, green 33, tee 9, bunker 6, steps 16, trees cleared 26; land 2 parcels $1,550
+cost doc/10: PlaytestNine, nine holes ($)                  22704.000   target -                       its land $55,100 more (it spreads over the whole map); fairway 2312, rough 165, green 377, tee 81, bunker 127, water 39, trees 362, steps 1184, trees cleared 300, water filled 190
+cost doc/10: frugal nine, holes ($)                        16012.000   target -                       3 par 3, 4 par 4, 2 par 5 from the fixtures; land $31,000 more (31 parcels at the median $1,000)
+cost fit: par 3 basic (generate 3 flat dry, 160 yd) ($)     1517.000   target -                       fairway 107, green 37, tee 9, steps 0
+cost fit: par 4 (generate 4 flat dry, 380 yd) ($)           2837.000   target -                       fairway 327, green 37, tee 9, steps 0
+cost fit: par 5 with water (generate 5 flat water, 520 yd) ($)  4262.000   target -                       fairway 452, green 37, tee 9, water 27, steps 27
+cost fit: par 3 tee and green only, no fairway (160 yd) ($)   875.000   target -                       green 37, tee 9, steps 0
+cost fit: fair par 4 with cross bunker (ReactionHoles, 380 yd) ($)  2915.000   target -                       fairway 365, green 25, tee 9, bunker 6, steps 0
+cost fit: dogleg par 4 round a pond (ReactionHoles, 450 yd) ($)  3401.000   target -                       fairway 461, green 25, tee 9, steps 0
+cost fit: PlaytestNine hole 1, par 4, 340 yd ($)            5680.000   target -                       fairway 318, rough 79, green 49, tee 9, bunker 21, trees 83, steps 304, trees cleared 4, water filled 112; land 12 parcels $13,700
+cost fit: PlaytestNine hole 2, par 3, 130 yd ($)             964.000   target -                       rough 7, green 35, tee 9, bunker 1, steps 20, trees cleared 37; land 2 parcels $2,050
+cost fit: PlaytestNine hole 3, par 4, 347 yd ($)            5311.000   target -                       fairway 315, green 47, tee 9, bunker 26, water 39, trees 67, steps 128, trees cleared 11; land 8 parcels $7,850
+cost fit: PlaytestNine hole 4, par 4, 327 yd ($)            4632.000   target -                       fairway 295, green 35, tee 9, bunker 16, trees 39, steps 295, trees cleared 45; land 5 parcels $5,200
+cost fit: PlaytestNine hole 5, par 5, 524 yd ($)            6404.000   target -                       fairway 583, rough 58, green 45, tee 9, bunker 15, trees 60, steps 210, trees cleared 77, water filled 78; land 8 parcels $8,750
+cost fit: PlaytestNine hole 6, par 4, 447 yd ($)            4418.000   target -                       fairway 415, rough 2, green 47, tee 9, bunker 19, trees 23, steps 76, trees cleared 65; land 8 parcels $7,650
+cost fit: PlaytestNine hole 7, par 3, 150 yd ($)            1665.000   target -                       green 43, tee 9, bunker 8, steps 110, trees cleared 2; land 4 parcels $3,900
+cost fit: PlaytestNine hole 8, par 4, 320 yd ($)            4381.000   target -                       fairway 386, green 43, tee 9, bunker 15, trees 90, steps 25, trees cleared 33; land 4 parcels $4,450
+cost fit: PlaytestNine hole 9, par 3, 230 yd ($)            1003.000   target -                       rough 19, green 33, tee 9, bunker 6, steps 16, trees cleared 26; land 2 parcels $1,550
+cost fit: PlaytestNine, nine holes ($)                     34458.000   target -                       its land $55,100 more (it spreads over the whole map); fairway 2312, rough 165, green 377, tee 81, bunker 127, water 39, trees 362, steps 1184, trees cleared 300, water filled 190
+cost fit: frugal nine, holes ($)                           25143.000   target -                       3 par 3, 4 par 4, 2 par 5 from the fixtures; land $31,000 more (31 parcels at the median $1,000)
+cost fit-green: par 3 basic (generate 3 flat dry, 160 yd) ($)  1595.000   target -                       fairway 107, green 37, tee 9, steps 0
+cost fit-green: par 4 (generate 4 flat dry, 380 yd) ($)     2695.000   target -                       fairway 327, green 37, tee 9, steps 0
+cost fit-green: par 5 with water (generate 5 flat water, 520 yd) ($)  4400.000   target -                       fairway 452, green 37, tee 9, water 27, steps 27
+cost fit-green: par 3 tee and green only, no fairway (160 yd) ($)  1060.000   target -                       green 37, tee 9, steps 0
+cost fit-green: fair par 4 with cross bunker (ReactionHoles, 380 yd) ($)  2705.000   target -                       fairway 365, green 25, tee 9, bunker 6, steps 0
+cost fit-green: dogleg par 4 round a pond (ReactionHoles, 450 yd) ($)  3065.000   target -                       fairway 461, green 25, tee 9, steps 0
+cost fit-green: PlaytestNine hole 1, par 4, 340 yd ($)      7398.000   target -                       fairway 318, rough 79, green 49, tee 9, bunker 21, trees 83, steps 304, trees cleared 4, water filled 112; land 12 parcels $13,700
+cost fit-green: PlaytestNine hole 2, par 3, 130 yd ($)      1244.000   target -                       rough 7, green 35, tee 9, bunker 1, steps 20, trees cleared 37; land 2 parcels $2,050
+cost fit-green: PlaytestNine hole 3, par 4, 347 yd ($)      6525.000   target -                       fairway 315, green 47, tee 9, bunker 26, water 39, trees 67, steps 128, trees cleared 11; land 8 parcels $7,850
+cost fit-green: PlaytestNine hole 4, par 4, 327 yd ($)      6145.000   target -                       fairway 295, green 35, tee 9, bunker 16, trees 39, steps 295, trees cleared 45; land 5 parcels $5,200
+cost fit-green: PlaytestNine hole 5, par 5, 524 yd ($)      7291.000   target -                       fairway 583, rough 58, green 45, tee 9, bunker 15, trees 60, steps 210, trees cleared 77, water filled 78; land 8 parcels $8,750
+cost fit-green: PlaytestNine hole 6, par 4, 447 yd ($)      4759.000   target -                       fairway 415, rough 2, green 47, tee 9, bunker 19, trees 23, steps 76, trees cleared 65; land 8 parcels $7,650
+cost fit-green: PlaytestNine hole 7, par 3, 150 yd ($)      2470.000   target -                       green 43, tee 9, bunker 8, steps 110, trees cleared 2; land 4 parcels $3,900
+cost fit-green: PlaytestNine hole 8, par 4, 320 yd ($)      4590.000   target -                       fairway 386, green 43, tee 9, bunker 15, trees 90, steps 25, trees cleared 33; land 4 parcels $4,450
+cost fit-green: PlaytestNine hole 9, par 3, 230 yd ($)      1278.000   target -                       rough 19, green 33, tee 9, bunker 6, steps 16, trees cleared 26; land 2 parcels $1,550
+cost fit-green: PlaytestNine, nine holes ($)               41700.000   target -                       its land $55,100 more (it spreads over the whole map); fairway 2312, rough 165, green 377, tee 81, bunker 127, water 39, trees 362, steps 1184, trees cleared 300, water filled 190
+cost fit-green: frugal nine, holes ($)                     24755.000   target -                       3 par 3, 4 par 4, 2 par 5 from the fixtures; land $31,000 more (31 parcels at the median $1,000)
+height at $0 a step: PlaytestNine's shaping ($)                0.000   target -                       1184 steps; by hole 1: $0, 2: $0, 3: $0, 4: $0, 5: $0, 6: $0, 7: $0, 8: $0, 9: $0
+height at $5 a step: PlaytestNine's shaping ($)             5920.000   target -                       1184 steps; by hole 1: $1520, 2: $100, 3: $640, 4: $1475, 5: $1050, 6: $380, 7: $550, 8: $125, 9: $80
+height at $10 a step: PlaytestNine's shaping ($)           11840.000   target -                       1184 steps; by hole 1: $3040, 2: $200, 3: $1280, 4: $2950, 5: $2100, 6: $760, 7: $1100, 8: $250, 9: $160
+height at $20 a step: PlaytestNine's shaping ($)           23680.000   target -                       1184 steps; by hole 1: $6080, 2: $400, 3: $2560, 4: $5900, 5: $4200, 6: $1520, 7: $2200, 8: $500, 9: $320
+guests: PlaytestNine holes 1 to 1 open, complaint share        0.583   target -                       3 days, 48 guests, 48 reactions: praise 0.00, neutral 0.42; fails fair 48, interesting 0, pace 13, challenge 7
+guests: PlaytestNine holes 1 to 2 open, complaint share        0.479   target -                       3 days, 48 guests, 96 reactions: praise 0.00, neutral 0.52; fails fair 48, interesting 48, pace 19, challenge 10
+guests: PlaytestNine holes 1 to 3 open, complaint share        0.340   target -                       3 days, 48 guests, 144 reactions: praise 0.22, neutral 0.44; fails fair 48, interesting 48, pace 34, challenge 15
+guests: PlaytestNine holes 1 to 4 open, complaint share        0.312   target -                       3 days, 48 guests, 192 reactions: praise 0.20, neutral 0.49; fails fair 48, interesting 48, pace 69, challenge 33
+guests: PlaytestNine holes 1 to 5 open, complaint share        0.263   target -                       3 days, 48 guests, 240 reactions: praise 0.30, neutral 0.44; fails fair 48, interesting 48, pace 75, challenge 45
+guests: PlaytestNine holes 1 to 6 open, complaint share        0.219   target -                       3 days, 48 guests, 288 reactions: praise 0.38, neutral 0.41; fails fair 48, interesting 48, pace 76, challenge 55
+guests: PlaytestNine holes 1 to 7 open, complaint share        0.235   target -                       3 days, 48 guests, 336 reactions: praise 0.31, neutral 0.46; fails fair 48, interesting 96, pace 82, challenge 56
+guests: PlaytestNine holes 1 to 8 open, complaint share        0.331   target -                       3 days, 48 guests, 384 reactions: praise 0.27, neutral 0.40; fails fair 96, interesting 144, pace 108, challenge 58
+guests: PlaytestNine holes 1 to 9 open, complaint share        0.294   target -                       3 days, 48 guests, 432 reactions: praise 0.34, neutral 0.36; fails fair 96, interesting 144, pace 109, challenge 59
+capacity: 16 arrivals on PlaytestNine's nine, share finishing nine     1.000   target -                       48 guests, 0 left at dusk; praise 0.34, complaint 0.29; pace fails 0.25 of reactions
+capacity: 20 arrivals on PlaytestNine's nine, share finishing nine     1.000   target -                       60 guests, 0 left at dusk; praise 0.35, complaint 0.33; pace fails 0.31 of reactions
+capacity: 24 arrivals on PlaytestNine's nine, share finishing nine     1.000   target -                       72 guests, 0 left at dusk; praise 0.34, complaint 0.36; pace fails 0.35 of reactions
+capacity: 32 arrivals on PlaytestNine's nine, share finishing nine     0.844   target -                       96 guests, 15 left at dusk; praise 0.33, complaint 0.36; pace fails 0.35 of reactions
+rating 5/3/1: PlaytestNine's nine (stars)                      3.000   target -                       mean 3.10; a fair course (0.70/0.27/0.03) 4.34, 4.5 stars; one hole open 1.83
+rating 5/4/1: PlaytestNine's nine (stars)                      3.500   target -                       mean 3.46; a fair course (0.70/0.27/0.03) 4.61, 4.5 stars; one hole open 2.25
+rating 5/3/0: PlaytestNine's nine (stars)                      3.000   target -                       mean 2.81; a fair course (0.70/0.27/0.03) 4.31, 4.5 stars; one hole open 1.25
+rating 5/1/1 (praise only): PlaytestNine's nine (stars)        2.500   target -                       mean 2.38; a fair course (0.70/0.27/0.03) 3.80, 4.0 stars; one hole open 1.00
+fee curve linear: best fee (share of ceiling)                  1.000   target -                       arrivals at 25% 0.92, 50% 0.83, 70% 0.77, 85% 0.72, 100% 0.67; earns 0.667 of ceiling x arrivals, the ceiling 0.667
+fee curve flat_to_half: best fee (share of ceiling)            1.000   target -                       arrivals at 25% 1.00, 50% 1.00, 70% 0.87, 85% 0.77, 100% 0.67; earns 0.667 of ceiling x arrivals, the ceiling 0.667
+fee curve knee_70: best fee (share of ceiling)                 0.800   target -                       arrivals at 25% 1.00, 50% 1.00, 70% 1.00, 85% 0.83, 100% 0.67; earns 0.711 of ceiling x arrivals, the ceiling 0.667
+fee curve steep: best fee (share of ceiling)                   0.880   target -                       arrivals at 25% 1.00, 50% 0.98, 70% 0.92, 85% 0.83, 100% 0.67; earns 0.704 of ceiling x arrivals, the ceiling 0.667
+day I1 E3 traffic, fee at the $10 ceiling: 9 holes at 1 stars, net ($)    65.000   target -                       11 guests at $10.00, upkeep $45
+day I1 E3 traffic, fee at the $10 ceiling: 9 holes at 3 stars, net ($)   285.000   target -                       11 guests at $30.00, upkeep $45
+day I1 E3 traffic, fee at the $10 ceiling: 9 holes at 5 stars, net ($)   505.000   target -                       11 guests at $50.00, upkeep $45
+run I1 E3 traffic, fee at the $10 ceiling: 3-star course at the fit-green table, day the nine opens       inf   target -                       stalled 37 days for money; 3 stars day -1; lowest $455
+fit I1 E3 traffic, fee at the $10 ceiling, 3-star course: cost scale on fit-green and land     0.240   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $343; par 3 $383, par 5 $1056, parcel $240
+fit I1 E3 traffic, fee at the $10 ceiling, 4.5-star fair course: cost scale on fit-green and land     0.320   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $514; par 3 $510, par 5 $1408, parcel $320
+fit I1 E3 traffic, fee at the $10 ceiling, 3-star course, start 1 star: cost scale on fit-green and land     0.230   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $411; par 3 $367, par 5 $1012, parcel $230
+fit I1 E3 traffic, fee at the $10 ceiling, 3-star course, no pad: cost scale on fit-green and land     0.240   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $343; par 3 $383, par 5 $1056, parcel $240
+day I2 by star 8 + 4 a star, $10 ceiling, fee 80%: 9 holes at 1 stars, net ($)    43.000   target -                       11 guests at $8.00, upkeep $45
+day I2 by star 8 + 4 a star, $10 ceiling, fee 80%: 9 holes at 3 stars, net ($)   387.000   target -                       18 guests at $24.00, upkeep $45
+day I2 by star 8 + 4 a star, $10 ceiling, fee 80%: 9 holes at 5 stars, net ($)   915.000   target -                       24 guests at $40.00, upkeep $45
+run I2 by star 8 + 4 a star, $10 ceiling, fee 80%: 3-star course at the fit-green table, day the nine opens       inf   target -                       stalled 37 days for money; 3 stars day -1; lowest $432
+fit I2 by star 8 + 4 a star, $10 ceiling, fee 80%, 3-star course: cost scale on fit-green and land     0.290   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $408; par 3 $463, par 5 $1276, parcel $290
+fit I2 by star 8 + 4 a star, $10 ceiling, fee 80%, 4.5-star fair course: cost scale on fit-green and land     0.480   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $850; par 3 $766, par 5 $2112, parcel $480
+fit I2 by star 8 + 4 a star, $10 ceiling, fee 80%, 3-star course, start 1 star: cost scale on fit-green and land     0.280   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $434; par 3 $447, par 5 $1232, parcel $280
+fit I2 by star 8 + 4 a star, $10 ceiling, fee 80%, 3-star course, no pad: cost scale on fit-green and land     0.290   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $408; par 3 $463, par 5 $1276, parcel $290
+day I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%: 9 holes at 1 stars, net ($)    -5.000   target -                       5 guests at $8.00, upkeep $45
+day I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%: 9 holes at 3 stars, net ($)   339.000   target -                       16 guests at $24.00, upkeep $45
+day I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%: 9 holes at 5 stars, net ($)   915.000   target -                       24 guests at $40.00, upkeep $45
+run I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%: 3-star course at the fit-green table, day the nine opens       inf   target -                       stalled 41 days for money; 3 stars day -1; lowest $152
+fit I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%, 3-star course: cost scale on fit-green and land     0.200   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $359; par 3 $319, par 5 $880, parcel $200
+fit I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%, 4.5-star fair course: cost scale on fit-green and land     0.310   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $656; par 3 $494, par 5 $1364, parcel $310
+fit I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%, 3-star course, start 1 star: cost scale on fit-green and land     0.190   target at least 0.000     ok   nine opens day 29, 3 stars day 29, stalled 12 days, lowest $345; par 3 $303, par 5 $836, parcel $190
+fit I3 by hole 2 a hole x stars/3, $10 ceiling, fee 80%, 3-star course, no pad: cost scale on fit-green and land     0.200   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $391; par 3 $319, par 5 $880, parcel $200
+day I4 by star 8 + 4 a star, $15 ceiling, fee 80%: 9 holes at 1 stars, net ($)    87.000   target -                       11 guests at $12.00, upkeep $45
+day I4 by star 8 + 4 a star, $15 ceiling, fee 80%: 9 holes at 3 stars, net ($)   603.000   target -                       18 guests at $36.00, upkeep $45
+day I4 by star 8 + 4 a star, $15 ceiling, fee 80%: 9 holes at 5 stars, net ($)  1395.000   target -                       24 guests at $60.00, upkeep $45
+run I4 by star 8 + 4 a star, $15 ceiling, fee 80%: 3-star course at the fit-green table, day the nine opens       inf   target -                       stalled 33 days for money; 3 stars day -1; lowest $768
+fit I4 by star 8 + 4 a star, $15 ceiling, fee 80%, 3-star course: cost scale on fit-green and land     0.410   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $664; par 3 $654, par 5 $1804, parcel $410
+fit I4 by star 8 + 4 a star, $15 ceiling, fee 80%, 4.5-star fair course: cost scale on fit-green and land     0.680   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $1346; par 3 $1085, par 5 $2992, parcel $680
+fit I4 by star 8 + 4 a star, $15 ceiling, fee 80%, 3-star course, start 1 star: cost scale on fit-green and land     0.380   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $869; par 3 $606, par 5 $1672, parcel $380
+fit I4 by star 8 + 4 a star, $15 ceiling, fee 80%, 3-star course, no pad: cost scale on fit-green and land     0.410   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $664; par 3 $654, par 5 $1804, parcel $410
+day I5 by star 8 + 4 a star, $25 ceiling, fee 80%: 9 holes at 1 stars, net ($)   175.000   target -                       11 guests at $20.00, upkeep $45
+day I5 by star 8 + 4 a star, $25 ceiling, fee 80%: 9 holes at 3 stars, net ($)  1035.000   target -                       18 guests at $60.00, upkeep $45
+day I5 by star 8 + 4 a star, $25 ceiling, fee 80%: 9 holes at 5 stars, net ($)  2355.000   target -                       24 guests at $100.00, upkeep $45
+run I5 by star 8 + 4 a star, $25 ceiling, fee 80%: 3-star course at the fit-green table, day the nine opens       inf   target -                       stalled 29 days for money; 3 stars day -1; lowest $1295
+fit I5 by star 8 + 4 a star, $25 ceiling, fee 80%, 3-star course: cost scale on fit-green and land     0.620   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $1172; par 3 $989, par 5 $2728, parcel $620
+fit I5 by star 8 + 4 a star, $25 ceiling, fee 80%, 4.5-star fair course: cost scale on fit-green and land     1.090   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $2305; par 3 $1739, par 5 $4796, parcel $1090
+fit I5 by star 8 + 4 a star, $25 ceiling, fee 80%, 3-star course, start 1 star: cost scale on fit-green and land     0.590   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $1067; par 3 $941, par 5 $2596, parcel $590
+fit I5 by star 8 + 4 a star, $25 ceiling, fee 80%, 3-star course, no pad: cost scale on fit-green and land     0.620   target at least 0.000     ok   nine opens day 30, 3 stars day 30, stalled 13 days, lowest $1172; par 3 $989, par 5 $2728, parcel $620
+== economy: every target hit
