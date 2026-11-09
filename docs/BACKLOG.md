@@ -1128,6 +1128,11 @@ Done when: a player starts with $5,000, funds the course from green fees, and ca
   - Accept: `/balance economy` reaches 9 holes and 3 stars in 25 to 35 in-game days at one hole per 2 days, without going negative. A `/playtest full` session covers all 8 checklist items.
   - Test: sim output in the balance commit. Findings in `docs/playtests/`.
   - Touches: `data/`, `docs/`
+- [ ] E4-S9 Check the blind-tee rule on hilly land. E4-S8 must tune on a nine that can reach 3 stars.
+  - Note: (found in E4-S1, `docs/playtests/2026-11-09-e4-economy-options.md`) on PlaytestNine holes 1 to 8 fail fair ("blind from the tee, could not see the flag") on every one of 384 reactions and draw no praise, so the course rates 1.5 to 2 stars and 3 stars is out of reach. First measure whether the check is too strict on hilly land: on each hole, what blocks the line (which tiles, how high, the eye and mark heights used), against D50's smooth ground (`HeightField.height_at`). Then fix the rule (with `/decision` if its meaning changes, and a `/balance reactions` rerun keeping every target) or, if the rule holds, fix the nine's tees.
+  - Accept: the cause is recorded per hole. PlaytestNine is seen from the tee on most of its holes, and its rating under 5/3/1 scoring from the economy sim is reported. `/balance reactions --runs 50 --seed 1` hits every target, before and after recorded.
+  - Test: `tests/test_reactions.gd` (the sight-line rule), `tests/test_playtest_nine.gd` (the nine's holes seen from the tee).
+  - Touches: `guests/`, `tests/`
 
 ## E5: Polish and share — planned
 
