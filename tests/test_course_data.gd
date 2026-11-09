@@ -121,6 +121,25 @@ func test_off_map_reads_are_oob_and_do_not_wrap() -> void:
 			Vector2i(3, 1), Vector2i(-1, 0)]:
 		assert_eq(c.get_height(p.x, p.y), 0, "height at %s" % p)
 		assert_eq(c.get_surface(p.x, p.y), Surface.Type.OOB, "surface at %s" % p)
+		assert_false(c.is_owned(p.x, p.y), "owned at %s" % p)
+
+
+## E3-S75: is_owned spells out the parcel index (integer division, parcels_wide rounded up);
+## on a map whose width and height are not parcel multiples it reads, tile by tile, what
+## is_parcel_owned(parcel_of) says, and never wraps off the map.
+func test_is_owned_reads_the_tiles_parcel_on_a_ragged_map() -> void:
+	var c := CourseData.create(37, 21)
+	c.set_parcel_owned(Vector2i(1, 0), false)
+	c.set_parcel_owned(Vector2i(2, 1), false)
+	c.set_parcel_owned(Vector2i(0, 1), false)
+	var wrong := 0
+	for y: int in range(-2, 24):
+		for x: int in range(-2, 40):
+			var want := c.in_bounds(x, y) and c.is_parcel_owned(c.parcel_of(x, y))
+			wrong += 1 if c.is_owned(x, y) != want else 0
+	assert_eq(wrong, 0, "tiles whose ownership is not their parcel's")
+	assert_false(c.is_owned(36, 20), "the last tile's parcel (2, 1) was given up")
+	assert_true(c.is_owned(36, 0), "parcel (2, 0) is still owned")
 
 
 # --- round trip ---

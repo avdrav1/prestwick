@@ -143,18 +143,21 @@ func in_bounds(x: int, y: int) -> bool:
 
 
 ## Height step 0 to MAX_HEIGHT. Off-map tiles read as height 0.
+## E3-S75: get_height, get_surface and is_owned spell out in_bounds and the index rather than
+## call them: a Ball tick reads them dozens of times, and each GDScript call costs about as much
+## as the read (the same answers, a guest frame's ticks about a quarter cheaper).
 func get_height(x: int, y: int) -> int:
-	if not in_bounds(x, y):
+	if x < 0 or y < 0 or x >= _width or y >= _height:
 		return 0
-	return _tiles[_index(x, y)] >> 4
+	return _tiles[y * _width + x] >> 4
 
 
 ## Surface.Type value. Off-map tiles read as Surface.Type.OOB, so edge sampling
 ## (cursor picking, ball stepping) never wraps into a neighbouring row.
 func get_surface(x: int, y: int) -> Surface.Type:
-	if not in_bounds(x, y):
+	if x < 0 or y < 0 or x >= _width or y >= _height:
 		return Surface.Type.OOB
-	return (_tiles[_index(x, y)] & 0x0F) as Surface.Type
+	return (_tiles[y * _width + x] & 0x0F) as Surface.Type
 
 
 ## True when parcel `p` (in parcel coordinates) is on the map.
@@ -183,10 +186,14 @@ func is_parcel_owned(p: Vector2i) -> bool:
 
 
 ## True when tile (x, y) is on an owned parcel. Off-map tiles are never owned.
+@warning_ignore("integer_division")
 func is_owned(x: int, y: int) -> bool:
-	if not in_bounds(x, y):
+	if x < 0 or y < 0 or x >= _width or y >= _height:
 		return false
-	return _owned[_parcel_index(parcel_of(x, y))] != 0
+	# On the map x and y are 0 or more, so integer division is parcel_of's floor (and, rounded
+	# up, parcels_wide's ceiling).
+	return _owned[(y / PARCEL_TILES) * ((_width + PARCEL_TILES - 1) / PARCEL_TILES)
+			+ x / PARCEL_TILES] != 0
 
 
 ## True when buying land has no budget limit (New sandbox, version 1 files).
