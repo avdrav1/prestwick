@@ -18,14 +18,16 @@ const NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
 ]
 
-## Cart path searches kept for one course while its tiles stand unchanged (E3-S15). A walk
-## passed a Cache reads CourseData.revision first and drops what it holds when the course was
-## written since (any tile or parcel write), so a kept route is always the one a fresh search
-## would find. GuestBrain holds one for the whole day.
+## Cart path searches kept for one course while its cart path tiles stand unchanged (E3-S15).
+## A walk passed a Cache reads the course's path key first (its CourseData.surface_revision of
+## CART_PATH, E3-S74: before, CourseData.revision, so any tile or parcel write dropped every
+## search and the path grid, about 0.9 ms to read again) and drops what it holds when a tile
+## turned to or from cart path since: the search reads nothing else, so a kept route is always
+## the one a fresh search would find. GuestBrain holds one for the whole day.
 class Cache:
 	extends RefCounted
-	## CourseData.revision the searches and the grid stand for.
-	var revision: int = -1
+	## The path key (Cache.key) the searches and the grid stand for.
+	var revision: String = ""
 	## {Vector4i(start tile, end tile): [tiles between, empty for none; steps searched]}.
 	var searches: Dictionary = {}
 	## path_grid of that course (empty until a search needs it).
@@ -35,12 +37,18 @@ class Cache:
 	func size() -> int:
 		return searches.size()
 
-	## Drops everything if `course` was written since it was filled.
+	## Drops everything if `course` is another course, or a tile of it turned to or from cart
+	## path, since it was filled.
 	func follow(course: CourseData) -> void:
-		if course.revision != revision:
+		var k := key(course)
+		if k != revision:
 			searches.clear()
 			grid = PackedByteArray()
-			revision = course.revision
+			revision = k
+
+	## What the path search reads of `course`, as one key: the course and its cart path writes.
+	static func key(course: CourseData) -> String:
+		return "%d:%d" % [course.get_instance_id(), course.surface_revision(Surface.Type.CART_PATH)]
 
 
 ## The route's corners, yards: the start first, the end last.

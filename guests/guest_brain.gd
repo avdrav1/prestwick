@@ -112,11 +112,11 @@ var _sim_used: int = 0
 var _need: int = 0
 ## Share of the current simulated second gone by in real time (advance_real).
 var _clock: float = 0.0
-## Cart path searches (GuestWalk.route's cache) kept across steps while the course's tiles
-## stand unchanged (E3-S15): every walk of the day between the same two path tiles shares one
-## search, and the cache is dropped at the first walk after any tile or parcel write
-## (CourseData.revision moved, GuestWalk.Cache.follow). A cached route is the one a fresh
-## search finds, so the day is the same with or without it.
+## Cart path searches (GuestWalk.route's cache) kept across steps while the course's cart path
+## stands unchanged (E3-S15): every walk of the day between the same two path tiles shares one
+## search, and the cache is dropped at the first walk after a tile turned to or from cart path
+## (E3-S74; before, any tile or parcel write; GuestWalk.Cache.follow). A cached route is the one
+## a fresh search finds, so the day is the same with or without it.
 var _route_cache := GuestWalk.Cache.new()
 ## HoleChecks.terrain_key of the course this step ("" until a reaction needs it); dropped
 ## before the next step.

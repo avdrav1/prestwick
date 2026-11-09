@@ -237,6 +237,31 @@ func test_copy_is_independent() -> void:
 	assert_eq(a.get_height(0, 0), 0, "original untouched")
 
 
+## E3-S74: the shape counters move only on a real change of what they count: a height, a tile
+## turning to or from one surface (both surfaces' counters), a parcel's owned flag. A rewrite
+## of the same value moves `revision` alone.
+func test_shape_counters_move_only_on_what_they_count() -> void:
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 1)
+	var rev: int = c.revision
+	c.set_tile(3, 3, 1, Surface.Type.ROUGH)
+	assert_gt(c.revision, rev, "every write moves revision")
+	assert_eq([c.height_revision, c.land_revision], [0, 0], "a rewrite moves nothing else")
+	for s: int in Surface.COUNT:
+		assert_eq(c.surface_revision(s as Surface.Type), 0, "%s untouched" % Surface.NAMES[s])
+	c.set_tile(3, 3, 1, Surface.Type.FAIRWAY)
+	assert_eq(c.surface_revision(Surface.Type.ROUGH), 1, "turned from rough")
+	assert_eq(c.surface_revision(Surface.Type.FAIRWAY), 1, "turned to fairway")
+	assert_eq(c.surface_revision(Surface.Type.BUNKER), 0, "no bunker moved")
+	assert_eq(c.height_revision, 0, "same height")
+	c.set_tile(3, 3, 2, Surface.Type.FAIRWAY)
+	assert_eq(c.height_revision, 1, "a height moved")
+	assert_eq(c.surface_revision(Surface.Type.FAIRWAY), 1, "same surface")
+	c.set_parcel_owned(Vector2i(0, 0), true)
+	assert_eq(c.land_revision, 0, "already owned")
+	c.set_parcel_owned(Vector2i(0, 0), false)
+	assert_eq(c.land_revision, 1, "given up")
+
+
 # --- hash ---
 
 func test_hash_is_stable_and_sensitive() -> void:

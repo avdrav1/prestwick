@@ -22,6 +22,10 @@ const NONE: Vector2i = Vector2i(-1, -1)
 ## hide another (hidden).
 const HIDE_EPS: float = 0.02
 
+## TerrainTuning's default, read once (E3-S74: `load` on every cast cost about 0.08 ms, a
+## third of an issue box's placing), as TerrainMesh keeps its subdiv.
+static var _tuning: TerrainTuning = null
+
 
 ## The tile drawn frontmost at `screen` (CourseView local space), or NONE. `heights` overrides
 ## the course height of the tiles it holds (tile -> height), to pick against ground as it was.
@@ -50,7 +54,9 @@ static func hidden(course: CourseData, p: Vector3) -> bool:
 static func cast(course: CourseData, screen: Vector2, heights: Dictionary = {}, floor: float = -INF) -> Array:
 	var t0: Vector2 = Iso.screen_to_tile(screen, 0.0)
 	var hi_edge := Vector2(course.width - 0.5, course.height - 0.5)
-	var tuning := TerrainTuning.load_default()
+	if _tuning == null:
+		_tuning = TerrainTuning.load_default()
+	var tuning := _tuning
 	var base: float = maxf(minf(0.0, tuning.base_steps), floor)
 	var n: int = tuning.subdiv
 	var top: float = CourseData.MAX_HEIGHT + 0.5

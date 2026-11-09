@@ -407,8 +407,8 @@ func test_a_check_keeps_the_issue_boxes_that_did_not_change() -> void:
 	b.set_par(3, 5)  # hole 3's cup tile now fails rules 2 and 4
 	after = m.course_view.issue_markers()
 	assert_same(after[0], before[0], "hole 2's box is still kept")
-	assert_ne(after[1], before[1], "hole 3's is rebuilt")
-	assert_eq(after[1].lines().size(), 2)
+	assert_same(after[1], before[1], "hole 3's is filled again on its tile (E3-S74)")
+	assert_eq(after[1].lines().size(), 2, "with both its rules")
 	b.paint(_cup(1), Surface.Type.GREEN, 1)
 	assert_eq(m.course_view.issue_markers().size(), 1, "a box whose rules pass goes")
 

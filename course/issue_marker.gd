@@ -128,6 +128,17 @@ func add(rule: int, reason: String, hole: int = 0, hole_name: String = "") -> vo
 	label.queue_redraw()
 
 
+## Drops every rule it shows (E3-S74: CourseView fills a spare box standing on the same ground
+## again rather than place a new one).
+func clear() -> void:
+	rules = PackedInt32Array()
+	reasons = PackedStringArray()
+	holes = PackedInt32Array()
+	names = PackedStringArray()
+	_box_size = Vector2(-1.0, -1.0)
+	label.queue_redraw()
+
+
 ## True when it shows exactly `p_rules`, `p_reasons`, `p_holes` and `p_names` (CourseView keeps
 ## it then).
 func shows(p_rules: PackedInt32Array, p_reasons: PackedStringArray, p_holes: PackedInt32Array,

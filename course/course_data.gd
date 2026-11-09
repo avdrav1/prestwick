@@ -14,7 +14,7 @@ extends Resource
 ##   course_name, author, thumbnail, to_dict(), content_hash(), copy(),
 ##   parcels_wide, parcels_high, parcel_in_bounds(p), parcel_of(x, y), parcel_rect(p),
 ##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
-##   has_unlimited_budget(), revision.
+##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s).
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
 ## set_info, set_parcel_owned and set_land_budget (CLAUDE.md Architecture). Tests may call
@@ -70,6 +70,16 @@ var land_budget: int:
 var revision: int:
 	get:
 		return _revision
+## E3-S74: counts the writes that changed a tile's height, so a reader keeping something
+## derived from the heights alone (HoleChecks' statics) can tell whether it still stands.
+## Like `revision`, not saved and not part of the content; a fresh object starts at 0.
+var height_revision: int:
+	get:
+		return _height_revision
+## E3-S74: counts the writes that changed a parcel's owned flag.
+var land_revision: int:
+	get:
+		return _land_revision
 
 var _width: int = 0
 var _height: int = 0
@@ -82,10 +92,22 @@ var _thumbnail: String = ""
 var _owned: PackedByteArray = PackedByteArray()
 var _land_budget: int = UNLIMITED_BUDGET
 var _revision: int = 0
+var _height_revision: int = 0
+var _land_revision: int = 0
+## One counter per Surface.Type (surface_revision).
+var _surface_revisions := PackedInt32Array()
 
 
 func _init() -> void:
 	_holes.make_read_only()
+	_surface_revisions.resize(Surface.COUNT)
+
+
+## E3-S74: counts the writes that turned a tile to or from surface `s` (one write that turns
+## rough to fairway moves both counters). With height_revision and land_revision, a reader
+## that reads only some surfaces keys on those surfaces' counters, not on every tile.
+func surface_revision(s: Surface.Type) -> int:
+	return _surface_revisions[s]
 
 
 ## A new course filled with one surface at one height, every parcel owned and an unlimited
@@ -249,7 +271,14 @@ func set_tile(x: int, y: int, tile_height: int, surface: Surface.Type) -> void:
 	assert(in_bounds(x, y), "tile out of bounds")
 	assert(tile_height >= 0 and tile_height <= MAX_HEIGHT, "height out of range")
 	assert(Surface.is_valid(surface), "surface out of range")
-	_tiles[_index(x, y)] = _pack(tile_height, surface)
+	var i: int = _index(x, y)
+	var was: int = _tiles[i]
+	if (was >> 4) != tile_height:
+		_height_revision += 1
+	if (was & 0x0F) != surface:
+		_surface_revisions[was & 0x0F] += 1
+		_surface_revisions[surface] += 1
+	_tiles[i] = _pack(tile_height, surface)
 	_revision += 1
 
 
@@ -267,7 +296,10 @@ func set_info(p_name: String, p_author: String, p_thumbnail: String) -> void:
 ## Marks parcel `p` owned or not.
 func set_parcel_owned(p: Vector2i, owned: bool) -> void:
 	assert(parcel_in_bounds(p), "parcel out of bounds")
-	_owned[_parcel_index(p)] = 1 if owned else 0
+	var v: int = 1 if owned else 0
+	if _owned[_parcel_index(p)] != v:
+		_land_revision += 1
+	_owned[_parcel_index(p)] = v
 	_revision += 1
 
 

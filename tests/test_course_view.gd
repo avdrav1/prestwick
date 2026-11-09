@@ -185,6 +185,85 @@ func test_markers_follow_the_holes_list() -> void:
 	assert_eq(_view.hole_markers().size(), 0, "clearing the view clears the markers")
 
 
+## E3-S74: a holes change that leaves a marker as it was (a hole closed or opened, as a breaking
+## drag's release and its undo do) keeps that marker; a moved cup gets a pin on its new tile.
+func test_refresh_holes_keeps_the_markers_it_would_draw_the_same() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	var before: Array[HoleMarker] = _view.hole_markers()
+	var hs: Array[HoleData] = []
+	for h: HoleData in c.holes:
+		var shut := h.copy()
+		shut.open = not h.open
+		hs.append(shut)
+	c.set_holes(hs)
+	_view.refresh_holes()
+	assert_eq(_view.hole_markers(), before, "the same four markers")
+	hs[1].cup = Vector2i(9, 9)
+	c.set_holes(hs)
+	_view.refresh_holes()
+	var pin: HoleMarker = _view.hole_marker(2, HoleMarker.Kind.PIN)
+	assert_false(pin in before, "a new pin for the moved cup")
+	_assert_marker_on_top(pin, Vector2i(9, 9), 0)
+	assert_true(_view.hole_marker(1, HoleMarker.Kind.PIN) in before, "hole 1's pin kept")
+	assert_eq(_view.find_child("Holes", false, false).get_child_count(), 4, "the old pin is gone")
+
+
+## E3-S74: an edit that moves no height and turns no tile to or from water leaves the markers
+## where they stand (a breaking drag's undo repainted every issue box's tile, then freed them);
+## one that raises a marker's tile moves it.
+func test_a_surface_edit_leaves_the_markers_standing() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	_view.show_issues({1: [CourseValidator.Issue.new(2, Vector2i(9, 4), "test")]})
+	var pin: HoleMarker = _view.hole_marker(1, HoleMarker.Kind.PIN)
+	var box: IssueMarker = _view.issue_markers()[0]
+	var pin_at := pin.position
+	var box_at := box.position
+	pin.position = Vector2(-1000, -1000)
+	box.position = Vector2(-1000, -1000)
+	c.set_tile(9, 4, 3, Surface.Type.FAIRWAY)
+	_view.refresh_cells([Vector2i(9, 4)])
+	assert_eq(pin.position, Vector2(-1000, -1000), "a surface edit does not place the pin again")
+	assert_eq(box.position, Vector2(-1000, -1000), "nor the issue box")
+	c.set_tile(9, 4, 3, Surface.Type.WATER)
+	_view.refresh_cells([Vector2i(9, 4)])
+	assert_eq(pin.position, pin_at, "turned to water: placed again")
+	assert_eq(box.position, box_at)
+	c.set_tile(9, 4, 4, Surface.Type.WATER)
+	_view.refresh_cells([Vector2i(9, 4)])
+	_assert_marker_on_top(pin, Vector2i(9, 4), 4)
+	assert_eq(box.ground, 4, "raised: the box stands on the new top")
+
+
+## E3-S74: an issue box a check drops is kept hidden as its tile's spare and filled again when a
+## later check wants a box there (a breaking drag's undo drops nine, its next release wants the
+## same nine), so long as no height or water near it moved; once one did, the box is new.
+func test_a_dropped_issue_box_is_filled_again_while_its_ground_stands() -> void:
+	var c := _two_hole_course()
+	_view.show_course(c)
+	var issues := {1: [CourseValidator.Issue.new(2, Vector2i(9, 4), "first")]}
+	_view.show_issues(issues)
+	var box: IssueMarker = _view.issue_markers()[0]
+	_view.show_issues({})
+	assert_eq(_view.issue_markers().size(), 0, "none shown")
+	assert_false(box.visible, "kept hidden")
+	c.set_tile(9, 6, 0, Surface.Type.FAIRWAY)
+	_view.refresh_cells([Vector2i(9, 6)])
+	_view.show_issues({1: [CourseValidator.Issue.new(3, Vector2i(9, 4), "again")]})
+	assert_eq(_view.issue_markers(), [box] as Array[IssueMarker], "the spare, filled again")
+	assert_true(box.visible)
+	assert_eq(box.lines(), PackedStringArray(["hole 1, rule 3: again"]), "with the new lines only")
+	_view.show_issues({})
+	c.set_tile(10, 5, 2, Surface.Type.ROUGH)
+	_view.refresh_cells([Vector2i(10, 5)])
+	_view.show_issues(issues)
+	var fresh: IssueMarker = _view.issue_markers()[0]
+	assert_ne(fresh, box, "a raise in front of it: a new box")
+	assert_false(is_instance_valid(box), "the stale spare is freed")
+	assert_eq(fresh.ground, 3)
+
+
 # --- E6-S5: unowned land draws dimmed, hatched, with parcel lines (art/specs/land.md) ---
 
 ## 40 x 20 tiles (parcels 3 x 2, the last column partial), height 1, owning only parcel (0, 0).

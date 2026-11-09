@@ -806,6 +806,12 @@ func test_a_cached_walk_equals_a_fresh_one_after_a_path_edit() -> void:
 	var again := brain.route(from, to)
 	assert_eq(again.points, first.points, "kept across steps")
 	assert_eq(brain.route_cache_size(), 1, "the search ran once")
+	# E3-S74: an edit that lays or lifts no cart path (fairway, a bunker, a raise) keeps it.
+	b.paint(Vector2i(17, 10), Surface.Type.FAIRWAY, 1)
+	b.paint(Vector2i(20, 12), Surface.Type.BUNKER, 1)
+	b.raise(Vector2i(25, 12), 1)
+	assert_eq(brain.route(from, to).points, first.points)
+	assert_eq(brain.route_cache_size(), 1, "kept through edits off the path")
 	# Cut the path in the middle: the cached route crosses rough now; the brain's walk is the
 	# fresh one (straight: no path joins the ends).
 	b.paint(Vector2i(17, 3), Surface.Type.ROUGH, 1)
@@ -1206,7 +1212,8 @@ func _walled_day(t: GuestTuning, speed: float) -> Array:
 			stepped = brain.advance_real(1.0 / 60.0, speed)
 		most = maxi(most, brain.checks.parted - before)
 		if stepped > 0 and brain.second % 20 == 0:
-			b.paint(Vector2i(64 + edits % 3, 100), Surface.Type.FAIRWAY if edits % 2 == 0
+			# A hazard painted and taken up (E3-S74: fairway over rough keeps the statics).
+			b.paint(Vector2i(64 + edits % 3, 100), Surface.Type.BUNKER if edits % 2 == 0
 					else Surface.Type.ROUGH, 1)
 			edits += 1
 	return [out, brain.checks.parted, most]

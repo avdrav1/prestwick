@@ -4,7 +4,7 @@ extends RefCounted
 ## Interesting): whether a hole's tee shot is blind (D43) and whether the hole is interesting
 ## (E3-S1). Both read only the course (CourseData's getters) and the hole's tee and cup, never
 ## a guest, so they are measured once per hole and kept until the hole's tee or cup or the
-## course's terrain (heights, surfaces, owned land) changes. Pace and challenge read the
+## terrain they read (heights, hazard surfaces, owned land: terrain_key) changes. Pace and challenge read the
 ## guest's own play (GuestReaction).
 ##
 ## A reader only: like the validator, it never writes the course.
@@ -96,12 +96,18 @@ func _init(p_tuning: GuestTuning = null, p_params: BallParams = null,
 	surfaces = p_surfaces if p_surfaces != null else SurfaceTable.load_default()
 
 
-## The course's terrain as one key: its tiles (heights and surfaces) and owned land. Equal
-## terrain gives an equal key; any tile or parcel edit changes it. About a millisecond on
-## 128 x 128, so a caller checking many holes on an unchanged course passes it to `statics`.
+## The terrain the statics read, as one key: `course` itself, its heights (the sight line),
+## its hazard surfaces (HAZARDS: the line, the safe route, and trees blocking the sight line)
+## and its owned land. An edit that changes none of them (rough painted over fairway, a cart
+## path laid) keeps the key, so every hole's statics stand; any other changes it (E3-S74:
+## before, a hash of every tile and parcel, about a millisecond, and any paint dropped every
+## hole's statics). Read from CourseData's counters, so it costs nothing; another course,
+## or a copy, has another key.
 static func terrain_key(course: CourseData) -> String:
-	var d := course.to_dict()
-	return ("%d:%d:%s:%s" % [course.width, course.height, d["tiles"], str(d["owned"])]).md5_text()
+	var key := "%d:%d:%d" % [course.get_instance_id(), course.height_revision, course.land_revision]
+	for s: Surface.Type in HAZARDS:
+		key += ":%d" % course.surface_revision(s)
+	return key
 
 
 ## `hole`'s statics on `course`, measured once and kept while its tee and cup and the

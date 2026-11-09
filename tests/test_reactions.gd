@@ -423,6 +423,41 @@ func test_statics_are_measured_once_per_hole_until_it_or_the_terrain_changes() -
 	assert_eq(checks.measured, 4, "a land change measures again")
 
 
+## E3-S74: the statics read the heights, the hazard surfaces (trees block the sight line too)
+## and owned land, so an edit that changes none of them keeps every hole's statics, and one
+## that changes any of them measures them again.
+func test_statics_are_kept_through_an_edit_that_changes_no_hazard_height_or_land() -> void:
+	var c := _strip(40, 12)
+	var h := _hole(c, 1, 3, Vector2i(2, 6), Vector2i(30, 6))
+	c.set_tile(22, 6, 1, Surface.Type.BUNKER)
+	var first := checks.statics(c, h)
+	assert_true(first.interesting())
+	assert_eq(checks.measured, 1)
+	_column(c, 10, 0, 11, Surface.Type.FAIRWAY, 1)
+	assert_same(checks.statics(c, h), first, "fairway painted over rough on the line keeps them")
+	c.set_tile(22, 6, 1, Surface.Type.BUNKER)
+	c.set_parcel_owned(Vector2i(0, 0), true)
+	assert_same(checks.statics(c, h), first, "rewriting a bunker or owned land keeps them")
+	_column(c, 10, 0, 11, Surface.Type.CART_PATH, 1)
+	assert_same(checks.statics(c, h), first, "cart path over fairway keeps them")
+	assert_eq(checks.measured, 1)
+	c.set_tile(22, 6, 1, Surface.Type.TREES)
+	var trees := checks.statics(c, h)
+	assert_eq(checks.measured, 2, "one hazard for another measures again")
+	assert_true(trees.hazard_on_line)
+	c.set_tile(22, 6, 1, Surface.Type.ROUGH)
+	assert_false(checks.statics(c, h).hazard_on_line, "the hazard gone, measured again")
+	assert_eq(checks.measured, 3)
+	c.set_tile(15, 6, 3, Surface.Type.ROUGH)
+	checks.statics(c, h)
+	assert_eq(checks.measured, 4, "a height edit measures again")
+	c.set_parcel_owned(Vector2i(1, 0), false)
+	checks.statics(c, h)
+	assert_eq(checks.measured, 5, "a land change measures again")
+	assert_not_null(checks.statics(c.copy(), h))
+	assert_eq(checks.measured, 6, "another course is measured afresh")
+
+
 # --- a guest day ---
 
 func test_every_finished_hole_gives_one_reaction_naming_it() -> void:

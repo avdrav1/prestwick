@@ -80,6 +80,18 @@ const REBUILD_REACH: int = 2
 const WATER_REACH: int = 1
 ## E3-S16: edited tiles _drain sorts (_classify) for each tile of its budget.
 const CLASSIFY_PER_TILE: int = 4
+## E3-S74: the bit _heights_marked sets on a water tile (heights take the three below it).
+const WATER_MARK: int = 8
+## E3-S74: how far a tile's moved height or water reaches what a marker reads. A marker's own
+## ground (its tile's, its tee blocks', its diamond's) reads the 3 x 3 heights round its tile
+## (TerrainMesh.ground_in). An issue box's foot is covered by ground drawn in front of it on its
+## screen point, which lies on tiles (x + d, y + d) for d up to (MAX_HEIGHT + 0.5) / 2, each
+## drawn from its own 3 x 3: so 2 tiles behind to 6 in front.
+const MARK_NEAR: int = 1
+const MARK_BEHIND: int = 2
+const MARK_FRONT: int = 6
+## E3-S74: spare issue boxes kept at most (_spare_issues).
+const SPARE_ISSUES_MAX: int = 32
 
 var course: CourseData:
 	get:
@@ -101,7 +113,8 @@ var _pending_build: Dictionary = {}
 var _pending_paint: Dictionary = {}
 ## The edited tiles not yet sorted into that work (_classify), and how far the sorting has got.
 var _pending_cells: Array[Vector2i] = []
-## Each tile's height as the markers last followed it (refresh_cells, at once).
+## Each tile's shape as the markers last followed it (refresh_cells, at once): its height, plus
+## WATER_MARK when it is water (a water tile's ground lies flat at its level, E3-S74).
 var _heights_marked: PackedByteArray = PackedByteArray()
 var _pending_at: int = 0
 ## The tiles _drain has drawn since this node's last _process ended (a frame's share of the
@@ -113,6 +126,12 @@ var _holes_root: Node2D
 var _markers: Array[HoleMarker] = []
 var _issues_root: Node2D
 var _issue_markers: Array[IssueMarker] = []
+## E3-S74: issue boxes a check dropped, hidden under _issues_root (tile -> IssueMarker), kept
+## while the ground they were placed on stands (_follow_shape frees one a shape change reaches),
+## so a box wanted on that tile again is filled, not placed again (an IssueMarker's placing, its
+## foot's ray and its two rings on the ground, is most of a check's issue boxes: a breaking
+## drag's release built nine, 0.3 ms each, the very ones its undo had just dropped).
+var _spare_issues: Dictionary = {}
 ## The zoom (screen px per local unit) the issue boxes were last laid out at; 0 forces a layout.
 var _issue_layout_scale: float = 0.0
 ## The zoom the tee markers' hole numbers were last sized for (layout_hole_labels).
@@ -197,10 +216,11 @@ func show_course(c: CourseData) -> void:
 	_heights_seen = PackedByteArray()
 	if c != null:
 		_heights_seen.resize(c.width * c.height)
+		_heights_marked.resize(c.width * c.height)
 		for y: int in c.height:
 			for x: int in c.width:
 				_heights_seen[y * c.width + x] = c.get_height(x, y)
-		_heights_marked = _heights_seen.duplicate()
+				_heights_marked[y * c.width + x] = _marked_shape(c, x, y)
 		terrain.sync()
 		for key: Vector2i in terrain.all_chunk_keys():
 			var ch := terrain.make_chunk(key)
@@ -208,36 +228,75 @@ func show_course(c: CourseData) -> void:
 			_chunks[key] = ch
 	topo.show_course(c)
 	play_lines.show_course(c)
+	# Another course: every marker afresh (refresh_holes keeps those it would draw the same, and
+	# show_issues fills a spare box).
+	for m: HoleMarker in _markers:
+		_holes_root.remove_child(m)
+		m.free()
+	_markers.clear()
+	for m: IssueMarker in _spare_issues.values():
+		_free_issue(m)
+	_spare_issues.clear()
 	refresh_holes()
 	show_issues({})
 
 
 ## Rebuilds the tee marker and pin of every hole from CourseData. Call after holes change
-## (E2-S3's tee and cup tools). A tee or cup not placed yet has no marker.
+## (E2-S3's tee and cup tools). A tee or cup not placed yet has no marker. A marker that would
+## be drawn the same (its kind, hole number, name, tile and label side) is kept as it stands
+## (refresh_cells keeps it on its ground), the others made afresh, and the tee numbers laid out
+## again only when a marker was made or removed (E3-S74: a breaking drag's release and its undo
+## change only which holes are open, and freeing and rebuilding all eighteen markers cost their
+## frames 1.6 ms).
 func refresh_holes() -> void:
+	var spare := {}
 	for m: HoleMarker in _markers:
-		_holes_root.remove_child(m)
-		m.free()
-	_markers.clear()
-	if _course == null:
-		return
-	for slot: int in _course.holes.size():
-		var hole: HoleData = _course.holes[slot]
-		for pair: Array in [[HoleMarker.Kind.TEE, hole.tee], [HoleMarker.Kind.PIN, hole.cup]]:
-			var at: Vector2i = pair[1]
-			if not _course.in_bounds(at.x, at.y):
-				continue
-			var m := HoleMarker.new(pair[0], hole.number, at)
-			m.hole_label = _course.hole_label(slot)
-			# The tee's number stands beside the block away from its cup (E3-S66).
-			if pair[0] == HoleMarker.Kind.TEE and _course.in_bounds(hole.cup.x, hole.cup.y):
-				m.label_side = HoleMarker.side_away_from(hole.tee, hole.cup)
-			m.place(_course)
-			m.text_scale = 1.0 / _view_scale()
-			m.shape_scale = marker_shape_scale(_view_scale())
-			_holes_root.add_child(m)
-			_markers.append(m)
-	layout_hole_labels(_view_scale())
+		var k := _marker_key(m.kind, m.hole_number, m.hole_label, m.cell, m.label_side)
+		if not spare.has(k):
+			spare[k] = []
+		(spare[k] as Array).append(m)
+	var kept: Array[HoleMarker] = []
+	var changed: bool = false
+	if _course != null:
+		for slot: int in _course.holes.size():
+			var hole: HoleData = _course.holes[slot]
+			var label: String = _course.hole_label(slot)
+			for pair: Array in [[HoleMarker.Kind.TEE, hole.tee], [HoleMarker.Kind.PIN, hole.cup]]:
+				var at: Vector2i = pair[1]
+				if not _course.in_bounds(at.x, at.y):
+					continue
+				# The tee's number stands beside the block away from its cup (E3-S66).
+				var side: float = 1.0
+				if pair[0] == HoleMarker.Kind.TEE and _course.in_bounds(hole.cup.x, hole.cup.y):
+					side = HoleMarker.side_away_from(hole.tee, hole.cup)
+				var k := _marker_key(pair[0], hole.number, label, at, side)
+				var same: Array = spare.get(k, [])
+				if not same.is_empty():
+					kept.append(same.pop_back())
+					continue
+				var m := HoleMarker.new(pair[0], hole.number, at)
+				m.hole_label = label
+				m.label_side = side
+				m.place(_course)
+				m.text_scale = 1.0 / _view_scale()
+				m.shape_scale = marker_shape_scale(_view_scale())
+				_holes_root.add_child(m)
+				kept.append(m)
+				changed = true
+	for k: String in spare:
+		for m: HoleMarker in spare[k]:
+			_holes_root.remove_child(m)
+			m.free()
+			changed = true
+	_markers = kept
+	if changed:
+		layout_hole_labels(_view_scale())
+
+
+## What refresh_holes compares to keep a marker: everything it is made from.
+static func _marker_key(kind: HoleMarker.Kind, number: int, label: String, cell: Vector2i,
+		side: float) -> String:
+	return "%d:%d:%s:%d:%d:%d" % [kind, number, label, cell.x, cell.y, signi(int(side))]
 
 
 ## Draws every hole's line of play (D47, D51): `lines` one per slot, [tee, cup] or [tee, turn,
@@ -265,6 +324,8 @@ func hole_marker(number: int, kind: HoleMarker.Kind) -> HoleMarker:
 ## with no tile on the map (a hole with no tee and no cup) has no highlight. A marker whose
 ## tile shows the same rules as before is kept, not rebuilt (E3-S2 review: with nine holes
 ## failing, rebuilding every box on every check cost a frame), and the boxes are laid out again.
+## A box dropped is kept hidden as its tile's spare while the ground it stands on does not move
+## (_spare_issues), and a box wanted there again is that spare filled with its new lines.
 ##
 ## `slot_issues` (CourseBuilder.slot_issues: each slot's own issues, in CourseData.holes order),
 ## when given, names each line's hole as the map does (CourseData.hole_label), so two holes
@@ -305,20 +366,48 @@ func show_issues(issues: Dictionary, slot_issues: Array = []) -> void:
 		if not w.is_empty() and not kept.has(m.cell) and m.shows(w[0], w[1], w[2], w[3]):
 			kept[m.cell] = m
 		else:
-			_issues_root.remove_child(m)
-			m.free()
+			_spare_issue(m)
 	_issue_markers.clear()
 	for cell: Vector2i in order:
 		var m: IssueMarker = kept.get(cell)
 		if m == null:
-			m = IssueMarker.new(cell)
-			m.place(_course)
 			var w: Array = wanted[cell]
+			m = _spare_issues.get(cell)
+			if m != null:
+				_spare_issues.erase(cell)
+				m.visible = true
+				if m.shows(w[0], w[1], w[2], w[3]):
+					_issue_markers.append(m)
+					continue  # its lines too, and their wrapped box
+				m.clear()
+			else:
+				m = IssueMarker.new(cell)
+				m.place(_course)
+				_issues_root.add_child(m)
 			for i: int in (w[0] as PackedInt32Array).size():
 				m.add(w[0][i], w[1][i], w[2][i], w[3][i])
-			_issues_root.add_child(m)
 		_issue_markers.append(m)
 	layout_issue_labels(_view_scale())
+
+
+## Hides issue box `m`, dropped by a check, as the spare on its tile (one a tile, at most
+## SPARE_ISSUES_MAX, the oldest freed first).
+func _spare_issue(m: IssueMarker) -> void:
+	var old: IssueMarker = _spare_issues.get(m.cell)
+	if old != null:
+		_spare_issues.erase(m.cell)
+		_free_issue(old)
+	if _spare_issues.size() >= SPARE_ISSUES_MAX:
+		var first: Vector2i = _spare_issues.keys()[0]
+		_free_issue(_spare_issues[first])
+		_spare_issues.erase(first)
+	m.visible = false
+	_spare_issues[m.cell] = m
+
+
+func _free_issue(m: IssueMarker) -> void:
+	_issues_root.remove_child(m)
+	m.free()
 
 
 ## Lays the issue text boxes out in screen space at a zoom of `scale` screen px per local unit:
@@ -574,8 +663,11 @@ func refresh_cell(cell: Vector2i) -> void:
 	refresh_cells([cell])
 
 
-## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16): each
-## hole marker and issue box on one of its tiles is placed again at once; the ground is drawn
+## refresh_cell for a batch of tiles written together (one builder tiles_changed, E3-S16): when
+## a height in it moved or a tile turned to or from water, each hole marker and issue box on one
+## of its tiles is placed again at once (they read only the heights and water, so a batch that
+## changed surfaces alone leaves them standing, E3-S74: an undo of a breaking drag placed
+## every issue box again just before the check freed them); the ground is drawn
 ## again within the frame's budget (_drain, TerrainTuning.refresh_tiles_per_frame), the rest over
 ## the next frames: a tile whose surface alone changed is written in place in its chunk, and the
 ## chunks within REBUILD_REACH tiles of a tile whose height moved (WATER_REACH of one that turned
@@ -588,26 +680,62 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 	_pending_cells.append_array(cells)
 	# The markers read the course, not the drawn ground, so they follow the batch at once: a
 	# height moved in it may cover or uncover an issue box's foot.
-	var moved: bool = false
+	var shaped := {}
 	var w: int = _course.width
 	for cell: Vector2i in cells:
 		if _course.in_bounds(cell.x, cell.y):
 			var h: int = _course.get_height(cell.x, cell.y)
+			if _course.get_surface(cell.x, cell.y) == Surface.Type.WATER:
+				h |= WATER_MARK
 			if _heights_marked[cell.y * w + cell.x] != h:
 				_heights_marked[cell.y * w + cell.x] = h
-				moved = true
+				shaped[cell] = true
+	if not shaped.is_empty():
+		_follow_shape(shaped)
+	_drain(terrain.tuning.refresh_tiles_per_frame)
+
+
+## The markers after a batch whose tiles `shaped` (tile -> true) moved a height or water: a
+## marker whose tile's ground they can move (MARK_NEAR) is placed again, an issue box whose foot
+## they can cover or uncover (MARK_BEHIND to MARK_FRONT) has it read again, and the tee numbers
+## are laid out again (they read the ground in front as far as the zoom puts them).
+func _follow_shape(shaped: Dictionary) -> void:
+	var first: Vector2i = shaped.keys()[0]
+	var bounds := Rect2i(first, Vector2i.ONE)
+	for cell: Vector2i in shaped:
+		bounds = bounds.expand(cell).expand(cell + Vector2i.ONE)
 	for m: HoleMarker in _markers:
-		if cells.has(m.cell):
+		if _near(shaped, bounds, m.cell, MARK_NEAR, MARK_NEAR):
 			m.place(_course)
-	if moved:
-		_hole_label_scale = 0.0
+	_hole_label_scale = 0.0
 	for m: IssueMarker in _issue_markers:
-		if cells.has(m.cell):
+		if _near(shaped, bounds, m.cell, MARK_NEAR, MARK_NEAR):
 			m.place(_course)
 			_issue_layout_scale = 0.0
-		elif moved:
+		elif _near(shaped, bounds, m.cell, MARK_BEHIND, MARK_FRONT):
 			m.foot_hidden = IssueMarker.covered(_course, m.cell)
-	_drain(terrain.tuning.refresh_tiles_per_frame)
+	for cell: Vector2i in _spare_issues.keys():
+		if _near(shaped, bounds, cell, MARK_BEHIND, MARK_FRONT):
+			_free_issue(_spare_issues[cell])
+			_spare_issues.erase(cell)
+
+
+## True when a tile of `shaped` (within `bounds`) lies `back` tiles behind `cell` to `front` in
+## front of it (x and y alike: the camera looks from +x +y).
+static func _near(shaped: Dictionary, bounds: Rect2i, cell: Vector2i, back: int, front: int) -> bool:
+	var reach := Rect2i(cell - Vector2i(back, back), Vector2i.ONE * (back + front + 1))
+	if not reach.intersects(bounds):
+		return false
+	for dy: int in range(-back, front + 1):
+		for dx: int in range(-back, front + 1):
+			if shaped.has(cell + Vector2i(dx, dy)):
+				return true
+	return false
+
+
+## What the markers read of tile (x, y): its height, plus WATER_MARK on water.
+static func _marked_shape(c: CourseData, x: int, y: int) -> int:
+	return c.get_height(x, y) | (WATER_MARK if c.get_surface(x, y) == Surface.Type.WATER else 0)
 
 
 ## E3-S16: sorts up to `limit` of the pending edited tiles (_pending_cells, oldest first) into
