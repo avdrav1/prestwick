@@ -24,6 +24,8 @@ var cup_price: int = 0
 var upkeep_per_open_hole: int = 0
 ## The fee ceiling per round is this times the stars.
 var fee_ceiling_per_star: int = 0
+## E4-S6: the fee slider's setting on a new course, dollars a round.
+var start_fee: int = 0
 var arrivals_base: int = 0
 var arrivals_per_star: int = 0
 var arrivals_max: int = 0
@@ -62,6 +64,7 @@ static func from_dict(data: Dictionary) -> EconomyTuning:
 	t.cup_price = CourseData.read_int(data, "cup_price", e)
 	t.upkeep_per_open_hole = CourseData.read_int(data, "upkeep_per_open_hole", e)
 	t.fee_ceiling_per_star = CourseData.read_int(data, "fee_ceiling_per_star", e)
+	t.start_fee = CourseData.read_int(data, "start_fee", e)
 	t.arrivals_base = CourseData.read_int(data, "arrivals_base", e)
 	t.arrivals_per_star = CourseData.read_int(data, "arrivals_per_star", e)
 	t.arrivals_max = CourseData.read_int(data, "arrivals_max", e)
@@ -78,7 +81,7 @@ static func from_dict(data: Dictionary) -> EconomyTuning:
 		if t.tile_price[i] < 0:
 			e.append("tile_price: %s must be 0 or more" % Surface.NAMES[i])
 	for key: String in ["height_step_price", "tee_marker_price", "cup_price", "upkeep_per_open_hole",
-			"fee_ceiling_per_star", "arrivals_base", "arrivals_per_star"]:
+			"fee_ceiling_per_star", "start_fee", "arrivals_base", "arrivals_per_star"]:
 		if int(t.get(key)) < 0:
 			e.append("%s must be 0 or more" % key)
 	if t.arrivals_max < 1:

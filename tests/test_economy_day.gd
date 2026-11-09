@@ -39,17 +39,23 @@ func _skip(m: Main) -> void:
 	assert_false(m.guest_sim.skipping, "the skip reaches the morning")
 
 
+## [guests arrived, the fees they paid]. E4-S6: the fee is read at each arrival, since a falling
+## rating can lower it during the day.
 func _arrivals(m: Main) -> Array[int]:
-	var out: Array[int] = [0]
+	var out: Array[int] = [0, 0]
 	m.guest_sim.day_started.connect(func(_d: int) -> void:
-		m.guest_sim.brain.guest_arrived.connect(func(_g: Guest) -> void: out[0] += 1))
+		m.guest_sim.brain.guest_arrived.connect(func(_g: Guest) -> void:
+			out[0] += 1
+			out[1] += m.green_fee()))
 	return out
 
 
-func test_the_green_fee_is_80_percent_of_the_3_star_ceiling_until_e4_s6() -> void:
+func test_the_green_fee_is_the_sliders_fee() -> void:
 	var m := _main()
-	assert_eq(m.green_fee(), roundi(0.8 * _econ.fee_ceiling(3.0)))
+	assert_eq(m.green_fee(), roundi(0.8 * _econ.fee_ceiling(3.0)), "E4-S6's start fee, 80% at 3 stars")
 	assert_eq(m.green_fee(), 60, "D58's best fee at 3 stars")
+	m.guest_sim.set_fee(45)
+	assert_eq(m.green_fee(), 45, "the slider's fee (tests/test_fee.gd)")
 
 
 func test_a_guest_pays_as_it_arrives_at_the_first_tee() -> void:
@@ -81,7 +87,7 @@ func test_upkeep_is_charged_once_at_the_days_end_per_open_hole() -> void:
 	var upkeep: int = 3 * _econ.upkeep_per_open_hole
 	assert_eq(upkeep, 15, "$5 a hole, three open (D56)")
 	assert_gt(arrived[0], 0)
-	assert_eq(m.build_tool.builder.balance(), START + arrived[0] * m.green_fee() - upkeep)
+	assert_eq(m.build_tool.builder.balance(), START + arrived[1] - upkeep)
 	assert_eq(ended[0], m.build_tool.builder.balance(), "upkeep is in by day_ended's other listeners")
 
 
@@ -92,7 +98,7 @@ func test_only_open_holes_cost_upkeep() -> void:
 	m.guest_sim.advance(0.0)
 	_skip(m)
 	assert_eq(m.build_tool.builder.balance(),
-			START + arrived[0] * m.green_fee() - 2 * _econ.upkeep_per_open_hole)
+			START + arrived[1] - 2 * _econ.upkeep_per_open_hole)
 
 
 func test_the_morning_shows_the_days_income_and_costs() -> void:
@@ -102,7 +108,7 @@ func test_the_morning_shows_the_days_income_and_costs() -> void:
 	assert_eq(m.money_panel.day_label.text, "", "nothing to report on day 1's morning")
 	m.build_tool.builder.paint(Vector2i(10, 20), Surface.Type.BUNKER, 1)
 	_skip(m)
-	var fees: int = arrived[0] * m.green_fee()
+	var fees: int = arrived[1]
 	var line: String = m.money_panel.day_label.text
 	assert_eq(line, "Day 1: fees +%s (%d guests), upkeep -$15, building -%s" % [
 			LandPrices.money(fees), arrived[0], LandPrices.money(_econ.price_of(Surface.Type.BUNKER))])
@@ -126,9 +132,10 @@ func test_a_sandbox_day_reports_but_never_moves_the_balance() -> void:
 
 func test_upkeep_can_take_the_balance_below_0_and_the_day_goes_on() -> void:
 	var m := _main()
-	var quiet := GuestTuning.from_file(GuestTuning.PATH)
-	quiet.arrivals_per_day = 0  # a day with no guests: upkeep and nothing in
-	m.guest_sim.tuning = quiet
+	var quiet := EconomyTuning.load_default()
+	quiet.arrivals_base = 0  # a day with no guests (E4-S5: arrivals by rating): upkeep and nothing in
+	quiet.arrivals_per_star = 0
+	m.guest_sim.economy = quiet
 	m.build_tool.builder.debit(START - 10)
 	m.guest_sim.advance(0.0)
 	_skip(m)
@@ -151,7 +158,7 @@ func test_a_load_replays_the_day_and_takes_its_fees_once() -> void:
 	while arrived[0] < 1 and b.guest_sim.day == 1:
 		b.guest_sim.advance(1.0)
 	assert_gt(arrived[0], 0, "fees taken before the save")
-	assert_eq(b.build_tool.builder.balance(), START + arrived[0] * b.green_fee())
+	assert_eq(b.build_tool.builder.balance(), START + arrived[1])
 	assert_eq(b.save_game(SAVE_PATH), OK)
 	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
 	assert_eq(int(saved["money"]), START, "the save holds the morning's balance, before the day's fees")

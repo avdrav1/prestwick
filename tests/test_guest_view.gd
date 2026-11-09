@@ -362,6 +362,10 @@ func test_a_figure_waits_for_its_ball_to_rest_on_screen_before_it_walks() -> voi
 func test_no_figure_jumps_at_the_start_of_a_swing() -> void:
 	for speed: float in [1.0, 3.0]:
 		var sim := _sim(GuestCourse.course(), 7)
+		# E4-S6: free, so the day draws 20 guests as it did under E4-S5. At the $60 start fee it
+		# draws 18, and guest 3 moves 0.81 yd (more than a walk step) as it begins a swing at 1x:
+		# E4-S10.
+		sim.set_fee(0)
 		sim.set_speed(speed)
 		var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
 		var step_yd := view.guest_tuning.walk_yd_per_s * speed * FRAME + 0.01

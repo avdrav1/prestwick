@@ -35,6 +35,13 @@ extends Node
 ## at most 24 (EconomyTuning.arrivals) at the stars of that morning, replacing E3's flat
 ## `arrivals_per_day`; a day keeps its count whatever the rating does during it. The same
 ## seed and the same feed give the same day, so a skip, a run and a load's replay agree.
+##
+## The fee (E4-S6, D56, D58): `fee` is the player's green fee a round, the fee slider's setting,
+## from 0 to fee_ceiling() ($25 a star at the stars shown, whole dollars down); set_fee holds it
+## there. A new course starts it at `start_fee`. Whenever the rating moves and the ceiling falls
+## under the fee, the fee comes down to the ceiling (and stays there when the rating recovers).
+## The morning's arrivals take the fee's share of the ceiling through D58's curve
+## (EconomyTuning.arrivals). Main.green_fee() reads it when a guest pays at the first tee.
 
 signal day_started(day: int)
 ## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
@@ -48,6 +55,8 @@ signal speed_changed(speed: float)
 signal skip_changed(skipping: bool)
 ## E4-S5: the course rating may have moved (the feed's window changed).
 signal rating_changed(rating: float)
+## E4-S6: the fee changed (the slider, a new course, a load, or a falling ceiling).
+signal fee_changed(fee: int)
 
 ## Pause, 1x, 3x.
 const SPEEDS: Array[float] = [0.0, 1.0, 3.0]
@@ -73,6 +82,8 @@ var feed_tuning: FeedTuning
 var economy: EconomyTuning
 ## E4-S5: the guests the day under way drew at its morning (arrivals_today then).
 var day_arrivals: int = 0
+## E4-S6: the green fee a round, dollars, 0 to fee_ceiling() (set_fee). -1 until the first start.
+var fee: int = -1
 
 ## The builder whose edits clear the feed's tallies (watch), and the holes as it last left them.
 var _watched: CourseBuilder
@@ -124,12 +135,33 @@ func stars() -> float:
 	return EconomyTuning.stars_of(rating())
 
 
-## E4-S5: the guests a day starting now draws: EconomyTuning.arrivals at stars(), free.
+## E4-S5, E4-S6: the guests a day starting now draws: EconomyTuning.arrivals at stars() and the
+## fee's share of the ceiling.
 func arrivals_today() -> int:
-	return economy.arrivals(stars(), 0.0)
+	var ceiling := fee_ceiling()
+	return economy.arrivals(stars(), 0.0 if ceiling <= 0 else float(maxi(fee, 0)) / ceiling)
+
+
+## E4-S6: the most the fee can be now: fee_ceiling_per_star x the stars shown, whole dollars down.
+func fee_ceiling() -> int:
+	_ensure_feed()
+	return floori(economy.fee_ceiling(stars()))
+
+
+## E4-S6: sets the fee to `f` dollars, held from 0 to fee_ceiling(). Emits fee_changed when it
+## moved.
+func set_fee(f: int) -> void:
+	var held := clampi(f, 0, fee_ceiling())
+	if held == fee:
+		return
+	fee = held
+	fee_changed.emit(fee)
 
 
 func _on_feed_changed() -> void:
+	# A falling rating that drops the ceiling under the fee lowers the fee (E4-S6).
+	if fee > fee_ceiling():
+		set_fee(fee)
 	rating_changed.emit(rating())
 
 
@@ -149,6 +181,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_first_day = 1
 	_stale.clear()
 	feed.clear()
+	set_fee(economy.start_fee)
 
 
 ## E4-S7: a loaded game resumes at the morning of day `d` (from 1): the next day built is `d`,

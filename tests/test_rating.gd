@@ -117,6 +117,7 @@ func _first_day_guests(kinds: Dictionary) -> int:
 	add_child_autofree(sim)
 	sim.set_process(false)
 	sim.start(GuestCourse.course(), 7)
+	sim.set_fee(0)  # free: the rating alone (E4-S6's fee curve is tests/test_fee.gd)
 	for k: GuestReaction.Kind in kinds:
 		_push(sim.feed, k, kinds[k])
 	sim.advance(0.0)
@@ -141,6 +142,7 @@ func test_a_day_keeps_its_morning_count_and_the_next_morning_reads_the_new_ratin
 	add_child_autofree(sim)
 	sim.set_process(false)
 	sim.start(GuestCourse.course(), 7)
+	sim.set_fee(0)
 	sim.advance(0.0)
 	var first := sim.brain
 	assert_eq(sim.arrivals_today(), 20)

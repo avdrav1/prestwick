@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -24,6 +24,7 @@
 [ext_resource type="Script" path="res://scenes/save_notice.gd" id="save_notice"]
 [ext_resource type="Script" path="res://scenes/money_panel.gd" id="money_panel"]
 [ext_resource type="Script" path="res://scenes/rating_row.gd" id="rating_row"]
+[ext_resource type="Script" path="res://scenes/fee_panel.gd" id="fee_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -172,6 +173,14 @@ offset_top = 88.0
 offset_right = 196.0
 offset_bottom = 88.0
 script = ExtResource("16_sim_panel")
+
+[node name="FeePanel" type="PanelContainer" parent="HUD"]
+visible = false
+offset_left = 16.0
+offset_top = 168.0
+offset_right = 310.0
+offset_bottom = 168.0
+script = ExtResource("fee_panel")
 
 [node name="FeedPanel" type="PanelContainer" parent="HUD"]
 visible = false

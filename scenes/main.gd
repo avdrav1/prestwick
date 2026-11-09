@@ -33,11 +33,6 @@ var rating_history: Array[float] = []
 ## E4-S4: today's green fees and the balance at the morning; its last line is the morning report.
 var ledger := DayLedger.new()
 
-## E4-S4's green fee until E4-S6's slider: this share of the fee ceiling at PLACEHOLDER_STARS,
-## the fee that earns most under D58's curve. Lane B (E4-S5, E4-S6) replaces green_fee's body.
-const PLACEHOLDER_FEE_SHARE: float = 0.8
-const PLACEHOLDER_STARS: float = 3.0
-
 ## The left column's gap between controls, px (as main.tscn spaces them).
 const SPEED_PANEL_GAP: float = 8.0
 ## The speed panel's top as main.tscn places it, for Play (_place_speed_panel); -1 until read.
@@ -48,6 +43,8 @@ var _feed_panel_top: float = -1.0
 @onready var mode_label: Label = $HUD/ModeLabel
 ## E4-S5: the course rating, on the mode label's line.
 @onready var rating_row: RatingRow = $HUD/RatingRow
+## E4-S6: the fee slider, Build only, under the speed panel.
+@onready var fee_panel: FeePanel = $HUD/FeePanel
 @onready var course_view: CourseView = $CourseView
 @onready var camera: CourseCamera = $Camera
 @onready var build_tool: BuildTool = $BuildTool
@@ -109,6 +106,7 @@ func _ready() -> void:
 	guest_view.bind(guest_sim)
 	sim_speed_panel.bind(guest_sim)
 	rating_row.bind(guest_sim)
+	fee_panel.bind(guest_sim)
 	feed_panel.bind(guest_sim)
 	feed_panel.hole_requested.connect(_on_hole_link)
 	reaction_tags.bind(guest_sim.feed)
@@ -307,7 +305,7 @@ func hud_controls() -> Array[Control]:
 
 func _hud_groups() -> Array:
 	return [
-		[mode_label, rating_row, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel,
+		[mode_label, rating_row, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel, fee_panel,
 				sim_speed_panel, feed_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
@@ -473,21 +471,24 @@ func economy_to_save(s: GameSave.State) -> void:
 	s.unlimited_money = b.has_unlimited_money()
 	s.money = 0 if s.unlimited_money else b.balance() - ledger.fees
 	s.rating_history = rating_history.duplicate()
+	s.fee = guest_sim.fee
 
 
 ## Takes the economy back from a loaded save (economy_to_save's other half): the balance, through
-## the builder (CourseBuilder.restore_balance), an empty ledger, and the rating history.
+## the builder (CourseBuilder.restore_balance), an empty ledger, the rating history and the fee.
 func economy_from_save(s: GameSave.State) -> void:
 	build_tool.builder.restore_balance(s.money, s.unlimited_money)
 	ledger.clear(build_tool.builder.balance(), build_tool.builder.has_unlimited_money())
 	money_panel.refresh()
 	rating_history = s.rating_history.duplicate()
+	# E4-S6: the saved fee (an E4-S7 save has none: the start fee), held under the loaded ceiling.
+	guest_sim.set_fee(s.fee if s.fee >= 0 else guest_sim.economy.start_fee)
 
 
-## The green fee a guest pays at the first tee (E4-S4). The one place the fee is read: E4-S6's
-## slider replaces this body. Until then 80% of D56's ceiling at 3 stars ($60, D58's best fee).
+## The green fee a guest pays at the first tee (E4-S4): the fee slider's setting (E4-S6,
+## GuestSim.fee, at most the ceiling at the stars shown). The one place the fee is read.
 func green_fee() -> int:
-	return roundi(PLACEHOLDER_FEE_SHARE * build_tool.builder.economy.fee_ceiling(PLACEHOLDER_STARS))
+	return maxi(guest_sim.fee, 0)
 
 
 ## A guest arrived at the first tee (E4-S4): it pays the green fee.
@@ -648,6 +649,8 @@ func _apply_mode() -> void:
 	sim_speed_panel.visible = true
 	# The balance shows in Build and Play (E4-S2).
 	money_panel.visible = true
+	# E4-S6: the fee is set in Build, the management mode; Play's column keeps its height.
+	fee_panel.visible = building
 	_place_speed_panel()
 	# The feed panel is read in Play (its lines link to Build): it shows from the start of Play,
 	# so the free view never shifts at its first line (E3-S67). In Build the feed still takes every
@@ -686,6 +689,8 @@ func _place_speed_panel() -> void:
 		top = maxf(above + SPEED_PANEL_GAP, _speed_panel_top)
 	top = _stack(money_panel, top)
 	top = _stack(sim_speed_panel, top)
+	if fee_panel.visible:
+		top = _stack(fee_panel, top)
 	if mode == Mode.PLAY:
 		_stack(feed_panel, maxf(top, _feed_panel_top))
 

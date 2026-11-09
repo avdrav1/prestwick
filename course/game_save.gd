@@ -3,7 +3,7 @@ extends RefCounted
 ## The game save (E4-S7, docs/design.md Save and load): one versioned JSON file in `user://`
 ## holding the course (course format v2, through CourseSave, so the land owned and the land
 ## budget come with it), the guests' seed, the day to resume at the morning of, the money, the
-## rating history and the guest feed. Only course/ save code writes CourseData on load
+## rating history, the green fee (E4-S6) and the guest feed. Only course/ save code writes CourseData on load
 ## (CLAUDE.md): the course is read by CourseSave.from_dict and nothing here writes it.
 ##
 ## Guests out on the course are not saved (D38: none stays overnight), so a load resumes at the
@@ -36,6 +36,8 @@ class State:
 	var unlimited_money: bool = false
 	## The course rating at the end of each day so far, oldest first (E4-S5 fills it).
 	var rating_history: Array[float] = []
+	## E4-S6: the green fee a round (GuestSim.fee); -1 in a save from before it (the start fee).
+	var fee: int = -1
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
@@ -67,6 +69,8 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		"feed": state.feed_data,
 		"course": course_json,
 	}
+	if state.fee >= 0:
+		data["fee"] = state.fee
 	return JSON.stringify(data, "  ", false)
 
 
@@ -125,6 +129,11 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 				errors.append("rating_history must hold numbers")
 				break
 			s.rating_history.append(float(v))
+	# E4-S6: a new field with a default (FORMAT_VERSION): an E4-S7 save has no fee.
+	if data.has("fee"):
+		s.fee = CourseData.read_int(data, "fee", errors)
+		if s.fee < 0:
+			errors.append("fee must be 0 or more, got %d" % s.fee)
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
 	if typeof(data.get("course")) != TYPE_DICTIONARY:
 		errors.append("course must be an object")
