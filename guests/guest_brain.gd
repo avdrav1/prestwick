@@ -12,8 +12,9 @@ extends RefCounted
 ## against the same walk limit as the walk from a previous cup, so a far clubhouse fails pace
 ## with "a long walk from the clubhouse"; the walk home comes after the last record and costs
 ## only time. Walking off its last green it holds the stroke behind it (hold_for) while a guest
-## of it still stands on the green when the club would meet the ball (E5-S12,
-## stands_at_impact); before E5-S11 it left the course at hole-out. The door is read when each
+## of it still stands on the green when the club would meet the ball (E5-S12, D61,
+## stands_at_impact), as a group walking to its next tee does; before E5-S11 it left the
+## course at hole-out. The door is read when each
 ## walk starts. With no clubhouse, no group arrives
 ## (turned_away counts them). The green fee is still paid at the first tee (E4-S4): GuestSim
 ## takes it on reached_first_tee, not on guest_arrived.
@@ -704,33 +705,26 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 				tuning.play_clear_yd, radius, false):
 			return Hold.SAME_HOLE
 	# E3-S38: a group that holed out leaves the queue in the step its last guest stands at the
-	# cup; that guest walks off during the second, so a guest of a group gone from this hole
-	# who stood on a green when the second began still holds the stroke.
+	# cup and walks off the green, to its next tee or home to the clubhouse (E5-S11). E5-S12
+	# (D61): it holds the stroke only while a guest of it still stands on the green when the
+	# club would meet the ball (stands_at_impact), for as long as that takes, and not once it
+	# has stepped off. It walks away from the green, so a ball struck then comes down on a
+	# green it has left. Before, any guest on the green as the second began held it, for up to
+	# 2 s. A group counts while it walks (to its next tee or home) and in the second it left
+	# and the one after (it may already be on its next hole, a tee within a second's walk).
 	for other: GuestGroup in groups:
 		if other == g or other.left_hole != g.hole_number:
 			continue
-		# E5-S11, E5-S12: a group walking home from its last green holds the stroke only while
-		# a guest of it still stands on the green when the club would meet the ball
-		# (stands_at_impact), for as long as that takes; not once it has stepped off, for the
-		# rest of the walk home. It walks away from the green, so a ball struck then comes down
-		# on a green it has left (E3-S38).
-		if other.phase == GuestGroup.Phase.TO_CLUBHOUSE:
-			for o: Guest in other.guests:
-				if o.is_done():
-					continue
-				var o_at := stands_at_impact(o)
-				if field.surface_at(o_at.x, o_at.y) == Surface.Type.GREEN \
-						and in_the_way(o_at, at, rest, cup, tuning.play_clear_yd, radius):
-					return Hold.SAME_HOLE
+		if other.phase != GuestGroup.Phase.TO_CLUBHOUSE and other.phase != GuestGroup.Phase.TO_TEE \
+				and other.left_s < second - 1:
 			continue
-		# It left in this second or the one before (it may already be on its next hole, a tee
-		# within a second's walk, even struck there); later its guests are off the green.
-		if other.left_s >= second - 1:
-			for o: Guest in other.guests:
-				if not o.is_done() \
-						and field.surface_at(o.step_from.x, o.step_from.y) == Surface.Type.GREEN \
-						and in_the_way(o.step_from, at, rest, cup, tuning.play_clear_yd, radius):
-					return Hold.SAME_HOLE
+		for o: Guest in other.guests:
+			if o.is_done():
+				continue
+			var o_at := stands_at_impact(o)
+			if field.surface_at(o_at.x, o_at.y) == Surface.Type.GREEN \
+					and in_the_way(o_at, at, rest, cup, tuning.play_clear_yd, radius):
+				return Hold.SAME_HOLE
 	if g.cross_held_s >= tuning.cross_hold_max_s:
 		return Hold.CLEAR
 	for other: GuestGroup in groups:

@@ -476,10 +476,11 @@ func test_the_group_behind_never_plays_into_the_group_ahead() -> void:
 ## E3-S38: the group behind holds until the last guest of the group ahead has left the green.
 ## A group that holes out leaves its hole's queue in the step its last guest stands at the cup;
 ## that guest walks off during the second, so no stroke onto the green may be struck in a
-## second that starts with a guest of another group standing on it. E5-S12: a guest walking
-## home from its last green holds the stroke only while it still stands on the green, so for
-## it the rule is read where the ball comes down: no ball lands on a green while it stands
-## there (its place at the ball's first touchdown, along the leg it walked that second).
+## second that starts with a guest of another group standing on it. E5-S12 (D61): a guest
+## walking off a green (to its next tee or home to the clubhouse) holds the stroke only while
+## it still stands on the green, so for a guest that walked in the strike's second the rule
+## is read where the ball comes down: no ball lands on a green while it stands there (its
+## place at the ball's first touchdown, along the leg it walked that second).
 func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void:
 	var onto := 0
 	var home_checked := 0
@@ -489,9 +490,9 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 			var brain := GuestBrain.new(c, day_seed, tuning, model)
 			var field := brain.field
 			# {guest id: [second struck, cup, guests of other groups on its green then,
-			#  ids of guests of other groups walking home then]}
+			#  ids of guests of other groups walking then]}
 			var pending := {}
-			# {[guest id, second]: [from, to, leg_start, leg_end, walk, walked]}: legs walked home.
+			# {[guest id, second]: [from, to, leg_start, leg_end, walk, walked]}: legs walked.
 			var legs := {}
 			while not brain.day_over:
 				var stood := {}
@@ -503,16 +504,17 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 				var t := brain.second
 				brain.step()
 				var home := {}
-				for gg: GuestGroup in brain.groups:
-					if gg.phase != GuestGroup.Phase.TO_CLUBHOUSE:
+				for o: Guest in brain.guests:
+					if o.is_done():
 						continue
-					for o: Guest in gg.guests:
-						if not o.is_done():
-							home[o.id] = true
-							var walked: float = o.walk.walked if o.walk != null else 0.0
-							legs[[o.id, t]] = [stood[o.id][0] if stood.has(o.id) else o.position,
-									o.position, o.leg_start, o.leg_end,
-									o.walk if o.last_walk_s == t else null, walked]
+					if o.last_walk_s != t:
+						# Standing all second: where it stood.
+						legs[[o.id, t]] = [o.position, o.position, 0.0, 1.0, null, 0.0]
+						continue
+					home[o.id] = true
+					var walked: float = o.walk.walked if o.walk != null else 0.0
+					legs[[o.id, t]] = [stood[o.id][0] if stood.has(o.id) else o.position,
+							o.position, o.leg_start, o.leg_end, o.walk, walked]
 				for g: Guest in brain.guests:
 					if g.hole == null:
 						pending.erase(g.id)
@@ -550,16 +552,16 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 						for id: int in p[3]:
 							var leg: Array = legs.get([id, floori(when)], [])
 							if leg.is_empty():
-								continue  # home at the door by then
+								continue  # gone home by then
 							home_checked += 1
 							var w := _leg_point(leg, when - floorf(when), tuning.walk_yd_per_s)
 							if w.distance_to(p[1]) < 30.0 \
 									and field.surface_at(w.x, w.y) == Surface.Type.GREEN \
 									and field.surface_at(land.x, land.y) == Surface.Type.GREEN:
-								bad.append("day %d s %d: guest %d came down on the green at %.2f s with guest %d walking home on it at %s"
+								bad.append("day %d s %d: guest %d came down on the green at %.2f s with guest %d walking on it at %s"
 										% [day_seed, p[0], g.id, when, id, w])
 	assert_gt(onto, 50, "strokes came down on greens")
-	assert_gt(home_checked, 0, "some of them while a group walked home")
+	assert_gt(home_checked, 0, "some of them while a guest of another group walked")
 	assert_eq(bad, [] as Array[String], "no stroke onto a green another group still stands on")
 
 
@@ -1441,15 +1443,15 @@ func test_a_playtest_nine_day_leaves_from_and_returns_to_the_clubhouse() -> void
 			assert_false(g.left_at_dusk, "guest %d finished nine and walked home" % g.id)
 
 
-## E5-S12: a group walking home from its last green holds the group behind only while a guest
-## of it still stands on that green (GuestBrain.stands_at_impact: where it stands when the
-## club would meet the ball), not for the rest of the walk home and not once it has stepped
-## off (E5-S11 held the stroke for any guest who stood on the green as the second began, for
-## up to 2 s). On the fair par 4 a
-## guest of the group behind, ready to play onto the green, is held by a walker home standing
-## on the green at its planned rest, however long ago its group left; and not held by one that
-## stepped off this second to a spot still in the stroke's landing area.
-func test_a_group_walking_home_holds_only_while_it_still_stands_on_the_green() -> void:
+## E5-S12 (D61): a group leaving a green, walking home from its last one or to its next tee,
+## holds the group behind only while a guest of it still stands on that green
+## (GuestBrain.stands_at_impact: where it stands when the club would meet the ball), not for
+## the rest of its walk and not once it has stepped off (before, any guest on the green as
+## the second began held it, for up to 2 s). On the fair par 4 a guest of the group behind,
+## ready to play onto the green, is held by a walker standing on the green at its planned
+## rest, however long ago its group left, and not by one that stepped off this second to a
+## spot still in the stroke's landing area.
+func test_a_group_leaving_a_green_holds_only_while_it_still_stands_on_it() -> void:
 	var c := ReactionHoles.fair_par4()
 	var found := false
 	for day_seed: int in [1, 2, 3, 4, 5]:
@@ -1503,6 +1505,16 @@ func test_a_group_walking_home_holds_only_while_it_still_stands_on_the_green() -
 					_stand(home, rest, rest)
 					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.SAME_HOLE,
 							"one still on the green seconds after its group left holds it")
+					# D61: the same rule for a group walking off to its next tee.
+					home.phase = GuestGroup.Phase.TO_TEE
+					home.left_s = brain.second
+					_stand(home, cup, rest)
+					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.SAME_HOLE,
+							"a walker to its next tee still on the green holds the stroke")
+					_stand(home, cup, off)
+					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.CLEAR,
+							"one that stepped off the green this second does not")
+					home.phase = GuestGroup.Phase.TO_CLUBHOUSE
 					break
 				if found:
 					break

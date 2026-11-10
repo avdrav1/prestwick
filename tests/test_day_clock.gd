@@ -9,6 +9,8 @@ extends GutTest
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const SEED := 3
+## E5-S12: the most real time a day at 3x may be held for its Ball work (GuestBrain.held_frames).
+const MAX_HELD_S := 0.5
 
 
 func _sim(base_seed: int = SEED) -> GuestSim:
@@ -73,11 +75,28 @@ func test_a_day_is_day_s_and_takes_its_real_minutes_at_1x_and_3x() -> void:
 		var sim := _sim()
 		sim.set_speed(speed)
 		var delta := 1.0 / 60.0
-		var frames := _run_until_day_ends(sim, 1, delta, 200000)
+		# The day's own brain, read each frame: at dusk sim.brain is already the next day's.
+		var held := 0
+		var frames := 0
+		while sim.day <= 1 and frames < 200000:
+			sim.advance(delta)
+			frames += 1
+			if sim.day == 1 and sim.brain != null:
+				held = sim.brain.held_frames
+		assert_lt(frames, 200000, "day 1 ends")
 		var real_s := frames * delta
 		var want := tuning.day_s / speed
-		assert_almost_eq(real_s, want, 2.0 * delta + 1e-3,
-				"%dx: the day takes %.1f real s (9 minutes at 1x, 3 at 3x)" % [int(speed), want])
+		if speed == 1.0:
+			assert_almost_eq(real_s, want, 2.0 * delta + 1e-3,
+					"1x: the day takes %.1f real s (9 minutes)" % want)
+		else:
+			# E5-S12: a due step waits for its second's Ball work (E3-S35, E4-S3), so a busy
+			# second makes the day late, never different: by the frames held, and no more.
+			assert_lte(held * delta, MAX_HELD_S, "%dx: held for Ball work at most %.1f s a day" % [
+					int(speed), MAX_HELD_S])
+			assert_almost_eq(real_s, want + held * delta, 2.0 * delta + 1e-3,
+					"%dx: the day takes %.1f real s (3 minutes) and the %d frames held for its Ball work" % [
+						int(speed), want, held])
 		assert_eq(sim.day, 2, "%dx: the next morning has started" % int(speed))
 		assert_eq(sim.brain.second, 0, "%dx: at its first second" % int(speed))
 
