@@ -47,6 +47,8 @@ var wait_s: int = 0
 var wait_limit_s: float = 0.0
 var walk_yd: float = -1.0
 var walk_limit_yd: float = 0.0
+## E5-S11: the walk was from the clubhouse door (the round's first hole), not a previous cup.
+var from_clubhouse: bool = false
 ## The hole's statics as the checks read them.
 var statics: HoleChecks.Statics
 ## One line for the feed, naming the hole ("Hole 3: blind from the tee, could not see the flag.
@@ -73,6 +75,7 @@ static func judge(guest: Guest, record: Guest.HoleRecord, statics: HoleChecks.St
 	r.wait_s = record.wait_s
 	r.wait_limit_s = wait_limit(guest.patience, tuning)
 	r.walk_yd = record.walk_yd
+	r.from_clubhouse = record.walk_from_clubhouse
 	r.walk_limit_yd = walk_limit(guest.patience, tuning)
 	r.passed[Check.FAIR] = statics.fair()
 	r.passed[Check.INTERESTING] = statics.interesting()
@@ -108,8 +111,9 @@ static func walk_limit(patience: int, tuning: GuestTuning) -> float:
 	return tuning.walk_base_yd + tuning.walk_per_patience_yd * patience
 
 
-## Pace: the counted wait and the walk from the previous cup (none on a first hole, -1) are
-## each within the guest's limit (over it fails).
+## Pace: the counted wait and the walk to the tee (from the previous cup, or on the round's first
+## hole from the clubhouse door since E5-S11; -1 for none) are each within the guest's limit
+## (over it fails).
 static func pace_passes(record: Guest.HoleRecord, patience: int, tuning: GuestTuning) -> bool:
 	if record.wait_s > wait_limit(patience, tuning):
 		return false
@@ -230,6 +234,8 @@ func _reason(c: int) -> String:
 		Check.PACE:
 			if wait_s > wait_limit_s:
 				return "slow, waited %d s" % wait_s
+			if from_clubhouse:
+				return "a long walk from the clubhouse, %d yd" % roundi(walk_yd)
 			return "a long walk to the tee, %d yd" % roundi(walk_yd)
 		_:
 			if score > expected:
@@ -249,6 +255,8 @@ func _short_reason(c: int) -> String:
 		Check.PACE:
 			if wait_s > wait_limit_s:
 				return "slow (%d s wait)" % wait_s
+			if from_clubhouse:
+				return "a long walk from the clubhouse (%d yd)" % roundi(walk_yd)
 			return "a long walk (%d yd)" % roundi(walk_yd)
 		_:
 			if score > expected:
@@ -276,7 +284,7 @@ func to_save() -> Dictionary:
 		"passed": passed.duplicate(), "weights": weights.duplicate(), "fail_weight": fail_weight,
 		"score": score, "par": par, "expected": expected, "wait_s": wait_s,
 		"wait_limit_s": wait_limit_s, "walk_yd": walk_yd, "walk_limit_yd": walk_limit_yd,
-		"text": text, "lead": _lead, "rest": _rest,
+		"from_clubhouse": from_clubhouse, "text": text, "lead": _lead, "rest": _rest,
 	}
 
 
@@ -315,6 +323,7 @@ static func from_save(d: Variant, errors: Array[String], context: String = "reac
 	r.wait_limit_s = float(data.get("wait_limit_s", 0.0))
 	r.walk_yd = float(data.get("walk_yd", -1.0))
 	r.walk_limit_yd = float(data.get("walk_limit_yd", 0.0))
+	r.from_clubhouse = bool(data.get("from_clubhouse", false))  # E5-S11; false in older saves
 	r.text = str(data.get("text", ""))
 	r._lead = str(data.get("lead", ""))
 	r._rest = str(data.get("rest", ""))

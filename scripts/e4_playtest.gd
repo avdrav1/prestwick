@@ -268,7 +268,7 @@ func _on_day_started(d: int) -> void:
 	_days[d] = {"day": d, "arrivals": sim.day_arrivals, "paid": 0, "lines": 0, "reactions": 0,
 			"stars": sim.stars(), "fee": sim.fee, "ceiling": sim.fee_ceiling(), "seconds": [],
 			"lo": sim.stars(), "hi": sim.stars(), "mlo": sim.rating(), "mhi": sim.rating(), "moves": []}
-	sim.brain.guest_arrived.connect(func(_g: Guest) -> void: _days[d].paid += 1)
+	sim.brain.reached_first_tee.connect(func(_g: Guest) -> void: _days[d].paid += 1)
 	sim.brain.reacted.connect(func(_g: Guest, r: GuestReaction) -> void:
 		_days[d].reactions += 1
 		if d <= 2 and r.hole_number == 1:

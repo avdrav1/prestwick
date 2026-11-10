@@ -725,6 +725,18 @@ func move_clubhouse(centre: Vector2i, facing: int) -> bool:
 	return true
 
 
+## Moves the clubhouse to the allowed spot nearest tile `at` (ClubhouseRule.spot_beside: within
+## `reach` tiles, BuilderTuning.clubhouse_tee_search when below 0), its door facing `at`, as
+## move_clubhouse does. The rule's fallback beside a tee, for fixtures and scripts that build a
+## course hole by hole (E5-S11). False when there is no such spot or it is there already.
+func move_clubhouse_beside(at: Vector2i, reach: int = -1) -> bool:
+	var spot: Array = ClubhouseRule.spot_beside(_course, at, slot_lines(),
+			reach if reach >= 0 else _tuning.clubhouse_tee_search)
+	if spot[0] == CourseData.NO_CLUBHOUSE:
+		return false
+	return move_clubhouse(spot[0], spot[1])
+
+
 # --- land ---
 
 ## What parcel `parcel` costs (LandPrices), in dollars.

@@ -31,6 +31,8 @@ static func build() -> CourseBuilder:
 	for spec: Array in HOLES:
 		var opened := b.open_hole(spec[0])
 		assert(opened, "fixture hole %d opens" % spec[0])
+	# E5-S11 (D60): the clubhouse beside hole 1's tee, where guests arrive and leave.
+	b.move_clubhouse_beside(HOLES[0][1])
 	return b
 
 

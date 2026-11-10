@@ -11,21 +11,28 @@ enum Phase {
 	TO_TEE,
 	## Playing `hole_number`.
 	ON_HOLE,
+	## E5-S11: done with its last hole, walking back to the clubhouse door to leave.
+	TO_CLUBHOUSE,
 	## Gone home.
 	DONE,
 }
 
 ## Arrival order over the day, from 0.
 var index: int = 0
-## The simulated second of the day it arrives at the first open hole's tee.
+## The simulated second of the day it comes out of the clubhouse door (E5-S11; before, it
+## appeared on the first open hole's tee).
 var arrive_s: float = 0.0
 var guests: Array[Guest] = []
 var phase: Phase = Phase.PENDING
 ## The hole it is heading for or playing (0 before it arrives).
 var hole_number: int = 0
-## The cup of the last hole it finished, yards (pace's walk from the previous cup).
+## The cup of the last hole it finished, or the clubhouse door before its first hole (E5-S11),
+## yards (pace's walk from the previous cup).
 var prev_cup: Vector2 = Vector2.ZERO
 var has_prev_cup: bool = false
+## E5-S11: true from its arrival until it tees off its first hole: `prev_cup` is then the
+## clubhouse door, and the first hole's pace walk is the walk from the clubhouse.
+var from_clubhouse: bool = false
 ## The second it teed off `hole_number`.
 var start_s: int = 0
 ## E3-S38: the hole it last left by holing out (0: none yet). Its guests still standing on

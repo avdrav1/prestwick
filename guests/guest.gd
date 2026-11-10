@@ -88,6 +88,10 @@ var wait_s: int = 0
 var tee_wait_s: int = 0
 var cross_wait_s: int = 0
 var walk_yd: float = -1.0
+## E5-S11: `walk_yd` is the walk from the clubhouse door (the first hole of its round).
+var walk_from_clubhouse: bool = false
+## E5-S11: true once it has stood on the first tee of its round (GuestBrain.reached_first_tee).
+var at_first_tee: bool = false
 ## Ball ticks spent this simulated second (GuestBrain's budget), and in all.
 var second_ticks: int = 0
 var ticks: int = 0
@@ -115,6 +119,8 @@ class HoleRecord:
 	var cross_wait_s: int = 0
 	## The walk from the previous hole's cup to this tee, yards; -1 on the first hole played.
 	var walk_yd: float = -1.0
+	## E5-S11: `walk_yd` was the walk from the clubhouse door.
+	var walk_from_clubhouse: bool = false
 	## Simulated seconds of the day it teed off and holed out.
 	var start_s: int = 0
 	var end_s: int = 0

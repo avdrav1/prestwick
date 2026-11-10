@@ -44,7 +44,7 @@ func _skip(m: Main) -> void:
 func _arrivals(m: Main) -> Array[int]:
 	var out: Array[int] = [0, 0]
 	m.guest_sim.day_started.connect(func(_d: int) -> void:
-		m.guest_sim.brain.guest_arrived.connect(func(_g: Guest) -> void:
+		m.guest_sim.brain.reached_first_tee.connect(func(_g: Guest) -> void:
 			out[0] += 1
 			out[1] += m.green_fee()))
 	return out
@@ -62,7 +62,7 @@ func test_a_guest_pays_as_it_arrives_at_the_first_tee() -> void:
 	var m := _main()
 	var paid: Array[int] = []
 	m.guest_sim.day_started.connect(func(_d: int) -> void:
-		m.guest_sim.brain.guest_arrived.connect(func(_g: Guest) -> void:
+		m.guest_sim.brain.reached_first_tee.connect(func(_g: Guest) -> void:
 			paid.append(m.build_tool.builder.balance())))
 	m.guest_sim.advance(0.0)  # builds day 1
 	while paid.is_empty() and m.guest_sim.day == 1:

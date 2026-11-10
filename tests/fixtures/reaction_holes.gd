@@ -117,6 +117,7 @@ static func crossing_holes() -> CourseData:
 	for n: int in [1, 2]:
 		var opened := b.open_hole(n)
 		assert(opened, "crossing hole %d opens" % n)
+	b.move_clubhouse_beside(CROSS_TEE_1)  # E5-S11
 	return c
 
 
@@ -139,4 +140,6 @@ static func _finish(b: CourseBuilder, tee: Vector2i, cup: Vector2i, par: int) ->
 	b.place_tee(1, tee, par)
 	b.place_cup(1, cup)
 	b.set_par(1, par)
+	# E5-S11 (D60): the clubhouse beside the tee, where guests arrive and leave.
+	b.move_clubhouse_beside(tee)
 	return b.open_hole(1)

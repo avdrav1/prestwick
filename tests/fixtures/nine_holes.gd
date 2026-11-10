@@ -44,4 +44,6 @@ static func build(b: CourseBuilder) -> Array[int]:
 		b.set_par(n, spec[1])
 		if b.open_hole(n):
 			opened.append(n)
+	# E5-S11 (D60): the clubhouse beside hole 1's tee, where guests arrive and leave.
+	b.move_clubhouse_beside(HOLES[0][2])
 	return opened

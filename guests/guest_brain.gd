@@ -1,8 +1,20 @@
 class_name GuestBrain
 extends RefCounted
 ## The guests' day (E3-S4; docs/design.md Guests and reactions, Guest day), with no scene:
-## it spawns the day's groups (GuestSpawner) at the first open hole's tee, walks them, takes
-## their turns and plays their holes (GuestHole) in number order, once per simulated second.
+## it spawns the day's groups (GuestSpawner), walks them, takes their turns and plays their
+## holes (GuestHole) in number order, once per simulated second.
+##
+## The clubhouse (D60, E5-S11): a group appears at the clubhouse door (CourseData.clubhouse_door)
+## and walks to the first open hole's tee; after its last hole it walks back to the door, and
+## each guest leaves as it reaches it. Both walks take the cart path search (route), like the
+## walks between holes, and take the day's time. The walk out is the first hole's pace walk
+## (Guest.HoleRecord.walk_yd, from_clubhouse; before E5-S11 a first hole had none), judged
+## against the same walk limit as the walk from a previous cup, so a far clubhouse fails pace
+## with "a long walk from the clubhouse"; the walk home comes after the last record and costs
+## only time. Walking off its last green it holds the stroke behind it (hold_for), as a group
+## walking to its next tee does; before E5-S11 it left the course at hole-out. The door is read when each walk starts. With no clubhouse, no group arrives
+## (turned_away counts them). The green fee is still paid at the first tee (E4-S4): GuestSim
+## takes it on reached_first_tee, not on guest_arrived.
 ##
 ## Time: `step()` is one simulated second, and the only place guests change state (walk,
 ## wait, swing, finish a hole, leave). It never runs per frame: `advance_real(delta, speed)`
@@ -44,7 +56,7 @@ extends RefCounted
 ## A guest whose plan is unfinished at its turn waits for it (reading the green, on a putt;
 ## not counted against pace). The group leaves the hole when every one
 ## of it has holed out or picked up (D12) and stands still, and heads for the open hole with
-## the next number. With none left, it goes home.
+## the next number. With none left, it walks back to the clubhouse and goes home.
 ##
 ## Edits while guests play (holes are edited by copy, GuestHole.hole_still_stands): a group
 ## whose hole is closed, removed, renumbered or changed before it struck a ball there walks to
@@ -58,6 +70,9 @@ extends RefCounted
 ## and kept while its tee, cup and the course's terrain stay the same (HoleChecks).
 
 signal guest_arrived(guest: Guest)
+## E5-S11: a guest reached the first tee of its round, having walked from the clubhouse door:
+## where it pays its green fee (E4-S4, GuestSim). Once a guest, the second its walk ends.
+signal reached_first_tee(guest: Guest)
 signal hole_finished(guest: Guest, record: Guest.HoleRecord)
 signal guest_left(guest: Guest)
 ## A guest's reaction to the hole it just finished (D39), right after its `hole_finished`.
@@ -82,7 +97,8 @@ var guests: Array[Guest] = []
 ## Simulated seconds of the day stepped so far: the next step plays second `second`.
 var second: int = 0
 var day_over: bool = false
-## Groups that arrived to no open hole and went home at once.
+## Groups that arrived to no open hole, or to a course with no clubhouse (E5-S11), and went
+## home at once.
 var turned_away: int = 0
 ## The most Ball ticks one simulated second spent, sim-wide and by one guest; and the
 ## seconds that reached the sim's cap.
@@ -357,17 +373,29 @@ func _update(t: int) -> void:
 			_update_to_tee(g, t)
 		elif g.phase == GuestGroup.Phase.ON_HOLE:
 			_update_on_hole(g, t)
+		elif g.phase == GuestGroup.Phase.TO_CLUBHOUSE:
+			_update_to_clubhouse(g, t)
+
+
+## The middle of the clubhouse's door tile, yards (E5-S11): where guests appear and leave.
+## Only meaningful when the course has a clubhouse.
+func door() -> Vector2:
+	return field.tile_center(course.clubhouse_door())
 
 
 func _arrive(g: GuestGroup, t: int) -> void:
 	var n := next_open_hole(0)
-	if n == 0:
+	if n == 0 or not course.has_clubhouse():
 		g.phase = GuestGroup.Phase.DONE
 		turned_away += 1
 		return
-	var tee := field.tile_center(hole_numbered(n).tee)
+	# E5-S11: out of the clubhouse door; the walk to the first tee is the first hole's pace walk.
+	var at := door()
+	g.prev_cup = at
+	g.has_prev_cup = true
+	g.from_clubhouse = true
 	for guest: Guest in g.guests:
-		guest.position = tee
+		guest.position = at
 		guest.state = Guest.State.WAITING
 		guest.arrived_s = t
 		guests.append(guest)
@@ -417,6 +445,9 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 			_start_walk(guest, tee)
 		if guest.is_walking():
 			_walk(guest, t)
+		if not guest.is_walking() and not guest.at_first_tee and guest.position == tee:
+			guest.at_first_tee = true
+			reached_first_tee.emit(guest)
 		if not guest.is_walking() and guest.hole == null:
 			if typeof(turn) == TYPE_STRING:
 				turn = GuestHole.turn_of(course, h, _validator)
@@ -449,6 +480,8 @@ func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	var walk_yd := route(g.prev_cup, tee).length if g.has_prev_cup else -1.0
 	for guest: Guest in g.guests:
 		guest.walk_yd = walk_yd
+		guest.walk_from_clubhouse = g.from_clubhouse and g.has_prev_cup
+	g.from_clubhouse = false
 	_update_on_hole(g, t)
 
 
@@ -459,6 +492,7 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 				# The hole changed under the group: no record, on to the next. It left no green,
 				# so the next hole has no pace walk (an older cup is not where it stood).
 				g.has_prev_cup = false
+				g.from_clubhouse = false
 				_move_on(g, t)
 			else:
 				g.phase = GuestGroup.Phase.TO_TEE
@@ -673,6 +707,8 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 	for other: GuestGroup in groups:
 		# It left in this second or the one before (it may already be on its next hole, a tee
 		# within a second's walk, even struck there); later its guests are off the green.
+		# E5-S11: a group walking home from its last green holds the stroke too, as one walking
+		# to its next tee does (before, it left the course at hole-out and held nobody).
 		if other != g and other.left_hole == g.hole_number and other.left_s >= second - 1:
 			for o: Guest in other.guests:
 				if not o.is_done() \
@@ -778,6 +814,7 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.tee_wait_s = guest.tee_wait_s
 	r.cross_wait_s = guest.cross_wait_s
 	r.walk_yd = guest.walk_yd
+	r.walk_from_clubhouse = guest.walk_from_clubhouse
 	r.start_s = g.start_s
 	r.end_s = t
 	r.play = guest.hole
@@ -791,16 +828,51 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 
 
 ## Group `g` is done with its hole (finished, or the hole was taken away): it leaves the
-## hole's queue and heads for the next open number, or goes home.
+## hole's queue and heads for the next open number, or walks back to the clubhouse (E5-S11).
 func _move_on(g: GuestGroup, t: int) -> void:
 	(_queues[g.hole_number] as Array).erase(g)
 	var n := next_open_hole(g.hole_number)
 	if n == 0:
-		g.phase = GuestGroup.Phase.DONE
-		for guest: Guest in g.guests:
-			_leave(guest, t, false)
+		_head_home(g, t)
 		return
 	_head_for(g, n, t)
+
+
+## E5-S11: group `g` has played its last hole and walks back to the clubhouse door, starting
+## this second; each guest leaves on reaching it. With no clubhouse they leave where they stand.
+func _head_home(g: GuestGroup, t: int) -> void:
+	g.phase = GuestGroup.Phase.TO_CLUBHOUSE
+	for guest: Guest in g.guests:
+		guest.hole = null
+		guest.ball_moved = false
+		guest.waiting_for = Guest.Wait.NONE
+	_update_to_clubhouse(g, t)
+
+
+## One second of the walk home: each guest walks to the door (the door as it is when its walk
+## starts) and leaves there; the group is done once all of it has left.
+func _update_to_clubhouse(g: GuestGroup, t: int) -> void:
+	var all_gone := true
+	for guest: Guest in g.guests:
+		if guest.is_done():
+			continue
+		if not course.has_clubhouse():
+			_leave(guest, t, false)
+			continue
+		var to := door()
+		if guest.is_walking() and guest.walk.end() != to:
+			guest.walk = null  # the clubhouse moved under it
+			guest.state = Guest.State.WAITING
+		if not guest.is_walking() and guest.position != to:
+			_start_walk(guest, to)
+		if guest.is_walking():
+			_walk(guest, t)
+		if not guest.is_walking():
+			_leave(guest, t, false)
+		else:
+			all_gone = false
+	if all_gone:
+		g.phase = GuestGroup.Phase.DONE
 
 
 func _dusk(t: int) -> void:
@@ -808,8 +880,11 @@ func _dusk(t: int) -> void:
 		if g.phase == GuestGroup.Phase.DONE:
 			continue
 		if g.phase != GuestGroup.Phase.PENDING:
+			# E5-S11: a group walking home has played its round: it leaves, not cut short by dusk.
+			var home: bool = g.phase == GuestGroup.Phase.TO_CLUBHOUSE
 			for guest: Guest in g.guests:
-				_leave(guest, t, true)
+				if not guest.is_done():
+					_leave(guest, t, not home)
 		g.phase = GuestGroup.Phase.DONE
 	_queues.clear()
 	day_over = true

@@ -1,5 +1,6 @@
 extends GutTest
-## E3-S4: guests on a timer. The day's guests spawn at the first open hole's tee, hold a state
+## E3-S4: guests on a timer. The day's guests spawn at the clubhouse door (E5-S11; at the first
+## open hole's tee before) and walk to that tee, hold a state
 ## (walking, waiting, playing, done), play the open holes in number order, walk cart paths or
 ## straight lines, wait behind a slower group, and the sim moves once per simulated second,
 ## never per frame. The same seed gives the same day. docs/design.md Guests and reactions.
@@ -124,17 +125,23 @@ func test_ball_work_stays_inside_its_budgets_and_carries_over() -> void:
 
 # --- spawning and order ---
 
-func test_guests_spawn_at_the_first_open_holes_tee() -> void:
+func test_guests_spawn_at_the_clubhouse_and_head_for_the_first_open_holes_tee() -> void:
 	var b := GuestCourse.build()
 	assert_true(b.close_hole(1))
 	var brain := GuestBrain.new(b.course, 3, tuning, model)
 	var tee := brain.field.tile_center(brain.hole_numbered(2).tee)
 	var arrivals: Array[Guest] = []
-	brain.guest_arrived.connect(func(g: Guest) -> void: arrivals.append(g))
+	var spawned_at: Array[Vector2] = []
+	brain.guest_arrived.connect(func(g: Guest) -> void:
+		arrivals.append(g)
+		spawned_at.append(g.position))
 	brain.step()
 	assert_gt(arrivals.size(), 0, "the first group arrives in the morning")
-	for g: Guest in arrivals:
-		assert_eq(g.position, tee, "at hole 2's tee: hole 1 is closed")
+	for i: int in arrivals.size():
+		var g: Guest = arrivals[i]
+		assert_eq(spawned_at[i], brain.door(), "out of the clubhouse door (E5-S11)")
+		assert_true(g.is_walking(), "walking to the tee")
+		assert_eq(g.walk.end(), tee, "to hole 2's tee: hole 1 is closed")
 		assert_eq(g.arrived_s, 0)
 		assert_eq(brain.group_of(g).hole_number, 2)
 	var last := brain.groups[-1]
@@ -168,7 +175,7 @@ func test_guests_play_open_holes_in_number_order() -> void:
 	assert_eq(brain.hole_numbered(1).tee, Vector2i(40, 16), "hole 1 is the old hole 3")
 	brain.step()
 	for g: Guest in brain.guests:
-		assert_eq(g.position, spawn)
+		assert_eq(g.walk.end(), spawn, "heading for hole 1's tee")
 	brain.run_day()
 	for g: Guest in brain.guests:
 		var played: Array[int] = []
@@ -179,7 +186,11 @@ func test_guests_play_open_holes_in_number_order() -> void:
 		assert_eq(played, [1, 3] as Array[int], "number order, closed hole 2 skipped")
 		assert_true(g.is_done())
 		assert_false(g.left_at_dusk, "a pair plays two short holes long before dusk")
-		assert_eq(g.records[0].walk_yd, -1.0, "the first hole played has no walk")
+		# E5-S11: the first hole played's walk is the walk from the clubhouse door.
+		assert_almost_eq(g.records[0].walk_yd, brain.route(brain.door(), spawn).length, 1e-3,
+				"the first hole played's walk is from the clubhouse")
+		assert_true(g.records[0].walk_from_clubhouse)
+		assert_false(g.records[1].walk_from_clubhouse)
 		assert_gt(g.records[1].walk_yd, 0.0, "the walk from hole 1's cup to hole 3's tee")
 
 
@@ -1292,3 +1303,81 @@ func test_a_guest_on_the_dogleg_aims_at_the_turn_then_the_cup() -> void:
 		if handed:
 			break
 	assert_true(handed, "a guest started the dogleg")
+
+
+# --- the clubhouse (E5-S11, D60) ---
+
+func test_groups_walk_back_to_the_clubhouse_door_and_leave_there() -> void:
+	var brain := GuestBrain.new(GuestCourse.course(), 4, tuning, model, [
+		GuestSpawner.group(0, 0.0, [[10, 10, Guest.Taste.CASUAL, 21], [9, 10, Guest.Taste.PURIST, 22]]),
+	])
+	var left_at: Dictionary = {}
+	brain.guest_left.connect(func(g: Guest) -> void: left_at[g.id] = g.position)
+	var walking_home := false
+	while not brain.day_over:
+		brain.step()
+		if brain.groups[0].phase == GuestGroup.Phase.TO_CLUBHOUSE:
+			walking_home = true
+	assert_true(walking_home, "after its last hole the group walks back")
+	for g: Guest in brain.guests:
+		assert_eq(g.records.size(), 3, "it played the three holes")
+		assert_eq(left_at[g.id], brain.door(), "and left at the clubhouse door")
+		assert_gt(g.left_s, g.records[-1].end_s, "after walking back from the last green")
+		assert_false(g.left_at_dusk)
+	assert_eq(brain.groups[0].phase, GuestGroup.Phase.DONE)
+
+
+func test_a_far_clubhouse_costs_the_first_hole_its_pace_and_the_day_its_time() -> void:
+	var spec := [[10, 1, Guest.Taste.CASUAL, 21]]
+	var near := GuestBrain.new(GuestCourse.course(), 4, tuning, model, [GuestSpawner.group(0, 0.0, spec)])
+	near.run_day()
+	var b := GuestCourse.build()
+	var far_spot := Vector2i(44, 20)
+	assert_true(b.move_clubhouse(far_spot, 2), "an allowed spot across the strip")
+	var far := GuestBrain.new(b.course, 4, tuning, model, [GuestSpawner.group(0, 0.0, spec)])
+	far.run_day()
+	var r_near: Guest.HoleRecord = near.guests[0].records[0]
+	var r_far: Guest.HoleRecord = far.guests[0].records[0]
+	assert_true(r_near.walk_from_clubhouse and r_far.walk_from_clubhouse)
+	assert_lte(r_near.walk_yd, GuestReaction.walk_limit(1, tuning), "beside the first tee: a short walk")
+	assert_true(r_near.reaction.passed[GuestReaction.Check.PACE])
+	assert_gt(r_far.walk_yd, GuestReaction.walk_limit(1, tuning))
+	assert_false(r_far.reaction.passed[GuestReaction.Check.PACE], "a far clubhouse fails pace")
+	assert_string_contains(r_far.reaction.text, "a long walk from the clubhouse")
+	assert_gt(r_far.start_s, r_near.start_s, "and the round starts later")
+	assert_gt(far.guests[0].left_s, near.guests[0].left_s, "and ends later")
+	assert_eq(r_far.reaction.to_save()["from_clubhouse"], true, "kept in the save")
+	var errors: Array[String] = []
+	var back := GuestReaction.from_save(r_far.reaction.to_save(), errors)
+	assert_true(back != null and back.from_clubhouse, "and read back: %s" % [errors])
+
+
+func test_no_clubhouse_no_arrivals() -> void:
+	var c := GuestCourse.course().copy()
+	c.set_clubhouse(CourseData.NO_CLUBHOUSE, 1)
+	var brain := GuestBrain.new(c, 3, tuning, model)
+	var arrived := [0]
+	brain.guest_arrived.connect(func(_g: Guest) -> void: arrived[0] += 1)
+	brain.run_day()
+	assert_eq(arrived[0], 0)
+	assert_eq(brain.guests.size(), 0)
+	assert_eq(brain.turned_away, brain.groups.size())
+
+
+func test_a_playtest_nine_day_leaves_from_and_returns_to_the_clubhouse() -> void:
+	var c := CourseSave.load_file(PlaytestNine.PATH)
+	var brain := GuestBrain.new(c, 1, tuning, model)
+	var door := brain.door()
+	var counts := [0, 0]  # came out of the door, went back in
+	brain.guest_arrived.connect(func(g: Guest) -> void:
+		if g.position == door:
+			counts[0] += 1)
+	brain.guest_left.connect(func(g: Guest) -> void:
+		if g.position == door and not g.left_at_dusk:
+			counts[1] += 1)
+	brain.run_day()
+	assert_eq(counts[0], brain.guests.size(), "every guest came out of the clubhouse door")
+	assert_gt(counts[1], 0, "guests who finished walked back in")
+	for g: Guest in brain.guests:
+		if g.records.size() == 9:
+			assert_false(g.left_at_dusk, "guest %d finished nine and walked home" % g.id)
