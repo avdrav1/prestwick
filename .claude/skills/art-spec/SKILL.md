@@ -19,7 +19,11 @@ Argument: what to spec. Examples: `surfaces`, `risers`, `golfer`, `ball`, `trees
 1. Write `art/specs/<thing>.md`: purpose, frame list with sizes, anchor point, which code reads it, and one line on the look (SimGolf warmth, Mean 18 clarity).
 2. Generate a placeholder with `scripts/placeholder.py <thing>`: flat colors from the palette, a label in the corner, correct frame count and size. Save to `art/<folder>/<thing>_placeholder.png`.
 3. Add the sheet to the matching `.tres` (`art/tiles/surfaces.tres`, `art/sprites/golfer.tres`) so code loads it by name.
-4. Note in the spec what a real artist needs to replace: file name, frame count, anchor.
+4. Note in the spec what the final sheet must keep: file name, frame count, anchor.
+
+## Final art (D62)
+
+Final sheets are made by generator scripts in `scripts/` (`scripts/art_terrain.py` for the surfaces and land hatch, `scripts/art_sprites.py` for the sprites), drawn by rule as clean pixel art to the spec, from the palette only, and rerunnable. A sheet that fails review is fixed in its script and rerun, never by editing the PNG. The user reviews screenshots in colour and grayscale.
 
 ## Colorblind rule
 
@@ -28,4 +32,4 @@ Every surface has a pattern as well as a color (fairway plain, rough stippled, g
 ## Rules
 
 - Placeholders are never final. The spec file is the handoff, not the PNG.
-- Do not pull images from the web or reference other games' sprites by file.
+- Do not pull images from the web or reference other games' sprites by file. All art is original (D62).
