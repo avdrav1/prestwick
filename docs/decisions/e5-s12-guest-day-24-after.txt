@@ -1,0 +1,97 @@
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+nine holes (nine_holes.gd): 9 open
+day_s 540 s (24 guests a day, arriving over the first 90 s)
+day 1 dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 468 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1: groups 2-1-2-1-2-2-2-2-4-4-2; 24 guests, 24 finished nine (rounds [188, 189, 217, 267, 268, 237, 270, 269, 292, 293, 304, 303, 310, 311, 342, 342, 342, 343, 372, 372, 373, 372, 386, 385] s), 0 out at dusk, 216 hole records; hole time median 20 s, p90 32; pace wait a hole median 5 s, p90 30, worst 77; ticks a second worst 4800 (a guest 480), 1 s at the sim cap; CPU a simulated second mean 27.8 ms, median 25.2, p95 70.0, worst 94.5, of which the step's moves (no Ball work) median 0.58, worst 2.63
+day 1 holes reached (teed off): 9 of 9, finished by someone: 9 of 9 (records a hole 1:24 2:24 3:24 4:24 5:24 6:24 7:24 8:24 9:24)
+day 1 reactions: praise 0, neutral 112, complaint 104 of 216; fails fair 11%, interesting 100%, pace 26%, challenge 11%; statics measured 9 times
+day 1 pace fails by hole 1:79% 2:0% 3:50% 4:17% 5:0% 6:54% 7:0% 8:13% 9:21%; counted waits 1892 s on the tee, 265 s on the hole behind its queue, 25 s held for a group on another hole
+day 1 holes praised: 0 of 9 (praise a hole 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:0 9:0)
+day 1 (group 0 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 540 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 1 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 516 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 2 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 480 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 3 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 493 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 4 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 499 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 5 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 486 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 14
+day 1 (group 6 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 505 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 7 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 491 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 8 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 481 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 9 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 476 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 (group 10 a skill-1 foursome) dusk at 540: 11 of 11 groups teed off, 11 finished nine; EVERY GROUP FINISHED; latest finish 483 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 1 with a skill-1 foursome in each of 11 slots: EVERY SLOT HOLDS; latest finish 540 s (foursome as group 0)
+day 2 dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 473 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2: groups 3-4-3-1-2-3-1-3-1-3; 24 guests, 24 finished nine (rounds [288, 284, 283, 292, 293, 292, 292, 298, 298, 299, 301, 324, 325, 347, 346, 346, 355, 375, 375, 376, 379, 391, 391, 392] s), 0 out at dusk, 216 hole records; hole time median 22 s, p90 34; pace wait a hole median 6 s, p90 34, worst 70; ticks a second worst 4678 (a guest 480), 0 s at the sim cap; CPU a simulated second mean 29.5 ms, median 27.1, p95 70.7, worst 104.0, of which the step's moves (no Ball work) median 0.60, worst 2.29
+day 2 holes reached (teed off): 9 of 9, finished by someone: 9 of 9 (records a hole 1:24 2:24 3:24 4:24 5:24 6:24 7:24 8:24 9:24)
+day 2 reactions: praise 0, neutral 79, complaint 137 of 216; fails fair 11%, interesting 100%, pace 35%, challenge 12%; statics measured 9 times
+day 2 pace fails by hole 1:79% 2:8% 3:25% 4:17% 5:46% 6:42% 7:0% 8:50% 9:46%; counted waits 1989 s on the tee, 318 s on the hole behind its queue, 175 s held for a group on another hole
+day 2 holes praised: 0 of 9 (praise a hole 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:0 9:0)
+day 2 (group 0 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 495 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 9
+day 2 (group 1 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 483 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 2 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 484 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 3 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 495 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 4 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 465 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 5 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 465 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 6 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 460 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 7 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 498 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 8 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 496 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 (group 9 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 495 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 70
+day 2 with a skill-1 foursome in each of 10 slots: EVERY SLOT HOLDS; latest finish 498 s (foursome as group 7)
+day 3 dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 515 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3: groups 1-3-4-2-4-2-3-3-2; 24 guests, 24 finished nine (rounds [181, 230, 229, 229, 271, 272, 271, 271, 275, 274, 363, 363, 364, 363, 394, 395, 410, 411, 410, 435, 436, 435, 434, 435] s), 0 out at dusk, 216 hole records; hole time median 20 s, p90 35; pace wait a hole median 2 s, p90 40, worst 101; ticks a second worst 4733 (a guest 480), 0 s at the sim cap; CPU a simulated second mean 30.3 ms, median 28.3, p95 69.3, worst 104.3, of which the step's moves (no Ball work) median 0.55, worst 2.35
+day 3 holes reached (teed off): 9 of 9, finished by someone: 9 of 9 (records a hole 1:24 2:24 3:24 4:24 5:24 6:24 7:24 8:24 9:24)
+day 3 reactions: praise 0, neutral 73, complaint 143 of 216; fails fair 11%, interesting 100%, pace 29%, challenge 13%; statics measured 9 times
+day 3 pace fails by hole 1:67% 2:4% 3:46% 4:25% 5:4% 6:21% 7:21% 8:50% 9:21%; counted waits 2080 s on the tee, 276 s on the hole behind its queue, 2 s held for a group on another hole
+day 3 holes praised: 0 of 9 (praise a hole 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:0 9:0)
+day 3 (group 0 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 540 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 1 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 8 finished nine; some ended short; latest finish 540 s; pace walks 224, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 2 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 537 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 3 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 537 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 61
+day 3 (group 4 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 463 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 28
+day 3 (group 5 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 507 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 6 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 524 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 7 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 519 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 (group 8 a skill-1 foursome) dusk at 540: 9 of 9 groups teed off, 9 finished nine; EVERY GROUP FINISHED; latest finish 540 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 62
+day 3 with a skill-1 foursome in each of 9 slots: short with the foursome as group 1; latest finish 540 s (foursome as group 0)
+day 4 dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 436 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 31
+day 4: groups 2-4-3-3-3-4-4-1; 24 guests, 24 finished nine (rounds [189, 188, 241, 241, 241, 242, 257, 256, 256, 289, 290, 289, 304, 303, 303, 332, 331, 331, 331, 332, 333, 332, 332, 357] s), 0 out at dusk, 216 hole records; hole time median 22 s, p90 32; pace wait a hole median 4 s, p90 20, worst 40; ticks a second worst 4800 (a guest 480), 7 s at the sim cap; CPU a simulated second mean 28.7 ms, median 24.0, p95 80.5, worst 118.6, of which the step's moves (no Ball work) median 0.52, worst 3.36
+day 4 holes reached (teed off): 9 of 9, finished by someone: 9 of 9 (records a hole 1:24 2:24 3:24 4:24 5:24 6:24 7:24 8:24 9:24)
+day 4 reactions: praise 0, neutral 90, complaint 126 of 216; fails fair 11%, interesting 100%, pace 19%, challenge 8%; statics measured 9 times
+day 4 pace fails by hole 1:54% 2:4% 3:8% 4:13% 5:0% 6:50% 7:0% 8:21% 9:17%; counted waits 1133 s on the tee, 213 s on the hole behind its queue, 9 s held for a group on another hole
+day 4 holes praised: 0 of 9 (praise a hole 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:0 9:0)
+day 4 (group 0 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 490 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 29
+day 4 (group 1 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 483 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 29
+day 4 (group 2 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 459 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 29
+day 4 (group 3 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 485 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 3 s, worst 29
+day 4 (group 4 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 460 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 30
+day 4 (group 5 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 441 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 29
+day 4 (group 6 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 453 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 29
+day 4 (group 7 a skill-1 foursome) dusk at 540: 8 of 8 groups teed off, 8 finished nine; EVERY GROUP FINISHED; latest finish 456 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 21
+day 4 with a skill-1 foursome in each of 8 slots: EVERY SLOT HOLDS; latest finish 490 s (foursome as group 0)
+day 5 dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 455 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5: groups 2-2-2-3-1-2-3-4-4-1; 24 guests, 24 finished nine (rounds [196, 197, 223, 224, 241, 242, 252, 252, 253, 317, 277, 276, 317, 318, 317, 349, 349, 349, 350, 365, 365, 365, 366, 374] s), 0 out at dusk, 216 hole records; hole time median 21 s, p90 34; pace wait a hole median 1 s, p90 31, worst 73; ticks a second worst 4800 (a guest 480), 3 s at the sim cap; CPU a simulated second mean 28.6 ms, median 26.7, p95 71.0, worst 99.3, of which the step's moves (no Ball work) median 0.64, worst 2.66
+day 5 holes reached (teed off): 9 of 9, finished by someone: 9 of 9 (records a hole 1:24 2:24 3:24 4:24 5:24 6:24 7:24 8:24 9:24)
+day 5 reactions: praise 0, neutral 99, complaint 117 of 216; fails fair 11%, interesting 100%, pace 20%, challenge 6%; statics measured 9 times
+day 5 pace fails by hole 1:67% 2:0% 3:42% 4:17% 5:17% 6:17% 7:0% 8:4% 9:21%; counted waits 1271 s on the tee, 195 s on the hole behind its queue, 302 s held for a group on another hole
+day 5 holes praised: 0 of 9 (praise a hole 1:0 2:0 3:0 4:0 5:0 6:0 7:0 8:0 9:0)
+day 5 (group 0 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 478 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 9
+day 5 (group 1 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 469 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 4 s, worst 10
+day 5 (group 2 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 467 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 3 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 484 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 4 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 496 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 5 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 466 s; pace walks 234, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 6 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 484 s; pace walks 225, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 7 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 478 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 8 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 465 s; pace walks 216, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 (group 9 a skill-1 foursome) dusk at 540: 10 of 10 groups teed off, 10 finished nine; EVERY GROUP FINISHED; latest finish 511 s; pace walks 243, 5 to 86 yd (median 56); Ball work left over a guest's nine median 5 s, worst 9
+day 5 with a skill-1 foursome in each of 10 slots: EVERY SLOT HOLDS; latest finish 511 s (foursome as group 9)
+every group that teed off finished its nine on 5 of 5 days; with a skill-1 foursome in every slot on 4 of 5
+plan ticks a stroke (all days): median 433, p95 1005, p99 1534, worst 10308; 2 of 4990 at 10,000 or more (worst case about 23,700)
+a group of 2 (skill 10) alone: 9 holes, round 173 s (left at 173, done), waits 0 s, 32.5 strokes a guest
+a group of 2 (skill 5) alone: 9 holes, round 190 s (left at 190, done), waits 0 s, 38.5 strokes a guest
+a group of 2 (skill 1) alone: 9 holes, round 208 s (left at 208, done), waits 0 s, 44.0 strokes a guest
+a group of 1 (skill 5) alone: 9 holes, round 179 s (left at 179, done), waits 0 s, 37.0 strokes a guest
+a group of 1 (skill 1) alone: 9 holes, round 185 s (left at 185, done), waits 0 s, 41.0 strokes a guest
+a group of 4 (skill 10) alone: 9 holes, round 217 s (left at 217, done), waits 0 s, 33.8 strokes a guest
+a group of 4 (skill 5) alone: 9 holes, round 252 s (left at 252, done), waits 0 s, 40.8 strokes a guest
+a group of 4 (skill 1) alone: 9 holes, round 285 s (left at 285, done), waits 0 s, 48.0 strokes a guest

@@ -476,16 +476,23 @@ func test_the_group_behind_never_plays_into_the_group_ahead() -> void:
 ## E3-S38: the group behind holds until the last guest of the group ahead has left the green.
 ## A group that holes out leaves its hole's queue in the step its last guest stands at the cup;
 ## that guest walks off during the second, so no stroke onto the green may be struck in a
-## second that starts with a guest of another group standing on it.
+## second that starts with a guest of another group standing on it. E5-S12: a guest walking
+## home from its last green holds the stroke only while it still stands on the green, so for
+## it the rule is read where the ball comes down: no ball lands on a green while it stands
+## there (its place at the ball's first touchdown, along the leg it walked that second).
 func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void:
 	var onto := 0
+	var home_checked := 0
 	var bad: Array[String] = []
-	for c: CourseData in [ReactionHoles.fair_par4(), GuestCourse.course()]:
+	for c: CourseData in [ReactionHoles.fair_par4(), GuestCourse.course(), ReactionHoles.dogleg_par4()]:
 		for day_seed: int in [1, 2, 3]:
 			var brain := GuestBrain.new(c, day_seed, tuning, model)
 			var field := brain.field
-			# {guest id: [second struck, cup, guests of other groups on its green then]}
+			# {guest id: [second struck, cup, guests of other groups on its green then,
+			#  ids of guests of other groups walking home then]}
 			var pending := {}
+			# {[guest id, second]: [from, to, leg_start, leg_end, walk, walked]}: legs walked home.
+			var legs := {}
 			while not brain.day_over:
 				var stood := {}
 				var strokes := {}
@@ -493,7 +500,19 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 					if not g.is_done():
 						stood[g.id] = [g.position, g.group_id]
 					strokes[g.id] = g.hole.strokes.size() if g.hole != null else 0
+				var t := brain.second
 				brain.step()
+				var home := {}
+				for gg: GuestGroup in brain.groups:
+					if gg.phase != GuestGroup.Phase.TO_CLUBHOUSE:
+						continue
+					for o: Guest in gg.guests:
+						if not o.is_done():
+							home[o.id] = true
+							var walked: float = o.walk.walked if o.walk != null else 0.0
+							legs[[o.id, t]] = [stood[o.id][0] if stood.has(o.id) else o.position,
+									o.position, o.leg_start, o.leg_end,
+									o.walk if o.last_walk_s == t else null, walked]
 				for g: Guest in brain.guests:
 					if g.hole == null:
 						pending.erase(g.id)
@@ -501,15 +520,18 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 					if g.hole.strokes.size() > int(strokes.get(g.id, 0)):
 						var cup := field.tile_center(g.hole.hole.cup)
 						var on_green := PackedStringArray()
+						var walkers: Array[int] = []
 						for id: int in stood:
 							var at: Vector2 = stood[id][0]
 							# A guest that went home this second is no longer drawn (GuestView).
-							if _guest_by_id(brain, id).is_done():
+							if _guest_by_id(brain, id).is_done() or int(stood[id][1]) == g.group_id:
 								continue
-							if int(stood[id][1]) != g.group_id and at.distance_to(cup) < 30.0 \
+							if home.has(id):
+								walkers.append(id)
+							elif at.distance_to(cup) < 30.0 \
 									and field.surface_at(at.x, at.y) == Surface.Type.GREEN:
 								on_green.append("guest %d at %s" % [id, at])
-						pending[g.id] = [brain.second - 1, cup, on_green]
+						pending[g.id] = [t, cup, on_green, walkers]
 					elif pending.has(g.id) and g.hole.state != GuestHole.State.FLYING:
 						var p: Array = pending[g.id]
 						pending.erase(g.id)
@@ -521,8 +543,44 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 						if not (p[2] as PackedStringArray).is_empty():
 							bad.append("day %d s %d: guest %d onto the green with %s" % [day_seed,
 									p[0], g.id, ", ".join(p[2])])
+						# Where the ball first came down, and when (E3-S20's drawn flight).
+						var down := _touchdown(g.hole.last_path, field)
+						var when: float = float(p[0]) + tuning.impact_s() + tuning.flight_shown_s(down)
+						var land := g.hole.last_path[down]
+						for id: int in p[3]:
+							var leg: Array = legs.get([id, floori(when)], [])
+							if leg.is_empty():
+								continue  # home at the door by then
+							home_checked += 1
+							var w := _leg_point(leg, when - floorf(when), tuning.walk_yd_per_s)
+							if w.distance_to(p[1]) < 30.0 \
+									and field.surface_at(w.x, w.y) == Surface.Type.GREEN \
+									and field.surface_at(land.x, land.y) == Surface.Type.GREEN:
+								bad.append("day %d s %d: guest %d came down on the green at %.2f s with guest %d walking home on it at %s"
+										% [day_seed, p[0], g.id, when, id, w])
 	assert_gt(onto, 50, "strokes came down on greens")
+	assert_gt(home_checked, 0, "some of them while a group walked home")
 	assert_eq(bad, [] as Array[String], "no stroke onto a green another group still stands on")
+
+
+## The index of a flight's first touchdown in its recorded path (the first point back on the
+## ground), or its last point.
+func _touchdown(path: PackedVector3Array, field: HeightField) -> int:
+	for i: int in range(1, path.size()):
+		if path[i].z <= field.height_at(path[i].x, path[i].y) + 0.01:
+			return i
+	return path.size() - 1
+
+
+## Where a guest stood at share `s` of a second it walked home ([from, to, leg_start, leg_end,
+## walk or null, walked at the second's end]).
+func _leg_point(leg: Array, s: float, speed: float) -> Vector2:
+	var walk: GuestWalk = leg[4]
+	if walk == null or s >= float(leg[3]):
+		return leg[1]
+	if s <= float(leg[2]):
+		return leg[0]
+	return walk.point_at(float(leg[5]) - (float(leg[3]) - s) * speed)
 
 
 func _guest_by_id(brain: GuestBrain, id: int) -> Guest:
@@ -1381,3 +1439,81 @@ func test_a_playtest_nine_day_leaves_from_and_returns_to_the_clubhouse() -> void
 	for g: Guest in brain.guests:
 		if g.records.size() == 9:
 			assert_false(g.left_at_dusk, "guest %d finished nine and walked home" % g.id)
+
+
+## E5-S12: a group walking home from its last green holds the group behind only while a guest
+## of it still stands on that green (GuestBrain.stands_at_impact: where it stands when the
+## club would meet the ball), not for the rest of the walk home and not once it has stepped
+## off (E5-S11 held the stroke for any guest who stood on the green as the second began, for
+## up to 2 s). On the fair par 4 a
+## guest of the group behind, ready to play onto the green, is held by a walker home standing
+## on the green at its planned rest, however long ago its group left; and not held by one that
+## stepped off this second to a spot still in the stroke's landing area.
+func test_a_group_walking_home_holds_only_while_it_still_stands_on_the_green() -> void:
+	var c := ReactionHoles.fair_par4()
+	var found := false
+	for day_seed: int in [1, 2, 3, 4, 5]:
+		var brain := GuestBrain.new(c, day_seed, tuning, model)
+		var field := brain.field
+		var cup := field.tile_center(c.holes[0].cup)
+		while not brain.day_over and not found:
+			brain.step()
+			var home: GuestGroup = null
+			for g: GuestGroup in brain.groups:
+				if g.phase == GuestGroup.Phase.TO_CLUBHOUSE and g.left_hole == 1:
+					home = g
+			if home == null:
+				continue
+			for g: GuestGroup in brain._queues.get(1, []):
+				for away: Guest in g.guests:
+					if away.hole.is_finished() or away.hole.state != GuestHole.State.READY \
+							or away.hole.plan == null or away.hole.plan.prediction == null:
+						continue
+					var p := away.hole.plan.prediction
+					var at := Vector2(away.hole.ball_at.x, away.hole.ball_at.y)
+					var rest := Vector2(p.rest.x, p.rest.y)
+					if field.surface_at(rest.x, rest.y) != Surface.Type.GREEN \
+							or field.surface_at(at.x, at.y) == Surface.Type.GREEN:
+						continue
+					# Off the green, still in the stroke's way: nearer the cup, in the landing area.
+					var radius := brain.landing_radius(at.distance_to(rest))
+					var off := Vector2.INF
+					for dx: int in range(-8, 9):
+						for dy: int in range(-8, 9):
+							var q := field.tile_center(field.tile_at(rest.x, rest.y) + Vector2i(dx, dy))
+							if field.surface_at(q.x, q.y) != Surface.Type.GREEN \
+									and GuestBrain.in_the_way(q, at, rest, cup, tuning.play_clear_yd, radius) \
+									and (off == Vector2.INF or q.distance_to(rest) < off.distance_to(rest)):
+								off = q
+					if off == Vector2.INF:
+						continue
+					# Nothing else holds it: with the walkers back at the door it plays.
+					_stand(home, brain.door(), brain.door())
+					if brain.hold_for(away, g) != GuestBrain.Hold.CLEAR:
+						continue
+					found = true
+					home.left_s = brain.second
+					_stand(home, cup, rest)
+					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.SAME_HOLE,
+							"a walker home still on the green holds the stroke")
+					_stand(home, cup, off)
+					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.CLEAR,
+							"one that stepped off the green this second does not, in the landing area or not")
+					home.left_s = brain.second - 5
+					_stand(home, rest, rest)
+					assert_eq(brain.hold_for(away, g), GuestBrain.Hold.SAME_HOLE,
+							"one still on the green seconds after its group left holds it")
+					break
+				if found:
+					break
+		if found:
+			break
+	assert_true(found, "a ready approach met a group walking home off the fair par 4")
+
+
+## Stands every guest of `g` still out at `to`, having stood at `from` as the second began.
+func _stand(g: GuestGroup, from: Vector2, to: Vector2) -> void:
+	for o: Guest in g.guests:
+		if not o.is_done():
+			o.step_from = from
+			o.position = to
