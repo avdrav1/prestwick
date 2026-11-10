@@ -27,17 +27,17 @@ Source of intent: the Claude Docs design doc "Prestwick, Game Design Doc". This 
 - Picking (`course/tile_picker.gd`): the cursor picks the tile drawn frontmost under it. Each tile is treated as a solid column from height 0 to its top, tested front to back by depth (i + j). A top face picks its tile, a wall picks the hill it belongs to, and a tile partly behind a nearer hill is picked only where its top still shows.
 - Every surface has a pattern as well as a color (colorblind rule); patterns are named in `art/specs/surfaces.md`. Art uses only `art/palette.gpl` (32 colors). Terrain sheets load by name through `art/tiles/surfaces.tres`.
 
-| Surface | Roll | Distance | Cost/tile | Notes |
+| Surface | Roll | Distance | Cost/tile ($, D56, `data/economy.json`) | Notes |
 | --- | --- | --- | --- | --- |
-| fairway | 1.0 | 1.0 | 40 | |
-| rough | 0.6 | 0.85 (0.8 to 0.9, one fixed value, D14; `golf/lies.tres`) | 10 | |
-| green | 1.4 | putter only | 120 | putter only here, and only here (D13) |
-| tee | 1.0 | 1.0 | 80 | driver allowed (D13) |
-| bunker | 0 | 0.5, sand wedge only | 60 | |
-| water | n/a | penalty, drop at entry (D15) | 90 | |
-| trees | n/a | blocks flight below 10 yd, 1 to 2 tile scatter (D15, E2-S6) | 30 | a rolling ball stops at its edge (D15) |
-| cart_path | 1.6 | hard bounce | 20 | |
-| oob | n/a | penalty, drop at entry (D15) | E4-S1 | on the palette from E2-S3 (D9) |
+| fairway | 1.0 | 1.0 | 3 | |
+| rough | 0.6 | 0.85 (0.8 to 0.9, one fixed value, D14; `golf/lies.tres`) | 1 | |
+| green | 1.4 | putter only | 16 | putter only here, and only here (D13) |
+| tee | 1.0 | 1.0 | 9 | driver allowed (D13) |
+| bunker | 0 | 0.5, sand wedge only | 13 | |
+| water | n/a | penalty, drop at entry (D15) | 19 | |
+| trees | n/a | blocks flight below 10 yd, 1 to 2 tile scatter (D15, E2-S6) | 6 | a rolling ball stops at its edge (D15) |
+| cart_path | 1.6 | hard bounce | 5 | |
+| oob | n/a | penalty, drop at entry (D15) | 1 (rough's price) | on the palette from E2-S3 (D9) |
 
 ## Land
 
