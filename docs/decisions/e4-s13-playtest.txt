@@ -1,0 +1,76 @@
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+e4 playtest: seed 1
+1. Build a par 3 under $1,500
+  ok   the game opens on a New course, seed 1, with money
+  hole 1: tee (51, 51), cup (72, 72), 148 yd, in the starting block [P: (48, 48), S: (32, 32)]
+  tee placed, no cup: rule 1: hole 1 has a tee but no cup; panel: "rule 1 at (51, 51): hole 1 has a tee but no cup"
+  ok   with the tee alone the validator names what is missing
+  cup placed on rough: rule 2: cup is on rough, not green; panel: "rule 2 at (72, 72): cup is on rough, not green"
+  ok   a cup on rough fails rule 2 alone, and the hole panel says why
+  green painted round the cup: passes; panel: ""
+  ok   then it passes every rule
+  ok   Open opens it
+  cost: $748 (balance $5,000 to $4,252); the HUD reads "Balance: $4,252"
+  ok   the par 3 costs $748, under $1,500
+  ok   one click to Play
+  ok   the ball is on the tee
+2. Play it
+  stroke 1: 7i, 64 bar ticks
+  ok   stroke 1 comes to rest
+  ok     it lands on the tile the aim line predicted, (69, 69)
+  ok     it rests on the predicted tile (72, 72)
+  ok   the ball holes out
+  score: 1 strokes on a par 3 (0 penalty)
+  ok   back in Build, the course unchanged (its balance aside: guests paid meanwhile)
+3. Open it, watch three guests
+  hole 1, days 1 and 2: 0 praise, 18 neutral, 13 complaints
+    day 1 guest 0, neutral: Hole 1: fine, but nothing in the way, nothing to think about.
+    day 1 guest 1, neutral: Hole 1: fine, but nothing in the way, nothing to think about.
+    day 1 guest 2, neutral: Hole 1: fine, but nothing in the way, nothing to think about.
+  ok   three guests or more react to hole 1
+  day 1: 18 drawn at 3.0 stars and $60, "Day 1: fees +$1,080 (18 guests), upkeep -$5"
+  day 2: 13 drawn at 2.5 stars and $60, "Day 2: fees +$780 (13 guests), upkeep -$5"
+  rating 2.48, 2.5 stars; balance $6,102
+4. A par 5 with water on the direct line
+  par 5 with water (generate 5 flat water, 520 yd): $2,704 to build (fairway 452, green 37, tee 9, water 27, steps 27), and about 2 parcels of land at the median $650, $1,300; balance now $6,102
+  the pond: 27 water tiles, $513 of it
+  ok   it costs $2,704, inside Balance targets' $2,500 to $5,000
+5. Lay up or go for it: hand only
+6. Two days at 3x on res://courses/playtest_nine.json
+  ok   the day runs at 3x in Play
+  day 1: 18 guests at 3.0 stars (3.0 to 3.0 shown during it, the mean 2.64 to 3.48), 162 reactions as 104 feed lines, 180.5 real s at 3x (10832 frames), busiest 10 real s 14 lines; "Day 1: fees +$1,080 (18 guests), upkeep -$45"
+  ok   day 1's stars shown hold until dusk (D59)
+  ok   day 1 at 3x keeps its 3 real minutes, within 2%
+  day 2: 18 guests at 3.0 stars (3.0 to 3.0 shown during it, the mean 2.48 to 3.60), 162 reactions as 111 feed lines, 180.5 real s at 3x (10832 frames), busiest 10 real s 16 lines; "Day 2: fees +$1,080 (18 guests), upkeep -$45"
+  ok   day 2's stars shown hold until dusk (D59)
+  ok   day 2 at 3x keeps its 3 real minutes, within 2%
+  ok   the feed is on screen in Play
+7. The fee at the ceiling
+  ok   the fee slider is on screen in Build
+  slider $60 to $87 (the ceiling at 3.5 stars): tomorrow's guests 22 to 15; "Fee $87 of $87"
+  tooltip: "Green fee a round. Up to $60 every guest comes; above it fewer, 67% of them at the $87 ceiling ($25 a star). 15 guests tomorrow at this fee, if the stars hold at dusk."
+  ok   the slider's end is the ceiling, $87
+  ok   the ceiling draws fewer guests than $60
+  day 3: 22 guests drawn at $60 of $87 (3.5 stars; 3.5 to 3.5 during day 3); fee changes ["541 s $87"]; "Day 3: fees +$1,320 (22 guests), upkeep -$45"
+  day 4: 15 guests drawn at $87 of $87 (3.5 stars; 3.5 to 3.5 during day 4); fee changes []; ""
+  day 4 at the start fee $60 would have drawn 22
+  ok   day 4's morning draws at the ceiling, $87
+  ok   day 3's stars shown hold until dusk (D59)
+  ok   the fee does not move during day 3 (moves ["541 s $87"])
+  ok   at the ceiling day 4 draws 15, under the 22 at $60
+8. Save, quit, load
+  ok   F5's save writes user://e4_playtest_save.json at day 4, 150 s
+  uninterrupted day 4 ends on $9,605, feed 657 reactions, 4 days of rating history
+  ok   a fresh game loads it (F9)
+  ok   it resumes at the morning of day 4
+  ok   the balance is that morning's, $8,345
+  ok   the fee is as the player left it, $87
+  ok   the stars shown are that morning's, 3.5
+  ok   the rating history is back (3 days)
+  ok   the course is the same (its tiles, holes and land)
+  replayed day 4 ends on $9,605, feed 657 reactions
+  ok   the replayed day ends on the uninterrupted balance
+  ok   and the same rating history
+  ok   and the same fee
+e4 playtest: PASS

@@ -455,7 +455,8 @@ static func stars_of(rating: float) -> float:
 ## (GuestSim.fee_ceiling, set_fee): Vector2(fee, its share of the ceiling), the fee `fee_share`
 ## of the ceiling in whole dollars down, the ceiling `fee_ceiling_per_star` x stars in whole
 ## dollars down. `fee_share` < 0 is a player who leaves the slider at `start_fee`, which a
-## falling ceiling lowers and a rising one leaves (GuestSim._on_feed_changed).
+## falling ceiling lowers and a rising one leaves (GuestSim._show_stars; since E4-S13, D59, the
+## ceiling moves only at dusk, as this sim's day-at-a-time stars always did).
 static func chosen_fee(e: Dictionary, stars: float, held: int = -1) -> Vector2:
 	var t: EconomyTuning = e.tuning
 	var ceiling := floori(t.fee_ceiling(stars))
@@ -516,6 +517,7 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 					nine_day = day
 			else:
 				stalled += 1
+		# The stars shown all day: the mean at the last dusk (D59, GuestSim.stars).
 		var stars := stars_of(_rating(window, float(start[0]), int(start[1])))
 		var fee := float(e.ceiling) * stars * float(e.fee_share)
 		var guests := guests_for(e, stars, open)

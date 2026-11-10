@@ -440,9 +440,8 @@ func save_game(path: String = GameSave.PATH) -> Error:
 	s.seed_value = guest_sim.base_seed
 	s.day = guest_sim.morning_day()
 	s.feed_data = guest_sim.feed.to_save(s.day)
-	# E4-S11: what that morning drew and the second the save is at, for the replay.
+	# E4-S11: what that morning drew, for the replay.
 	s.arrivals = guest_sim.morning_arrivals()
-	s.second = guest_sim.save_second()
 	economy_to_save(s)
 	var dropped: Array[int] = []
 	var err := GameSave.save_file(s, path, dropped)
@@ -486,17 +485,20 @@ func economy_to_save(s: GameSave.State) -> void:
 
 
 ## Takes the economy back from a loaded save (economy_to_save's other half): the balance, through
-## the builder (CourseBuilder.restore_balance), an empty ledger, the rating history and the fee
-## (E4-S11: held as the player left it until the replay reaches the save, GuestSim.restore_fee),
-## and what the replayed day's first guests paid.
+## the builder (CourseBuilder.restore_balance), an empty ledger, the rating history, the stars
+## shown that morning (E4-S13, D59: the last dusk's rating, the history's last; a save before
+## any dusk shows the loaded feed's, 3 on day 1), the fee under their ceiling, and what the
+## replayed day's first guests paid (E4-S11).
 func economy_from_save(s: GameSave.State) -> void:
 	build_tool.builder.restore_balance(s.money, s.unlimited_money)
 	ledger.clear(build_tool.builder.balance(), build_tool.builder.has_unlimited_money())
 	money_panel.refresh()
 	rating_history = s.rating_history.duplicate()
-	# E4-S6: the saved fee (an E4-S7 save has none: the start fee), held under the loaded ceiling
-	# unless the save was made part way through its day (E4-S11).
-	guest_sim.restore_fee(s.fee if s.fee >= 0 else guest_sim.economy.start_fee, s.second)
+	var dusk: float = guest_sim.rating() if rating_history.is_empty() else rating_history[-1]
+	guest_sim.restore_stars(dusk)
+	# E4-S6: the saved fee (an E4-S7 save has none: the start fee), held under the loaded ceiling.
+	# The ceiling holds all day (D59), so a fee set during the saved day loads as the player left it.
+	guest_sim.set_fee(s.fee if s.fee >= 0 else guest_sim.economy.start_fee)
 	_replay_fees = s.fees_paid.duplicate()
 
 
@@ -523,7 +525,8 @@ func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
 		if h.open:
 			open += 1
 	var upkeep: int = open * b.economy.upkeep_per_open_hole
-	# E4-S5: the closing rating goes on the history (the rating the next morning's arrivals read).
+	# E4-S5: the closing rating goes on the history (E4-S13: the stars shown from tonight on are
+	# its, GuestSim._end_day, so a load reads them back from here).
 	rating_history.append(guest_sim.rating())
 	ledger.close(b.balance(), upkeep)
 	_replay_fees.clear()

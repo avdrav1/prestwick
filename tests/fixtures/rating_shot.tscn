@@ -7,3 +7,4 @@ script = ExtResource("1_shot")
 build = true
 run_to_s = 100
 extra_praise = 13
+dusk = true

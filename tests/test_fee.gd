@@ -4,6 +4,8 @@ extends GutTest
 ## ceiling, then fall in a straight line to two thirds at it; a falling rating that drops the
 ## ceiling below the fee lowers the fee. The fee is saved, and Main.green_fee() is what a guest
 ## pays at the first tee (E4-S4). By hand: checklist item 7.
+## E4-S13 (D59): the stars shown, and so the ceiling, move only at dusk; a ceiling that falls under
+## the fee lowers it then, never during a day.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -23,9 +25,17 @@ func _reaction(kind: GuestReaction.Kind, hole: int = 1) -> GuestReaction:
 	return r
 
 
-func _push(feed: ReactionFeed, kind: GuestReaction.Kind, n: int, hole: int = 1) -> void:
+func _push(feed: ReactionFeed, kind: GuestReaction.Kind, n: int, hole: int = 1, day: int = 1) -> void:
 	for i in n:
-		feed.push(_reaction(kind, hole), 1, i, hole - 1)
+		feed.push(_reaction(kind, hole), day, i, hole - 1)
+
+
+## Ends the day under way at once (its dusk) and starts the next morning: the stars shown are set
+## then (D59).
+static func _dusk(sim: GuestSim) -> void:
+	sim.advance(0.0)
+	sim.brain.day_over = true
+	sim.advance(0.0)
 
 
 func _sim() -> GuestSim:
@@ -48,9 +58,11 @@ func test_the_ceiling_is_25_dollars_a_star_at_the_stars_shown() -> void:
 	var sim := _sim()
 	assert_eq(sim.fee_ceiling(), 75, "a new course: 3 stars, $75")
 	_push(sim.feed, GuestReaction.Kind.PRAISE, 13)
+	_dusk(sim)
 	assert_eq(sim.stars(), 3.5)
 	assert_eq(sim.fee_ceiling(), 87, "3.5 stars: $87.50, whole dollars down")
 	_push(sim.feed, GuestReaction.Kind.PRAISE, 50)
+	_dusk(sim)
 	assert_eq(sim.fee_ceiling(), 125, "5 stars: $125")
 
 
@@ -90,31 +102,57 @@ func test_arrivals_follow_d58s_curve() -> void:
 	assert_almost_eq(economy.fee_arrivals_share(1.0), 0.6667, 1e-9, "a third fewer at the ceiling")
 
 
-func test_a_falling_rating_lowers_the_fee_and_a_rising_one_leaves_it() -> void:
+func test_a_falling_rating_lowers_the_fee_at_dusk_and_a_rising_one_leaves_it() -> void:
 	var sim := _sim()
 	sim.set_fee(75)
+	sim.advance(0.0)
 	watch_signals(sim)
 	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 25)
+	assert_almost_eq(sim.rating(), 2.0, 1e-9)
+	assert_eq(sim.fee_ceiling(), 75, "the ceiling holds during the day (D59)")
+	assert_eq(sim.fee, 75, "and so does the fee")
+	assert_signal_not_emitted(sim, "fee_changed")
+	_dusk(sim)
 	assert_eq(sim.stars(), 2.0)
-	assert_eq(sim.fee, 50, "the ceiling fell to $50 under the fee: the fee follows it")
+	assert_eq(sim.fee, 50, "at dusk the ceiling fell to $50 under the fee: the fee follows it")
 	assert_signal_emitted_with_parameters(sim, "fee_changed", [50])
-	_push(sim.feed, GuestReaction.Kind.PRAISE, 50)
+	assert_eq(sim.day_arrivals, economy.arrivals(2.0, 1.0), "before the morning draws at it")
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 50, 1, 2)
+	_dusk(sim)
 	assert_eq(sim.fee_ceiling(), 125)
 	assert_eq(sim.fee, 50, "a rising rating does not raise it back")
 	sim.set_fee(40)
-	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 30)
+	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 30, 1, 3)
+	_dusk(sim)
 	assert_eq(sim.stars(), 2.5, "20 praise and 30 complaints: 2.6")
 	assert_eq(sim.fee_ceiling(), 62)
 	assert_eq(sim.fee, 40, "a fee under the new ceiling stays")
 
 
+func test_a_dip_during_the_day_costs_the_fee_nothing() -> void:
+	# Finding 1 of the 2026-11-09 playtest: one bad hour no longer lowers the fee for good.
+	var sim := _sim()
+	sim.advance(0.0)
+	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 50)
+	assert_eq(sim.fee, economy.start_fee, "the start fee holds through a 1-star hour")
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 13)
+	_push(sim.feed, GuestReaction.Kind.NEUTRAL, 37)
+	_dusk(sim)
+	assert_eq(sim.stars(), 3.5)
+	assert_eq(sim.fee, economy.start_fee, "and the course is back by night")
+
+
 func test_a_cleared_hole_can_lower_the_fee_too() -> void:
 	var sim := _sim()
 	_push(sim.feed, GuestReaction.Kind.PRAISE, 50, 2)
+	_dusk(sim)
 	sim.set_fee(125)
 	sim.feed.clear_slot(GuestCourse.course().holes, 1)
-	assert_eq(sim.stars(), 3.0, "hole 2's praise cleared: neutral")
-	assert_eq(sim.fee, 75)
+	assert_almost_eq(sim.rating(), 3.0, 1e-9, "hole 2's praise cleared: neutral")
+	assert_eq(sim.fee, 125, "the day's ceiling holds")
+	_dusk(sim)
+	assert_eq(sim.stars(), 3.0)
+	assert_eq(sim.fee, 75, "at dusk the fee comes down to it")
 
 
 func _main() -> Main:
@@ -142,7 +180,9 @@ func test_the_slider_sets_the_fee_and_stops_at_the_ceiling() -> void:
 	assert_eq(slider.value, 75.0, "the slider cannot pass the ceiling")
 	assert_eq(m.green_fee(), 75)
 	_push(m.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 50)
-	assert_eq(slider.max_value, 25.0, "1 star: the slider's end moves down")
+	assert_eq(slider.max_value, 75.0, "the slider's end holds during the day")
+	_dusk(m.guest_sim)
+	assert_eq(slider.max_value, 25.0, "1 star at dusk: the slider's end moves down")
 	assert_eq(slider.value, 25.0, "and the fee with it")
 	assert_eq(m.green_fee(), 25)
 	assert_eq(panel.ceiling_label.text, "of $25")
@@ -297,8 +337,9 @@ func test_a_save_of_a_loaded_day_keeps_what_the_load_replays() -> void:
 	assert_true(n.load_game(SAVE_PATH))
 	assert_eq(n.save_game(SAVE_PATH), OK)
 	var again: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
-	for key: String in ["money", "fee", "arrivals", "fees_paid", "second", "feed"]:
+	for key: String in ["money", "fee", "arrivals", "fees_paid", "feed", "rating_history"]:
 		assert_eq(again[key], first[key], "a load saved at once saves the same %s" % key)
+	assert_false(first.has("second"), "E4-S13: no held fee, so no second to hold it to")
 	n.guest_sim.advance(0.0)
 	_until_paid(n, 1)
 	assert_eq(n.save_game(SAVE_PATH), OK)
@@ -310,25 +351,52 @@ func test_a_save_of_a_loaded_day_keeps_what_the_load_replays() -> void:
 	assert_eq(o.rating_history, a.rating_history)
 
 
-func test_a_fee_raised_past_the_mornings_ceiling_loads_as_set() -> void:
+func test_a_mid_day_save_loads_the_stars_the_day_began_with() -> void:
 	var m := _day_main()
 	m.guest_sim.advance(0.0)
-	_until_paid(m, 1)
-	# The rating rises during the day (here, by hand) and the player takes the higher ceiling.
-	_push(m.guest_sim.feed, GuestReaction.Kind.PRAISE, 50)
-	assert_eq(m.guest_sim.fee_ceiling(), 125)
-	m.fee_panel.slider.value = 110
-	var saved_at: int = m.guest_sim.brain.second
+	_skip(m)
+	var morning: float = m.guest_sim.stars()
+	assert_eq(morning, EconomyTuning.stars_of(m.rating_history.back()), "day 2 shows day 1's dusk")
+	_until_paid_on(m, 1)
+	# The live mean moves far from the morning's (here, by hand): the stars shown do not.
+	_push(m.guest_sim.feed, GuestReaction.Kind.PRAISE, 50, 1, 2)
+	assert_almost_eq(m.guest_sim.rating(), 5.0, 1e-9)
+	assert_eq(m.guest_sim.stars(), morning)
+	var ceiling := floori(economy.fee_ceiling(morning))
+	m.fee_panel.slider.value = 200
+	assert_eq(m.green_fee(), ceiling, "the day's ceiling, not the mean's")
 	assert_eq(m.save_game(SAVE_PATH), OK)
 	var n := _day_main()
 	assert_true(n.load_game(SAVE_PATH))
-	assert_eq(n.guest_sim.fee_ceiling(), 75, "the morning's 3 stars")
-	assert_eq(n.green_fee(), 110, "the fee the player set, not the morning's ceiling")
-	assert_eq(n.fee_panel.slider.value, 110.0)
+	assert_eq(n.guest_sim.stars(), morning, "the load shows the stars the day began with")
+	assert_eq(n.guest_sim.fee_ceiling(), ceiling)
+	assert_eq(n.green_fee(), ceiling, "the fee as the player left it")
+	assert_eq(n.fee_panel.slider.max_value, float(ceiling))
+	assert_eq(n.fee_panel.slider.value, float(ceiling))
+	assert_eq(n.rating_row.rating_label.text, RatingRow.rating_text(morning))
+
+
+func test_a_day_one_save_loads_three_stars() -> void:
+	var m := _day_main()
+	m.guest_sim.advance(0.0)
+	_until_paid(m, 1)
+	_push(m.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 50)
+	assert_eq(m.save_game(SAVE_PATH), OK)
+	var n := _day_main()
 	n.guest_sim.advance(0.0)
-	_push(n.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 1)
-	assert_eq(n.green_fee(), 110, "held while the replay is short of the save")
-	while n.guest_sim.brain.second < saved_at:
-		n.guest_sim.brain.step()
-	_push(n.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 1)
-	assert_eq(n.green_fee(), n.guest_sim.fee_ceiling(), "past it, a ceiling under the fee lowers it again")
+	_dusk(n.guest_sim)
+	_push(n.guest_sim.feed, GuestReaction.Kind.PRAISE, 50, 1, 2)
+	_dusk(n.guest_sim)
+	assert_eq(n.guest_sim.stars(), 5.0)
+	assert_true(n.load_game(SAVE_PATH))
+	assert_eq(n.guest_sim.stars(), 3.0, "no dusk yet in the saved game: 3 stars")
+	assert_eq(n.green_fee(), economy.start_fee)
+
+
+## Runs the day under way until `n` more guests have paid at the first tee.
+func _until_paid_on(m: Main, n: int) -> void:
+	var d := m.guest_sim.day
+	var want := m.ledger.guests + n
+	while m.ledger.guests < want and m.guest_sim.day == d:
+		m.guest_sim.advance(1.0)
+	assert_gte(m.ledger.guests, want, "%d guests paid on day %d" % [n, d])

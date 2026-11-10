@@ -45,9 +45,6 @@ class State:
 	## E4-S11: what each guest of the saved day paid before the save, in arrival order
 	## (DayLedger.paid): the replay's first guests pay these, the rest the fee.
 	var fees_paid: Array[int] = []
-	## E4-S11: the second of the saved day the save was made at (GuestSim.save_second): the load
-	## holds `fee` against a falling ceiling until the replay reaches it. 0 at a morning.
-	var second: int = 0
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
@@ -85,8 +82,6 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		data["arrivals"] = state.arrivals
 	if not state.fees_paid.is_empty():
 		data["fees_paid"] = state.fees_paid.duplicate()
-	if state.second > 0:
-		data["second"] = state.second
 	return JSON.stringify(data, "  ", false)
 
 
@@ -165,10 +160,8 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 					errors.append("fees_paid must hold whole dollars, 0 or more")
 					break
 				s.fees_paid.append(int(v))
-	if data.has("second"):
-		s.second = CourseData.read_int(data, "second", errors)
-		if s.second < 0:
-			errors.append("second must be 0 or more, got %d" % s.second)
+	# E4-S13: an E4-S11 save's "second" held the fee over the morning's ceiling; the ceiling no
+	# longer moves within a day (D59), so it is ignored.
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
 	if typeof(data.get("course")) != TYPE_DICTIONARY:
 		errors.append("course must be an object")

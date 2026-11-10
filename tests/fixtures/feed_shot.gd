@@ -49,6 +49,9 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## day's run, so the speed panel's Rating row shows a half star (13 on top of the day: 3.5).
 ##   scripts/screenshot.sh tests/fixtures/rating_shot.tscn out.png 30
 @export var extra_praise: int = 0
+## E4-S13 (D59): with `dusk`, the day then ends at once and the next morning starts, so the row
+## shows the stars set at that dusk (the praise above moves only the mean until then).
+@export var dusk: bool = false
 
 var main: Main
 
@@ -91,6 +94,9 @@ func _ready() -> void:
 		p.kind = GuestReaction.Kind.PRAISE
 		p.text = "Hole 2: loved it."
 		main.guest_sim.feed.push(p, 1, run_to_s, 1)
+	if dusk:
+		main.guest_sim.brain.day_over = true
+		main.guest_sim.advance(0.0)
 	for i: int in 64:
 		main.feed_panel.tick(main.feed_panel.tuning.reveal_interval_s)
 	main.camera.tracking = false

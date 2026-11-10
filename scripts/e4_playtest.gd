@@ -18,7 +18,8 @@ extends SceneTree
 ##   5. Hand only (lay up or go for it).
 ##   6. courses/playtest_nine.json with $5,000: two days at 3x in 60 fps frames: lines, guests
 ##      and real time per day, and the busiest 10 real seconds of the feed.
-##   7. The fee slider set to the ceiling for day 4: day 4's arrivals and fees against day 3's.
+##   7. The fee slider set to the ceiling for day 4, at day 3's dusk once day 4's stars are set
+##      (E4-S13, D59): day 4's arrivals and fees against day 3's.
 ##   8. Save part way through day 4, quit (free the scene), load into a fresh one: the day, the
 ##      balance, the fee, the rating history and the course come back, and the replayed day
 ##      ends on the uninterrupted day's balance and feed. The save goes to SAVE_PATH, not the
@@ -45,8 +46,6 @@ const FAST: float = 3.0
 const READ_WINDOW_REAL_S: float = 10.0
 ## Item 8: simulated seconds into day 4 at which the game is saved.
 const SAVE_AT_S: int = 150
-## Item 7: the fee goes to the ceiling this many simulated seconds before day 3's dusk.
-const FEE_LATE_S: int = 5
 
 enum Phase { BUILD, SWING, FLYING, DAY1_SKIP, DAY2_SKIP, NINE_RUN, FEE_WAIT, FEE_LATE, FEE_SKIP, DAY4_RUN, DAY4_SKIP,
 		LOAD_SKIP, DONE }
@@ -119,8 +118,8 @@ func _process(_delta: float) -> bool:
 			if _main.guest_sim.day >= 3:
 				_report_fast_days()
 				print("7. The fee at the ceiling")
-				# Day 3's guests are drawn already: the fee moves day 4's. It is set in day 3's
-				# last seconds, so a falling ceiling during day 3 cannot lower it first.
+				# Day 3's guests are drawn already: the fee moves day 4's. It is set at day 3's
+				# dusk (_on_day_ended), when the stars shown for day 4 are set (D59).
 				_main.guest_sim.skip_to_morning()
 				_phase = Phase.FEE_WAIT
 		Phase.FEE_WAIT:
@@ -128,8 +127,7 @@ func _process(_delta: float) -> bool:
 				_main.guest_sim.set_speed(FAST)
 				_phase = Phase.FEE_LATE
 		Phase.FEE_LATE:
-			if _main.guest_sim.brain.second >= _main.guest_sim.tuning.day_s - FEE_LATE_S:
-				_set_ceiling()
+			pass  # _on_day_ended moves the slider at day 3's dusk.
 		Phase.FEE_SKIP:
 			if _main.guest_sim.day >= 4:
 				_report_fee()
@@ -269,7 +267,7 @@ func _on_day_started(d: int) -> void:
 	_day_frames = 0
 	_days[d] = {"day": d, "arrivals": sim.day_arrivals, "paid": 0, "lines": 0, "reactions": 0,
 			"stars": sim.stars(), "fee": sim.fee, "ceiling": sim.fee_ceiling(), "seconds": [],
-			"lo": sim.stars(), "hi": sim.stars(), "moves": []}
+			"lo": sim.stars(), "hi": sim.stars(), "mlo": sim.rating(), "mhi": sim.rating(), "moves": []}
 	sim.brain.guest_arrived.connect(func(_g: Guest) -> void: _days[d].paid += 1)
 	sim.brain.reacted.connect(func(_g: Guest, r: GuestReaction) -> void:
 		_days[d].reactions += 1
@@ -288,16 +286,20 @@ func _on_day_ended(d: int, _b: GuestBrain) -> void:
 	# Main's handler ran first (connected in _ready): the upkeep is paid.
 	_days[d].end = _main.build_tool.builder.balance()
 	_days[d].line = _main.ledger.last_line
+	if d == 3 and _phase == Phase.FEE_LATE:
+		_set_ceiling()
 
 
-## The stars shown through the day (the window turns over about three times a day on the nine),
-## and every fee change with its second.
-func _on_rating_changed(_r: float) -> void:
+## The stars shown through the day (E4-S13: they should hold until dusk) and the mean, which
+## turns over about three times a day on the nine, and every fee change with its second.
+func _on_rating_changed(r: float) -> void:
 	var sim := _main.guest_sim
 	if not _days.has(sim.day):
 		return
 	_days[sim.day].lo = minf(_days[sim.day].lo, sim.stars())
 	_days[sim.day].hi = maxf(_days[sim.day].hi, sim.stars())
+	_days[sim.day].mlo = minf(_days[sim.day].mlo, r)
+	_days[sim.day].mhi = maxf(_days[sim.day].mhi, r)
 
 
 func _on_fee_changed(f: int) -> void:
@@ -381,9 +383,10 @@ func _report_fast_days() -> void:
 			_fail("day %d ran to its end" % d)
 			continue
 		var busiest := _busiest(x.seconds, READ_WINDOW_REAL_S * FAST)
-		print("  day %d: %d guests at %.1f stars (%.1f to %.1f during it), %d reactions as %d feed lines, %.1f real s at 3x (%d frames), busiest %d real s %d lines; \"%s\"" % [
-				d, x.paid, x.stars, x.lo, x.hi, x.reactions, x.lines, x.frames / 60.0, x.frames,
+		print("  day %d: %d guests at %.1f stars (%.1f to %.1f shown during it, the mean %.2f to %.2f), %d reactions as %d feed lines, %.1f real s at 3x (%d frames), busiest %d real s %d lines; \"%s\"" % [
+				d, x.paid, x.stars, x.lo, x.hi, x.mlo, x.mhi, x.reactions, x.lines, x.frames / 60.0, x.frames,
 				READ_WINDOW_REAL_S, busiest, x.line])
+		_check(x.lo == x.stars and x.hi == x.stars, "day %d's stars shown hold until dusk (D59)" % d)
 		_check(x.frames <= ceili(_main.guest_sim.tuning.day_s / FAST * 60.0 * 1.02),
 				"day %d at 3x keeps its 3 real minutes, within 2%%" % d)
 	_check(_main.feed_panel.visible, "the feed is on screen in Play")
@@ -430,6 +433,11 @@ func _report_fee() -> void:
 	var at_start := e.arrivals(x4.stars, float(e.start_fee) / maxf(x4.ceiling, 1.0))
 	print("  day 4 at the start fee %s would have drawn %d" % [LandPrices.money(e.start_fee), at_start])
 	_check(int(x4.fee) == int(x4.ceiling), "day 4's morning draws at the ceiling, %s" % LandPrices.money(x4.ceiling))
+	var x3: Dictionary = _days[3]
+	_check(x3.lo == x3.stars and x3.hi == x3.stars, "day 3's stars shown hold until dusk (D59)")
+	var mid: Array = (x3.moves as Array).filter(func(m: String) -> bool:
+		return int(m.split(" ")[0]) < _main.guest_sim.tuning.day_s)
+	_check(mid.is_empty(), "the fee does not move during day 3 (moves %s)" % [x3.moves])
 	_check(int(x4.arrivals) < at_start, "at the ceiling day 4 draws %d, under the %d at %s" % [
 			x4.arrivals, at_start, LandPrices.money(e.start_fee)])
 
@@ -440,7 +448,7 @@ func _save() -> void:
 	var sim := _main.guest_sim
 	var err := _main.save_game(SAVE_PATH)
 	_check(err == OK, "F5's save writes %s at day %d, %d s" % [SAVE_PATH, sim.day, sim.brain.second])
-	_saved = {"day": sim.day, "fee": sim.fee, "history": _main.rating_history.duplicate(),
+	_saved = {"day": sim.day, "fee": sim.fee, "stars": sim.stars(), "history": _main.rating_history.duplicate(),
 			"hash": _course_key(_main.course), "money": _main.build_tool.builder.balance() - _main.ledger.fees,
 			"notice": _main.save_notice.text_shown() if _main.save_notice.has_method("text_shown") else ""}
 	sim.skip_to_morning()
@@ -467,6 +475,7 @@ func _load() -> void:
 	_check(_main.build_tool.builder.balance() == int(_saved.money),
 			"the balance is that morning's, %s" % LandPrices.money(_saved.money))
 	_check(sim.fee == int(_saved.fee), "the fee is as the player left it, %s" % LandPrices.money(sim.fee))
+	_check(sim.stars() == float(_saved.stars), "the stars shown are that morning's, %.1f" % sim.stars())
 	_check(_main.rating_history == _saved.history, "the rating history is back (%d days)" % _main.rating_history.size())
 	_check(_course_key(_main.course) == String(_saved.hash), "the course is the same (its tiles, holes and land)")
 	sim.skip_to_morning()

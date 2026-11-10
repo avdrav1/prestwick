@@ -30,24 +30,27 @@ extends Node
 ## unless its group had not struck there yet: it replans on the new version and counts (E3-S49).
 ##
 ## The rating (E4-S5, D58): rating() is the feed's mean points over its full window
-## (ReactionFeed.rating, EconomyTuning.rating_points), stars() the stars shown for it (to the
-## half star, EconomyTuning.stars_of). Each morning draws arrivals_today() guests, 8 + 4 a star
-## at most 24 (EconomyTuning.arrivals) at the stars of that morning, replacing E3's flat
-## `arrivals_per_day`; a day keeps its count whatever the rating does during it. The same
-## seed and the same feed give the same day, so a skip, a run and a load's replay agree.
+## (ReactionFeed.rating, EconomyTuning.rating_points); it moves with every reaction
+## (rating_changed). E4-S13 (D59): stars() are the stars shown, set once a day, at dusk, from the
+## mean then (to the half star, EconomyTuning.stars_of; stars_changed), as SimGolf's daily
+## rating; a new course shows 3 until its first dusk. Each morning draws arrivals_today()
+## guests, 8 + 4 a star at most 24 (EconomyTuning.arrivals) at the stars shown, replacing E3's
+## flat `arrivals_per_day`. The same seed and the same feed give the same day, so a skip, a run
+## and a load's replay agree.
 ##
 ## The fee (E4-S6, D56, D58): `fee` is the player's green fee a round, the fee slider's setting,
 ## from 0 to fee_ceiling() ($25 a star at the stars shown, whole dollars down); set_fee holds it
-## there. A new course starts it at `start_fee`. Whenever the rating moves and the ceiling falls
-## under the fee, the fee comes down to the ceiling (and stays there when the rating recovers).
-## The morning's arrivals take the fee's share of the ceiling through D58's curve
-## (EconomyTuning.arrivals). Main.green_fee() reads it when a guest pays at the first tee.
+## there. A new course starts it at `start_fee`. The ceiling moves only at dusk (D59): when it
+## falls under the fee, the fee comes down to it then, before the next morning draws (and stays
+## there when the stars recover). The morning's arrivals take the fee's share of the ceiling
+## through D58's curve (EconomyTuning.arrivals). Main.green_fee() reads it when a guest pays at
+## the first tee.
 ##
 ## The replay (E4-S11): a load replays the saved day from its morning, so it must be the day the
 ## player saved. resume_at takes the arrivals that morning drew (morning_arrivals), not those
-## the fee and stars at the load would draw; restore_fee takes the fee as the player left it and
-## holds it against a falling ceiling until the replay reaches the second the save was made at
-## (save_second), since the uninterrupted day's fee only met those ceilings after it.
+## the fee at the load would draw; restore_stars takes the stars shown that morning (Main: the
+## last dusk's rating in its history). Since the ceiling holds all day, the fee the player left
+## is under the loaded ceiling and loads as set_fee holds it.
 
 signal day_started(day: int)
 ## E4-S3: the day's end, before the next morning: `finished` is the day's brain (day_over).
@@ -61,6 +64,8 @@ signal speed_changed(speed: float)
 signal skip_changed(skipping: bool)
 ## E4-S5: the course rating may have moved (the feed's window changed).
 signal rating_changed(rating: float)
+## E4-S13 (D59): the stars shown changed (at dusk, a new course or a load).
+signal stars_changed(stars: float)
 ## E4-S6: the fee changed (the slider, a new course, a load, or a falling ceiling).
 signal fee_changed(fee: int)
 
@@ -92,9 +97,8 @@ var day_arrivals: int = 0
 var fee: int = -1
 ## E4-S11: the arrivals a loaded day's morning drew (resume_at), -1 to draw them at the morning.
 var _resume_arrivals: int = -1
-## E4-S11: the second of the loaded day the save was made at (restore_fee); until the replay
-## reaches it a falling ceiling leaves the fee alone. -1 when no fee is held.
-var _fee_hold_s: int = -1
+## E4-S13: the stars shown (stars()), set at dusk (D59). 3 until a course's first dusk.
+var _stars: float = 3.0
 
 ## The builder whose edits clear the feed's tallies (watch), and the holes as it last left them.
 var _watched: CourseBuilder
@@ -141,9 +145,27 @@ func rating() -> float:
 	return feed.rating(economy.rating_points)
 
 
-## E4-S5: the stars shown now, to the half star (EconomyTuning.stars_of).
+## E4-S5, E4-S13: the stars shown, to the half star: the mean at the last dusk (D59), or 3 on a
+## new course before its first.
 func stars() -> float:
-	return EconomyTuning.stars_of(rating())
+	return _stars
+
+
+## E4-S13: shows the stars of rating `r` (EconomyTuning.stars_of) and holds the fee under the
+## ceiling they make. At dusk (_end_day), a new course (start) and a load (restore_stars).
+func _show_stars(r: float) -> void:
+	var st := EconomyTuning.stars_of(r)
+	if st != _stars:
+		_stars = st
+		stars_changed.emit(_stars)
+	if fee > fee_ceiling():
+		set_fee(fee)
+
+
+## E4-S13: a loaded game's stars shown: those of rating `r`, its last dusk's (Main.rating_history).
+func restore_stars(r: float) -> void:
+	_ensure_feed()
+	_show_stars(r)
 
 
 ## E4-S5, E4-S6: the guests a day starting now draws: EconomyTuning.arrivals at stars() and the
@@ -162,46 +184,11 @@ func fee_ceiling() -> int:
 ## E4-S6: sets the fee to `f` dollars, held from 0 to fee_ceiling(). Emits fee_changed when it
 ## moved.
 func set_fee(f: int) -> void:
-	_fee_hold_s = -1
 	var held := clampi(f, 0, fee_ceiling())
 	if held == fee:
 		return
 	fee = held
 	fee_changed.emit(fee)
-
-
-## E4-S11: sets the fee a loaded game saved, `f` dollars, as the player left it at second
-## `save_s` of the saved day (save_second), and holds it there until the replay reaches that
-## second, even over the ceiling at the morning: the stars may have risen before the save. A save
-## at the morning (`save_s` 0) holds nothing: the fee is set as set_fee does.
-func restore_fee(f: int, save_s: int) -> void:
-	if save_s <= 0:
-		set_fee(f)
-		return
-	_fee_hold_s = save_s
-	var held := maxi(f, 0)
-	if held == fee:
-		return
-	fee = held
-	fee_changed.emit(fee)
-
-
-## E4-S11: true while the replay of a loaded day has not reached the second its save was made at.
-func fee_held() -> bool:
-	if _fee_hold_s < 0:
-		return false
-	if brain != null and (day != _first_day or brain.second >= _fee_hold_s):
-		_fee_hold_s = -1
-		return false
-	return true
-
-
-## E4-S11: the second of the day under way a save made now holds the fee to (restore_fee): the
-## seconds it has run, or, while a loaded day's replay is short of its own save, that save's.
-## Read after morning_day().
-func save_second() -> int:
-	var s := 0 if brain == null else brain.second
-	return maxi(s, _fee_hold_s) if fee_held() else s
 
 
 ## E4-S11: the arrivals of the day a save made now resumes at: those its morning drew, or a
@@ -210,11 +197,8 @@ func morning_arrivals() -> int:
 	return _resume_arrivals if brain == null else day_arrivals
 
 
+## The mean moves live; the stars shown, the ceiling and the fee wait for dusk (D59).
 func _on_feed_changed() -> void:
-	# A falling rating that drops the ceiling under the fee lowers the fee (E4-S6), unless a
-	# loaded day's replay is still short of its save (E4-S11).
-	if fee > fee_ceiling() and not fee_held():
-		set_fee(fee)
 	rating_changed.emit(rating())
 
 
@@ -235,6 +219,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_stale.clear()
 	feed.clear()
 	_resume_arrivals = -1
+	_show_stars(rating())
 	set_fee(economy.start_fee)
 
 
@@ -248,7 +233,6 @@ func resume_at(d: int, arrivals: int = -1) -> void:
 	day = _first_day
 	_stale.clear()
 	_resume_arrivals = arrivals
-	_fee_hold_s = -1
 
 
 ## E4-S7: the day a save made now resumes at the morning of: the day under way, or 1 (or a
@@ -402,9 +386,12 @@ func _ready_day() -> bool:
 	return true
 
 
-## The day's end (E4-S3): `day_ended` with the finished brain, then the next morning. The one
-## place a day ends, so whatever a day's end settles (E4-S4's upkeep) runs once a day.
+## The day's end (E4-S3): the stars shown take the mean (E4-S13, D59; a ceiling under the fee
+## lowers it), then `day_ended` with the finished brain, then the next morning, which draws by
+## them. The one place a day ends, so whatever a day's end settles (E4-S4's upkeep) runs once a
+## day.
 func _end_day() -> void:
+	_show_stars(rating())
 	day_ended.emit(day, brain)
 	_new_day(day + 1)
 

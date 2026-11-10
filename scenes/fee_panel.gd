@@ -3,9 +3,9 @@ extends PanelContainer
 ## E4-S6: the fee slider, the player's one pricing decision (docs/design.md Economy and time; D56,
 ## D58), in Build under the speed panel. "Fee $60" over a slider from $0 to the ceiling ($25 a
 ## star at the stars shown, GuestSim.fee_ceiling), so it cannot pass it, and "of $75". The
-## slider sets GuestSim.fee; a falling rating that lowers the ceiling under the fee moves the
-## slider's end and the fee with it (GuestSim.fee_changed, rating_changed). Its tooltip says how
-## guests take the price (D58's curve).
+## slider sets GuestSim.fee; the ceiling moves only at dusk (E4-S13, D59), and one that falls
+## under the fee moves the slider's end and the fee with it (GuestSim.fee_changed,
+## stars_changed). Its tooltip says how guests take the price (D58's curve).
 
 var sim: GuestSim
 var fee_label: Label
@@ -41,7 +41,7 @@ func _ready() -> void:
 func bind(p_sim: GuestSim) -> void:
 	sim = p_sim
 	sim.fee_changed.connect(func(_f: int) -> void: refresh())
-	sim.rating_changed.connect(func(_r: float) -> void: refresh())
+	sim.stars_changed.connect(func(_s: float) -> void: refresh())
 	if is_node_ready():
 		refresh()
 
@@ -58,9 +58,7 @@ func refresh() -> void:
 		return
 	var ceiling := sim.fee_ceiling()
 	slider.set_block_signals(true)
-	# E4-S11: a loaded day's fee can stand over the morning's ceiling until its replay reaches
-	# the save (GuestSim.restore_fee): the slider's end takes it in.
-	slider.max_value = maxi(ceiling, sim.fee)
+	slider.max_value = ceiling
 	slider.value = sim.fee
 	slider.set_block_signals(false)
 	fee_label.text = "Fee %s" % LandPrices.money(sim.fee)
@@ -68,7 +66,7 @@ func refresh() -> void:
 	var e := sim.economy
 	var full := floori(ceiling * e.fee_full_arrivals_share)
 	var tip := ("Green fee a round. Up to %s every guest comes; above it fewer, %d%% of them at the " +
-			"%s ceiling (%s a star). %d guests tomorrow at this fee.") % [LandPrices.money(full),
+			"%s ceiling (%s a star). %d guests tomorrow at this fee, if the stars hold at dusk.") % [LandPrices.money(full),
 			roundi(e.ceiling_arrivals_share * 100.0), LandPrices.money(ceiling),
 			LandPrices.money(e.fee_ceiling_per_star), sim.arrivals_today()]
 	for c: Control in [fee_label, ceiling_label, slider]:

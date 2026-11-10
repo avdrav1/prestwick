@@ -4,6 +4,8 @@ extends GutTest
 ## counting as neutral; 1 to 5 stars to the half star on the HUD; each morning's arrivals
 ## 8 + 4 a star, at most 24, replacing E3's flat number; the closing rating of each day kept in
 ## Main.rating_history, which a save carries.
+## E4-S13 (D59): the stars shown move once a day, at dusk, from the mean then; the mean moves live
+## (the HUD's tooltip), and a new course shows 3 stars until its first dusk.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -110,17 +112,27 @@ func test_stars_are_shown_to_the_half_star_from_one_to_five() -> void:
 		assert_eq(EconomyTuning.stars_of(c[0]), c[1], "rating %s" % c[0])
 
 
-## The guests a sim's first day on the guest course draws, after `kinds` (n of each) went into
-## its feed.
+## Ends the day under way at once (its dusk, E4-S3) and starts the next morning (E4-S13: the
+## stars shown are set then).
+static func _dusk(sim: GuestSim) -> void:
+	sim.advance(0.0)
+	sim.brain.day_over = true
+	sim.advance(0.0)
+
+
+## The guests the guest course's second day draws, after `kinds` (n of each) went into the feed
+## on day 1 (D59: the stars they make are shown from that dusk).
 func _first_day_guests(kinds: Dictionary) -> int:
 	var sim := GuestSim.new()
 	add_child_autofree(sim)
 	sim.set_process(false)
 	sim.start(GuestCourse.course(), 7)
 	sim.set_fee(0)  # free: the rating alone (E4-S6's fee curve is tests/test_fee.gd)
+	sim.advance(0.0)
 	for k: GuestReaction.Kind in kinds:
 		_push(sim.feed, k, kinds[k])
-	sim.advance(0.0)
+	_dusk(sim)
+	assert_eq(sim.day, 2)
 	var n := 0
 	for g: GuestGroup in sim.brain.groups:
 		n += g.guests.size()
@@ -147,7 +159,8 @@ func test_a_day_keeps_its_morning_count_and_the_next_morning_reads_the_new_ratin
 	var first := sim.brain
 	assert_eq(sim.arrivals_today(), 20)
 	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 50)
-	assert_eq(sim.arrivals_today(), 12, "the rating fell")
+	assert_almost_eq(sim.rating(), 1.0, 1e-9, "the rating fell")
+	assert_eq(sim.arrivals_today(), 20, "but the stars shown hold until dusk (D59)")
 	assert_eq(sim.brain, first, "the day under way keeps its guests")
 	first.day_over = true
 	sim.advance(0.0)
@@ -157,6 +170,68 @@ func test_a_day_keeps_its_morning_count_and_the_next_morning_reads_the_new_ratin
 	assert_eq(sim.day, 2)
 	assert_eq(n, 12, "the next morning draws by the new rating")
 	assert_eq(sim.day_arrivals, 12, "and says so")
+
+
+func test_the_stars_shown_hold_through_a_day_and_move_at_dusk() -> void:
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(GuestCourse.course(), 7)
+	sim.set_fee(0)
+	assert_eq(sim.stars(), 3.0, "a new course shows 3 stars")
+	sim.advance(0.0)
+	watch_signals(sim)
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 50)
+	assert_almost_eq(sim.rating(), 5.0, 1e-9, "the mean moves with every reaction")
+	assert_eq(sim.stars(), 3.0, "the stars shown do not, during the day")
+	assert_eq(sim.fee_ceiling(), 75, "nor the ceiling")
+	assert_eq(sim.arrivals_today(), 20, "nor tomorrow's guests")
+	assert_signal_not_emitted(sim, "stars_changed")
+	_push(sim.feed, GuestReaction.Kind.COMPLAINT, 50)
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 25)
+	assert_eq(sim.stars(), 3.0, "a swing during the day shows nowhere")
+	sim.brain.day_over = true
+	sim.advance(0.0)
+	assert_eq(sim.day, 2)
+	assert_eq(sim.stars(), 3.0, "at dusk: 25 praise and 25 complaints, 3.0")
+	assert_signal_not_emitted(sim, "stars_changed", "no change, no signal")
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 25)
+	assert_eq(sim.stars(), 3.0)
+	_dusk(sim)
+	assert_eq(sim.day, 3)
+	assert_eq(sim.stars(), 5.0, "the next dusk takes the mean then")
+	assert_signal_emitted_with_parameters(sim, "stars_changed", [5.0])
+	assert_eq(sim.fee_ceiling(), 125)
+	assert_eq(sim.day_arrivals, 24, "and the morning after it draws by them")
+
+
+func test_the_stars_are_set_before_the_days_end_is_told() -> void:
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(GuestCourse.course(), 7)
+	sim.advance(0.0)
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 50)
+	var seen: Array[float] = []
+	sim.day_ended.connect(func(_d: int, _b: GuestBrain) -> void: seen.append(sim.stars()))
+	sim.brain.day_over = true
+	sim.advance(0.0)
+	assert_eq(seen, [5.0] as Array[float], "a day_ended listener sees the night's stars")
+
+
+func test_a_new_course_shows_three_stars_until_its_first_dusk() -> void:
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(GuestCourse.course(), 7)
+	sim.advance(0.0)
+	_push(sim.feed, GuestReaction.Kind.PRAISE, 50)
+	_dusk(sim)
+	assert_eq(sim.stars(), 5.0)
+	watch_signals(sim)
+	sim.start(GuestCourse.course(), 8)
+	assert_eq(sim.stars(), 3.0, "a new course starts again at 3")
+	assert_signal_emitted_with_parameters(sim, "stars_changed", [3.0])
 
 
 func test_the_rating_changes_signal_on_every_window_change() -> void:
@@ -181,17 +256,30 @@ func _main() -> Main:
 	return m
 
 
+## Main's day to its dusk and the next morning.
+static func _main_dusk(m: Main) -> void:
+	_dusk(m.guest_sim)
+
+
 func test_the_hud_shows_the_stars_in_build_and_play() -> void:
 	var m := _main()
 	var row: RatingRow = m.rating_row
 	assert_true(row.stars_view.is_visible_in_tree(), "Build shows the stars")
 	assert_eq(row.stars_view.stars, 3.0)
 	assert_eq(row.rating_label.text, "3 stars")
+	m.guest_sim.advance(0.0)
 	_push(m.guest_sim.feed, GuestReaction.Kind.PRAISE, 13)
-	assert_eq(row.stars_view.stars, 3.5, "a reaction redraws it")
+	assert_eq(row.stars_view.stars, 3.0, "the stars hold during the day (D59)")
+	assert_eq(row.rating_label.text, "3 stars")
+	assert_string_contains(row.stars_view.tooltip_text, "3.52", "the tooltip has the mean now")
+	assert_string_contains(row.rating_label.tooltip_text, "dusk")
+	_main_dusk(m)
+	assert_eq(row.stars_view.stars, 3.5, "dusk redraws it")
 	assert_eq(row.rating_label.text, "3.5 stars")
-	assert_string_contains(row.stars_view.tooltip_text, "3.52")
 	_push(m.guest_sim.feed, GuestReaction.Kind.COMPLAINT, 50)
+	assert_eq(row.rating_label.text, "3.5 stars")
+	assert_string_contains(row.stars_view.tooltip_text, "1.00")
+	_main_dusk(m)
 	assert_eq(row.rating_label.text, "1 star")
 	m.set_mode(Main.Mode.PLAY)
 	await get_tree().process_frame
