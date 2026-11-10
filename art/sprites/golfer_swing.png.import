@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://crir2nahqyjcr"
-path="res://.godot/imported/clubhouse_placeholder.png-d04af1e66ce5bb6dba17966dbac28748.ctex"
+uid="uid://b7fepgwvrgq38"
+path="res://.godot/imported/golfer_swing.png-9c5c5a7b275f7f748e30dcccb9be5cd3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/clubhouse_placeholder.png"
-dest_files=["res://.godot/imported/clubhouse_placeholder.png-d04af1e66ce5bb6dba17966dbac28748.ctex"]
+source_file="res://art/sprites/golfer_swing.png"
+dest_files=["res://.godot/imported/golfer_swing.png-9c5c5a7b275f7f748e30dcccb9be5cd3.ctex"]
 
 [params]
 

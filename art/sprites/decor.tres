@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="TileSheet" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://art/tiles/tile_sheet.gd" id="1_sheet"]
+[ext_resource type="Texture2D" path="res://art/sprites/decor.png" id="2_tex"]
+
+[resource]
+script = ExtResource("1_sheet")
+texture = ExtResource("2_tex")
+frame_size = Vector2i(48, 48)
+gutter = 1
+frames = PackedStringArray("bench_x", "bench_y", "flag", "sign")
+anchor = Vector2i(24, 40)

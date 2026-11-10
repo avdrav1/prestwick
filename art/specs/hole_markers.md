@@ -1,9 +1,10 @@
 # Art spec: hole markers (tee markers, pin and cup)
 
-> Status (E5-S1): drawn in code, `course/hole_marker.gd` (`HoleMarker`, E2-S2): the tee marker is
-> two square blocks either side of the tile centre with the hole number beside one (chalk on
-> ink, E3-S66), the pin a dark cup with a 30 px pole and a `flag_red` pennant. That drawing is
-> the placeholder.
+> Status (E5-S3): final art, `python3 scripts/art_sprites.py markers` (D62). `HoleMarker` draws
+> two `tee_block` frames either side of the tile centre and the `cup` under `pin_0`, scaled by
+> its shape_scale; the frames differ in size, so `HoleMarker.SHEET_FRAMES` names each region and
+> anchor. The pennant's wave frames (`pin_1`, `pin_2`) are drawn but not animated yet. The
+> overhead green inset (`scenes/green_view.gd`) keeps its code drawing.
 
 ## Purpose
 
@@ -18,7 +19,7 @@ the course; tee markers are a pair of round blocks (SimGolf's coloured tee balls
 
 ## Sheet
 
-- File: `art/sprites/hole_markers_<state>.png`. No PNG placeholder: the code drawing stands in.
+- File: `art/sprites/hole_markers.png` (72 x 36).
 - One row of 5 frames, 1 px gutter:
 
 | # | Frame | Size | Contents |
@@ -42,7 +43,7 @@ pole stays 30 px tall at 1x.
 `course/hole_marker.gd` (`_draw`), `scenes/green_view.gd` (the overhead green inset draws its
 own pin and cup; it keeps code drawing unless E5-S3 says otherwise).
 
-## For the artist replacing it
+## Changing it (scripts/art_sprites.py, D62)
 
 - Keep the frame order, sizes and anchors. Palette colours only. The pin's pennant must not be
   confused with the decor `flag` (square, `sun_yellow`).

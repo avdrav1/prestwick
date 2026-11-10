@@ -610,10 +610,10 @@ func test_shirt_rows_follow_each_pattern() -> void:
 
 
 func test_the_shirt_preview_matches_the_set() -> void:
-	# scripts/placeholder.py golfer draws the idle s_0 frame in each shirt by its own copy of
+	# scripts/art_sprites.py golfer draws the idle s_0 frame in each shirt by its own copy of
 	# the set: it must dress the frame as GolferArt.shirt_color does.
 	var art := GolferArt.load_default()
-	var preview := (load("res://art/sprites/golfer_shirts_placeholder.png") as Texture2D).get_image()
+	var preview := (load("res://art/sprites/golfer_shirts.png") as Texture2D).get_image()
 	var base := art.idle.texture.get_image().get_region(art.idle.region(art.idle.frame_index(&"s_0")))
 	assert_eq(preview.get_width(), art.shirt_count() * 25 - 1, "one frame a shirt")
 	for i in art.shirt_count():

@@ -93,6 +93,8 @@ signal refused(reason: String)
 signal money_changed(balance: int)
 ## Emitted after the clubhouse moved or turned (move_clubhouse, or an undo of one).
 signal clubhouse_changed
+## E5-S3: decor was placed, changed or removed on `cell` (by an edit or its undo).
+signal decor_changed(cell: Vector2i)
 
 ## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
 ## OB ground from E2-S3 (D9).
@@ -132,9 +134,12 @@ class Step:
 	var lines_reads: Dictionary = {}
 	## E5-S9: the clubhouse before the step, [centre, facing], when the step moved it; else null.
 	var clubhouse: Variant = null
+	## E5-S3: the decor before the step, [cell, kind], when the step changed it; else null.
+	var decor: Variant = null
 
 	func is_empty() -> bool:
-		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL and clubhouse == null
+		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL and clubhouse == null \
+				and decor == null
 
 
 var course: CourseData:
@@ -743,6 +748,40 @@ func move_clubhouse_beside(at: Vector2i, reach: int = -1) -> bool:
 	return move_clubhouse(spot[0], spot[1])
 
 
+# --- decor (E5-S3) ---
+
+## Why decor cannot stand on `cell`, or "" when it may: "off the map", "not your land", "not on
+## water", "the clubhouse is here". Decor does nothing to the ball, the validator or guests, so
+## any other tile takes it (a tee, a green, a fairway), and it costs nothing.
+func decor_refusal(cell: Vector2i) -> String:
+	if not _course.in_bounds(cell.x, cell.y):
+		return "off the map"
+	if not _course.is_owned(cell.x, cell.y):
+		return "not your land"
+	if _course.get_surface(cell.x, cell.y) == Surface.Type.WATER:
+		return "not on water"
+	if _course.is_clubhouse(cell.x, cell.y):
+		return "the clubhouse is here"
+	return ""
+
+
+## Puts decor of `kind` (CourseData.DECOR_KINDS) on `cell`, or removes it with
+## CourseData.NO_DECOR, as one undo step. False when it is so already, and false, emitting
+## `refused`, when decor_refusal names a rule (removing is always allowed).
+func set_decor(cell: Vector2i, kind: int) -> bool:
+	if not _course.in_bounds(cell.x, cell.y) or _course.decor_at(cell.x, cell.y) == kind:
+		return false
+	if kind != CourseData.NO_DECOR and _refuse(decor_refusal(cell)):
+		return false
+	end_stroke()
+	var step := Step.new()
+	step.decor = [cell, _course.decor_at(cell.x, cell.y)]
+	_course.set_decor(cell, kind)
+	_push(step)
+	decor_changed.emit(cell)
+	return true
+
+
 # --- land ---
 
 ## What parcel `parcel` costs (LandPrices), in dollars.
@@ -821,6 +860,9 @@ func undo() -> bool:
 	if step.clubhouse != null:
 		_course.set_clubhouse(step.clubhouse[0], step.clubhouse[1])
 		clubhouse_changed.emit()
+	if step.decor != null:
+		_course.set_decor(step.decor[0], step.decor[1])
+		decor_changed.emit(step.decor[0])
 	# E4-S2: exactly what the step charged comes back, whatever the balance did since (D56, D27).
 	_add_money(step.charged)
 	if not step.lines.is_empty():

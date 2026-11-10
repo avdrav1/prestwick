@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://d27dhgbblpybj"
-path="res://.godot/imported/golfer_idle_placeholder.png-6214d632547e3f196c5758e278a2bc9b.ctex"
+uid="uid://0n2uq3ph8mkb"
+path="res://.godot/imported/ball.png-aa068313d705d165689961860439c765.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/golfer_idle_placeholder.png"
-dest_files=["res://.godot/imported/golfer_idle_placeholder.png-6214d632547e3f196c5758e278a2bc9b.ctex"]
+source_file="res://art/sprites/ball.png"
+dest_files=["res://.godot/imported/ball.png-aa068313d705d165689961860439c765.ctex"]
 
 [params]
 

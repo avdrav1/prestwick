@@ -35,6 +35,8 @@ Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 til
 
 Clubhouse (version 3, E5-S9, D60): `clubhouse` is the 3x3 clubhouse's centre tile and its facing, the side its door is on (`"+x"`, `"+y"`, `"-x"` or `"-y"`; the door is the tile just outside the middle of that side), or `null` for none (then no guests come). Its footprint and door must be on the map. Version 1 and 2 files load with one placed by rule (`course/clubhouse_rule.gd`: in the starting block at the middle of its +y edge, else beside hole 1's tee, else none) and save as version 3. `generate` places one by the same rule. `inspect` prints it.
 
+Decor (E5-S3): an optional `decor` list of `[x, y, kind]`, one per tile, kind an index into `CourseData.DECOR_KINDS` (`bench_x`, `bench_y`, `flag`, `sign`). Absent when the course has none, so files without decor are unchanged and stay version 3. Scenery only: nothing that plays reads it.
+
 ## Headless entry point
 
 `validate`, `generate` and `inspect` run through `course/course_file.gd` (E2-S2, E2-S18):

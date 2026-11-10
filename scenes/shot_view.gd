@@ -42,7 +42,8 @@ extends Node2D
 signal landed(at: Vector3)
 signal came_to_rest(at: Vector3)
 
-## Placeholder look, from art/palette.gpl (chalk, ink, flag_red) until E5-S3 brings a sprite.
+## Colours from art/palette.gpl. Since E5-S3 the ball itself is a sprite (BallArt,
+## art/sprites/ball.png); ball_color and outline_color stay for the hazard cue and tests.
 @export var ball_color: Color = Color8(240, 236, 224)
 @export var outline_color: Color = Color8(26, 28, 34)
 @export var shadow_color: Color = Color8(26, 28, 34, 150)
@@ -286,8 +287,8 @@ func _draw_ball(piece: Node2D) -> void:
 	piece.draw_set_transform(Vector2.ZERO)
 	var k := cue_k()
 	var r := ball_draw_radius(k)
-	piece.draw_circle(at, r + ball_outline_width(k), outline_color)
-	piece.draw_circle(at, r, ball_color)
+	# E5-S3: the ball sprite (BallArt), its ink outline drawn in it; it spins in flight.
+	BallArt.draw(piece, at, r + ball_outline_width(k), false, playing and not on_ground() and BallArt.spin_at(_elapsed))
 
 
 ## The ball's drawn radius, canvas units, at cue k `k` (1 / view scale): ball_radius, the

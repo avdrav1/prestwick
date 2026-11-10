@@ -1,8 +1,7 @@
 # Art spec: trees
 
-> Status (E5-S1): spec only. Today the trees surface (6) is a flat canopy pattern on the ground
-> (`art/specs/surfaces.md`) with nothing standing on it, so the 10 yd block it puts on a shot
-> cannot be seen (E2 review, E6-S2 note). E5-S3 draws these sprites over it.
+> Status (E5-S3): final art, `python3 scripts/art_sprites.py trees` (D62), drawn on every trees
+> tile by `course/tree_view.gd`.
 
 ## Purpose
 
@@ -20,8 +19,7 @@ does the work in grayscale: a crown on a trunk, not a green blob. No ground shad
 
 ## Sheet
 
-- File: `art/sprites/trees_<state>.png`. Placeholder: `art/sprites/trees_placeholder.png`
-  (`python3 scripts/placeholder.py trees --size 64x96 --frames 3 --folder sprites --color tree`).
+- File: `art/sprites/trees.png`, loaded from `art/sprites/trees.tres`.
 - One row of 3 frames, 64 x 96 px each, 1 px gutter (194 x 96): `a`, `b`, `c`, three crowns of
   one species so a stand does not look stamped. The variant is picked per tile by a hash of its
   cell, so a course looks the same on every load.
@@ -36,11 +34,13 @@ clubhouse.
 
 ## Code that reads it
 
-None yet. E5-S3 adds a TileSheet in a `trees.tres` and a Y-sorted view under CourseView
-(like `course/clubhouse_view.gd`). Below 0.5x the crowns may be culled to the ground pattern
+`course/tree_view.gd` (TreeView, a Y-sorted child of CourseView): the trees of one depth row
+and ground height share a node at `Iso.object_sort_key`, so a guest behind a tree is hidden by
+its crown and one in front draws over it (`tests/test_sprites.gd`). Trees on unowned land take
+`unowned_tint`. All trees draw at every zoom (none culled; the 0.175x course shot reads). Below 0.5x the crowns may be culled to the ground pattern
 if frame time needs it (`scripts/nine_holes_perf.gd`).
 
-## For the artist replacing it
+## Changing it
 
 - Keep `trees_<state>.png`, 3 frames of 64 x 96, 1 px gutter, anchor (32, 88), crown top at
   y 8 (80 px above the anchor).

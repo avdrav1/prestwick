@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bolf1aqyvd4ax"
-path="res://.godot/imported/trees_placeholder.png-461a73c9bd770c7614802f538c8c2c7d.ctex"
+uid="uid://b7ckljetwno4x"
+path="res://.godot/imported/golfer_idle.png-920c1f1b10ae384e49f5d7593f14909b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/trees_placeholder.png"
-dest_files=["res://.godot/imported/trees_placeholder.png-461a73c9bd770c7614802f538c8c2c7d.ctex"]
+source_file="res://art/sprites/golfer_idle.png"
+dest_files=["res://.godot/imported/golfer_idle.png-920c1f1b10ae384e49f5d7593f14909b.ctex"]
 
 [params]
 

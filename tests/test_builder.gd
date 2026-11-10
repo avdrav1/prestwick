@@ -399,7 +399,7 @@ func test_palette_fits_a_1280_window_in_every_state() -> void:
 		var tools: Array[Button] = []
 		tools.append_array(pal.surface_buttons)
 		tools.append_array([pal.raise_button, pal.lower_button, pal.tee_button, pal.cup_button,
-				pal.clubhouse_button])
+				pal.clubhouse_button, pal.decor_button])
 		tools.append_array(pal.brush_buttons)
 		if buying:
 			tools.append(pal.buy_button)

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckcb7aarwalvv"
-path="res://.godot/imported/golfer_swing_placeholder.png-5aa4a349ebd674ffbb58c9d7a81a858d.ctex"
+uid="uid://b7u00vuxwygom"
+path="res://.godot/imported/golfer_walk.png-0e722a0527da3288c3db8621141a1a32.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/golfer_swing_placeholder.png"
-dest_files=["res://.godot/imported/golfer_swing_placeholder.png-5aa4a349ebd674ffbb58c9d7a81a858d.ctex"]
+source_file="res://art/sprites/golfer_walk.png"
+dest_files=["res://.godot/imported/golfer_walk.png-0e722a0527da3288c3db8621141a1a32.ctex"]
 
 [params]
 

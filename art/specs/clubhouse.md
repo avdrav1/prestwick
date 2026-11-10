@@ -27,7 +27,9 @@ lowest ground of its 9 tiles, so on a slope its walls sink into the uphill side,
 
 ## Sheet
 
-`art/sprites/clubhouse_placeholder.png`: one row of 4 frames, 192 x 138 px each, 1 px gutter,
+`art/sprites/clubhouse.png` (final art, E5-S3, D62: `python3 scripts/art_sprites.py clubhouse`;
+siding, a stone plinth, mullioned windows on sills, a door with its knob, tile courses on the
+roof and a chimney): one row of 4 frames, 192 x 138 px each, 1 px gutter,
 no padding, named by facing: `+x`, `+y`, `-x`, `-y` (`CourseData.FACING_NAMES`: the side the door
 is on; on screen +x runs down and right, +y down and left, so only `+x` and `+y` show the door).
 
@@ -40,10 +42,12 @@ Loaded as a `TileSheet` from `art/sprites/clubhouse.tres` (frames by facing name
 `course/clubhouse_view.gd` (ClubhouseView) draws it, Y-sorted with the ground, the hole markers
 and the guests at the sort key of the footprint's front tile (centre + (1, 1)).
 
-## What an artist replaces
+## Changing it
 
-- File: `art/sprites/clubhouse.png` (point `clubhouse.tres`'s `texture` at it).
+- Change the rule in `scripts/art_sprites.py` and rerun it (D62).
+- File: `art/sprites/clubhouse.png`.
 - Frames: 4, 192 x 138, in the order `+x`, `+y`, `-x`, `-y`, 1 px gutter.
 - Anchor: (96, 88) for the footprint centre; keep the building inside the 3x3 diamond at the
   ground and the frame's 138 px height (or change `frame_size` and `anchor` together).
-- Placeholder generator: `scripts/placeholder.py clubhouse`. Placeholders are never final.
+- The geometry helpers it shares with the old placeholder (`club_pt`, the wall quads) stay in
+  `scripts/placeholder.py`.

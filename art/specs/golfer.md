@@ -66,8 +66,8 @@ its body, so plain light, striped, dark with light shoulders, plain mid-light, p
 light with dark shoulders and light with dark stripes tell apart with no colour (shirt 6's hoops are
 dark on light where shirt 1's are light on dark, 64 apart in body luma) (`docs/decisions/e3-s28-shirts-gray.png`); the ink outline keeps every shirt
 off the grass. Chalk and sun_yellow are the closest pair (40 apart). The cap stays flag_red
-for everyone: the brim is the facing cue. Preview: `art/sprites/golfer_shirts_placeholder.png`
-(`scripts/placeholder.py golfer`: the idle `s_0` frame in each shirt, in order; not loaded by
+for everyone: the brim is the facing cue. Preview: `art/sprites/golfer_shirts.png`
+(`scripts/art_sprites.py golfer`: the idle `s_0` frame in each shirt, in order; not loaded by
 the game, checked against the .tres by `tests/test_guest_view.gd`).
 
 Shader output (E3-S28 review): the GUT tests run headless and draw nothing, so they check the
@@ -92,8 +92,12 @@ art-spec constant), no padding, 1 px transparent gutter.
 | walk | `art/sprites/golfer_walk.png` | 4 (stride: contact, pass, contact, pass) | 32 frames, 799 x 24 |
 | swing | `art/sprites/golfer_swing.png` | 6 (address, takeaway, top, down, impact, finish) | 48 frames, 1199 x 24 |
 
-Placeholders: `art/sprites/golfer_<state>_placeholder.png` (`scripts/placeholder.py golfer`),
-each frame labelled with its direction in the top-left corner.
+Final art (E5-S3, D62): written by `python3 scripts/art_sprites.py golfer`; the placeholders are
+gone. Rows: cap 2 to 5 (the brim on the facing side, none from behind), head to 8 (skin face
+with eyes, or earth_dark hair from behind and on the back half in profile), the chalk shirt 9
+to 16 with rounded shoulders and sleeves, slate_dark legs 17 to 21 and earth_dark shoes, an ink
+outline round the figure; the walk strides on frames 0 and 2 and rises a pixel on the passing
+frames, the arms swinging; the swing holds the club in both hands through its six angles.
 
 Directions are screen directions, clockwise from straight down the screen (toward the
 camera): `s`, `sw`, `w`, `nw`, `n`, `ne`, `e`, `se`. Frame names are `<dir>_<n>`, `n` from 0:
@@ -124,14 +128,14 @@ hill in front hides a guest's feet or the whole guest.
 as `TileSheet`s; `scenes/guest_view.gd` (`GuestView`) asks it for a frame by state,
 direction and index (`GolferArt.frame`), never by pixel offset.
 
-## For the artist
+## Changing it
 
-Replace the three placeholder PNGs with `golfer_idle.png`, `golfer_walk.png` and
-`golfer_swing.png` at the same frame size (24 x 24), frame counts, order and anchor (12, 23),
-then point the three `texture` entries in `art/sprites/golfer.tres` at them. Draw the club in
+Change the rule in `scripts/art_sprites.py` and rerun it (D62); keep the frame size (24 x 24),
+frame counts, order and anchor (12, 23) that `art/sprites/golfer.tres` names. Draw the club in
 the swing so the top (frame 2) and the finish (frame 5) read at 0.5x. Draw the whole shirt in
 flat chalk (240, 236, 224) and use chalk nowhere else in the frame: the shader recolours every
 chalk pixel per group, so shading the shirt needs a second key colour and a shader change
 (a story, not a repaint). Shirt colours and patterns are `shirt_body`, `shirt_trim` and
 `shirt_pattern` in `art/sprites/golfer.tres`, palette colours only; keep
-`scripts/placeholder.py`'s `GOLFER_SHIRTS` in step for the preview.
+`scripts/placeholder.py`'s `GOLFER_SHIRTS` (which the generator reads) in step for the preview,
+and rerun `scripts/shirt_render_check.gd`.

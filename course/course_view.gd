@@ -59,6 +59,10 @@ extends Node2D
 ## calls it on CourseBuilder.clubhouse_changed). Below marker_min_screen_scale (0.175x) it draws
 ## at z 1 like the grown markers and the guests (lifted_z), so it still sorts with the guests.
 ##
+## Trees (E5-S3): `trees`, a Y-sorted TreeView child, stands a tree 80 px tall on every trees
+## tile, sorted with guests and markers by its row (course/tree_view.gd); show_course,
+## refresh_cells and refresh_parcel keep it in step.
+##
 ## Line of play (E3-S46, D47): `play_lines`, a LineOfPlay, draws each hole's tee -> turn -> cup
 ## line on the ground, Y-sorted into the terrain, in Build (course/line_of_play.gd). Main hands
 ## it the builder's lines after every check (show_play_lines); a height change redraws it then.
@@ -172,6 +176,10 @@ var play_art: bool = false:
 var topo: TopoOverlay
 ## The clubhouse (E5-S10).
 var clubhouse: ClubhouseView
+## The trees standing on trees tiles (E5-S3).
+var trees: TreeView
+## Benches, flags and signs (E5-S3).
+var decor: DecorView
 ## The line of play (E3-S46): Main enables it in Build.
 var play_lines: LineOfPlay
 
@@ -200,6 +208,10 @@ func _init() -> void:
 	add_child(_holes_root)
 	clubhouse = ClubhouseView.new()
 	add_child(clubhouse)
+	trees = TreeView.new()
+	add_child(trees)
+	decor = DecorView.new()
+	add_child(decor)
 	topo = TopoOverlay.new()
 	add_child(topo)
 	play_lines = LineOfPlay.new()
@@ -249,7 +261,14 @@ func show_course(c: CourseData) -> void:
 	_spare_issues.clear()
 	refresh_holes()
 	refresh_clubhouse()
+	trees.show_course(c)
+	decor.show_course(c)
 	show_issues({})
+
+
+## Draws the decor as the course has it now (E5-S3): Main calls it on CourseBuilder.decor_changed.
+func refresh_decor(_cell: Vector2i = Vector2i.ZERO) -> void:
+	decor.refresh()
 
 
 ## Draws the clubhouse where the course has it now (E5-S10): after a move, a turn or its undo.
@@ -696,6 +715,9 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 	if _course == null or cells.is_empty():
 		return
 	_pending_cells.append_array(cells)
+	trees.refresh_cells(cells)
+	if _course.decor_cells().size() > 0:
+		decor.refresh()  # its ground may have moved
 	# The markers read the course, not the drawn ground, so they follow the batch at once: a
 	# height moved in it may cover or uncover an issue box's foot.
 	var shaped := {}
@@ -877,6 +899,7 @@ func refresh_parcel(parcel: Vector2i) -> void:
 			dirty[key][Vector2i(x, y)] = true
 	for key: Vector2i in dirty:
 		terrain.build_chunk(_chunks[key], dirty[key])
+	trees.refresh_rect(r)
 
 
 ## Screen rectangle (local to this node) covering every tile at every height.

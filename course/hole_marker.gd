@@ -27,6 +27,16 @@ extends Node2D
 enum Kind { TEE, PIN }
 ## The hole number's ink outline, screen px.
 const LABEL_OUTLINE: int = 3
+## E5-S3: the marker sheet (scripts/art_sprites.py markers). Its frames differ in size, so each
+## names its region and anchor here (art/specs/hole_markers.md): one row, 1 px gutter.
+const SHEET_PATH: String = "res://art/sprites/hole_markers.png"
+const SHEET_FRAMES: Dictionary = {
+	&"tee_block": [Rect2(0, 0, 8, 8), Vector2(4, 6)],
+	&"cup": [Rect2(9, 0, 12, 6), Vector2(6, 3)],
+	&"pin_0": [Rect2(22, 0, 16, 36), Vector2(2, 34)],
+	&"pin_1": [Rect2(39, 0, 16, 36), Vector2(2, 34)],
+	&"pin_2": [Rect2(56, 0, 16, 36), Vector2(2, 34)],
+}
 ## How many tiles in front label_covered looks for higher ground before casting rays: at 0.5x
 ## the number stands about two tiles' worth of height over its tile.
 const LIFT_REACH: int = 4
@@ -215,29 +225,34 @@ func sort_key() -> float:
 
 func _draw() -> void:
 	var at: Vector2 = draw_point() - position
-	# The shape, drawn about its tile's centre at shape_scale (D45: never under its 0.5x size).
+	# The shape, drawn about its tile's centre at shape_scale (D45: never under its 0.5x size),
+	# from the hole marker sheet (E5-S3, art/specs/hole_markers.md).
 	var k: float = shape_scale
+	draw_set_transform(at, 0.0, Vector2.ONE * k)
 	if kind == Kind.TEE:
-		draw_set_transform(at, 0.0, Vector2.ONE * k)
 		for i: int in 2:
 			var side: float = -1.0 if i == 0 else 1.0
-			var c: Vector2 = Vector2(side * tee_block_offset, -tee_block_radius - block_lift[i] / k)
-			var r := Vector2(tee_block_radius, tee_block_radius)
-			draw_rect(Rect2(c - r - Vector2.ONE, (r + Vector2.ONE) * 2.0), ink_color)
-			draw_rect(Rect2(c - r, r * 2.0), tee_color)
-		draw_set_transform(Vector2.ZERO)
-		return
-	draw_set_transform(at, 0.0, Vector2(k, k * 0.5))
-	draw_circle(Vector2.ZERO, cup_radius, ink_color)
-	draw_set_transform(at, 0.0, Vector2.ONE * k)
-	var top := Vector2(0.0, -pole_height)
-	draw_line(Vector2.ZERO, top, ink_color, 4.0)
-	draw_line(Vector2.ZERO, top, pole_color, 2.0)
-	var flag := PackedVector2Array([top, top + Vector2(flag_width, flag_height * 0.5), top + Vector2(0.0, flag_height)])
-	draw_colored_polygon(flag, flag_color)
-	flag.append(top)
-	draw_polyline(flag, ink_color, 1.0)
+			_draw_frame(&"tee_block", Vector2(side * tee_block_offset, -block_lift[i] / k))
+	else:
+		_draw_frame(&"cup", Vector2.ZERO)
+		_draw_frame(&"pin_0", Vector2.ZERO)
 	draw_set_transform(Vector2.ZERO)
+
+
+## Draws sheet frame `frame` with its anchor on `foot` (in the transform set by _draw).
+func _draw_frame(frame: StringName, foot: Vector2) -> void:
+	var f: Array = SHEET_FRAMES[frame]
+	var region: Rect2 = f[0]
+	draw_texture_rect_region(_sheet_texture(), Rect2(foot - (f[1] as Vector2), region.size), region)
+
+
+static var _texture: Texture2D
+
+
+static func _sheet_texture() -> Texture2D:
+	if _texture == null:
+		_texture = load(SHEET_PATH) as Texture2D
+	return _texture
 
 
 ## The tee's hole number, on `label`, at screen size (text_scale).

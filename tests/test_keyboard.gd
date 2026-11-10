@@ -305,11 +305,11 @@ func test_every_build_tool_is_in_reach_of_q_and_e() -> void:
 	for s: Surface.Type in CourseBuilder.PALETTE:
 		assert_has(seen, [BuildTool.Tool.PAINT, s], Surface.name_of(s))
 	for tool: BuildTool.Tool in [BuildTool.Tool.RAISE, BuildTool.Tool.LOWER, BuildTool.Tool.TEE,
-			BuildTool.Tool.CUP, BuildTool.Tool.CLUBHOUSE]:
+			BuildTool.Tool.CUP, BuildTool.Tool.CLUBHOUSE, BuildTool.Tool.DECOR]:
 		assert_has(seen, [tool, -1], BuildTool.Tool.keys()[tool])
 	assert_false(seen.has([BuildTool.Tool.BUY, -1]), "no Buy land in a sandbox, where it is hidden")
 	_tap(KEY_Q)
-	assert_eq(_m.build_tool.tool, BuildTool.Tool.CLUBHOUSE, "Q goes back round")
+	assert_eq(_m.build_tool.tool, BuildTool.Tool.DECOR, "Q goes back round (E5-S3: Decor is last)")
 
 
 func test_raise_lower_and_the_clubhouse_and_its_turn_by_keys() -> void:

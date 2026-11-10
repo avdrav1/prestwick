@@ -573,8 +573,9 @@ func _draw_ball(piece: Node2D, f: Figure) -> void:
 		piece.draw_set_transform(Vector2.ZERO)
 	var at := ball_screen(f) - piece.position
 	var r := guest_ball_radius()
-	piece.draw_circle(at, r + maxf(1.0, k), outline_color)
-	piece.draw_circle(at, r, ball_color)
+	# E5-S3: a guest's own sprite (BallArt), slate with a chalk dot, so it never reads as the
+	# player's chalk ball, by value and shape as well as size.
+	BallArt.draw(piece, at, r + maxf(1.0, k), true, f.ball_flying and BallArt.spin_at(Time.get_ticks_msec() / 1000.0))
 
 
 func _cue_k() -> float:

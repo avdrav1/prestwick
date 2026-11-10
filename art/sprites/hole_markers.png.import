@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cpm4cl2dde5bg"
-path="res://.godot/imported/golfer_walk_placeholder.png-8d2603d6070fe256b0a51fb3d6687862.ctex"
+uid="uid://cw24eym4ah4er"
+path="res://.godot/imported/hole_markers.png-56f3d3a5b02dc100127790ba40cc96ca.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/sprites/golfer_walk_placeholder.png"
-dest_files=["res://.godot/imported/golfer_walk_placeholder.png-8d2603d6070fe256b0a51fb3d6687862.ctex"]
+source_file="res://art/sprites/hole_markers.png"
+dest_files=["res://.godot/imported/hole_markers.png-56f3d3a5b02dc100127790ba40cc96ca.ctex"]
 
 [params]
 

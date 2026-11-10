@@ -29,7 +29,7 @@ const SECTIONS: Array = [
 		[[&"build_apply"], "Use the tool at the cursor; hold it while moving to drag"],
 		[[&"build_tool_prev", &"build_tool_next"], "Previous / next tool"],
 		[[&"brush_smaller", &"brush_larger"], "Smaller / larger brush"],
-		[[&"clubhouse_turn"], "Turn the clubhouse door"],
+		[[&"clubhouse_turn"], "Turn the clubhouse door (with Decor: take decor away)"],
 		[[&"ui_undo"], "Undo"],
 		[[&"buy_confirm", &"buy_cancel"], "Buy / cancel the parcel asked about"],
 	]],

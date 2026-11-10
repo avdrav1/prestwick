@@ -3,7 +3,8 @@ extends PanelContainer
 ## The Build-mode HUD bar: the 9 surfaces, `oob` included (D9; each with its tile art, so the
 ## colorblind pattern shows on the button), raise and lower, the tee and cup tools (E2-S3),
 ## Buy land (E6-S5), the Clubhouse tool (E5-S10: a click moves it, a right-click turns its
-## door), brush 1/3/5 and undo. E5-S10: buttons keep BUTTON_SIDE_MARGIN px each side (6 before).
+## door), the Decor tool (E5-S3: a click places or changes a bench, flag or sign, a right-click
+## or R takes it away), brush 1/3/5 and undo. E5-S10: buttons keep BUTTON_SIDE_MARGIN px each side (6 before).
 ## E5-S13: the surface icons draw SURFACE_ICON_WIDTH px wide (64 before), so the whole bar, Buy
 ## land and Clubhouse shown, fits a 1280 px window with a gutter at both ends. A view onto a BuildTool:
 ## buttons set the tool, and the tool's settings_changed keeps the buttons in step.
@@ -18,14 +19,17 @@ var cup_button: Button
 var buy_button: Button
 ## E5-S10: the Clubhouse tool.
 var clubhouse_button: Button
+## E5-S3: the Decor tool (benches, flags, signs).
+var decor_button: Button
 ## Brush buttons in BuilderTuning.brush_sizes order.
 var brush_buttons: Array[Button] = []
 var undo_button: Button
 
 ## Each button's left and right content margin, px (E5-S10; the top and bottom keep 6).
 const BUTTON_SIDE_MARGIN: int = 3
-## E5-S13: the surface buttons' tile art width, px (the 64 x 32 tile scaled to 56 x 28).
-const SURFACE_ICON_WIDTH: int = 56
+## E5-S13: the surface buttons' tile art width, px (the 64 x 32 tile scaled to 48 x 24; 56 in
+## E5-S13, narrowed in E5-S3 to make room for the Decor button).
+const SURFACE_ICON_WIDTH: int = 48
 ## E5-S13: the least space left between the bar and either side of a 1280 px window.
 const MIN_GUTTER: int = 16
 ## E5-S13: the bar's height, px, as it was with 64 px icons, kept so the free view the camera
@@ -87,6 +91,9 @@ func _ready() -> void:
 	clubhouse_button = _toggle(row, "Clubhouse", _tools_group)
 	clubhouse_button.tooltip_text = "Click to move the clubhouse, where guests arrive and leave (free); right-click or R to turn its door"
 	clubhouse_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CLUBHOUSE))
+	decor_button = _toggle(row, "Decor", _tools_group)
+	decor_button.tooltip_text = "Click to place a bench, flag or sign (free; a click on one changes it); right-click or R to take it away"
+	decor_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.DECOR))
 	row.add_child(VSeparator.new())
 	var brush_label := Label.new()
 	brush_label.text = "Brush"
@@ -149,6 +156,8 @@ func _sync() -> void:
 			on = buy_button
 		BuildTool.Tool.CLUBHOUSE:
 			on = clubhouse_button
+		BuildTool.Tool.DECOR:
+			on = decor_button
 	for b: BaseButton in _tools_group.get_buttons():
 		b.set_pressed_no_signal(b == on)
 	var n: int = _brush_sizes.find(_tool.brush_size)

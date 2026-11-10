@@ -18,7 +18,13 @@ extends Resource
 ##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
 ##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s),
 ##   has_clubhouse(), clubhouse, clubhouse_facing, clubhouse_cells(), is_clubhouse(x, y),
-##   clubhouse_door(), clubhouse_revision.
+##   clubhouse_door(), clubhouse_revision, decor_at(x, y), decor_cells(), decor_revision.
+##
+## Decor (E5-S3, art/specs/decor.md): benches, flags and signs placed on tiles, one per tile, by
+## kind (an index into DECOR_KINDS, the decor sheet's frame order). Decor is scenery only: the
+## ball, the validator and guests never read it. It is an optional field of version 3 ("decor",
+## a list of [x, y, kind]; absent when there is none), so a course without decor writes the
+## same file as before and an older game reading a file with decor only drops the scenery.
 ##
 ## The clubhouse (D60, E5-S9): one 3x3 building, where guests arrive and leave, stored as its
 ## centre tile and a facing, one of FACINGS (the side its door is on). The door is the tile just
@@ -26,7 +32,7 @@ extends Resource
 ## room was found for it): then no guests come.
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
-## set_info, set_parcel_owned, set_land_budget and set_clubhouse (CLAUDE.md Architecture). Tests may call
+## set_info, set_parcel_owned, set_land_budget, set_clubhouse and set_decor (CLAUDE.md Architecture). Tests may call
 ## them to build fixtures.
 ##
 ## Serialised as course format version 3 (.claude/skills/course-file/SKILL.md):
@@ -38,6 +44,11 @@ extends Resource
 ## version 1 or 2 file first (CourseSave.migrate) and places its clubhouse by rule.
 
 const FORMAT_VERSION: int = 3
+## E5-S3: decor kinds by index, the decor sheet's frame order (art/sprites/decor.png). A format
+## constant: files store the index, so new kinds are appended, never reordered.
+const DECOR_KINDS: PackedStringArray = ["bench_x", "bench_y", "flag", "sign"]
+## decor_at when a tile has none.
+const NO_DECOR: int = -1
 ## The clubhouse's footprint is CLUBHOUSE_SIZE x CLUBHOUSE_SIZE tiles round its centre (D60).
 ## A format constant: the file stores the centre.
 const CLUBHOUSE_SIZE: int = 3
@@ -134,6 +145,9 @@ var _land_revision: int = 0
 var _clubhouse: Vector2i = NO_CLUBHOUSE
 var _clubhouse_facing: int = 1
 var _clubhouse_revision: int = 0
+## E5-S3: tile -> decor kind.
+var _decor: Dictionary = {}
+var _decor_revision: int = 0
 ## One counter per Surface.Type (surface_revision).
 var _surface_revisions := PackedInt32Array()
 
@@ -241,6 +255,26 @@ func has_unlimited_budget() -> bool:
 	return _land_budget == UNLIMITED_BUDGET
 
 
+## E5-S3: counts decor writes (set_decor). Not saved, not part of the content.
+var decor_revision: int:
+	get:
+		return _decor_revision
+
+
+## E5-S3: the decor kind on tile (x, y), NO_DECOR when none.
+func decor_at(x: int, y: int) -> int:
+	return int(_decor.get(Vector2i(x, y), NO_DECOR))
+
+
+## E5-S3: every tile with decor, sorted by y then x.
+func decor_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell: Vector2i in _decor:
+		out.append(cell)
+	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y or (a.y == b.y and a.x < b.x))
+	return out
+
+
 ## True when the course has a clubhouse (D60).
 func has_clubhouse() -> bool:
 	return _clubhouse != NO_CLUBHOUSE
@@ -333,6 +367,7 @@ func copy() -> CourseData:
 	c._land_budget = _land_budget
 	c._clubhouse = _clubhouse
 	c._clubhouse_facing = _clubhouse_facing
+	c._decor = _decor.duplicate()
 	c._replace_holes(_holes)
 	return c
 
@@ -342,7 +377,7 @@ func to_dict() -> Dictionary:
 	var hole_dicts: Array = []
 	for h in _holes:
 		hole_dicts.append(h.to_dict())
-	return {
+	var out := {
 		"version": FORMAT_VERSION,
 		"name": _course_name,
 		"author": _author,
@@ -357,6 +392,12 @@ func to_dict() -> Dictionary:
 			"x": _clubhouse.x, "y": _clubhouse.y, "facing": FACING_NAMES[_clubhouse_facing],
 		},
 	}
+	if not _decor.is_empty():
+		var items: Array = []
+		for cell: Vector2i in decor_cells():
+			items.append([cell.x, cell.y, _decor[cell]])
+		out["decor"] = items
+	return out
 
 
 # --- write (course/builder.gd and course/save.gd only) ---
@@ -413,6 +454,20 @@ func set_clubhouse(centre: Vector2i, facing: int) -> void:
 	_clubhouse = centre
 	_clubhouse_facing = facing
 	_clubhouse_revision += 1
+
+
+## E5-S3: puts decor of `kind` (an index into DECOR_KINDS) on `cell`, or clears it with
+## NO_DECOR. Where it may stand is the builder's rule (CourseBuilder.decor_refusal).
+func set_decor(cell: Vector2i, kind: int) -> void:
+	assert(in_bounds(cell.x, cell.y), "decor off the map")
+	assert(kind == NO_DECOR or (kind >= 0 and kind < DECOR_KINDS.size()), "decor kind out of range")
+	if decor_at(cell.x, cell.y) == kind:
+		return
+	if kind == NO_DECOR:
+		_decor.erase(cell)
+	else:
+		_decor[cell] = kind
+	_decor_revision += 1
 
 
 # --- load ---
@@ -478,6 +533,7 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	if errors.size() > start:
 		return null
 	var house := _read_clubhouse(data, w, h, errors)
+	var decor := _read_decor(data, w, h, errors)
 	if errors.size() > start:
 		return null
 
@@ -512,8 +568,41 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	c._land_budget = budget
 	c._clubhouse = house[0]
 	c._clubhouse_facing = house[1]
+	c._decor = decor
 	c._replace_holes(parsed_holes)
 	return c
+
+
+## Reads the optional "decor" field (E5-S3): a list of [x, y, kind] on the map, one per tile.
+static func _read_decor(data: Dictionary, w: int, h: int, errors: Array[String]) -> Dictionary:
+	var out := {}
+	if not data.has("decor"):
+		return out
+	var v: Variant = data["decor"]
+	if typeof(v) != TYPE_ARRAY:
+		errors.append("decor must be a list of [x, y, kind]")
+		return out
+	for item: Variant in v:
+		if typeof(item) != TYPE_ARRAY or (item as Array).size() != 3:
+			errors.append("decor: each item must be [x, y, kind]")
+			continue
+		var a: Array = item
+		var nums: Array[int] = []
+		for k: int in 3:
+			if typeof(a[k]) == TYPE_INT or (typeof(a[k]) == TYPE_FLOAT and float(a[k]) == floorf(a[k])):
+				nums.append(int(a[k]))
+		if nums.size() != 3:
+			errors.append("decor: %s must be three whole numbers" % [a])
+			continue
+		if nums[0] < 0 or nums[1] < 0 or nums[0] >= w or nums[1] >= h:
+			errors.append("decor: (%d, %d) off the %dx%d map" % [nums[0], nums[1], w, h])
+		elif nums[2] < 0 or nums[2] >= DECOR_KINDS.size():
+			errors.append("decor: kind %d unknown (0 to %d)" % [nums[2], DECOR_KINDS.size() - 1])
+		elif out.has(Vector2i(nums[0], nums[1])):
+			errors.append("decor: two on (%d, %d)" % [nums[0], nums[1]])
+		else:
+			out[Vector2i(nums[0], nums[1])] = nums[2]
+	return out
 
 
 ## Reads the "clubhouse" field (version 3): [centre, facing], [NO_CLUBHOUSE, 1] for null.

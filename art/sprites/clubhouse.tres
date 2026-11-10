@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="TileSheet" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://art/tiles/tile_sheet.gd" id="1_sheet"]
-[ext_resource type="Texture2D" path="res://art/sprites/clubhouse_placeholder.png" id="2_tex"]
+[ext_resource type="Texture2D" path="res://art/sprites/clubhouse.png" id="2_tex"]
 
 [resource]
 script = ExtResource("1_sheet")

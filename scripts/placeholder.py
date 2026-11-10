@@ -2,10 +2,6 @@
 """Generate placeholder art for Prestwick from art/palette.gpl. Stdlib only.
 
 Usage:
-  scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
-                                                and golfer_shirts_placeholder.png (E3-S28)
-  scripts/placeholder.py clubhouse           -> art/sprites/clubhouse_placeholder.png (E5-S10)
-  scripts/placeholder.py all                 -> all of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
 
@@ -14,7 +10,9 @@ between frames, one row. Every pixel is a palette color or fully transparent.
 Placeholders are never final; the spec in art/specs/ is the handoff.
 
 The terrain is final art since E5-S2 (D62): scripts/art_terrain.py writes the surface and land
-sheets; the surface, riser and edge cue placeholders went with it.
+sheets; the surface, riser and edge cue placeholders went with it. Since E5-S3 the sprites are final
+too (scripts/art_sprites.py writes them, reusing the golfer and clubhouse geometry kept here), so
+this script only makes a generic placeholder for a new thing until its generator exists.
 """
 from __future__ import annotations
 
@@ -406,12 +404,6 @@ def main(argv: list[str]) -> int:
 
     p = load_palette()
     jobs: list[tuple[Path, Image]] = []
-    if args.thing in ("clubhouse", "all"):
-        jobs.append((ROOT / "art/sprites/clubhouse_placeholder.png", build_clubhouse(p)))
-    if args.thing in ("golfer", "all"):
-        for state, frames in GOLFER_STATES:
-            jobs.append((ROOT / f"art/sprites/golfer_{state}_placeholder.png", build_golfer(state, frames, p)))
-        jobs.append((ROOT / "art/sprites/golfer_shirts_placeholder.png", build_golfer_shirts(p)))
     if not jobs:
         if not args.size:
             ap.error(f"no built-in generator for {args.thing!r}; pass --size WxH and --frames N")

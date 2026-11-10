@@ -36,10 +36,11 @@ extends Node2D
 ## -x, Down +y, Up -y; the outline is the cursor), starting from the tile at the middle of the
 ## view; Space or Enter applies the tool there as a click does, and held while the arrows move
 ## it drags (one undo step). Q and E step through the tools in the palette's order (cycle_tool),
-## [ and ] through the brush sizes (step_brush), R turns the clubhouse (as the right-click does).
+## [ and ] through the brush sizes (step_brush), R turns the clubhouse (as the right-click does);
+## with the Decor tool R takes the hovered decor away (E5-S3).
 ## cursor_moved tells Main, which keeps the cursor in view.
 
-enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE }
+enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE, DECOR }
 
 ## Emitted when the tool, surface or brush changes, so the palette can follow.
 signal settings_changed
@@ -76,6 +77,9 @@ const PARCEL_EDGE_POINTS: int = 4
 
 var builder: CourseBuilder
 var tool: Tool = Tool.PAINT
+## E5-S3: the decor kind the Decor tool places (CourseData.DECOR_KINDS); a click on decor steps it
+## to the next kind, and this follows.
+var decor_kind: int = 0
 var surface: Surface.Type = Surface.Type.FAIRWAY
 ## The hole the tee and cup tools build, picked in the hole list (select_hole, E3-S2).
 var hole_number: int = 1
@@ -243,6 +247,10 @@ func hover_hint() -> String:
 			if _hover == builder.course.clubhouse:
 				return ""
 			return builder.clubhouse_refusal(_hover, clubhouse_facing())
+		Tool.DECOR:
+			if builder.course.decor_at(_hover.x, _hover.y) != CourseData.NO_DECOR:
+				return ""
+			return builder.decor_refusal(_hover)
 	return builder.edit_refusal(_hover, brush_size)
 
 
@@ -268,6 +276,19 @@ func turn_clubhouse(dir: int = 1) -> bool:
 			queue_redraw()
 			return ok
 	return false
+
+
+## E5-S3: removes the decor on `cell` (the hovered tile when NONE), through the builder. False
+## when there is none.
+func remove_decor(cell: Vector2i = TilePicker.NONE) -> bool:
+	if builder == null or not active:
+		return false
+	var at: Vector2i = _hover if cell == TilePicker.NONE else cell
+	if at == TilePicker.NONE:
+		return false
+	var ok: bool = builder.set_decor(at, CourseData.NO_DECOR)
+	queue_redraw()
+	return ok
 
 
 ## The Buy land tool's outline for the hovered parcel: outline_color when it is already owned
@@ -409,6 +430,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		turn_clubhouse()  # E5-S10: right-click turns its door
 		get_viewport().set_input_as_handled()
 		return
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT and tool == Tool.DECOR:
+		remove_decor()  # E5-S3: right-click takes it away
+		get_viewport().set_input_as_handled()
+		return
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
 		var local: Vector2 = _to_local(mb.position)
 		if mb.pressed:
@@ -454,7 +479,10 @@ func _key_input(event: InputEvent) -> bool:
 		step_brush(1)
 		return true
 	if event.is_action_pressed(TURN_ACTION):
-		turn_clubhouse()
+		if tool == Tool.DECOR:
+			remove_decor()  # E5-S3: with the Decor tool, R takes the decor away
+		else:
+			turn_clubhouse()
 		return true
 	return false
 
@@ -508,7 +536,7 @@ func tool_order() -> Array:
 	var out: Array = []
 	for s: Surface.Type in CourseBuilder.PALETTE:
 		out.append([Tool.PAINT, s])
-	for t: Tool in [Tool.RAISE, Tool.LOWER, Tool.TEE, Tool.CUP, Tool.BUY, Tool.CLUBHOUSE]:
+	for t: Tool in [Tool.RAISE, Tool.LOWER, Tool.TEE, Tool.CUP, Tool.BUY, Tool.CLUBHOUSE, Tool.DECOR]:
 		if t != Tool.BUY or buying:
 			out.append([t, surface])
 	return out
@@ -568,7 +596,7 @@ func outline_cells() -> Array[Vector2i]:
 		return [] as Array[Vector2i]
 	if tool == Tool.CLUBHOUSE:
 		return CourseData.footprint_cells(_hover)
-	return builder.brush_cells(_hover, 1 if _places_hole() else brush_size)
+	return builder.brush_cells(_hover, 1 if _places_hole() or tool == Tool.DECOR else brush_size)
 
 
 ## One outlined tile, on the drawn ground round it (E3-S59), filled as a fan from its centre: the
@@ -630,6 +658,11 @@ func _apply(cell: Vector2i) -> void:
 			buy_requested.emit(builder.course.parcel_of(cell.x, cell.y))
 		Tool.CLUBHOUSE:
 			builder.move_clubhouse(cell, clubhouse_facing())
+		Tool.DECOR:
+			var k: int = builder.course.decor_at(cell.x, cell.y) if builder.course.in_bounds(cell.x, cell.y) else CourseData.NO_DECOR
+			if k != CourseData.NO_DECOR:
+				decor_kind = (k + 1) % CourseData.DECOR_KINDS.size()
+			builder.set_decor(cell, decor_kind)
 	queue_redraw()
 
 
@@ -639,7 +672,7 @@ func _places_hole() -> bool:
 
 ## Tools that act once per click, never along a drag.
 func _single_click() -> bool:
-	return _places_hole() or tool == Tool.BUY or tool == Tool.CLUBHOUSE
+	return _places_hole() or tool == Tool.BUY or tool == Tool.CLUBHOUSE or tool == Tool.DECOR
 
 
 func _pick(local: Vector2) -> Vector2i:

@@ -1,6 +1,9 @@
 # Art spec: decor
 
-> Status (E5-S1): spec only; no code places decor yet (E5-S3).
+> Status (E5-S3): final art, `python3 scripts/art_sprites.py decor` (D62). Placed with the Build
+> bar's Decor tool, stored in the course (`CourseData.set_decor`, the optional `decor` field),
+> drawn by `course/decor_view.gd`; `tests/test_decor.gd` shows it does nothing to the ball or the
+> validator.
 
 ## Purpose
 
@@ -17,8 +20,7 @@ from `art/palette.gpl` only.
 
 ## Sheet
 
-- File: `art/sprites/decor_<state>.png`. Placeholder: `art/sprites/decor_placeholder.png`
-  (`python3 scripts/placeholder.py decor --size 48x48 --frames 4 --folder sprites --color earth`).
+- File: `art/sprites/decor.png`, loaded from `art/sprites/decor.tres`.
 - One row of 4 frames, 48 x 48 px each, 1 px gutter (195 x 48):
 
 | # | Frame | Contents |
@@ -34,10 +36,11 @@ from `art/palette.gpl` only.
 
 ## Code that reads it
 
-None yet. E5-S3: a decor list in CourseData (written by the builder and save only), a Build
-tool, and a Y-sorted view.
+`course/decor_view.gd` (DecorView), `scenes/build_tool.gd` (Tool.DECOR: a click places the tool's
+kind or steps the kind of the decor clicked; a right-click or R takes it away), `course/builder.gd`
+(`set_decor`, `decor_refusal`: not on water, unowned land or the clubhouse; free; one undo step).
 
-## For the artist replacing it
+## Changing it
 
 - Keep `decor_<state>.png`, 4 frames of 48 x 48, order above, anchor (24, 40). Append new
   frames; never reorder (course files will store the index).
