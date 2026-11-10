@@ -31,6 +31,7 @@ const NAME_ROUND_YD: int = 10
 const TOOL_NAMES: Dictionary = {
 	BuildTool.Tool.PAINT: "Paint", BuildTool.Tool.RAISE: "Raise", BuildTool.Tool.LOWER: "Lower",
 	BuildTool.Tool.TEE: "Tee", BuildTool.Tool.CUP: "Cup", BuildTool.Tool.BUY: "Buy",
+	BuildTool.Tool.CLUBHOUSE: "Clubhouse",
 }
 
 ## The hovered parcel: "NW parcel, 130 yd out: $1,150, click to buy".

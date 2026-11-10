@@ -235,14 +235,14 @@ func test_a_v1_file_loads_fully_owned() -> void:
 		return
 	assert_true(_all_owned(c), "every parcel owned")
 	assert_true(c.has_unlimited_budget(), "no budget limit, as New sandbox")
-	assert_eq(c.to_dict()["version"], 2, "it saves as version 2")
+	assert_eq(c.to_dict()["version"], CourseData.FORMAT_VERSION, "it saves as the current version (3 since E5-S9)")
 
 
 func test_a_v1_dictionary_migrates_and_v2_passes_through() -> void:
 	var v1 := {"version": 1, "name": "", "author": "", "width": 20, "height": 33,
 			"tiles": CourseData.create(20, 33).to_dict()["tiles"], "holes": [], "thumbnail": ""}
 	var m := CourseSave.migrate(v1)
-	assert_eq(m["version"], 2)
+	assert_eq(m["version"], CourseData.FORMAT_VERSION, "on to the current version (3, E5-S9)")
 	assert_eq(m["owned"], ["11", "11", "11"])
 	assert_eq(m["land_budget"], null)
 	assert_false(v1.has("owned"), "the input is not changed")
@@ -250,8 +250,8 @@ func test_a_v1_dictionary_migrates_and_v2_passes_through() -> void:
 	assert_not_null(c)
 	if c:
 		assert_true(_all_owned(c))
-	var v2 := _land_course().to_dict()
-	assert_eq(CourseSave.migrate(v2), v2, "version 2 is unchanged")
+	var v3 := _land_course().to_dict()
+	assert_eq(CourseSave.migrate(v3), v3, "the current version is unchanged")
 
 
 func test_a_v2_round_trip_keeps_ownership_and_the_hash() -> void:
@@ -266,7 +266,7 @@ func test_a_v2_round_trip_keeps_ownership_and_the_hash() -> void:
 	var errors: Array[String] = []
 	var loaded := CourseSave.load_file(path, errors)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	assert_eq(int(raw["version"]), 2)
+	assert_eq(int(raw["version"]), CourseData.FORMAT_VERSION)
 	assert_eq(raw["owned"][2], "00001000", "parcel row 2: only parcel 4")
 	assert_eq(raw["owned"][3], "00011100")
 	assert_eq(int(raw["land_budget"]), 3700, "what was left, not a fresh $5,000 (two $650 parcels)")

@@ -16,19 +16,40 @@ extends Resource
 ##   course_name, author, thumbnail, to_dict(), content_hash(), copy(),
 ##   parcels_wide, parcels_high, parcel_in_bounds(p), parcel_of(x, y), parcel_rect(p),
 ##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
-##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s).
+##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s),
+##   has_clubhouse(), clubhouse, clubhouse_facing, clubhouse_cells(), is_clubhouse(x, y),
+##   clubhouse_door(), clubhouse_revision.
+##
+## The clubhouse (D60, E5-S9): one 3x3 building, where guests arrive and leave, stored as its
+## centre tile and a facing, one of FACINGS (the side its door is on). The door is the tile just
+## outside the middle of that side (clubhouse_door). NO_CLUBHOUSE when the course has none (no
+## room was found for it): then no guests come.
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
-## set_info, set_parcel_owned and set_land_budget (CLAUDE.md Architecture). Tests may call
+## set_info, set_parcel_owned, set_land_budget and set_clubhouse (CLAUDE.md Architecture). Tests may call
 ## them to build fixtures.
 ##
-## Serialised as course format version 2 (.claude/skills/course-file/SKILL.md):
+## Serialised as course format version 3 (.claude/skills/course-file/SKILL.md):
 ## tiles are row-major (index = y * width + x), one byte each, (height << 4) | surface,
 ## base64 encoded; "owned" is one string per parcel row (q), one "1" or "0" per parcel (p);
-## "land_budget" is the balance in dollars (below 0 allowed, E4-S2), or null for unlimited. from_dict reads version 2 only:
-## course/save.gd migrates a version 1 file first (CourseSave.migrate).
+## "land_budget" is the balance in dollars (below 0 allowed, E4-S2), or null for unlimited;
+## "clubhouse" (version 3, E5-S9) is {"x", "y", "facing"} (its centre tile and one of
+## FACING_NAMES), or null for none. from_dict reads version 3 only: course/save.gd migrates a
+## version 1 or 2 file first (CourseSave.migrate) and places its clubhouse by rule.
 
-const FORMAT_VERSION: int = 2
+const FORMAT_VERSION: int = 3
+## The clubhouse's footprint is CLUBHOUSE_SIZE x CLUBHOUSE_SIZE tiles round its centre (D60).
+## A format constant: the file stores the centre.
+const CLUBHOUSE_SIZE: int = 3
+## Tiles from the clubhouse's centre to its edge: (CLUBHOUSE_SIZE - 1) / 2.
+const CLUBHOUSE_REACH: int = 1
+## The clubhouse centre when there is none.
+const NO_CLUBHOUSE: Vector2i = Vector2i(-1, -1)
+## The four facings, the side the door is on, by index: +x, +y, -x, -y. On screen (Iso, 2:1) +x
+## runs down and right, +y down and left, so facings 0 and 1 show their door to the camera.
+const FACINGS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]
+## Each facing's name in a file, by the same index.
+const FACING_NAMES: PackedStringArray = ["+x", "+y", "-x", "-y"]
 const MAX_HEIGHT: int = 7
 ## Tiles along a parcel's edge (D26). A format constant, not a tunable: the saved owned flags
 ## are indexed by it, so changing it needs a new format version and a migration.
@@ -84,6 +105,18 @@ var height_revision: int:
 var land_revision: int:
 	get:
 		return _land_revision
+## E5-S9: the clubhouse's centre tile, NO_CLUBHOUSE when there is none.
+var clubhouse: Vector2i:
+	get:
+		return _clubhouse
+## E5-S9: the clubhouse's facing, an index into FACINGS.
+var clubhouse_facing: int:
+	get:
+		return _clubhouse_facing
+## E5-S9: counts clubhouse writes (set_clubhouse). Not saved, not part of the content.
+var clubhouse_revision: int:
+	get:
+		return _clubhouse_revision
 
 var _width: int = 0
 var _height: int = 0
@@ -98,6 +131,9 @@ var _land_budget: int = UNLIMITED_BUDGET
 var _revision: int = 0
 var _height_revision: int = 0
 var _land_revision: int = 0
+var _clubhouse: Vector2i = NO_CLUBHOUSE
+var _clubhouse_facing: int = 1
+var _clubhouse_revision: int = 0
 ## One counter per Surface.Type (surface_revision).
 var _surface_revisions := PackedInt32Array()
 
@@ -205,6 +241,48 @@ func has_unlimited_budget() -> bool:
 	return _land_budget == UNLIMITED_BUDGET
 
 
+## True when the course has a clubhouse (D60).
+func has_clubhouse() -> bool:
+	return _clubhouse != NO_CLUBHOUSE
+
+
+## The clubhouse's tiles, row-major (empty when there is none). They may run off the map only
+## in a hand-made file; the builder and the placement rule keep them on it.
+func clubhouse_cells() -> Array[Vector2i]:
+	return footprint_cells(_clubhouse) if has_clubhouse() else [] as Array[Vector2i]
+
+
+## The CLUBHOUSE_SIZE x CLUBHOUSE_SIZE tiles round `centre`, row-major.
+static func footprint_cells(centre: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var r: int = CLUBHOUSE_REACH
+	for dy: int in range(-r, r + 1):
+		for dx: int in range(-r, r + 1):
+			out.append(centre + Vector2i(dx, dy))
+	return out
+
+
+## True when tile (x, y) is under the clubhouse.
+func is_clubhouse(x: int, y: int) -> bool:
+	if not has_clubhouse():
+		return false
+	var r: int = CLUBHOUSE_REACH
+	return absi(x - _clubhouse.x) <= r and absi(y - _clubhouse.y) <= r
+
+
+## The tile just outside the clubhouse's door, where guests come out and go in (D60);
+## NO_CLUBHOUSE when there is none.
+func clubhouse_door() -> Vector2i:
+	if not has_clubhouse():
+		return NO_CLUBHOUSE
+	return door_of(_clubhouse, _clubhouse_facing)
+
+
+## The door tile of a clubhouse centred on `centre` facing `facing`.
+static func door_of(centre: Vector2i, facing: int) -> Vector2i:
+	return centre + FACINGS[posmod(facing, FACINGS.size())] * (CLUBHOUSE_REACH + 1)
+
+
 ## The name the map and the hole list give the hole in slot `slot` (E3-S27): its number, or
 ## when other holes share it (a loaded file; validator rule 1 fails them) its number and a
 ## letter by course order, "4a", "4b", so two tees marked 4 are told apart. "" for no slot.
@@ -253,11 +331,13 @@ func copy() -> CourseData:
 	c._thumbnail = _thumbnail
 	c._owned = _owned.duplicate()
 	c._land_budget = _land_budget
+	c._clubhouse = _clubhouse
+	c._clubhouse_facing = _clubhouse_facing
 	c._replace_holes(_holes)
 	return c
 
 
-## Course format version 2 dictionary, ready for JSON.stringify.
+## Course format version 3 dictionary, ready for JSON.stringify.
 func to_dict() -> Dictionary:
 	var hole_dicts: Array = []
 	for h in _holes:
@@ -273,6 +353,9 @@ func to_dict() -> Dictionary:
 		"thumbnail": _thumbnail,
 		"owned": _owned_rows(),
 		"land_budget": null if has_unlimited_budget() else _land_budget,
+		"clubhouse": null if not has_clubhouse() else {
+			"x": _clubhouse.x, "y": _clubhouse.y, "facing": FACING_NAMES[_clubhouse_facing],
+		},
 	}
 
 
@@ -321,13 +404,26 @@ func set_land_budget(budget: int) -> void:
 	_land_budget = budget
 
 
+## Puts the clubhouse's centre on `centre` facing `facing` (an index into FACINGS), or removes
+## it with NO_CLUBHOUSE. Where it may stand is the builder's rule (CourseBuilder.clubhouse_refusal).
+func set_clubhouse(centre: Vector2i, facing: int) -> void:
+	assert(facing >= 0 and facing < FACINGS.size(), "facing out of range")
+	if centre == _clubhouse and facing == _clubhouse_facing:
+		return
+	_clubhouse = centre
+	_clubhouse_facing = facing
+	_clubhouse_revision += 1
+
+
 # --- load ---
 
-## Parses a course format version 2 dictionary (as from JSON.parse_string; course/save.gd
+## Parses a course format version 3 dictionary (as from JSON.parse_string; course/save.gd
 ## migrates older versions first). Returns null and appends a reason per problem to `errors`
 ## when the data is malformed: wrong version, bad size, tiles not width*height bytes, height
 ## above MAX_HEIGHT, unknown surface, owned rows not one "0" or "1" per parcel, a land budget
-## that is not null or a whole number of 0 or more, malformed hole, or a tee/cup off the map.
+## that is not null or a whole number of 0 or more, a clubhouse that is not null or
+## {"x", "y", "facing"} with its footprint and door on the map, malformed hole, or a tee/cup
+## off the map.
 ## Gameplay rules (one tee, cup on green, yardage vs par) belong to course/validator.gd.
 static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseData:
 	var start := errors.size()
@@ -381,6 +477,9 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 			errors.append("land_budget must be whole dollars, or null, got %d" % budget)
 	if errors.size() > start:
 		return null
+	var house := _read_clubhouse(data, w, h, errors)
+	if errors.size() > start:
+		return null
 
 	var parsed_holes: Array[HoleData] = []
 	var raw_holes: Variant = data.get("holes", [])
@@ -411,8 +510,40 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	c._thumbnail = texts["thumbnail"]
 	c._owned = owned
 	c._land_budget = budget
+	c._clubhouse = house[0]
+	c._clubhouse_facing = house[1]
 	c._replace_holes(parsed_holes)
 	return c
+
+
+## Reads the "clubhouse" field (version 3): [centre, facing], [NO_CLUBHOUSE, 1] for null.
+static func _read_clubhouse(data: Dictionary, w: int, h: int, errors: Array[String]) -> Array:
+	if not data.has("clubhouse"):
+		errors.append("clubhouse is missing (null for none)")
+		return [NO_CLUBHOUSE, 1]
+	var v: Variant = data["clubhouse"]
+	if v == null:
+		return [NO_CLUBHOUSE, 1]
+	if typeof(v) != TYPE_DICTIONARY:
+		errors.append("clubhouse must be an object or null")
+		return [NO_CLUBHOUSE, 1]
+	var d: Dictionary = v
+	var start := errors.size()
+	var x := read_int(d, "x", errors, "clubhouse")
+	var y := read_int(d, "y", errors, "clubhouse")
+	var facing: int = FACING_NAMES.find(str(d.get("facing", "")))
+	if facing < 0:
+		errors.append("clubhouse: facing must be one of %s" % ", ".join(FACING_NAMES))
+	if errors.size() > start:
+		return [NO_CLUBHOUSE, 1]
+	var r: int = CLUBHOUSE_REACH
+	var door := door_of(Vector2i(x, y), facing)
+	if x - r < 0 or y - r < 0 or x + r >= w or y + r >= h or door.x < 0 or door.y < 0 \
+			or door.x >= w or door.y >= h:
+		errors.append("clubhouse: (%d, %d) facing %s is not on the %dx%d map with its door"
+				% [x, y, FACING_NAMES[facing], w, h])
+		return [NO_CLUBHOUSE, 1]
+	return [Vector2i(x, y), facing]
 
 
 ## Reads data[key] as an integer. JSON gives floats, so integral floats are accepted.

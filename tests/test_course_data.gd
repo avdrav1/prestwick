@@ -55,7 +55,7 @@ func _tiles_dict(width: int, height: int, bytes: PackedByteArray) -> Dictionary:
 	return {
 		"version": CourseData.FORMAT_VERSION, "name": "", "author": "", "width": width,
 		"height": height, "tiles": Marshalls.raw_to_base64(bytes), "holes": [], "thumbnail": "",
-		"owned": CourseData.all_owned_rows(width, height), "land_budget": null,
+		"owned": CourseData.all_owned_rows(width, height), "land_budget": null, "clubhouse": null,
 	}
 
 
@@ -154,12 +154,12 @@ func test_20x20_round_trips_through_json_text() -> void:
 		_assert_same_course(a, b)
 
 
-func test_to_dict_has_format_v2_keys() -> void:
+func test_to_dict_has_format_v3_keys() -> void:
 	var d := _make_course().to_dict()
 	for key in ["version", "name", "author", "width", "height", "tiles", "holes", "thumbnail",
-			"owned", "land_budget"]:
+			"owned", "land_budget", "clubhouse"]:
 		assert_has(d, key)
-	assert_eq(d["version"], 2)
+	assert_eq(d["version"], 3)
 	assert_eq(d["holes"][0], {"number": 1, "par": 3, "tee": [2, 2], "cup": [17, 3], "open": true})
 
 
@@ -325,7 +325,7 @@ func test_rejects_empty_tiles() -> void:
 
 func test_rejects_wrong_version() -> void:
 	var d := _tiles_dict(1, 1, PackedByteArray([0]))
-	d["version"] = 3
+	d["version"] = 4
 	_rejected(d, "version")
 
 

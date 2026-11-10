@@ -10,7 +10,7 @@ extends SceneTree
 ## rule of each hole as pass or FAIL, with the tile at fault and the reason. generate writes
 ## a CourseGenerator course (hilly: over LandGenerator heights), by default to courses/gen_par<par>_<terrain>_<water>.json.
 ## inspect prints the size, the height range, the tile count of each surface present, the
-## build cost of painting them (E4-S2, _inspect_cost), and the owned parcel grid and the land budget left (or "unlimited"), and one line per hole
+## build cost of painting them (E4-S2, _inspect_cost), and the owned parcel grid and the land budget left (or "unlimited"), the clubhouse (E5-S9), and one line per hole
 ## (par, yardage, open or closed, the validator's PASS or FAIL) with a line for each failing rule. Paths without res:// or user:// are taken from the project folder.
 ##
 ## Exit code: 0 when every rule passes (or the file was written, or inspected), 1 when a rule
@@ -97,6 +97,9 @@ static func inspect(path: String, out: Array[String]) -> int:
 	out.append("surfaces: %s" % ", ".join(parts))
 	_inspect_cost(counts, EconomyTuning.load_default(), out)
 	_inspect_land(course, out)
+	out.append("clubhouse: %s" % ("none" if not course.has_clubhouse() else "(%d, %d) facing %s, door (%d, %d)"
+			% [course.clubhouse.x, course.clubhouse.y, CourseData.FACING_NAMES[course.clubhouse_facing],
+			course.clubhouse_door().x, course.clubhouse_door().y]))
 	out.append("holes: %d" % course.holes.size())
 	var validator := CourseValidator.new()
 	var reach := CourseValidator.Reach.new(course)

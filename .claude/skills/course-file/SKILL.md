@@ -7,11 +7,11 @@ description: Validate, generate, or inspect a Prestwick course JSON file in cour
 
 Argument: `validate <path>`, `generate <par> [flat|hilly] [water|dry]`, or `inspect <path>`.
 
-## Format (version 2)
+## Format (version 3)
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "Example Par 3",
   "author": "",
   "width": 40,
@@ -22,7 +22,8 @@ Argument: `validate <path>`, `generate <par> [flat|hilly] [water|dry]`, or `insp
   ],
   "thumbnail": "",
   "owned": ["111", "111", "111"],
-  "land_budget": null
+  "land_budget": null,
+  "clubhouse": {"x": 20, "y": 33, "facing": "+y"}
 }
 ```
 
@@ -31,6 +32,8 @@ Surface enum: 0 fairway, 1 rough, 2 green, 3 tee, 4 bunker, 5 water, 6 trees, 7 
 Holes (E3-S2): at most `max_holes` (9, `course/builder_tuning.tres`), each numbered 1 to 9. A file with more holes, or a number outside 1 to 9, does not load (`validate` exits 2 and says why). Two holes sharing a number load and fail rule 1.
 
 Land (version 2, E6-S3, D26): `owned` has one string per parcel row (16 x 16 tiles, `CourseData.PARCEL_TILES`), top row first, one character per parcel, `"1"` owned and `"0"` not, so a 40 x 40 map has 3 rows of 3 (the last parcels partial). `land_budget` is the balance (E4-S2, D57: the one balance that building and parcels both come out of) in whole dollars, below 0 when upkeep took it there, or `null` for no limit (New sandbox). Version 1 files (no `owned`, no `land_budget`) still load: `course/save.gd` migrates them with every parcel owned and `land_budget` null, and saves them as version 2. `generate` writes every parcel owned and `null`.
+
+Clubhouse (version 3, E5-S9, D60): `clubhouse` is the 3x3 clubhouse's centre tile and its facing, the side its door is on (`"+x"`, `"+y"`, `"-x"` or `"-y"`; the door is the tile just outside the middle of that side), or `null` for none (then no guests come). Its footprint and door must be on the map. Version 1 and 2 files load with one placed by rule (`course/clubhouse_rule.gd`: in the starting block at the middle of its +y edge, else beside hole 1's tee, else none) and save as version 3. `generate` places one by the same rule. `inspect` prints it.
 
 ## Headless entry point
 

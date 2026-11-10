@@ -24,10 +24,13 @@ extends Node2D
 ## outline_color meanwhile), so the map shows what Buy buys. An owned parcel under Buy land
 ## draws in outline_color too (E6-S17): owning it is no error (parcel_outline_color).
 ## stroke_count counts presses, so the HUD can tell one drag's refusals from the next's.
+## The Clubhouse tool (E5-S9, D60) moves the clubhouse, centred on the tile clicked, keeping its
+## facing, through CourseBuilder.move_clubhouse; turn_clubhouse turns it a quarter in place. Its
+## hover_hint is CourseBuilder.clubhouse_refusal.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
 
-enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY }
+enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE }
 
 ## Emitted when the tool, surface or brush changes, so the palette can follow.
 signal settings_changed
@@ -206,10 +209,38 @@ func hover_hint() -> String:
 		return ""
 	match tool:
 		Tool.TEE, Tool.CUP:
-			return builder.place_refusal(_hover)
+			return builder.place_refusal(_hover, hole_number, tool == Tool.TEE, hole_slot)
 		Tool.BUY:
 			return builder.buy_refusal(hover_parcel())
+		Tool.CLUBHOUSE:
+			if _hover == builder.course.clubhouse:
+				return ""
+			return builder.clubhouse_refusal(_hover, clubhouse_facing())
 	return builder.edit_refusal(_hover, brush_size)
+
+
+## The facing the Clubhouse tool moves the clubhouse with: the one it has (CourseData.FACINGS
+## index), or the rule's +y when the course has none.
+func clubhouse_facing() -> int:
+	if builder == null or not builder.course.has_clubhouse():
+		return ClubhouseRule.BLOCK_FACING
+	return builder.course.clubhouse_facing
+
+
+## Turns the clubhouse a quarter in place (`dir` 1 one way, -1 the other), through the builder:
+## the first facing round from its own whose door is allowed. False when there is no clubhouse,
+## or no other facing is allowed.
+func turn_clubhouse(dir: int = 1) -> bool:
+	if builder == null or not active or not builder.course.has_clubhouse():
+		return false
+	var c: CourseData = builder.course
+	for k: int in range(1, CourseData.FACINGS.size()):
+		var f: int = posmod(c.clubhouse_facing + k * signi(dir if dir != 0 else 1), CourseData.FACINGS.size())
+		if builder.clubhouse_refusal(c.clubhouse, f).is_empty():
+			var ok: bool = builder.move_clubhouse(c.clubhouse, f)
+			queue_redraw()
+			return ok
+	return false
 
 
 ## The Buy land tool's outline for the hovered parcel: outline_color when it is already owned
@@ -430,6 +461,8 @@ func _apply(cell: Vector2i) -> void:
 			builder.place_cup(hole_number, cell, par, hole_slot)
 		Tool.BUY:
 			buy_requested.emit(builder.course.parcel_of(cell.x, cell.y))
+		Tool.CLUBHOUSE:
+			builder.move_clubhouse(cell, clubhouse_facing())
 	queue_redraw()
 
 
@@ -439,7 +472,7 @@ func _places_hole() -> bool:
 
 ## Tools that act once per click, never along a drag.
 func _single_click() -> bool:
-	return _places_hole() or tool == Tool.BUY
+	return _places_hole() or tool == Tool.BUY or tool == Tool.CLUBHOUSE
 
 
 func _pick(local: Vector2) -> Vector2i:

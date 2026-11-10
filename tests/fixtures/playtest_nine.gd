@@ -41,8 +41,9 @@ extends RefCounted
 ## kept, the ground round them eased so neighbours differ by one step and at most one riser
 ## every 2 tiles along an axis, the land generator's slope rule), then FILLS painted rough,
 ## every hole's trees and clears, then each hole's fairway, bunkers, water, tee box and green,
-## then the tees, cups and pars, and last every hole is opened, so no edit lands in an open
-## hole's footprint.
+## then the tees, cups and pars, then the clubhouse (E5-S9, D60) on the allowed spot nearest
+## hole 1's tee (ClubhouseRule.spot_beside, CLUBHOUSE_REACH), where the nine finishes, and last
+## every hole is opened, so no edit lands in an open hole's footprint.
 
 const LAND_SEED: int = 7
 const PATH: String = "res://courses/playtest_nine.json"
@@ -50,6 +51,8 @@ const COURSE_NAME: String = "Playtest Nine"
 const COURSE_AUTHOR: String = "E3-S50"
 ## A curved fairway's centre line is sampled at least this often, in tiles.
 const CURVE_STEP: float = 0.25
+## How far from hole 1's tee the clubhouse may stand, tiles along x and y (E5-S9).
+const CLUBHOUSE_REACH: int = 8
 
 ## Land ponds filled (Rect2i, only their water tiles): the pond across hole 1's first leg and
 ## the one across the end of hole 5's sweep.
@@ -195,6 +198,9 @@ static func build(b: CourseBuilder) -> Array[int]:
 		b.place_tee(n, spec["tee"], spec["par"])
 		b.place_cup(n, spec["cup"])
 		b.set_par(n, spec["par"])
+	var first: Vector2i = (HOLES[0] as Dictionary)["tee"]
+	var spot: Array = ClubhouseRule.spot_beside(course, first, b.slot_lines(), CLUBHOUSE_REACH)
+	b.move_clubhouse(spot[0], spot[1])
 	var opened: Array[int] = []
 	for spec: Dictionary in HOLES:
 		if b.open_hole(spec["n"]):

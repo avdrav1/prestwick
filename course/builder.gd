@@ -68,6 +68,13 @@ extends RefCounted
 ## tiles on the map but none owned, or a tee or cup placed on an unowned tile, changes
 ## nothing and emits `refused` with the reason (edit_refusal, place_refusal: "not your
 ## land"). New sandbox owns every parcel, so nothing is refused there.
+##
+## The clubhouse (E5-S9, D60, course/clubhouse_rule.gd): new_course and new_sandbox place it by
+## rule. move_clubhouse puts it on any spot ClubhouseRule allows (clubhouse_refusal names the
+## rule that fails), free, as one undo step. Its tiles take no paint, raise or lower (a brush
+## edits the rest of its tiles, and one with only clubhouse tiles is refused, CLUBHOUSE_HERE),
+## and no tee or cup; a tee or cup that would run its hole's straight line through it is
+## refused (CLUBHOUSE_IN_THE_WAY), as a move across a hole's line of play is.
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
@@ -84,6 +91,8 @@ signal refused(reason: String)
 ## Emitted after the balance changed (a charge, a refund, credit, debit or restore_balance),
 ## with the balance now (CourseData.UNLIMITED_BUDGET when unlimited).
 signal money_changed(balance: int)
+## Emitted after the clubhouse moved or turned (move_clubhouse, or an undo of one).
+signal clubhouse_changed
 
 ## The 9 surfaces a player paints, in palette order (docs/design.md surface table); `oob` is
 ## OB ground from E2-S3 (D9).
@@ -98,6 +107,10 @@ const PARS: PackedInt32Array = [3, 4, 5]
 const NOT_YOUR_LAND: String = "not your land"
 ## The reason a new hole past BuilderTuning.max_holes is refused (E3-S2), with that number.
 const TOO_MANY_HOLES: String = "a course has at most %d holes"
+## The reason an edit, tee or cup on the clubhouse's tiles is refused (E5-S9).
+const CLUBHOUSE_HERE: String = "the clubhouse is here"
+## The reason a tee or cup whose hole's line would run through the clubhouse is refused (E5-S9).
+const CLUBHOUSE_IN_THE_WAY: String = "the clubhouse is in the way"
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
@@ -117,9 +130,11 @@ class Step:
 	## need not measure the turns its tiles moved again. Empty when none were kept.
 	var lines: Dictionary = {}
 	var lines_reads: Dictionary = {}
+	## E5-S9: the clubhouse before the step, [centre, facing], when the step moved it; else null.
+	var clubhouse: Variant = null
 
 	func is_empty() -> bool:
-		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL
+		return tiles.is_empty() and holes == null and land_parcel == NO_PARCEL and clubhouse == null
 
 
 var course: CourseData:
@@ -221,7 +236,9 @@ func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: Co
 ## height, no holes. A fresh course, not a write to one; hand it to a new builder.
 static func new_sandbox(p_tuning: BuilderTuning = null) -> CourseData:
 	var t: BuilderTuning = p_tuning if p_tuning != null else BuilderTuning.load_default()
-	return CourseData.create(t.plot_size.x, t.plot_size.y, t.plot_surface, t.plot_ground)
+	var c := CourseData.create(t.plot_size.x, t.plot_size.y, t.plot_surface, t.plot_ground)
+	place_clubhouse_by_rule(c, t)
+	return c
 
 
 ## A New course (E6-S6, D19, D26, D28): the generated land of `land_seed` (LandGenerator),
@@ -238,7 +255,19 @@ static func new_course(land_seed: int, p_prices: LandPrices = null,
 			var parcel := Vector2i(p, q)
 			c.set_parcel_owned(parcel, block.encloses(c.parcel_rect(parcel)))
 	c.set_land_budget(maxi(lp.land_budget, 0))
+	place_clubhouse_by_rule(c)
 	return c
+
+
+## Puts `course`'s clubhouse where the rule puts one (ClubhouseRule.default_spot, D60): a New
+## course's and a New sandbox's, in the starting block. Not an undo step. False, changing
+## nothing, when there is no room.
+static func place_clubhouse_by_rule(course: CourseData, p_tuning: BuilderTuning = null) -> bool:
+	var spot: Array = ClubhouseRule.default_spot(course, [] as Array[PackedVector2Array], p_tuning)
+	if spot[0] == CourseData.NO_CLUBHOUSE:
+		return false
+	course.set_clubhouse(spot[0], spot[1])
+	return true
 
 
 # --- terrain ---
@@ -263,14 +292,31 @@ func edit_refusal(center: Vector2i, size: int) -> String:
 	var cells: Array[Vector2i] = brush_cells(center, size)
 	if cells.is_empty() or not _owned_cells(cells).is_empty():
 		return ""
+	for c: Vector2i in cells:
+		if _course.is_owned(c.x, c.y):
+			return CLUBHOUSE_HERE  # owned, but every owned tile is the clubhouse's (E5-S9)
 	return NOT_YOUR_LAND
 
 
 ## Why a tee or cup on `cell` would be refused because of land, or "" when it may go there:
-## NOT_YOUR_LAND for a tile on the map that is not owned (E6-S4, D30).
-func place_refusal(cell: Vector2i) -> String:
-	if _course.in_bounds(cell.x, cell.y) and not _course.is_owned(cell.x, cell.y):
+## NOT_YOUR_LAND for a tile on the map that is not owned (E6-S4, D30); CLUBHOUSE_HERE on the
+## clubhouse (E5-S9). With `number`, the tee (`is_tee`) or cup of that hole (`slot` as
+## place_tee's): CLUBHOUSE_IN_THE_WAY when its straight tee-to-cup line would then run through
+## the clubhouse.
+func place_refusal(cell: Vector2i, number: int = 0, is_tee: bool = true, slot: int = -1) -> String:
+	if not _course.in_bounds(cell.x, cell.y):
+		return ""
+	if not _course.is_owned(cell.x, cell.y):
 		return NOT_YOUR_LAND
+	if _course.is_clubhouse(cell.x, cell.y):
+		return CLUBHOUSE_HERE
+	var h: HoleData = hole_at(slot_of(number, slot)) if number > 0 else null
+	if h != null and _course.has_clubhouse():
+		var tee: Vector2i = cell if is_tee else h.tee
+		var cup: Vector2i = h.cup if is_tee else cell
+		if _course.in_bounds(tee.x, tee.y) and _course.in_bounds(cup.x, cup.y) \
+				and ClubhouseRule.crosses(PackedVector2Array([Vector2(tee), Vector2(cup)]), _course.clubhouse):
+			return CLUBHOUSE_IN_THE_WAY
 	return ""
 
 
@@ -653,6 +699,32 @@ func renumber_hole(number: int, to: int, slot: int = -1) -> bool:
 	return true
 
 
+# --- clubhouse ---
+
+## Why the clubhouse cannot move to `centre` facing `facing`, or "" when it may
+## (ClubhouseRule.refusal against every hole's line of play as the latest check measured it).
+func clubhouse_refusal(centre: Vector2i, facing: int) -> String:
+	return ClubhouseRule.refusal(_course, centre, posmod(facing, CourseData.FACINGS.size()), slot_lines())
+
+
+## Moves (or turns) the clubhouse to `centre` facing `facing` (D60: free), as one undo step.
+## False when it is there already, and false, emitting `refused`, when clubhouse_refusal names a
+## rule.
+func move_clubhouse(centre: Vector2i, facing: int) -> bool:
+	facing = posmod(facing, CourseData.FACINGS.size())
+	if centre == _course.clubhouse and facing == _course.clubhouse_facing:
+		return false
+	if _refuse(clubhouse_refusal(centre, facing)):
+		return false
+	end_stroke()
+	var step := Step.new()
+	step.clubhouse = [_course.clubhouse, _course.clubhouse_facing]
+	_course.set_clubhouse(centre, facing)
+	_push(step)
+	clubhouse_changed.emit()
+	return true
+
+
 # --- land ---
 
 ## What parcel `parcel` costs (LandPrices), in dollars.
@@ -728,6 +800,9 @@ func undo() -> bool:
 		_course.set_parcel_owned(step.land_parcel, false)
 		_reach = null
 		land_changed.emit(step.land_parcel)
+	if step.clubhouse != null:
+		_course.set_clubhouse(step.clubhouse[0], step.clubhouse[1])
+		clubhouse_changed.emit()
 	# E4-S2: exactly what the step charged comes back, whatever the balance did since (D56, D27).
 	_add_money(step.charged)
 	if not step.lines.is_empty():
@@ -872,11 +947,12 @@ func _close_footprints(step: Step, cells: Array[Vector2i]) -> void:
 		_write_holes(step, hs)
 
 
-## The tiles of `cells` on owned parcels, in order.
+## The tiles of `cells` a terrain edit may write, in order: on owned parcels and not under the
+## clubhouse (E5-S9).
 func _owned_cells(cells: Array[Vector2i]) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c: Vector2i in cells:
-		if _course.is_owned(c.x, c.y):
+		if _course.is_owned(c.x, c.y) and not _course.is_clubhouse(c.x, c.y):
 			out.append(c)
 	return out
 
@@ -892,7 +968,7 @@ func _refuse(reason: String) -> bool:
 func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1) -> bool:
 	if not _course.in_bounds(cell.x, cell.y):
 		return false
-	if _refuse(place_refusal(cell)) or _refuse(new_hole_refusal(number)):
+	if _refuse(place_refusal(cell, number, is_tee, slot)) or _refuse(new_hole_refusal(number)):
 		return false
 	var hs: Array[HoleData] = _holes_copy()
 	var i: int = slot_of(number, slot)

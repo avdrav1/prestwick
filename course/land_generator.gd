@@ -59,6 +59,7 @@ static func generate(land_seed: int, tuning: LandTuning = null, errors: Array[St
 		# (CourseBuilder.new_course, E6-S6), not the land's.
 		"owned": CourseData.all_owned_rows(run.w, run.h),
 		"land_budget": null,
+		"clubhouse": null,
 	}
 	return CourseData.from_dict(data, errors)
 

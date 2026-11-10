@@ -329,7 +329,8 @@ func test_a_small_drag_after_lower_lowers_one_tile() -> void:
 	var lowered: Array[Vector2i] = []
 	for y: int in m.course.height:
 		for x: int in m.course.width:
-			if m.course.get_height(x, y) != before:
+			# E5-S9: the raise left the clubhouse's ground as it was (its tiles take no edit).
+			if m.course.get_height(x, y) != before and not m.course.is_clubhouse(x, y):
 				lowered.append(Vector2i(x, y))
 	assert_eq(lowered, [Vector2i(8, 8)] as Array[Vector2i], "the drag does not creep onto the tile behind")
 

@@ -15,7 +15,8 @@ extends RefCounted
 ## with dry rough round both ends. `hilly` lays the same hole over natural land: the heights of
 ## LandGenerator (HILLY_LAND_SEED), cropped round the map's centre, with the tee box, the green
 ## and the pond (with a one-tile dry ring) levelled flat (hilly_heights, below). Only heights
-## differ from the flat hole, so the surfaces and the six rules are the flat hole's.
+## differ from the flat hole, so the surfaces and the six rules are the flat hole's. Its
+## clubhouse (D60, E5-S9) stands where ClubhouseRule.default_spot puts it.
 
 ## Hole lengths in tiles at 5 yd per tile: 160, 380 and 520 yd. Fixture shapes, not tunables.
 const LENGTH_TILES: Dictionary = {3: 32, 4: 76, 5: 104}
@@ -85,7 +86,16 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 		# A fixture plays on land it owns, with no budget, as New sandbox does (D26).
 		"owned": CourseData.all_owned_rows(w, h),
 		"land_budget": null,
+		"clubhouse": null,
 	}
+	# E5-S9 (D60): the clubhouse by the rule a New course's follows, read off the course laid out.
+	var bare := CourseData.from_dict(data, errors)
+	if bare == null:
+		return null
+	var spot: Array = ClubhouseRule.default_spot(bare)
+	if spot[0] != CourseData.NO_CLUBHOUSE:
+		data["clubhouse"] = {"x": (spot[0] as Vector2i).x, "y": (spot[0] as Vector2i).y,
+				"facing": CourseData.FACING_NAMES[spot[1]]}
 	return CourseData.from_dict(data, errors)
 
 

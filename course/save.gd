@@ -1,6 +1,6 @@
 class_name CourseSave
 extends RefCounted
-## Course JSON load and save, course format version 2 (CourseData.FORMAT_VERSION). One of the
+## Course JSON load and save, course format version 3 (CourseData.FORMAT_VERSION). One of the
 ## two writers of CourseData (with course/builder.gd). Version migrations go here (course-file
 ## skill): migrate() brings an older file's data up to the current version before
 ## CourseData.from_dict reads it.
@@ -8,9 +8,13 @@ extends RefCounted
 ## Version 1 to 2 (E6-S3, D26): a version 1 file predates land, so it loads with every parcel
 ## owned and an unlimited land budget, the same as New sandbox, and every course and fixture
 ## made before E6 plays as before.
+##
+## Version 2 to 3 (E5-S9, D60): a version 2 file predates the clubhouse, so it loads with one
+## placed by the rule a New course's follows (ClubhouseRule.default_spot: in the starting block,
+## else beside the first tee), or none when neither has room.
 
 
-## Writes `course` as format v2 JSON. Returns OK or the FileAccess error.
+## Writes `course` as format v3 JSON. Returns OK or the FileAccess error.
 ## A half-placed hole (tee or cup off the map, as HoleData.UNPLACED is) is DROPPED from the file,
 ## not refused and not written: CourseData.from_dict rejects an off-map tee or cup, so writing it
 ## would give a file that does not load. The rest of the course is saved, and the dropped holes'
@@ -26,7 +30,7 @@ static func save_file(course: CourseData, path: String, dropped: Array[int] = []
 	return OK
 
 
-## Reads a course JSON file of any supported version (1 or 2). Returns null and appends reasons to `errors` on failure.
+## Reads a course JSON file of any supported version (1 to 3). Returns null and appends reasons to `errors` on failure.
 static func load_file(path: String, errors: Array[String] = []) -> CourseData:
 	if not FileAccess.file_exists(path):
 		errors.append("%s: file not found" % path)
@@ -38,7 +42,7 @@ static func load_file(path: String, errors: Array[String] = []) -> CourseData:
 	return from_json(text, errors)
 
 
-## Pretty-printed format v2 JSON text, with half-placed holes dropped (see save_file); their
+## Pretty-printed format v3 JSON text, with half-placed holes dropped (see save_file); their
 ## numbers are appended to `dropped`.
 static func to_json(course: CourseData, dropped: Array[int] = []) -> String:
 	var data := course.to_dict()
@@ -58,7 +62,7 @@ static func is_half_placed(course: CourseData, hole: HoleData) -> bool:
 	return not (course.in_bounds(hole.tee.x, hole.tee.y) and course.in_bounds(hole.cup.x, hole.cup.y))
 
 
-## Parses course JSON text of version 1 or 2. Returns null and appends reasons to `errors` on
+## Parses course JSON text of version 1 to 3. Returns null and appends reasons to `errors` on
 ## failure.
 static func from_json(text: String, errors: Array[String] = []) -> CourseData:
 	var json := JSON.new()
@@ -71,14 +75,20 @@ static func from_json(text: String, errors: Array[String] = []) -> CourseData:
 	return from_dict(json.data, errors)
 
 
-## Migrates `data` (version 1 or 2) and parses it. Returns null and appends reasons to
+## Migrates `data` (version 1 to 3) and parses it; a file from before version 3 gets its
+## clubhouse by rule (place_clubhouse). Returns null and appends reasons to
 ## `errors` on failure. A file may hold at most BuilderTuning.max_holes holes (9), numbered 1 to
 ## that (E3-S2, docs/design.md Hole list): the builder cannot make any other, so a file that has
 ## one is refused. Two holes sharing a number load, and validator rule 1 fails them.
 static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseData:
+	var ignored: Array[String] = []
+	var older: bool = data.has("version") and CourseData.read_int(data, "version", ignored) < 3 \
+			and ignored.is_empty()
 	var c := CourseData.from_dict(migrate(data), errors)
 	if c == null:
 		return null
+	if older:
+		place_clubhouse(c)
 	var start := errors.size()
 	var max_holes: int = BuilderTuning.load_default().max_holes
 	if c.holes.size() > max_holes:
@@ -93,16 +103,34 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 ## version, or of a version this cannot migrate (CourseData.from_dict then reports it), comes
 ## back unchanged. Version 1 gains "owned" with every parcel owned and "land_budget" null
 ## (unlimited). A version 1 file whose size is not two whole numbers gains no "owned", and
-## CourseData.from_dict reports the size.
+## CourseData.from_dict reports the size. Version 1 and 2 gain "clubhouse" null (from_dict
+## then places one by rule).
 static func migrate(data: Dictionary) -> Dictionary:
 	var ignored: Array[String] = []
-	if not data.has("version") or CourseData.read_int(data, "version", ignored) != 1:
+	if not data.has("version"):
+		return data
+	var version: int = CourseData.read_int(data, "version", ignored)
+	if not ignored.is_empty() or version < 1 or version >= CourseData.FORMAT_VERSION:
 		return data
 	var out := data.duplicate()
-	out["version"] = 2
-	var w := CourseData.read_int(data, "width", ignored)
-	var h := CourseData.read_int(data, "height", ignored)
-	if ignored.is_empty() and w > 0 and h > 0:
-		out["owned"] = CourseData.all_owned_rows(w, h)
-	out["land_budget"] = null
+	if version == 1:
+		var w := CourseData.read_int(data, "width", ignored)
+		var h := CourseData.read_int(data, "height", ignored)
+		if ignored.is_empty() and w > 0 and h > 0:
+			out["owned"] = CourseData.all_owned_rows(w, h)
+		out["land_budget"] = null
+	out["clubhouse"] = null
+	out["version"] = CourseData.FORMAT_VERSION
 	return out
+
+
+## Gives `course` a clubhouse by rule (ClubhouseRule.default_spot) when it has none: a file from
+## before version 3 (from_dict). True when one was placed.
+static func place_clubhouse(course: CourseData) -> bool:
+	if course.has_clubhouse():
+		return false
+	var spot: Array = ClubhouseRule.default_spot(course)
+	if spot[0] == CourseData.NO_CLUBHOUSE:
+		return false
+	course.set_clubhouse(spot[0], spot[1])
+	return true

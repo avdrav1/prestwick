@@ -11,6 +11,7 @@ plot_surface = 1
 plot_ground = 2
 default_par = 3
 max_holes = 9
+clubhouse_tee_search = 12
 issue_box_max_stack = 96.0
 issue_box_max_side = 160.0
 marker_min_screen_scale = 0.5

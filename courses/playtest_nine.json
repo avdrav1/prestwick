@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "name": "Playtest Nine",
   "author": "E3-S50",
   "width": 128,
@@ -135,5 +135,10 @@
     "11111111",
     "11111111"
   ],
-  "land_budget": null
+  "land_budget": null,
+  "clubhouse": {
+    "x": 7,
+    "y": 56,
+    "facing": "+x"
+  }
 }
