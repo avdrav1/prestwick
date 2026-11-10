@@ -106,7 +106,11 @@ func _build_main(parent: Control) -> void:
 	_button(main_page, "Save game", func() -> void: _do(save_requested))
 	_button(main_page, "Import course", show_import)
 	_button(main_page, "Export course", show_export)
-	_button(main_page, "Sound settings", func() -> void: _do(sound_requested))
+	# Asks before it closes, so Main sees the sound panel open from the menu as the menu hides
+	# and keeps the guests' day paused (Main._hold_day_for_menu).
+	_button(main_page, "Sound settings", func() -> void:
+		sound_requested.emit()
+		close())
 	_button(main_page, "Quit", func() -> void: _do(quit_requested))
 	for c: Node in main_page.get_children():
 		_main_buttons.append(c as Button)

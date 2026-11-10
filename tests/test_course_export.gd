@@ -67,23 +67,34 @@ func _tap(m: Main, keycode: Key) -> void:
 func test_an_exported_course_carries_its_name_and_author_and_imports_identically() -> void:
 	var b := GuestCourse.build()
 	b.set_info("Three Short", "Ann")
+	b.restore_balance(7_250)
 	var c := b.course
+	c.set_parcel_owned(Vector2i(0, 0), false)
+	# 2026-11-10: the file holds the starting balance, not the exporter's money; the land is kept.
+	var expect := c.copy()
+	expect.set_land_budget(LandPrices.load_default().land_budget)
 	var path := DIR.path_join("three_short.json")
 	var dropped: Array[int] = []
 	assert_eq(CourseExport.write_file(c, path, dropped), OK)
 	assert_eq(dropped, [] as Array[int])
+	assert_eq(c.land_budget, 7_250, "the exporter keeps their money")
 	var text := FileAccess.get_file_as_string(path)
 	var data: Dictionary = JSON.parse_string(text)
 	assert_eq(data["version"], float(CourseData.FORMAT_VERSION))
 	assert_eq(data["name"], "Three Short")
 	assert_eq(data["author"], "Ann")
+	assert_eq(data["land_budget"], 5000.0, "the starting balance (data/land.json, D57)")
 	var errors: Array[String] = []
 	var back := CourseExport.read_file(path, errors)
 	assert_eq(errors, [] as Array[String])
 	assert_not_null(back)
 	if back == null:
 		return
-	assert_eq(back.content_hash(), c.content_hash(), "the import is the course exported")
+	assert_eq(back.content_hash(), expect.content_hash(),
+			"the import is the course exported, on the starting balance")
+	assert_eq(back.land_budget, 5000)
+	assert_false(back.is_parcel_owned(Vector2i(0, 0)), "the land owned is kept")
+	assert_true(back.is_parcel_owned(Vector2i(1, 0)))
 	assert_eq(back.course_name, "Three Short")
 	assert_eq(back.author, "Ann")
 	assert_eq(back.clubhouse, c.clubhouse)
@@ -92,8 +103,28 @@ func test_an_exported_course_carries_its_name_and_author_and_imports_identically
 	assert_false(text.contains("user://") or text.contains(OS.get_user_data_dir()),
 			"no path of this machine in the file")
 	var other := CourseExport.read_text(text, errors)
-	assert_eq(other.content_hash(), c.content_hash())
+	assert_eq(other.content_hash(), expect.content_hash())
 	assert_eq(CourseSave.to_json(other), text, "and writes back byte for byte")
+
+
+func test_a_sandbox_course_exports_with_unlimited_money() -> void:
+	var c := GuestCourse.course()
+	assert_true(c.has_unlimited_budget())
+	var text := CourseExport.export_json(c)
+	var data: Dictionary = JSON.parse_string(text)
+	assert_eq(data["land_budget"], null, "unlimited stays unlimited")
+	var back := CourseExport.read_text(text)
+	assert_true(back.has_unlimited_budget())
+	assert_eq(back.content_hash(), c.content_hash())
+
+
+func test_the_starting_balance_comes_from_the_prices() -> void:
+	var b := GuestCourse.build()
+	b.restore_balance(-300)
+	var lp := LandPrices.load_default()
+	lp.land_budget = 2_000
+	var data: Dictionary = JSON.parse_string(CourseExport.export_json(b.course, [], lp))
+	assert_eq(data["land_budget"], 2000.0, "a balance below 0 resets too")
 
 
 func test_the_builder_sets_the_name_and_author_and_keeps_the_rest() -> void:
@@ -309,6 +340,19 @@ func test_an_export_names_the_course_and_writes_it_to_the_course_folder() -> voi
 	assert_eq(n.course.content_hash(), m.course.content_hash())
 
 
+func test_a_course_exported_with_12345_imports_with_5000() -> void:
+	var m := _main()
+	m.show_course(GuestCourse.course())
+	m.build_tool.builder.restore_balance(12_345)
+	assert_eq(m.export_course("Rich Man", "Ann"), OK)
+	assert_eq(m.course.land_budget, 12_345, "exporting leaves the exporter's money alone")
+	var n := _main()
+	assert_true(n.import_course(CourseExport.path_for("Rich Man")))
+	assert_eq(n.course.land_budget, 5000, "the importer starts on the starting balance")
+	assert_eq(n.build_tool.builder.balance(), 5000)
+	assert_false(n.course.has_unlimited_budget())
+
+
 func test_an_export_names_each_hole_it_leaves_out() -> void:
 	var m := _main()
 	m.show_course(GuestCourse.course())
@@ -362,6 +406,45 @@ func test_the_menu_pauses_the_camera_while_open() -> void:
 	assert_false(m.camera.is_processing(), "arrow keys move the focus, not the map")
 	m.main_menu.close()
 	assert_true(m.camera.is_processing())
+
+
+func test_the_menu_pauses_the_day_and_gives_back_the_speed() -> void:
+	var m := _main()
+	m.guest_sim.set_speed(3.0)
+	m.open_menu()
+	assert_eq(m.guest_sim.speed, 0.0, "the menu pauses the guests' day")
+	assert_true((m.sim_speed_panel.buttons[0.0] as Button).button_pressed, "on the panel's Pause")
+	m.main_menu.close()
+	assert_eq(m.guest_sim.speed, 3.0, "closing it gives back the speed the player had")
+	assert_true((m.sim_speed_panel.buttons[3.0] as Button).button_pressed)
+	# A day the player paused stays paused.
+	m.guest_sim.set_speed(0.0)
+	m.open_menu()
+	m.main_menu.close()
+	assert_eq(m.guest_sim.speed, 0.0)
+	# Esc both ways too.
+	m.guest_sim.set_speed(1.0)
+	_tap(m, KEY_ESCAPE)
+	assert_true(m.main_menu.visible)
+	assert_eq(m.guest_sim.speed, 0.0)
+	_tap(m, KEY_ESCAPE)
+	assert_false(m.main_menu.visible)
+	assert_eq(m.guest_sim.speed, 1.0)
+
+
+func test_the_sound_panel_from_the_menu_keeps_the_day_paused() -> void:
+	var m := _main()
+	m.guest_sim.set_speed(3.0)
+	m.open_menu()
+	m.main_menu.main_buttons()[MainMenu.SOUND_INDEX].pressed.emit()
+	assert_false(m.main_menu.visible)
+	assert_true(m.audio_panel.visible)
+	assert_eq(m.guest_sim.speed, 0.0, "still paused under the sound panel")
+	m.audio_panel.close()
+	assert_true(m.main_menu.visible, "back on the menu")
+	assert_eq(m.guest_sim.speed, 0.0, "still paused on the menu")
+	m.main_menu.close()
+	assert_eq(m.guest_sim.speed, 3.0, "the menu path closed: the speed is back")
 
 
 func test_the_export_page_takes_a_name_and_author_and_exports() -> void:

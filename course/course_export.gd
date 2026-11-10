@@ -10,8 +10,14 @@ extends RefCounted
 ## Reading checks what kind of file it is before CourseSave parses it, so the reason is one a
 ## player can act on: not JSON or not an object ("not a course file"), a saved game ("use Load
 ## game"), no version, a version newer than this game reads, or a version below 1. Writing goes
-## through CourseSave.to_json, so only course/save.gd and course/builder.gd write CourseData; this
+## through CourseSave.to_data, so only course/save.gd and course/builder.gd write CourseData; this
 ## class writes files, never a course.
+##
+## 2026-11-10 (the user): an exported file starts its importer on the starting balance
+## (LandPrices.land_budget, $5,000 in data/land.json, D57), not the exporter's money, so the file
+## is fair to share; the land owned is kept (the holes stand on it), and a sandbox course's
+## unlimited money (null) stays unlimited. The file itself holds the reset balance; the
+## exporter's own course keeps its money.
 
 ## Where exports go and Import course looks, under the user data folder.
 const FOLDER: String = "user://courses"
@@ -35,16 +41,19 @@ class Entry:
 		return "%s: %s" % [CourseExport.title(course, path), CourseExport.summary(course)]
 
 
-## Writes `course` to `path` as course JSON, making the folder if need be; the new file replaces
-## any there only once it is written whole (a temp file renamed over it). Half-placed holes are
-## left out (CourseSave.to_json) and their numbers appended to `dropped`.
-static func write_file(course: CourseData, path: String, dropped: Array[int] = []) -> Error:
+## Writes `course` to `path` as course JSON (export_json: the starting balance, not the
+## course's), making the folder if need be; the new file replaces any there only once it is
+## written whole (a temp file renamed over it). Half-placed holes are left out
+## (CourseSave.to_data) and their numbers appended to `dropped`. `prices` gives the starting
+## balance (data/land.json when null).
+static func write_file(course: CourseData, path: String, dropped: Array[int] = [],
+		prices: LandPrices = null) -> Error:
 	var dir := path.get_base_dir()
 	if not DirAccess.dir_exists_absolute(dir):
 		var made := DirAccess.make_dir_recursive_absolute(dir)
 		if made != OK:
 			return made
-	var text := CourseSave.to_json(course, dropped)
+	var text := export_json(course, dropped, prices)
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -52,6 +61,18 @@ static func write_file(course: CourseData, path: String, dropped: Array[int] = [
 	f.store_string(text)
 	f.close()
 	return DirAccess.rename_absolute(tmp, path)
+
+
+## The text an export writes: the course format, with the balance reset to the starting balance
+## (`prices.land_budget`, data/land.json when null) unless the course's money is unlimited
+## (null, which stays null). The land owned is kept. `course` is not changed.
+static func export_json(course: CourseData, dropped: Array[int] = [],
+		prices: LandPrices = null) -> String:
+	var data := CourseSave.to_data(course, dropped)
+	if not course.has_unlimited_budget():
+		var lp := prices if prices != null else LandPrices.load_default()
+		data["land_budget"] = maxi(lp.land_budget, 0)
+	return CourseSave.stringify(data)
 
 
 ## Reads the course file at `path`. Null, with the reason in `errors`, when it is missing or is

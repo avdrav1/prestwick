@@ -45,6 +45,12 @@ static func load_file(path: String, errors: Array[String] = []) -> CourseData:
 ## Pretty-printed format v3 JSON text, with half-placed holes dropped (see save_file); their
 ## numbers are appended to `dropped`.
 static func to_json(course: CourseData, dropped: Array[int] = []) -> String:
+	return stringify(to_data(course, dropped))
+
+
+## The format v3 dictionary to_json writes, with half-placed holes dropped (their numbers
+## appended to `dropped`). A new dictionary: changing it changes neither `course` nor a file.
+static func to_data(course: CourseData, dropped: Array[int] = []) -> Dictionary:
 	var data := course.to_dict()
 	var whole: Array = []
 	for h: HoleData in course.holes:
@@ -53,6 +59,11 @@ static func to_json(course: CourseData, dropped: Array[int] = []) -> String:
 		else:
 			whole.append(h.to_dict())
 	data["holes"] = whole
+	return data
+
+
+## Course data as file text, pretty-printed as to_json writes it.
+static func stringify(data: Dictionary) -> String:
 	return JSON.stringify(data, "  ", false)
 
 

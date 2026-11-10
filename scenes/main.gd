@@ -44,6 +44,13 @@ const SPEED_PANEL_GAP: float = 8.0
 var _speed_panel_top: float = -1.0
 ## The feed panel's top as main.tscn places it (E4-S2: Play moves it under the balance).
 var _feed_panel_top: float = -1.0
+## 2026-11-10: the guests' day is paused (the speed panel's Pause) while the menu path is open:
+## the menu, or the sound panel opened from it. The speed the player had, put back when the
+## path closes; `_menu_holds_day` while held.
+var _speed_under_menu: float = 1.0
+var _menu_holds_day: bool = false
+## The sound panel is open from the menu (open_sound_from_menu), so the menu path is still open.
+var _sound_from_menu: bool = false
 
 @onready var mode_label: Label = $HUD/ModeLabel
 ## E4-S5: the course rating, on the mode label's line.
@@ -521,15 +528,34 @@ func open_menu() -> void:
 ## While the menu is open the arrow keys move its focus, not the map.
 ## E5-S4: the menu's Sound settings opens the sound panel; closing it comes back to the menu,
 ## focus on Sound settings.
+## The day stays paused throughout (_hold_day_for_menu).
 func open_sound_from_menu() -> void:
+	_sound_from_menu = true
+	_hold_day_for_menu()
 	audio_panel.open()
 	audio_panel.closed.connect(func() -> void:
+		_sound_from_menu = false
 		main_menu.open(course)
 		main_menu.show_main(MainMenu.SOUND_INDEX), CONNECT_ONE_SHOT)
 
 
 func _on_menu_visibility_changed() -> void:
 	camera.set_process(not main_menu.visible)
+	_hold_day_for_menu()
+
+
+## 2026-11-10: pauses the guests' day as the menu path opens (the menu, or the sound panel
+## opened from it) and puts back the speed the player had when it is fully closed; a day the
+## player had paused stays paused.
+func _hold_day_for_menu() -> void:
+	var open := main_menu.visible or _sound_from_menu
+	if open and not _menu_holds_day:
+		_menu_holds_day = true
+		_speed_under_menu = guest_sim.speed
+		guest_sim.set_speed(0.0)
+	elif not open and _menu_holds_day:
+		_menu_holds_day = false
+		guest_sim.set_speed(_speed_under_menu)
 
 
 ## Imports the course file at `path` (E5-S5, CourseExport): a fresh builder on it, which closes
