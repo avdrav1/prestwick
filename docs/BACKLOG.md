@@ -1174,6 +1174,21 @@ Ships as 0.6.0, the MVP (D19). Pillar 4: finish it. Art is the largest single co
 
 Done when: 10 people outside the project have played a build with final art and sound, and swapped a course file.
 
+- [ ] E5-S9 Place the clubhouse. Every course has one, on owned land (D60).
+  - Note: listed first in E5 because guests depend on it; ids follow E5-S8. A 3x3 footprint with a facing, as course data written only by course/builder.gd and course/save.gd. A new course gets one beside its starting block; a course file without one (format bump) gets one by the same rule, else beside hole 1's tee. Free to place and move (D60); its tiles take no paint and no tee, cup or hole line.
+  - Accept: a new course shows a clubhouse; Build has a Clubhouse tool that moves it to any owned 3x3 with room, refusing water, holes' tees and greens and unowned land with a one-line reason; undo moves it back; save and load keep it; an older course file loads with one placed.
+  - Test: `tests/test_clubhouse.gd`: placement rule on a new course and an old file, refusals, undo, save round trip, the format version.
+  - Touches: `course/`, `tests/`
+- [ ] E5-S10 Draw the clubhouse. It reads as the course's front door.
+  - Note: an `/art-spec` for the clubhouse first (one building, its footprint and facing, drawn over the smooth ground, D50), with a placeholder so code goes on; E5-S1's sheet list gains it. The Build tool's button and hover outline belong here.
+  - Accept: the clubhouse draws at every zoom, sorted with guests and trees, with the hover outline showing where a move would land and why it is refused.
+  - Test: screenshots at 0.175x, 0.5x and 1x looked at; `tests/test_clubhouse.gd` for the tool's hover.
+  - Touches: `art/`, `scenes/`
+- [ ] E5-S11 Send guests from and back to the clubhouse. Arrivals start and end there (D60).
+  - Note: groups appear at the clubhouse door, walk to the first open hole's tee, and after their last hole walk back to the door and leave; the walks count toward the day's pace and use the cart path search (`GuestWalk`) like the walks between holes. The fee stays at the first tee (E4-S4). No clubhouse, no arrivals.
+  - Accept: a day on PlaytestNine shows groups leaving and returning to the clubhouse; skip to morning still matches a played day; the 24-guest day still finishes (E4-S8's `scripts/guest_day.gd` runs) with the clubhouse beside the first tee, and a far clubhouse costs the day time in a way the reaction for pace can name.
+  - Test: `tests/test_guest_brain.gd`; `/balance reactions` and `scripts/guest_day.gd` reruns in the commit.
+  - Touches: `guests/`, `tests/`
 - [ ] E5-S1 Choose the art pipeline. Decide before any final pixel is drawn.
   - Accept: a `/decision` on hand-drawn versus Aseprite with a generated terrain base, with a time estimate from one drawn surface and one riser. Every sheet to be produced is listed with an `/art-spec` file, including the E2 markers drawn in code: the pin, aim line, landing marker and swing bar.
   - Test: one final-quality tile in the game, screenshot beside the placeholders.
@@ -1195,6 +1210,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Test: by hand with `/playtest full`. Run headless with no audio errors.
   - Touches: `audio/`, `scenes/`
 - [ ] E5-S5 Export and import courses. A course is one JSON file friends can swap.
+  - Note: (D60) the course thumbnail moved to the Icebox to pay for the clubhouse; files still carry name and author and show par and yardage.
   - Accept: export and import from a main menu. Files carry name, author and thumbnail, and show par and yardage, derived from the holes because format version 1 has no fields for them. An import runs the validator, closes failing holes and lists them in one notice with each hole's reason, as E4-S7's load does (D35), and refuses a malformed file or a newer version with a clear message. An exported course imports identically on a second machine.
   - Test: `tests/test_course_export.gd`, including malformed and wrong-version files.
   - Touches: `course/`, `scenes/`, `tests/`
@@ -1214,8 +1230,9 @@ Done when: 10 people outside the project have played a build with final art and 
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
-- Tee in an L's corner (was E3-S42, moved 2026-11-08). The framing never tries a long hole's tee in the L's corner of the free view. Measured 2026-11-07: over 72 directions, 4 lengths and both list states the corner never showed more than 2 points more of the tee-to-cup line than the better strip, since each strip's framing already clamps the tee into the elbow. Reopen if the HUD changes shape (a left panel or a bottom panel that does not span the view). Pillar 2.
 
+- Course thumbnail in exported files (was part of E5-S5, moved 2026-11-10 by D60 to pay for the clubhouse). Pillar 3.
+- Tee in an L's corner (was E3-S42, moved 2026-11-08). The framing never tries a long hole's tee in the L's corner of the free view. Measured 2026-11-07: over 72 directions, 4 lengths and both list states the corner never showed more than 2 points more of the tee-to-cup line than the better strip, since each strip's framing already clamps the tee into the elbow. Reopen if the HUD changes shape (a left panel or a bottom panel that does not span the view). Pillar 2.
 - Land corridor width and D29 (found in E6 review). Is a one-parcel (80 yd) wide corridor right for a par 4? On the E6-S8 lanes 29% of swept tee strokes within 60 degrees of the line ended OB at the land line. D29's strict reading (OB on a roll over the line even if the ball would have come back) changed 1 of 12,628 swept strokes; recheck if players raise steep ground beside the line. For the user's hand playtest. Pillar 2.
 - Off-green roll feel after E6-S10 (found in E6 review). Fairway and tee roll about 12% shorter on flat ground, balls run faster down off-green slopes, and a swing across a valley floor dies sooner. For the user's hand playtest. Pillar 2.
 - Putt marker while a solve runs (found in E6 review). After a new stroke or a switch to the putter no marker shows until the first putt rests (up to 2 to 3 frames on a steep bank), a cold steep solve spreads over about 1 s, and a marker that trails a sweep gives no sign it is for an older aim (a fade or dash could). Accuracy is measured only on straight two-steps-per-tile risers, not curved or mixed banks. Pillar 2.

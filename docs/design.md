@@ -341,9 +341,9 @@ What each of these measures (E3-S1, D38 to D43). Every number is in `data/guests
 
 ## MVP
 
-In: 8 surfaces above, flat and hilly terrain, land bought in parcels on one map (D19), 9 holes, sandbox, one golfer sprite set, course JSON export/import.
+In: 8 surfaces above, flat and hilly terrain, land bought in parcels on one map (D19), 9 holes, one clubhouse where guests arrive and leave (D60), sandbox, one golfer sprite set, course JSON export/import.
 
-Out: campaign, unlocks, tournaments, second plot, weather (wind included: cut at E2 planning, D8), placed OB stakes (D9), staff, clubhouse, camera rotation, online sharing, multiplayer, mobile.
+Out: campaign, unlocks, tournaments, second plot, weather (wind included: cut at E2 planning, D8), placed OB stakes (D9), staff, clubhouse interiors and buildings beyond the one clubhouse (D60), camera rotation, online sharing, multiplayer, mobile.
 
 ## Milestones
 

@@ -627,3 +627,17 @@ Choice: R4, P1, C1 (user, 2026-11-09, each the recommended option). R4: `GuestSi
 Why: pillar 3: a day's guests give one verdict a night, which reads as the course's story rather than noise, and a better course paying for itself faster is the story the game should tell. Pillar 4: one moment the stars move, no second fee to keep, and no new numbers.
 Amends: D58 (its update: the stars shown move at dusk), E4-S6's fee rule (lowered at dusk only), E4-S11's held fee (the ceiling cannot move within a day, so a fee set during a day is under the morning's ceiling and nothing needs holding), the Claude Docs design doc's Rating (Management layer).
 Affects: scenes/guest_sim.gd, scenes/rating_row.gd, scenes/fee_panel.gd, scenes/main.gd, course/game_save.gd, scripts/economy_sim.gd (already a day at a time), docs/design.md Balance targets (economy) and Economy and time, docs/BACKLOG.md E4-S13, the Icebox
+
+## D60: Does every course get a clubhouse? (2026-11-10)
+Question: the user asked for a clubhouse on every course, where guests start, as in SimGolf. The clubhouse is on the MVP's "Out" list (docs/design.md MVP), so bringing it in needs this decision and what it delays.
+Options:
+- Where: W1 E5's first stories, ship 0.5.0 on E4 as planned (cost: E5 grows by three stories; benefit: E4 closes untouched). W2 add it to E4 before 0.5.0 (cost: 0.5.0 slips and its hand checks wait). W3 its own epic between E4 and E5 (cost: a release of its own).
+- Placing: P1 the player places a 3x3 clubhouse on owned land with a Build tool and can move it; a new course starts with one beside its starting block; no clubhouse, no guests. P2 fixed on the starting block. P3 none at start, placing it is the first build step.
+- Guests: G1 groups appear at the clubhouse, walk to the first tee, and walk back after their last hole before leaving; the walks count toward the day's pace. G2 arrive only, leave from the last green. G3 as G1, and the fee is paid at the clubhouse.
+- Cost: C1 free to place and move; its footprint must be on owned land. C2 a flat fee to move it. C3 a daily upkeep.
+Choice: W1, P1, G1, C1 (user, 2026-11-10, each the recommended option). The clubhouse joins the MVP. It is course data (a 3x3 footprint and a facing), written only by course/builder.gd and course/save.gd, and the course format gains a field for it (a format version bump; an older file gets a clubhouse placed by the same rule as a new course, beside its first tee if the starting block has no room). The green fee is still paid at the first tee (E4-S4).
+Why: pillar 3: guests walking out of a clubhouse and back to it make the course read as a place people visit, which is SimGolf's picture. Pillar 4: one building, no interior, no staff, no money of its own.
+Delays: E5 and so 0.6.0 by the three clubhouse stories, paid for by moving E5-S5's course thumbnail to the Icebox (export and import stay).
+Amends: docs/design.md MVP (clubhouse moves from Out to In), the Claude Docs design doc's out-of-scope list.
+Affects: course/ (data, builder, save, format version), guests/ (spawn, walks, pace), scenes/ (Build tool, drawing), art/ (a placeholder and an /art-spec), docs/BACKLOG.md E5-S9 to E5-S11 and E5-S5
+
