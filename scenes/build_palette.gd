@@ -85,7 +85,7 @@ func _ready() -> void:
 	buy_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.BUY))
 	row.add_child(VSeparator.new())
 	clubhouse_button = _toggle(row, "Clubhouse", _tools_group)
-	clubhouse_button.tooltip_text = "Click to move the clubhouse, where guests arrive and leave (free); right-click to turn its door"
+	clubhouse_button.tooltip_text = "Click to move the clubhouse, where guests arrive and leave (free); right-click or R to turn its door"
 	clubhouse_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CLUBHOUSE))
 	row.add_child(VSeparator.new())
 	var brush_label := Label.new()
@@ -95,7 +95,7 @@ func _ready() -> void:
 	for size: int in _brush_sizes:
 		var b := _toggle(row, str(size), _brush_group)
 		b.custom_minimum_size = Vector2(32, 0)
-		b.tooltip_text = "%dx%d brush" % [size, size]
+		b.tooltip_text = "%dx%d brush ([ and ] step the brush)" % [size, size]
 		b.pressed.connect(func() -> void: _tool.brush_size = size)
 		brush_buttons.append(b)
 	row.add_child(VSeparator.new())
@@ -111,9 +111,14 @@ func _ready() -> void:
 ## it while it is the selected tool steps the tool back to painting its surface.
 func set_buying(on: bool) -> void:
 	buy_button.visible = on
+	if _tool != null:
+		_tool.buying = on
 	if not on and _tool != null and _tool.tool == BuildTool.Tool.BUY:
 		_tool.select_surface(_tool.surface)
 
+
+## E5-S6: the bar is in the keyboard's reach (HudFocus: F6, then the arrows and Space or Enter),
+## and Q and E step the tool, [ and ] the brush, without it (BuildTool).
 
 ## Drives `tool` from now on and shows its current settings.
 func bind(tool: BuildTool) -> void:

@@ -3,7 +3,10 @@ extends PanelContainer
 ## The one notice a save or a load gives (E4-S7): what was saved and any hole left out, what was
 ## loaded and every hole the validator closed with its one-line reason (D35, D47), or why a load
 ## failed and that the game was left alone. Hidden until shown; OK (or the next save or load)
-## dismisses it. Centred at the top of the screen, over the map, only while shown.
+## dismisses it. Centred at the top of the screen, over the map, only while shown. E5-S6: Esc
+## dismisses it too, and F6 reaches its OK (HudFocus).
+
+const CLOSE_ACTION: StringName = &"ui_cancel"
 
 ## The text's width, px: centred at 1280 x 720 it ends left of the hole panel (340 px from the
 ## right edge).
@@ -24,11 +27,17 @@ func _ready() -> void:
 	box.add_child(label)
 	ok_button = Button.new()
 	ok_button.name = "OK"
-	ok_button.text = "OK"
+	ok_button.text = "OK (Esc)"
 	ok_button.focus_mode = Control.FOCUS_NONE
 	ok_button.size_flags_horizontal = Control.SIZE_SHRINK_END
 	ok_button.pressed.connect(hide)
 	box.add_child(ok_button)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed(CLOSE_ACTION):
+		hide()
+		get_viewport().set_input_as_handled()
 
 
 ## Shows `lines`, one a row.

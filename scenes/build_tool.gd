@@ -31,6 +31,13 @@ extends Node2D
 ## click would move it to, in refuse_color when refused, with its door tile outlined beside it.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
+##
+## E5-S6, the keyboard: the arrows move the hovered tile one tile along the grid (Right +x, Left
+## -x, Down +y, Up -y; the outline is the cursor), starting from the tile at the middle of the
+## view; Space or Enter applies the tool there as a click does, and held while the arrows move
+## it drags (one undo step). Q and E step through the tools in the palette's order (cycle_tool),
+## [ and ] through the brush sizes (step_brush), R turns the clubhouse (as the right-click does).
+## cursor_moved tells Main, which keeps the cursor in view.
 
 enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE }
 
@@ -40,8 +47,21 @@ signal settings_changed
 signal hover_changed
 ## Emitted when the Buy land tool is clicked on parcel `parcel`; nothing is bought yet.
 signal buy_requested(parcel: Vector2i)
+## E5-S6: the keyboard moved the cursor to `cell`.
+signal cursor_moved(cell: Vector2i)
 
 const UNDO_ACTION: StringName = &"ui_undo"
+## E5-S6: the keyboard cursor and the tool keys (project.godot; the help overlay lists them).
+const CURSOR_ACTIONS: Dictionary = {
+	&"build_cursor_left": Vector2i(-1, 0), &"build_cursor_right": Vector2i(1, 0),
+	&"build_cursor_up": Vector2i(0, -1), &"build_cursor_down": Vector2i(0, 1),
+}
+const APPLY_ACTION: StringName = &"build_apply"
+const TOOL_PREV_ACTION: StringName = &"build_tool_prev"
+const TOOL_NEXT_ACTION: StringName = &"build_tool_next"
+const BRUSH_SMALLER_ACTION: StringName = &"brush_smaller"
+const BRUSH_LARGER_ACTION: StringName = &"brush_larger"
+const TURN_ACTION: StringName = &"clubhouse_turn"
 ## Points along each tile edge of a parcel outline, so it lies on the sloped ground (E3-S59).
 const PARCEL_EDGE_POINTS: int = 4
 
@@ -82,6 +102,11 @@ var pinned_parcel: Vector2i = TilePicker.NONE:
 	set(value):
 		pinned_parcel = value
 		queue_redraw()
+## E5-S6: whether Buy land is in the palette (BuildPalette.set_buying), so cycle_tool skips it
+## when it is hidden.
+var buying: bool = true
+## E5-S6: true while the apply key is held (a keyboard stroke).
+var key_held: bool = false
 ## Presses so far: each starts a stroke (one click or drag). The HUD says a refusal once per
 ## stroke (E6-S17), however many dabs of a drag the builder refuses.
 var stroke_count: int = 0
@@ -320,6 +345,11 @@ func press_at(local: Vector2) -> void:
 ## Mouse moved to `local` with the left button held: apply along the drag.
 func drag_to(local: Vector2) -> void:
 	hover_at(local)
+	_drag_over()
+
+
+## Applies the stroke under way along the grid line to the hovered tile (drag_to, move_cursor).
+func _drag_over() -> void:
 	if not _dragging or not active or _single_click():
 		return
 	if _hover == TilePicker.NONE:
@@ -358,6 +388,7 @@ static func grid_line(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
 ## Left button released: close the stroke (one undo step).
 func release() -> void:
 	_dragging = false
+	key_held = false
 	_last_cell = TilePicker.NONE
 	if builder != null:
 		builder.end_stroke()
@@ -368,6 +399,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed(UNDO_ACTION):
 		undo()
+		get_viewport().set_input_as_handled()
+		return
+	if _key_input(event):
 		get_viewport().set_input_as_handled()
 		return
 	var mb := event as InputEventMouseButton
@@ -389,9 +423,117 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _dragging and (motion.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
 			drag_to(local)
 		else:
-			if _dragging:
+			if _dragging and not key_held:
 				release()
 			hover_at(local)
+
+
+## E5-S6: the keys of the Build cursor and tools. True when `event` was one of them.
+func _key_input(event: InputEvent) -> bool:
+	for action: StringName in CURSOR_ACTIONS:
+		if event.is_action_pressed(action, true):
+			move_cursor(CURSOR_ACTIONS[action])
+			return true
+	if event.is_action_pressed(APPLY_ACTION):
+		key_press()
+		return true
+	if event.is_action_released(APPLY_ACTION):
+		if key_held:
+			release()
+		return true
+	if event.is_action_pressed(TOOL_PREV_ACTION, true):
+		cycle_tool(-1)
+		return true
+	if event.is_action_pressed(TOOL_NEXT_ACTION, true):
+		cycle_tool(1)
+		return true
+	if event.is_action_pressed(BRUSH_SMALLER_ACTION):
+		step_brush(-1)
+		return true
+	if event.is_action_pressed(BRUSH_LARGER_ACTION):
+		step_brush(1)
+		return true
+	if event.is_action_pressed(TURN_ACTION):
+		turn_clubhouse()
+		return true
+	return false
+
+
+## E5-S6: the tile the keyboard cursor starts on when none is hovered: the one at the middle of
+## the view, else the middle of the map.
+func cursor_start() -> Vector2i:
+	if builder == null:
+		return TilePicker.NONE
+	if is_inside_tree():
+		var cell: Vector2i = _pick(_to_local(get_viewport_rect().size * 0.5))
+		if cell != TilePicker.NONE:
+			return cell
+	return Vector2i(builder.course.width / 2, builder.course.height / 2)
+
+
+## E5-S6: moves the hovered tile `step` tiles along the grid, staying on the map (from
+## cursor_start when none is hovered). While the apply key is held it drags, as the mouse does.
+func move_cursor(step: Vector2i) -> void:
+	if builder == null or not active:
+		return
+	var c: CourseData = builder.course
+	var cell: Vector2i = cursor_start() if _hover == TilePicker.NONE else _hover + step
+	cell = Vector2i(clampi(cell.x, 0, c.width - 1), clampi(cell.y, 0, c.height - 1))
+	if cell != _hover:
+		_hover = cell
+		queue_redraw()
+		hover_changed.emit()
+		_drag_over()
+	cursor_moved.emit(_hover)
+
+
+## E5-S6: the apply key went down: a click at the cursor (put at cursor_start when none is
+## hovered). It stays one stroke until the key comes up.
+func key_press() -> void:
+	if builder == null or not active:
+		return
+	if _hover == TilePicker.NONE:
+		move_cursor(Vector2i.ZERO)
+	key_held = true
+	_dragging = true
+	stroke_count += 1
+	builder.begin_stroke()
+	_last_cell = TilePicker.NONE
+	_apply(_hover)
+
+
+## E5-S6: the tools in the palette's order (CourseBuilder.PALETTE's surfaces, Raise, Lower, Tee,
+## Cup, Buy land while shown, Clubhouse), as [tool, surface] pairs.
+func tool_order() -> Array:
+	var out: Array = []
+	for s: Surface.Type in CourseBuilder.PALETTE:
+		out.append([Tool.PAINT, s])
+	for t: Tool in [Tool.RAISE, Tool.LOWER, Tool.TEE, Tool.CUP, Tool.BUY, Tool.CLUBHOUSE]:
+		if t != Tool.BUY or buying:
+			out.append([t, surface])
+	return out
+
+
+## E5-S6: steps `dir` (+1 or -1) through tool_order, wrapping round.
+func cycle_tool(dir: int) -> void:
+	var order: Array = tool_order()
+	var at: int = 0
+	for i: int in order.size():
+		if order[i][0] == tool and (tool != Tool.PAINT or order[i][1] == surface):
+			at = i
+			break
+	var next: Array = order[posmod(at + dir, order.size())]
+	if next[0] == Tool.PAINT:
+		select_surface(next[1])
+	else:
+		select_tool(next[0])
+
+
+## E5-S6: steps `dir` through BuilderTuning.brush_sizes, stopping at the ends.
+func step_brush(dir: int) -> void:
+	var sizes: PackedInt32Array = BuilderTuning.load_default().brush_sizes
+	var at: int = maxi(sizes.find(brush_size), 0)
+	brush_size = sizes[clampi(at + dir, 0, sizes.size() - 1)]
 
 
 func _draw() -> void:

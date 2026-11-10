@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -28,6 +28,8 @@
 [ext_resource type="Script" path="res://scenes/fee_panel.gd" id="fee_panel"]
 [ext_resource type="Script" path="res://audio/game_audio.gd" id="game_audio"]
 [ext_resource type="Script" path="res://scenes/audio_panel.gd" id="audio_panel"]
+[ext_resource type="Script" path="res://scenes/hud_focus.gd" id="hud_focus"]
+[ext_resource type="Script" path="res://scenes/help_overlay.gd" id="help_overlay"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -212,6 +214,15 @@ offset_bottom = 16.0
 grow_horizontal = 2
 script = ExtResource("save_notice")
 
+[node name="HelpOverlay" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+grow_horizontal = 2
+mouse_filter = 2
+script = ExtResource("help_overlay")
+
 [node name="MainMenu" type="Control" parent="HUD"]
 visible = false
 layout_mode = 3
@@ -231,3 +242,6 @@ script = ExtResource("game_audio")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")
+
+[node name="HudFocus" type="Node" parent="."]
+script = ExtResource("hud_focus")

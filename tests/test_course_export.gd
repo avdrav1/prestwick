@@ -382,6 +382,10 @@ func test_the_export_page_takes_a_name_and_author_and_exports() -> void:
 	assert_false(m.main_menu.visible, "the menu closes on the notice")
 	assert_true(FileAccess.file_exists(CourseExport.path_for("Three Short")))
 	assert_string_starts_with(m.save_notice.label.text, "Exported \"Three Short\" by Ann")
+	# E5-S6: Esc closes the notice first ("OK (Esc)"), then opens the menu.
+	_tap(m, KEY_ESCAPE)
+	assert_false(m.save_notice.visible, "Esc closes the notice")
+	assert_false(m.main_menu.visible)
 	_tap(m, KEY_ESCAPE)
 	assert_true(m.main_menu.visible)
 	_tap(m, KEY_ESCAPE)

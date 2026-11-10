@@ -85,6 +85,12 @@ var _feed_panel_top: float = -1.0
 ## E5-S4: the sound, and its F2 volume panel.
 @onready var game_audio: GameAudio = $GameAudio
 @onready var audio_panel: AudioPanel = $HUD/AudioPanel
+## E5-S6: the HUD in the keyboard's reach (F6) and the key map (F1).
+@onready var hud_focus: HudFocus = $HudFocus
+@onready var help_overlay: HelpOverlay = $HUD/HelpOverlay
+
+## E5-S6: the Build cursor keeps this many px inside the free view before the camera follows it.
+const CURSOR_MARGIN: float = 48.0
 
 
 func _ready() -> void:
@@ -137,6 +143,11 @@ func _ready() -> void:
 	game_audio.bind(swing_control, shot_view, guest_sim.feed)
 	audio_panel.bind(game_audio)
 	main_menu.sound_requested.connect(open_sound_from_menu)
+	# E5-S6: F6's stops, in order, and the camera following the Build cursor.
+	hud_focus.bind([build_palette, swing_panel, hole_panel, land_panel, feed_panel, mode_button,
+			new_course_button, new_sandbox_button, sim_speed_panel, fee_panel, save_notice] as Array[Control],
+			[main_menu, audio_panel] as Array[Control])
+	build_tool.cursor_moved.connect(_on_cursor_moved)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -429,6 +440,15 @@ func _hud_rect(c: Control) -> Rect2:
 			pos.y = anchored.get_center().y - size.y * 0.5
 	# From the parent's space to the screen's, as the control's own transform sits now.
 	return Rect2(c.get_global_rect().position - c.position + pos, size)
+
+
+## E5-S6: the keyboard moved the Build cursor to `cell`: the camera centres on it when it comes
+## within CURSOR_MARGIN of the free view's edge, so the cursor never goes under the HUD or off
+## the screen.
+func _on_cursor_moved(cell: Vector2i) -> void:
+	var w: Vector2 = tile_world(cell)
+	if not free_view_rect().grow(-CURSOR_MARGIN).has_point(camera.screen_point(w)):
+		camera.centre_on(w)
 
 
 ## The centre of tile `cell`'s top in the camera's space.
