@@ -3,8 +3,9 @@ extends PanelContainer
 ## The Build-mode HUD bar: the 9 surfaces, `oob` included (D9; each with its tile art, so the
 ## colorblind pattern shows on the button), raise and lower, the tee and cup tools (E2-S3),
 ## Buy land (E6-S5), the Clubhouse tool (E5-S10: a click moves it, a right-click turns its
-## door), brush 1/3/5 and undo. E5-S10: buttons keep BUTTON_SIDE_MARGIN px each side (6 before),
-## so the bar with Buy land and Clubhouse still fits a 1280 px window. A view onto a BuildTool:
+## door), brush 1/3/5 and undo. E5-S10: buttons keep BUTTON_SIDE_MARGIN px each side (6 before).
+## E5-S13: the surface icons draw SURFACE_ICON_WIDTH px wide (64 before), so the whole bar, Buy
+## land and Clubhouse shown, fits a 1280 px window with a gutter at both ends. A view onto a BuildTool:
 ## buttons set the tool, and the tool's settings_changed keeps the buttons in step.
 ## Buttons are made in code from CourseBuilder.PALETTE and BuilderTuning.brush_sizes.
 
@@ -23,6 +24,13 @@ var undo_button: Button
 
 ## Each button's left and right content margin, px (E5-S10; the top and bottom keep 6).
 const BUTTON_SIDE_MARGIN: int = 3
+## E5-S13: the surface buttons' tile art width, px (the 64 x 32 tile scaled to 56 x 28).
+const SURFACE_ICON_WIDTH: int = 56
+## E5-S13: the least space left between the bar and either side of a 1280 px window.
+const MIN_GUTTER: int = 16
+## E5-S13: the bar's height, px, as it was with 64 px icons, kept so the free view the camera
+## frames holes in (Main.free_view_rects) does not change with the smaller icons.
+const BAR_HEIGHT: int = 90
 
 ## Selected buttons get this border so the current tool and brush read at a glance.
 @export var selected_border: Color = Color(1.0, 0.97, 0.8)
@@ -54,7 +62,8 @@ func _ready() -> void:
 		b.icon = art.surface_texture(StringName(Surface.name_of(s)))
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.custom_minimum_size = Vector2(64, 0)
+		b.add_theme_constant_override("icon_max_width", SURFACE_ICON_WIDTH)
+		b.custom_minimum_size = Vector2(SURFACE_ICON_WIDTH, BAR_HEIGHT)
 		b.tooltip_text = "Paint %s" % Surface.name_of(s)
 		b.pressed.connect(func() -> void: _tool.select_surface(s))
 		surface_buttons.append(b)

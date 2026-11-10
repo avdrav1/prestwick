@@ -377,6 +377,46 @@ func test_palette_drives_the_tool() -> void:
 	assert_eq(lit, ["tee", "3"] as Array[String])
 
 
+## E5-S13: the whole Build bar lies inside a 1280 x 720 window with BuildPalette.MIN_GUTTER
+## px to spare at both ends, in every state it can be in: a New course (Buy land shown), a New
+## sandbox (Buy land hidden) and a loaded course, with each tool and brush selected.
+func test_palette_fits_a_1280_window_in_every_state() -> void:
+	var m := _main()
+	var pal: BuildPalette = m.build_palette
+	var view: Rect2 = m.get_viewport().get_visible_rect()
+	assert_eq(view.size, Vector2(1280, 720), "the project's window")
+	var inside: Rect2 = view.grow_individual(-BuildPalette.MIN_GUTTER, 0, -BuildPalette.MIN_GUTTER, 0)
+	var states: Array[String] = ["loaded", "new course", "new sandbox"]
+	for state: String in states:
+		match state:
+			"new course":
+				m.new_course(7)
+			"new sandbox":
+				m.new_sandbox()
+		var buying: bool = pal.buy_button.visible
+		if state != "loaded":
+			assert_eq(buying, state == "new course", "%s: Buy land shown" % state)
+		var tools: Array[Button] = []
+		tools.append_array(pal.surface_buttons)
+		tools.append_array([pal.raise_button, pal.lower_button, pal.tee_button, pal.cup_button,
+				pal.clubhouse_button])
+		tools.append_array(pal.brush_buttons)
+		if buying:
+			tools.append(pal.buy_button)
+		for b: Button in tools:
+			b.pressed.emit()
+			await get_tree().process_frame
+			await get_tree().process_frame
+			var r: Rect2 = pal.get_global_rect()
+			assert_true(inside.encloses(r), "%s, %s lit: bar %s inside %s" % [state, b.text, r, inside])
+			for c: Node in pal.get_child(0).get_children():
+				var btn := c as Button
+				if btn != null and btn.visible:
+					# Readable: no button squeezed below its own text and icon.
+					assert_true(btn.size.x >= btn.get_combined_minimum_size().x,
+							"%s: %s keeps its width" % [state, btn.text])
+
+
 func test_undo_shortcut() -> void:
 	assert_true(InputMap.has_action(BuildTool.UNDO_ACTION))
 	var m := _main()

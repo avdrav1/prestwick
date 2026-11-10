@@ -1234,6 +1234,12 @@ Done when: 10 people outside the project have played a build with final art and 
   - Accept: 10 people outside the project complete the checklist, with notes in `docs/playtests/`. At least two swap a course file. Bugs are filed here, pillar-level feel problems go to the icebox, balance goes to `/balance`. Recruiting them is a person's job, not an agent's.
   - Test: 10 session notes. No open crash bugs before the final `/ship-it`.
   - Touches: `docs/`
+- [x] E5-S13 Fit the Build toolbar in a 1280 px window. Every button shows, with room at both ends.
+  - Note: found in E5-S10. With the Clubhouse button a New course's bar (Buy land shown) was 1287 px wide in a 1280 px window: Undo cut off at the right and the fairway button against the left edge (`docs/decisions/e5-s10-clubhouse-new-course.png`).
+  - Accept: the whole bar lies inside a 1280 x 720 window with a gutter at both ends, Buy land shown or not, every button readable.
+  - Test: `tests/test_builder.gd` `test_palette_fits_a_1280_window_in_every_state`.
+  - Touches: `scenes/`, `tests/`
+  - Done: the least disruptive of the options: the surface buttons' tile art draws 56 px wide (`BuildPalette.SURFACE_ICON_WIDTH`, the 64 x 32 tile scaled to 56 x 28, the button's `icon_max_width`; 64 before), so each surface button but cart path (its label is wider) is 64 px instead of 70; they keep the bar's 90 px height (`BuildPalette.BAR_HEIGHT`) so the free view the camera frames holes in is unchanged (`test_when_no_strip_fits_the_one_showing_more_of_the_line_wins` measures it). No label, button or row changed. The bar is 1225 px on a New course, 27 px clear of each side at 1280 (1287 before); without Buy land 78 px less. `test_palette_fits_a_1280_window_in_every_state` loads a course, then a New course (Buy land shown) and a New sandbox (hidden), lights every tool and brush button in turn and checks the bar's rect lies inside the viewport less `BuildPalette.MIN_GUTTER` (16 px) at each end and no button is squeezed below its own minimum width; it fails on the old bar. Screenshot looked at: `docs/decisions/e5-s13-toolbar-new-course.png` (seed 7, the E5-S10 picture: fairway to Undo all clear of the edges, the tile patterns still read on the smaller icons).
 
 ## Icebox
 
