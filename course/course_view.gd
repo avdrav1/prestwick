@@ -53,6 +53,12 @@ extends Node2D
 ## Contours (E3-S57): `topo`, a TopoOverlay, draws contour lines Y-sorted into the terrain in
 ## Play (course/topo_overlay.gd); it traces again when a height changes.
 ##
+## The clubhouse (E5-S10, D60): `clubhouse`, a Y-sorted ClubhouseView child of this view,
+## drawn over its footprint and sorted with the terrain, markers and guests at its front
+## tile (course/clubhouse_view.gd). show_course places it and refresh_clubhouse moves it (Main
+## calls it on CourseBuilder.clubhouse_changed). Below marker_min_screen_scale (0.175x) it draws
+## at z 1 like the grown markers and the guests (lifted_z), so it still sorts with the guests.
+##
 ## Line of play (E3-S46, D47): `play_lines`, a LineOfPlay, draws each hole's tee -> turn -> cup
 ## line on the ground, Y-sorted into the terrain, in Build (course/line_of_play.gd). Main hands
 ## it the builder's lines after every check (show_play_lines); a height change redraws it then.
@@ -164,6 +170,8 @@ var play_art: bool = false:
 
 ## The contour overlay (E3-S57): Main enables it in Play.
 var topo: TopoOverlay
+## The clubhouse (E5-S10).
+var clubhouse: ClubhouseView
 ## The line of play (E3-S46): Main enables it in Build.
 var play_lines: LineOfPlay
 
@@ -190,6 +198,8 @@ func _init() -> void:
 	_holes_root.name = "Holes"
 	_holes_root.y_sort_enabled = true
 	add_child(_holes_root)
+	clubhouse = ClubhouseView.new()
+	add_child(clubhouse)
 	topo = TopoOverlay.new()
 	add_child(topo)
 	play_lines = LineOfPlay.new()
@@ -238,7 +248,14 @@ func show_course(c: CourseData) -> void:
 		_free_issue(m)
 	_spare_issues.clear()
 	refresh_holes()
+	refresh_clubhouse()
 	show_issues({})
+
+
+## Draws the clubhouse where the course has it now (E5-S10): after a move, a turn or its undo.
+func refresh_clubhouse() -> void:
+	clubhouse.show_clubhouse(_course)
+	clubhouse.z_index = lifted_z(_view_scale(), marker_min_screen_scale)
 
 
 ## Rebuilds the tee marker and pin of every hole from CourseData. Call after holes change
@@ -584,6 +601,7 @@ func _process(_delta: float) -> void:
 ## local unit (HoleMarker.text_scale). CourseView reruns it when the zoom changes.
 func layout_hole_labels(scale: float) -> void:
 	_hole_label_scale = scale
+	clubhouse.z_index = lifted_z(scale, marker_min_screen_scale)
 	var k: float = marker_shape_scale(scale)
 	for m: HoleMarker in _markers:
 		m.text_scale = 1.0 / scale

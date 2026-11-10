@@ -285,3 +285,81 @@ func test_a_malformed_clubhouse_does_not_load() -> void:
 	assert_not_null(c)
 	if c:
 		assert_false(c.has_clubhouse())
+
+
+# --- drawing and the tool's hover (E5-S10) ---
+
+const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+
+
+func _main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://courses/playtest_nine.json"
+	add_child_autofree(m)
+	return m
+
+
+func test_the_sheet_has_a_frame_per_facing_anchored_on_the_footprint_centre() -> void:
+	var sheet := load(ClubhouseView.PATH) as TileSheet
+	assert_not_null(sheet)
+	assert_eq(sheet.frames, CourseData.FACING_NAMES)
+	assert_eq(sheet.frame_size, Vector2i(192, 138), "the 3x3 diamond is 192 px wide")
+	assert_eq(sheet.anchor, Vector2i(96, 88))
+	assert_eq(sheet.texture.get_width(), 4 * 192 + 3, "four frames, 1 px gutters")
+
+
+func test_the_view_stands_on_its_footprint_and_sorts_at_its_front_tile() -> void:
+	var c := _land_course()
+	c.set_tile(BLOCK_SPOT.x + 1, BLOCK_SPOT.y, 3, Surface.Type.ROUGH)  # one tile raised
+	var v := ClubhouseView.new()
+	add_child_autofree(v)
+	v.show_clubhouse(c)
+	assert_true(v.visible)
+	assert_eq(v.frame_name(), "+y")
+	assert_eq(v.ground, 2, "the lowest of its tiles")
+	assert_eq(v.position.y, Iso.object_sort_key(Vector2(BLOCK_SPOT + Vector2i(1, 1)), 2),
+			"sorted at the front tile, over its own rows and under the rows nearer the camera")
+	var r: Rect2 = v.screen_rect()
+	var centre: Vector2 = Iso.tile_to_screen(Vector2(BLOCK_SPOT), 2)
+	assert_eq(r.position + Vector2(96, 88), centre, "the anchor on the centre tile's ground")
+	var none := CourseData.create(20, 20)
+	v.show_clubhouse(none)
+	assert_false(v.visible, "no clubhouse, nothing drawn")
+
+
+func test_main_draws_it_and_follows_a_move_and_its_undo() -> void:
+	var m := _main()
+	var v: ClubhouseView = m.course_view.clubhouse
+	assert_eq(v.centre, m.course.clubhouse)
+	assert_eq(v.frame_name(), "+x", "the playtest nine's faces hole 1's tee")
+	var b: CourseBuilder = m.build_tool.builder
+	assert_true(b.move_clubhouse(Vector2i(15, 60), 1))
+	assert_eq(v.centre, Vector2i(15, 60))
+	assert_eq(v.frame_name(), "+y")
+	m.build_tool.undo()
+	assert_eq(v.centre, m.course.clubhouse)
+	assert_eq(v.frame_name(), "+x")
+
+
+func test_the_hover_outlines_the_footprint_and_says_why_a_move_is_refused() -> void:
+	var m := _main()
+	var tool: BuildTool = m.build_tool
+	m.build_palette.clubhouse_button.pressed.emit()
+	assert_eq(tool.tool, BuildTool.Tool.CLUBHOUSE, "the palette's Clubhouse button")
+	var ok := Vector2i(15, 60)
+	tool.hover_at(Iso.tile_to_screen(Vector2(ok), m.course.get_height(ok.x, ok.y)))
+	assert_eq(tool.hover, ok)
+	assert_eq(tool.outline_cells(), CourseData.footprint_cells(ok), "the 3x3 a click would move it to")
+	assert_eq(tool.hover_hint(), "")
+	var across := Vector2i(14, 47)  # on hole 1's line of play
+	tool.hover_at(Iso.tile_to_screen(Vector2(across), m.course.get_height(across.x, across.y)))
+	assert_eq(tool.hover_hint(), "in the way of hole 1")
+	m.land_panel.refresh()
+	assert_eq(m.land_panel.hint_label.text, "Clubhouse: in the way of hole 1", "one line on the HUD")
+	assert_eq(tool.outline_cells().size(), 9)
+	var facing: int = m.course.clubhouse_facing
+	var right := InputEventMouseButton.new()
+	right.button_index = MOUSE_BUTTON_RIGHT
+	right.pressed = true
+	tool._unhandled_input(right)
+	assert_ne(m.course.clubhouse_facing, facing, "a right-click turns it in place")

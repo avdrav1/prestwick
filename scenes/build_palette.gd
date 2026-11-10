@@ -2,7 +2,9 @@ class_name BuildPalette
 extends PanelContainer
 ## The Build-mode HUD bar: the 9 surfaces, `oob` included (D9; each with its tile art, so the
 ## colorblind pattern shows on the button), raise and lower, the tee and cup tools (E2-S3),
-## Buy land (E6-S5), brush 1/3/5 and undo. A view onto a BuildTool:
+## Buy land (E6-S5), the Clubhouse tool (E5-S10: a click moves it, a right-click turns its
+## door), brush 1/3/5 and undo. E5-S10: buttons keep BUTTON_SIDE_MARGIN px each side (6 before),
+## so the bar with Buy land and Clubhouse still fits a 1280 px window. A view onto a BuildTool:
 ## buttons set the tool, and the tool's settings_changed keeps the buttons in step.
 ## Buttons are made in code from CourseBuilder.PALETTE and BuilderTuning.brush_sizes.
 
@@ -13,9 +15,14 @@ var lower_button: Button
 var tee_button: Button
 var cup_button: Button
 var buy_button: Button
+## E5-S10: the Clubhouse tool.
+var clubhouse_button: Button
 ## Brush buttons in BuilderTuning.brush_sizes order.
 var brush_buttons: Array[Button] = []
 var undo_button: Button
+
+## Each button's left and right content margin, px (E5-S10; the top and bottom keep 6).
+const BUTTON_SIDE_MARGIN: int = 3
 
 ## Selected buttons get this border so the current tool and brush read at a glance.
 @export var selected_border: Color = Color(1.0, 0.97, 0.8)
@@ -32,6 +39,8 @@ func _ready() -> void:
 	_normal_style = StyleBoxFlat.new()
 	_normal_style.bg_color = Color(0.12, 0.12, 0.14)
 	_normal_style.set_content_margin_all(6)
+	_normal_style.content_margin_left = BUTTON_SIDE_MARGIN
+	_normal_style.content_margin_right = BUTTON_SIDE_MARGIN
 	_selected_style = _normal_style.duplicate() as StyleBoxFlat
 	_selected_style.bg_color = Color(0.22, 0.22, 0.26)
 	_selected_style.border_color = selected_border
@@ -65,6 +74,10 @@ func _ready() -> void:
 	buy_button = _toggle(row, "Buy land", _tools_group)
 	buy_button.tooltip_text = "Buy the parcel under the cursor (it must touch your land)"
 	buy_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.BUY))
+	row.add_child(VSeparator.new())
+	clubhouse_button = _toggle(row, "Clubhouse", _tools_group)
+	clubhouse_button.tooltip_text = "Click to move the clubhouse, where guests arrive and leave (free); right-click to turn its door"
+	clubhouse_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CLUBHOUSE))
 	row.add_child(VSeparator.new())
 	var brush_label := Label.new()
 	brush_label.text = "Brush"
@@ -120,6 +133,8 @@ func _sync() -> void:
 			on = cup_button
 		BuildTool.Tool.BUY:
 			on = buy_button
+		BuildTool.Tool.CLUBHOUSE:
+			on = clubhouse_button
 	for b: BaseButton in _tools_group.get_buttons():
 		b.set_pressed_no_signal(b == on)
 	var n: int = _brush_sizes.find(_tool.brush_size)

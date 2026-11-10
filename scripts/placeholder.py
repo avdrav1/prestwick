@@ -10,6 +10,7 @@ Usage:
   scripts/placeholder.py land                -> art/tiles/land_placeholder.png
   scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
                                                 and golfer_shirts_placeholder.png (E3-S28)
+  scripts/placeholder.py clubhouse           -> art/sprites/clubhouse_placeholder.png (E5-S10)
   scripts/placeholder.py all                 -> all of the above
   scripts/placeholder.py <thing> --size WxH --frames N [--folder sprites] [--color name]
                                              -> art/<folder>/<thing>_placeholder.png
@@ -506,6 +507,111 @@ def build_golfer_shirts(p: dict[str, Color]) -> Image:
     return sheet([shirt_frame(base, shirt, p) for shirt in GOLFER_SHIRTS])
 
 
+# --- clubhouse (E5-S10, art/specs/clubhouse.md) -----------------------------
+
+CLUB_W = 3 * TILE_W            # the 3x3 footprint's diamond is 192 px wide
+CLUB_H = 138
+CLUB_ANCHOR = (96, 88)         # the footprint centre on the ground
+CLUB_WALL = 40                 # wall height, px (2.5 height steps)
+CLUB_ROOF = 36                 # roof rise above the eaves, px
+CLUB_INSET = 1.25              # the walls stand this many tiles from the centre
+CLUB_EAVE = 1.4                # the roof's eaves
+CLUB_FACINGS = [("+x", "PX"), ("+y", "PY"), ("-x", "MX"), ("-y", "MY")]
+
+
+def club_pt(tx: float, ty: float, z: float) -> tuple[float, float]:
+    ax, ay = CLUB_ANCHOR
+    return (ax + (tx - ty) * TILE_W / 2, ay + (tx + ty) * TILE_H / 2 - z)
+
+
+def fill_poly(img: Image, pts: list[tuple[float, float]], c: Color) -> None:
+    ys = [p[1] for p in pts]
+    for y in range(max(0, int(min(ys))), min(img.height, int(max(ys)) + 1)):
+        cy = y + 0.5
+        xs = []
+        for i in range(len(pts)):
+            (x0, y0), (x1, y1) = pts[i], pts[(i + 1) % len(pts)]
+            if (y0 <= cy < y1) or (y1 <= cy < y0):
+                xs.append(x0 + (cy - y0) * (x1 - x0) / (y1 - y0))
+        xs.sort()
+        for k in range(0, len(xs) - 1, 2):
+            for x in range(int(xs[k] + 0.5), int(xs[k + 1] + 0.5)):
+                img.set(x, y, c)
+
+
+def line(img: Image, a: tuple[float, float], b: tuple[float, float], c: Color) -> None:
+    n = int(max(abs(b[0] - a[0]), abs(b[1] - a[1]))) + 1
+    for i in range(n + 1):
+        t = i / n
+        img.set(int(a[0] + (b[0] - a[0]) * t), int(a[1] + (b[1] - a[1]) * t), c)
+
+
+def outline(img: Image, pts: list[tuple[float, float]], c: Color) -> None:
+    for i in range(len(pts)):
+        line(img, pts[i], pts[(i + 1) % len(pts)], c)
+
+
+def club_wall_quad(face: str, a: float, b: float, z0: float, z1: float) -> list[tuple[float, float]]:
+    """A rectangle on the +x (face "x") or +y ("y") wall, from a to b along it, z0 to z1 up."""
+    w = CLUB_INSET
+    if face == "x":
+        return [club_pt(w, a, z0), club_pt(w, b, z0), club_pt(w, b, z1), club_pt(w, a, z1)]
+    return [club_pt(a, w, z0), club_pt(b, w, z0), club_pt(b, w, z1), club_pt(a, w, z1)]
+
+
+def clubhouse_frame(facing: str, label: str, p: dict[str, Color]) -> Image:
+    img = Image(CLUB_W, CLUB_H)
+    h = 1.5
+    pad = [club_pt(-h, -h, 0), club_pt(h, -h, 0), club_pt(h, h, 0), club_pt(-h, h, 0)]
+    fill_poly(img, pad, p["path"])                     # the paved footprint
+    outline(img, pad, p["path_dark"])
+    w = CLUB_INSET
+    walls = {"y": club_wall_quad("y", -w, w, 0, CLUB_WALL), "x": club_wall_quad("x", w, -w, 0, CLUB_WALL)}
+    fill_poly(img, walls["y"], p["sand_light"])        # lit wall, down-left on screen
+    fill_poly(img, walls["x"], p["sand_dark"])         # shaded wall, down-right
+    door_face = {"+x": "x", "+y": "y"}.get(facing)
+    for face in ("x", "y"):
+        for a in (-0.85, 0.45):                        # two windows a wall, the door's middle left clear
+            win = club_wall_quad(face, a, a + 0.4, 16, 30)
+            fill_poly(img, win, p["water_light"])
+            outline(img, win, p["ink"])
+        if face == door_face:
+            door = club_wall_quad(face, -0.25, 0.25, 0, 26)
+            fill_poly(img, door, p["earth_dark"])
+            outline(img, door, p["ink"])
+            step = [club_pt(1.5, -0.35, 0), club_pt(1.5, 0.35, 0), club_pt(w, 0.35, 0), club_pt(w, -0.35, 0)] \
+                if face == "x" else [club_pt(-0.35, 1.5, 0), club_pt(0.35, 1.5, 0), club_pt(0.35, w, 0), club_pt(-0.35, w, 0)]
+            fill_poly(img, step, p["chalk"])            # the doorstep
+    for q in walls.values():
+        outline(img, q, p["ink"])
+    e, top = CLUB_EAVE, CLUB_WALL + CLUB_ROOF
+    apex = club_pt(0, 0, top)
+    c = {k: club_pt(*k, CLUB_WALL) for k in [(-e, -e), (e, -e), (e, e), (-e, e)]}
+    roof = [  # back faces first
+        ([c[(-e, -e)], c[(e, -e)], apex], p["earth"]),
+        ([c[(-e, e)], c[(-e, -e)], apex], p["earth"]),
+        ([c[(e, -e)], c[(e, e)], apex], p["earth_dark"]),
+        ([c[(e, e)], c[(-e, e)], apex], p["flag_red"]),
+    ]
+    for tri, col in roof:
+        fill_poly(img, tri, col)
+    for tri, _ in roof:
+        outline(img, tri, p["ink"])
+    if door_face is None:
+        # The door is on a wall facing away: a flag on the ridge on that side says where.
+        fx, fy = (-1.2, 0.2) if facing == "-x" else (0.2, -1.2)
+        base = club_pt(fx, fy, CLUB_WALL + 6)
+        tip = (base[0], base[1] - 18)
+        line(img, base, tip, p["chalk"])
+        fill_poly(img, [tip, (tip[0] + 9, tip[1] + 3), (tip[0], tip[1] + 6)], p["sun_yellow"])
+    draw_label(img, label, 1, 1, p["ink"])
+    return img
+
+
+def build_clubhouse(p: dict[str, Color]) -> Image:
+    return sheet([clubhouse_frame(f, label, p) for f, label in CLUB_FACINGS])
+
+
 # --- generic ---------------------------------------------------------------
 
 def build_generic(thing: str, size: tuple[int, int], frames: int, color: str, p: dict[str, Color]) -> Image:
@@ -551,6 +657,8 @@ def main(argv: list[str]) -> int:
         jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
     if args.thing in ("land", "all"):
         jobs.append((ROOT / "art/tiles/land_placeholder.png", build_land(p)))
+    if args.thing in ("clubhouse", "all"):
+        jobs.append((ROOT / "art/sprites/clubhouse_placeholder.png", build_clubhouse(p)))
     if args.thing in ("golfer", "all"):
         for state, frames in GOLFER_STATES:
             jobs.append((ROOT / f"art/sprites/golfer_{state}_placeholder.png", build_golfer(state, frames, p)))

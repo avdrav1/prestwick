@@ -25,8 +25,10 @@ extends Node2D
 ## draws in outline_color too (E6-S17): owning it is no error (parcel_outline_color).
 ## stroke_count counts presses, so the HUD can tell one drag's refusals from the next's.
 ## The Clubhouse tool (E5-S9, D60) moves the clubhouse, centred on the tile clicked, keeping its
-## facing, through CourseBuilder.move_clubhouse; turn_clubhouse turns it a quarter in place. Its
-## hover_hint is CourseBuilder.clubhouse_refusal.
+## facing, through CourseBuilder.move_clubhouse; turn_clubhouse (a right-click with the tool)
+## turns it a quarter in place. Its
+## hover_hint is CourseBuilder.clubhouse_refusal. Its outline (E5-S10) is the 3x3 footprint a
+## click would move it to, in refuse_color when refused, with its door tile outlined beside it.
 ## ui_undo (Ctrl+Z) undoes. Sits at the same origin as the CourseView, so local points are
 ## course screen space.
 
@@ -369,6 +371,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	var mb := event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT and tool == Tool.CLUBHOUSE:
+		turn_clubhouse()  # E5-S10: right-click turns its door
+		get_viewport().set_input_as_handled()
+		return
 	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
 		var local: Vector2 = _to_local(mb.position)
 		if mb.pressed:
@@ -404,21 +410,40 @@ func _draw() -> void:
 	var refused: bool = not hover_hint().is_empty()
 	var line: Color = refuse_color if refused else outline_color
 	var fill: Color = Color(refuse_color, fill_color.a) if refused else fill_color
-	for cell: Vector2i in builder.brush_cells(_hover, 1 if _places_hole() else brush_size):
-		# On the drawn ground round the tile (E3-S59), filled as a fan from its centre: the ring
-		# may fold where the ground climbs steeply away from the camera, which a polygon fill
-		# would refuse.
-		var ring := TerrainMesh.ring_screen(c, cell)
-		var pts := PackedVector2Array([Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))])
-		pts.append_array(ring)
-		var idx := PackedInt32Array()
-		for i: int in ring.size() - 1:
-			idx.append_array([0, 1 + i, 2 + i])
-		var cols := PackedColorArray()
-		cols.resize(pts.size())
-		cols.fill(fill)
-		RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), idx, pts, cols)
-		draw_polyline(ring, line, 1.0)
+	for cell: Vector2i in outline_cells():
+		if c.in_bounds(cell.x, cell.y):
+			_draw_tile(c, cell, fill, line)
+	if tool == Tool.CLUBHOUSE:
+		var door: Vector2i = CourseData.door_of(_hover, clubhouse_facing())
+		if c.in_bounds(door.x, door.y):
+			draw_polyline(TerrainMesh.ring_screen(c, door), line, 2.0)
+
+
+## The tiles the hover outline covers (E5-S10): the 3x3 footprint the Clubhouse tool would move
+## the clubhouse to, the tee or cup tile, else the brush.
+func outline_cells() -> Array[Vector2i]:
+	if builder == null or _hover == TilePicker.NONE:
+		return [] as Array[Vector2i]
+	if tool == Tool.CLUBHOUSE:
+		return CourseData.footprint_cells(_hover)
+	return builder.brush_cells(_hover, 1 if _places_hole() else brush_size)
+
+
+## One outlined tile, on the drawn ground round it (E3-S59), filled as a fan from its centre: the
+## ring may fold where the ground climbs steeply away from the camera, which a polygon fill would
+## refuse.
+func _draw_tile(c: CourseData, cell: Vector2i, fill: Color, line: Color) -> void:
+	var ring := TerrainMesh.ring_screen(c, cell)
+	var pts := PackedVector2Array([Iso.tile_to_screen(Vector2(cell), c.get_height(cell.x, cell.y))])
+	pts.append_array(ring)
+	var idx := PackedInt32Array()
+	for i: int in ring.size() - 1:
+		idx.append_array([0, 1 + i, 2 + i])
+	var cols := PackedColorArray()
+	cols.resize(pts.size())
+	cols.fill(fill)
+	RenderingServer.canvas_item_add_triangle_array(get_canvas_item(), idx, pts, cols)
+	draw_polyline(ring, line, 1.0)
 
 
 ## Outlines parcel `parcel`: each border tile's outer edges, on its drawn ground, 3 px.

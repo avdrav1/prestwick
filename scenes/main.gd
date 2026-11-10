@@ -154,6 +154,7 @@ func show_course(c: CourseData) -> void:
 	builder.holes_changed.connect(course_view.refresh_holes)
 	builder.checked.connect(_on_checked)
 	builder.land_changed.connect(course_view.refresh_parcel)
+	builder.clubhouse_changed.connect(course_view.refresh_clubhouse)
 	# An edit clears the verdicts guests gave the hole it changed (E3-S17).
 	guest_sim.watch(builder)
 	build_tool.builder = builder
