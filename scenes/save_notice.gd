@@ -68,6 +68,39 @@ static func load_lines(errors: Array[String], day: int, closed: Array[String]) -
 	return out
 
 
+## E5-S5: the lines of the notice an import gives: "Imported "Name" by Author: 9 holes, par 36,
+## 3,240 yd." then every hole the builder closed on import with its reason (D35, as a load);
+## or, when the file was refused, which file, why, and that nothing changed.
+static func import_lines(path: String, errors: Array[String], c: CourseData,
+		closed: Array[String]) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not errors.is_empty() or c == null:
+		var why: String = errors[0] if not errors.is_empty() else "cannot read it"
+		out.append("Could not import %s: %s." % [path.get_file(), why])
+		if errors.size() > 1:
+			out.append("(and %d more)" % (errors.size() - 1))
+		out.append("Your game is unchanged.")
+		return out
+	out.append("Imported %s: %s." % [CourseExport.title(c, path), CourseExport.summary(c)])
+	out.append_array(closed)
+	return out
+
+
+## E5-S5: the lines of the notice an export gives: what was exported and where (the full path,
+## to find the file and send it), then one line per half-placed hole the file leaves out.
+static func export_lines(err: Error, c: CourseData, path: String,
+		dropped: Array[int]) -> PackedStringArray:
+	var out := PackedStringArray()
+	if err != OK:
+		out.append("Could not export: %s." % error_string(err))
+		return out
+	out.append("Exported %s: %s." % [CourseExport.title(c, path), CourseExport.summary(c)])
+	out.append("File: %s" % ProjectSettings.globalize_path(path))
+	for n: int in dropped:
+		out.append("Hole %d not exported: %s." % [n, _missing(c, n)])
+	return out
+
+
 static func _missing(c: CourseData, number: int) -> String:
 	for h: HoleData in c.holes:
 		if h.number != number:

@@ -445,6 +445,12 @@ func restore_balance(amount: int, unlimited: bool = false) -> void:
 	money_changed.emit(to)
 
 
+## Names the course and its author (E5-S5: an export carries them), each trimmed; the thumbnail
+## is kept (D60 moved making one to the Icebox). Not an undo step: it changes no tile or hole.
+func set_info(p_name: String, p_author: String) -> void:
+	_course.set_info(p_name.strip_edges(), p_author.strip_edges(), _course.thumbnail)
+
+
 func _add_money(amount: int) -> void:
 	if amount == 0 or _course.has_unlimited_budget():
 		return

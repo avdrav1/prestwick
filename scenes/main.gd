@@ -12,6 +12,8 @@ const DEBUG_SHOT_ACTION: StringName = &"debug_shot"
 ## Save and load the game (E4-S7; F5 and F9 until E5's menus).
 const SAVE_ACTION: StringName = &"save_game"
 const LOAD_ACTION: StringName = &"load_game"
+## Opens the main menu (E5-S5; Esc).
+const MENU_ACTION: StringName = MainMenu.MENU_ACTION
 
 ## Course loaded at start (E2-S8). Empty, the default, starts on a New course (E6-S6,
 ## CourseBuilder.new_course: generated land, the starting block, the land budget); a failed
@@ -76,6 +78,8 @@ var _feed_panel_top: float = -1.0
 @onready var cup_pointer: CupPointer = $HUD/CupPointer
 ## The save and load notice (E4-S7).
 @onready var save_notice: SaveNotice = $HUD/SaveNotice
+## E5-S5: New course, Load game, Save game, Import course, Export course, Quit.
+@onready var main_menu: MainMenu = $HUD/MainMenu
 ## The balance, in Build and Play (E4-S2).
 @onready var money_panel: MoneyPanel = $HUD/MoneyPanel
 
@@ -120,6 +124,13 @@ func _ready() -> void:
 	guest_sim.guest_arrived.connect(_on_guest_arrived)
 	guest_sim.day_ended.connect(_on_day_ended)
 	guest_sim.day_started.connect(_on_day_started)
+	main_menu.new_course_requested.connect(func() -> void: new_course())
+	main_menu.load_requested.connect(func() -> void: load_game())
+	main_menu.save_requested.connect(func() -> void: save_game())
+	main_menu.import_requested.connect(import_course)
+	main_menu.export_requested.connect(export_course)
+	main_menu.quit_requested.connect(get_tree().quit)
+	main_menu.visibility_changed.connect(_on_menu_visibility_changed)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -131,6 +142,9 @@ func _ready() -> void:
 	if not errors.is_empty():
 		push_warning("main: %s" % "; ".join(errors))
 	new_course(start_seed)
+	# The game opens on the menu; a test or playtest that adds Main to its own tree does not.
+	if get_tree().current_scene == self:
+		open_menu()
 
 
 ## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
@@ -427,6 +441,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(LOAD_ACTION):
 		load_game()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(MENU_ACTION):
+		open_menu()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(DEBUG_SHOT_ACTION) and mode == Mode.PLAY and OS.is_debug_build():
 		fire_debug_shot()
 		get_viewport().set_input_as_handled()
@@ -468,6 +485,43 @@ func load_game(path: String = GameSave.PATH) -> bool:
 	economy_from_save(s)
 	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.closed_on_load))
 	return true
+
+
+## Opens the main menu (E5-S5) over the course.
+func open_menu() -> void:
+	main_menu.open(course)
+
+
+## While the menu is open the arrow keys move its focus, not the map.
+func _on_menu_visibility_changed() -> void:
+	camera.set_process(not main_menu.visible)
+
+
+## Imports the course file at `path` (E5-S5, CourseExport): a fresh builder on it, which closes
+## every open hole failing a rule, and one notice naming the course, its par and yardage, and
+## each hole closed with its reason (D35, as load_game). A file that is not a course this game
+## reads changes nothing but the notice. True when it imported.
+func import_course(path: String) -> bool:
+	var errors: Array[String] = []
+	var c := CourseExport.read_file(path, errors)
+	if c == null:
+		save_notice.show_lines(SaveNotice.import_lines(path, errors, null, []))
+		return false
+	show_course(c)
+	save_notice.show_lines(SaveNotice.import_lines(path, [], c, build_tool.builder.closed_on_load))
+	return true
+
+
+## Names the course and its author and exports it (E5-S5) to `path`, by default
+## CourseExport.path_for its name in the course folder; the notice gives the file's full path
+## and any half-placed hole left out.
+func export_course(course_name: String, author: String, path: String = "") -> Error:
+	build_tool.builder.set_info(course_name, author)
+	var to := path if not path.is_empty() else CourseExport.path_for(course.course_name)
+	var dropped: Array[int] = []
+	var err := CourseExport.write_file(course, to, dropped)
+	save_notice.show_lines(SaveNotice.export_lines(err, course, to, dropped))
+	return err
 
 
 ## The save's economy fields (E4-S7's interface): `money` is the balance (E4-S2) as of the

@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://scenes/green_view.gd" id="20_green_view"]
 [ext_resource type="Script" path="res://scenes/cup_pointer.gd" id="cup_pointer"]
 [ext_resource type="Script" path="res://scenes/save_notice.gd" id="save_notice"]
+[ext_resource type="Script" path="res://scenes/main_menu.gd" id="main_menu"]
 [ext_resource type="Script" path="res://scenes/money_panel.gd" id="money_panel"]
 [ext_resource type="Script" path="res://scenes/rating_row.gd" id="rating_row"]
 [ext_resource type="Script" path="res://scenes/fee_panel.gd" id="fee_panel"]
@@ -208,6 +209,16 @@ offset_top = 16.0
 offset_bottom = 16.0
 grow_horizontal = 2
 script = ExtResource("save_notice")
+
+[node name="MainMenu" type="Control" parent="HUD"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("main_menu")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")
