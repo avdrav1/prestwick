@@ -140,11 +140,16 @@ func test_reaction_rows_print_next_to_their_targets() -> void:
 			"crossing holes"]:
 		assert_false(_named(rows, prefix).is_empty(), "a row for %s" % prefix)
 	# E3-S22: pace on the first tee, the par 5 and the dogleg, each against the fair par 4's.
-	for prefix: String in ["pace fails: first tee", "pace fails: par 5", "pace fails: dogleg"]:
+	for prefix: String in ["pace fails: first tee", "pace fails: par 5"]:
 		var r := _named(rows, prefix)
 		assert_false(r.is_empty(), "a row for %s" % prefix)
 		assert_eq(r.target, Vector2(-ReactionField.PACE_SPREAD, ReactionField.PACE_SPREAD),
 				"%s: within 10 points of the fair par 4" % prefix)
+	# D61 (E5-S12): the dogleg within 15 points.
+	var dog := _named(rows, "pace fails: dogleg")
+	assert_false(dog.is_empty(), "a row for the dogleg's pace")
+	assert_eq(dog.target, Vector2(-0.15, 0.15), "the dogleg: within 15 points of the fair par 4")
+	assert_eq(ReactionField.DOGLEG_PACE_SPREAD, 0.15)
 	# E3-S22 review: the fixture's other par 5 (hole 8) was recorded; E3-S37 gives it the
 	# same 10 points (next_tee_queue_max spaces the groups bunched after par 3 hole 7).
 	var other := _named(rows, "pace fails: other par 5")

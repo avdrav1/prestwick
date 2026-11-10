@@ -18,13 +18,19 @@ const FAIR_COMPLAINTS := Vector2(0.0, 0.149)
 const BLIND_PRAISE_SHARE: float = 0.5
 const FAIR_TO_BLIND_COMPLAINTS: float = 0.15
 ## E3-S22: pace fails on the first tee (the nine-hole fixture's hole 1), its first par 5
-## (PACE_PAR5_HOLE) and the dogleg each within PACE_SPREAD of the fair par 4's. Its other par 5
+## (PACE_PAR5_HOLE) each within PACE_SPREAD of the fair par 4's, the dogleg within
+## DOGLEG_PACE_SPREAD (D61). Its other par 5
 ## (hole 8) was a recorded row (E3-S22 review: it failed pace on waits at its own tee); since
 ## E3-S37 (`next_tee_queue_max`) it has the same target.
 ## Read on PACE_FIELD hole records of the fair par 4 and the dogleg and PACE_DAYS nine-hole
 ## days (days 1 to 10, as D46 measured them), whatever `--runs` is: a field of 50 is three
 ## mornings, too few for a share of waits a few seconds long (E3-S22).
 const PACE_SPREAD: float = 0.10
+## D61 (E5-S12): the dogleg's pace fails within 15 points of the fair par 4's (10 before). The
+## 10 was measured when groups vanished at hole-out and held nobody; since guests walk off
+## greens (D60's clubhouse) a long dogleg approach really is held longer. Both holes are
+## one-hole fields whose groups walk home to the clubhouse beside the tee, like with like.
+const DOGLEG_PACE_SPREAD: float = 0.15
 const PACE_FIRST_TEE_HOLE: int = 1
 const PACE_PAR5_HOLE: int = 3
 const PACE_FIELD: int = 150
@@ -74,7 +80,7 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 ## (scripts/scoring_edges.gd): skill 10 on the spike holes, putting on sloped greens and
 ## chips, `runs` guests each, unless `edges` is false (tests read them alone).
 ## E3-S22: before the edges, pace across hole shapes (the first tee, the nine-hole fixture's
-## par 5s and the dogleg, each within PACE_SPREAD of the fair par 4's pace fails, on the bare
+## par 5s and the dogleg, each within PACE_SPREAD (the dogleg DOGLEG_PACE_SPREAD, D61) of the fair par 4's pace fails, on the bare
 ## nine, PACE_FIXTURE) and the crossing holes' field (ReactionHoles.crossing_holes), held for a
 ## group on the other hole.
 ## E3-S48: the work is a list of jobs (jobs_for, run_job), each a plain call with a JSON
@@ -168,7 +174,8 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 				"%.2f against %.2f; past the %d-point spread: %s" % [
 					float(pace_by_hole[worst_par5]), base, roundi(PACE_SPREAD * 100.0),
 					"none" if over.is_empty() else "; ".join(over)]))
-	rows.append(_row("pace fails: dogleg par 4 less the fair par 4's", dog_pace.pace - base, spread,
+	rows.append(_row("pace fails: dogleg par 4 less the fair par 4's", dog_pace.pace - base,
+			Vector2(-DOGLEG_PACE_SPREAD, DOGLEG_PACE_SPREAD),
 			"%.2f against %.2f; %d hole records; waits a hole mean %.1f s" % [dog_pace.pace, base, pf,
 				dog_pace.wait_mean]))
 	var crossing := _tally_of(by, "crossing", n)
