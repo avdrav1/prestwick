@@ -9,7 +9,6 @@ func test_constants_match_the_art() -> void:
 	assert_eq(Vector2i(Iso.TILE_W, Iso.TILE_H), art.surfaces.frame_size, "footprint 64x32")
 	assert_eq(Iso.STEP_PX, art.riser_px, "16 px per height step")
 	assert_eq(art.surfaces.anchor, art.surfaces.frame_size / 2, "tiles anchor at the diamond center")
-	assert_eq(art.risers.anchor, art.risers.frame_size / 2, "risers anchor like tiles")
 
 
 func test_known_points() -> void:

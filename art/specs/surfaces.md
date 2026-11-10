@@ -13,36 +13,46 @@ surface is a flat, unmistakable field; no texture noise that competes with the b
 
 ## Sheet
 
-- File: `art/tiles/surfaces_<state>.png`. Placeholder: `art/tiles/surfaces_placeholder.png`,
-  and its label-free Play copy `art/tiles/surfaces_play_placeholder.png` (E3-S55): the same
-  frames and patterns, the pattern running under where the label box was.
-- One row of 9 frames, each 64x32, no padding, 1 px transparent gutter. Sheet is 584x32.
-- Frame order is the surface enum from `/course-file`, so frame index == surface value.
-- Frame shape: the 2:1 diamond, pixel-center rasterized. Rows widen by 4 px per row,
-  2 px wide at the top and bottom tips, 62 px at the middle rows. Corners are transparent.
-- Each frame draws a 1 px darker line along its two bottom edges only, so two neighbors
-  share one seam.
-- Patterns repeat every 8 px (or a divisor of 32x16), so neighboring tiles join without seams.
+Final art (E5-S2, D62): `art/tiles/surfaces_final.png`, written by `scripts/art_terrain.py`
+(rerun it after any palette or rule change; it prints each surface's Rec. 709 mean and fill over
+all its variants, the measures of `tests/test_course_view.gd`). The placeholders went with it.
 
-| # | Frame | Base color | Pattern (colorblind rule) | Label |
-| --- | --- | --- | --- | --- |
-| 0 | `fairway` | `fairway` | plain | FW |
-| 1 | `rough` | `rough` | stippled: irregular dark flecks (`rough_dark`) and a lighter one | RO |
-| 2 | `green` | `green` | cross-hatched: both 45 degree diagonals in `green_dark` | GR |
-| 3 | `tee` | `tee_light` / `tee_dark` | checkered: 4 px mown squares | TE |
-| 4 | `bunker` | `sand` | dotted: regular dot grid in `sand_dark`, rows offset | BU |
-| 5 | `water` | `water` | waves: small `water_light` crests, rows offset | WA |
-| 6 | `trees` | `tree_dark` | canopy: round crowns in `tree` on a staggered grid | TR |
-| 7 | `cart_path` | `path` | lined: lines along one isometric axis in `path_dark` | CP |
-| 8 | `oob` | `oob` / `oob_dark` | bold diagonal stripes | OB |
+- 64x32 frames, no padding, 1 px transparent gutter, one row. Each frame is the 2:1 diamond,
+  pixel-center rasterized (rows widen by 4 px per row, 2 px wide at the top and bottom tips,
+  62 px at the middle rows); corners are transparent.
+- The pattern repeats every 4 x 4 tiles, not every tile (`TileSheet.macro` 4), so mowing
+  stripes can be two tiles wide and rough and water do not look stamped (the E5-S1 sample's
+  lesson: a pattern that repeats per tile cannot have a period over 64 px). The sheet holds 16
+  variants of each surface, 144 frames (9359 x 32): frames 0 to 8 are variant (0, 0) of each
+  surface in surface enum order, so frame index == surface value still names it (the Build
+  palette's icons draw these), and variant (a, b) of surface s is frame s + 9 * (a + 4b). The
+  course tile (x, y) draws variant (x mod 4, y mod 4) (`TileSheet.variant_of`).
+- Every rule is a function of the pixel's place on the course (A = X + 2Y, B = 2Y - X of its
+  course pixel, mod 256), so neighbouring tiles and variants join without seams on any slope.
+- No seam line and no labels: the ground reads as one field, not a board (SimGolf); Build has
+  its hover outline and the line of play for distances.
 
-Tee, trees and oob patterns are not named by the art-spec skill; they are chosen here.
-`oob` is surface 8 in the course format. D9 keeps it as a surface: from E2-S3 it is on the
-Build palette as OB ground, and its frame is the palette button's icon.
+| # | Frame | Colours | Pattern (colorblind rule) |
+| --- | --- | --- | --- |
+| 0 | `fairway` | `fairway`, `tee_light` | mown stripes along the x axis, 2 tiles wide, the light one 44% of the pair, edges dithered in 2 x 2 cells through tile middles; a few blades |
+| 1 | `rough` | `rough`, `rough_dark`, `fairway` | stippled: tufts of two dark blades with a lit tip, denser in slow patches |
+| 2 | `green` | `green`, `green_dark`, `green_light` | cross-hatched: both 45 degree diagonals every 8 px, one `green_dark`, one dashed `green_light` |
+| 3 | `tee` | `tee_light`, `tee_dark` | checkered: mown squares half a tile wide along the grid axes, the dark ones inset |
+| 4 | `bunker` | `sand`, `sand_dark`, `sand_light` | dotted: 2 x 1 `sand_dark` dots every 8 px, rows offset, a light grain |
+| 5 | `water` | `water_dark`, `water`, `water_light` | waves: deep water under scattered crests on rows 4 px apart (a swell with a light arc) |
+| 6 | `trees` | `tree_dark`, `tree`, `rough` | canopy: round crowns on a staggered 8 px grid, lit on the upper left |
+| 7 | `cart_path` | `path`, `path_dark` | lined: lines along the x axis about 7 px apart, grit between |
+| 8 | `oob` | `oob`, `oob_dark` | bold diagonal stripes |
 
-Grayscale check (`art/tiles/tile_preview.tscn`, right half): rough, water and oob sit
-close in luminance (about 108, 116, 100 of 255) and are told apart by pattern alone. Final
-art should spread them further (E5-S2 requires a grayscale-distinguishable set).
+Values (Rec. 709 over all variants, mean / fill): fairway 157.7 / 153.4, rough 117.8 / 118.6,
+green 192.4 / 194.9, tee 155.5 / 163.5, bunker 210.1 / 211.3, water 91.9 / 74.8, trees 77.2 /
+62.5, cart path 166.3 / 176.5, oob 102.4 / 119.7.
+
+Grayscale (`docs/decisions/e5-s2-*-gray.png`): water, the placeholder's near twin of rough
+(116 against 108), is now deep water with light crests, about 26 below rough in mean and with a
+light pattern where rough's is dark. Fairway and tee are close in value and told apart by
+stripes against checks; green is the lightest grass and cross-hatched; bunker the lightest
+surface, dotted.
 
 ## Height shade (E6-S18)
 
@@ -61,13 +71,17 @@ art must keep rough's value band over heights 0 to 7 at least 5% clear of fairwa
 and trees (`tests/test_course_view.gd`), and every shaded land surface at every height at
 least 5% clear of fairway, tee and green at the plot's height, by its mean value and by its
 fill (its most common colour, what is left at 0.5x once the speckle is gone; E6-S28); a
-lighter rough or a darker fairway or tee means retuning the ramp. The tee's fill (139 of 255
-luminance) is the tight one: rough's fill (119) may rise at most to about 1.12.
+lighter rough or a darker fairway or tee means retuning the ramp. With the placeholder the
+tee's fill (139 of 255 luminance) was the tight one; the final tee's fill is `tee_light` (163.5),
+so rough at height 7 (fill 130.5) sits 17% under fairway's fill (153.4), and the tightest gap
+is trees' band against rough's (trees at height 7, 84.9 mean, 11% under rough at height 0). The slope light was
+checked against the final sheets (screenshots at three zooms) and kept as tuned in E3-S58:
+the final values sit within 6 of the placeholder's.
 
 
-Smooth ground (E3-S58, D50): the course view maps each frame's diamond onto its tile's sloped
-ground (`course/terrain_mesh.gd`), pulled in by 1 px so the transparent corners are never
-sampled, so a slope takes the flat frame with no new art. The height shade is read at the
+Smooth ground (E3-S58, D50): the course view maps each frame's diamond (the tile's variant,
+E5-S2) onto its tile's sloped ground (`course/terrain_mesh.gd`), pulled in by 1 px so the
+transparent corners are never sampled, so a slope takes the flat frame with no new art. The height shade is read at the
 ground's own height, blended between the whole steps, and the slope light multiplies it,
 under the same headroom cap. Risers and the edge cue are no longer drawn.
 ## Anchor
@@ -78,24 +92,20 @@ projection returns for the tile's center at its height. Tile at grid (i, j), hei
 
 ## Code that reads it
 
-- `art/tiles/surfaces.tres` (`TileArt`), field `surfaces` (`TileSheet`).
-- The sheet's `play_texture` is the label-free copy; the course view draws it in Play
-  (`CourseView.play_art`, E3-S55) and the labelled `texture` in Build. Unset, `texture` is
-  drawn in both modes.
+- `art/tiles/surfaces.tres` (`TileArt`), field `surfaces` (`TileSheet`, `macro` 4).
+- `play_texture` is unset: the final sheet has no labels and draws in both modes (E3-S55's
+  label-free Play copy went with the placeholder).
 - `TileArt.load_default().surface_texture(&"green")` returns an `AtlasTexture`;
   `TileSheet.region(index)` returns the pixel rect for a TileSet atlas.
 - The course renderer (E1-S4) and the builder's surface palette (E1-S5).
-- `tests/test_tile_art.gd` checks layout, order, diamond shape, patterns and palette.
+- `tests/test_tile_art.gd` checks layout, order, diamond shape, patterns, stripes and palette;
+  `tests/test_course_view.gd` the value bands.
 
-## For the artist replacing it
+## Changing it
 
-- Keep the file name pattern `surfaces_<state>.png`, 9 frames, 64x32, 1 px gutter, the order
-  above. Point `surfaces.tres` at the new file; nothing else changes.
-- Keep the anchor at (32, 16) and the diamond rasterization above, or tiles will gap.
-- Keep one pattern per surface; it can be subtler, but it must survive a grayscale
-  screenshot. Drop the corner labels: the labels are a placeholder aid for Build, and Play
-  already hides them (E3-S55). With final art, leave `play_texture` unset in `surfaces.tres`
-  (and delete the play placeholder), so the one sheet draws in both modes; the Build palette's
-  icons come from the same sheet.
+- Change the rule in `scripts/art_terrain.py` and rerun it; never edit the PNG (D62).
+- Keep 64x32 frames, 1 px gutter, the order above, the anchor (32, 16), the diamond
+  rasterization and `macro` 4 (or change `art/tiles/surfaces.tres` with it), or tiles will gap.
+- Keep one pattern per surface that survives a grayscale screenshot at 0.5x, and the value
+  bands below `Height shade`.
 - Only colors from `art/palette.gpl`.
-- Regenerate the placeholder with `python3 scripts/placeholder.py surfaces`.

@@ -24,8 +24,10 @@ extends RefCounted
 ##
 ## Texture: every point of a tile maps affinely onto its surface frame's diamond (pulled in by
 ## UV_INSET_PX so the transparent corner pixels are never sampled), so the flat sheets texture
-## the slope with no new art. Unowned tiles are drawn a second time with the land sheet's hatch
-## and parcel lines (CourseView.land_frame).
+## the slope with no new art. E5-S2: the frame is the variant for the tile's place in the
+## sheet's macro repeat (TileSheet.variant_of), so a pattern can span several tiles. Unowned
+## tiles are drawn a second time with the land sheet's hatch and parcel lines
+## (CourseView.land_frame).
 ##
 ## Colour, per vertex: the E6-S18 height shade (a land surface's grey for its height, now
 ## interpolated between whole steps) times the slope light, capped at the frame's headroom
@@ -709,7 +711,7 @@ func repaint_tile(ch: Chunk, cell: Vector2i) -> bool:
 	var row: PackedFloat32Array = shades[frame]
 	var cap: float = caps[frame]
 	var sheet: TileSheet = art.surfaces
-	var origin: Vector2 = Vector2(sheet.region(frame).position) + Vector2(sheet.anchor)
+	var origin: Vector2 = Vector2(sheet.region(sheet.variant_of(frame, cell)).position) + Vector2(sheet.anchor)
 	repainted += 1
 	var base: int = ch.starts[cell]
 	var uvs: PackedVector2Array = part[1]
@@ -758,7 +760,8 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 	# Screen and texture points relative to the tile's centre at height 0: Iso and _uv written
 	# out here, since this runs for every point of the map.
 	var centre: Vector2 = Iso.tile_to_screen(Vector2(cell), 0.0) - Vector2(0.0, key_y)
-	var origin: Vector2 = Vector2(sheet.region(frame).position) + Vector2(sheet.anchor)
+	# E5-S2: the variant of its surface's frame for its place in the sheet's macro repeat.
+	var origin: Vector2 = Vector2(sheet.region(sheet.variant_of(frame, cell)).position) + Vector2(sheet.anchor)
 	var count: int = pts.size()
 	var screen := PackedVector2Array()
 	var uvs := PackedVector2Array()

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cmtuoqudcwxcb"
-path="res://.godot/imported/surfaces_sample_procedural.png-8c23f349bd3ddbf74f90601d809b5a74.ctex"
+uid="uid://dfy3ugt08qtsa"
+path="res://.godot/imported/land_final.png-83936e646f9de0075cfe7a1917905d86.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://art/tiles/surfaces_sample_procedural.png"
-dest_files=["res://.godot/imported/surfaces_sample_procedural.png-8c23f349bd3ddbf74f90601d809b5a74.ctex"]
+source_file="res://art/tiles/land_final.png"
+dest_files=["res://.godot/imported/land_final.png-83936e646f9de0075cfe7a1917905d86.ctex"]
 
 [params]
 

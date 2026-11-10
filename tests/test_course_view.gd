@@ -26,12 +26,13 @@ func _centre_colour(cell: Vector2i) -> Color:
 	return Color.TRANSPARENT
 
 
-## The surface frame `cell` is textured from: the frame whose region holds its UVs.
+## The surface frame `cell` is textured from: the frame whose variant for `cell`
+## (TileSheet.variant_of, E5-S2) holds its UVs.
 func _frame_of(cell: Vector2i) -> int:
 	var sheet: TileSheet = TileArt.load_default().surfaces
 	var uv: Vector2 = (_part(cell)[1] as PackedVector2Array)[0] * Vector2(sheet.texture.get_size())
 	for i: int in sheet.frame_count():
-		if Rect2(sheet.region(i)).grow(0.01).has_point(uv):
+		if Rect2(sheet.region(sheet.variant_of(i, cell))).grow(0.01).has_point(uv):
 			return i
 	return -1
 
@@ -413,12 +414,12 @@ func test_no_coloured_pixel_clips_at_any_height() -> void:
 	var img: Image = sheet.texture.get_image()
 	for i: int in sheet.frame_count():
 		var top: float = 0.0
-		var r: Rect2i = sheet.region(i)
-		for y: int in range(r.position.y, r.end.y):
-			for x: int in range(r.position.x, r.end.x):
-				var p: Color = img.get_pixel(x, y)
-				if p.a > 0.0 and p.s >= CourseView.HUE_MIN_SAT:
-					top = maxf(top, maxf(p.r, maxf(p.g, p.b)))
+		for r: Rect2i in sheet.variant_regions(i):
+			for y: int in range(r.position.y, r.end.y):
+				for x: int in range(r.position.x, r.end.x):
+					var p: Color = img.get_pixel(x, y)
+					if p.a > 0.0 and p.s >= CourseView.HUE_MIN_SAT:
+						top = maxf(top, maxf(p.r, maxf(p.g, p.b)))
 		for h: int in CourseData.MAX_HEIGHT + 1:
 			assert_true(top * shades[i][h] <= 1.0 + 0.0001,
 					"%s at %d: %.3f x %.3f" % [sheet.frames[i], h, top, shades[i][h]])
@@ -437,22 +438,12 @@ func test_grass_value_bands_do_not_overlap() -> void:
 	var tuning := BuilderTuning.load_default()
 	var sheet: TileSheet = TileArt.load_default().surfaces
 	var shades := CourseView.top_shades(sheet, tuning.height_shade, tuning.height_shaded)
-	var img: Image = sheet.texture.get_image()
 	var names: PackedStringArray = ["rough", "fairway", "tee", "green", "trees"]
 	var lo: Dictionary = {}
 	var hi: Dictionary = {}
 	for n: String in names:
 		var i: int = sheet.frame_index(StringName(n))
-		var r: Rect2i = sheet.region(i)
-		var sum: float = 0.0
-		var count: int = 0
-		for y: int in range(r.position.y, r.end.y):
-			for x: int in range(r.position.x, r.end.x):
-				var p: Color = img.get_pixel(x, y)
-				if p.a > 0.0:
-					sum += p.get_luminance()
-					count += 1
-		var base: float = sum / count
+		var base: float = _frame_values(sheet, i)[0]
 		lo[n] = base * Array(shades[i]).min()
 		hi[n] = base * Array(shades[i]).max()
 	for a: int in names.size():
@@ -469,34 +460,35 @@ func test_grass_value_bands_do_not_overlap() -> void:
 
 # --- E6-S28: shaded land stays apart from the course lies by value ---
 
-## A frame's value two ways, as Rec. 709 luminance: [mean over its opaque pixels, its fill].
+## A frame's value two ways, as Rec. 709 luminance: [mean over its opaque pixels, its fill],
+## over every variant of its repeat (TileSheet.macro, E5-S2), which is what the course draws.
 ## The fill is the frame's most common colour, the ground with the speckle, stipple and label
 ## left out, which is what is left of rough at 0.5x (E6-S28's note: rough at the top of the
 ## ramp read close to fairway once its speckle was gone).
 func _frame_values(sheet: TileSheet, i: int) -> PackedFloat32Array:
 	var img: Image = sheet.texture.get_image()
-	var r: Rect2i = sheet.region(i)
 	var sum: float = 0.0
 	var count: int = 0
-	for y: int in range(r.position.y, r.end.y):
-		for x: int in range(r.position.x, r.end.x):
-			var p: Color = img.get_pixel(x, y)
-			if p.a > 0.0:
-				sum += p.get_luminance()
-				count += 1
+	for r: Rect2i in sheet.variant_regions(i):
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var p: Color = img.get_pixel(x, y)
+				if p.a > 0.0:
+					sum += p.get_luminance()
+					count += 1
 	return PackedFloat32Array([sum / count, _fill(sheet, i).get_luminance()])
 
 
-## A frame's most common opaque colour.
+## A frame's most common opaque colour, over all its variants.
 func _fill(sheet: TileSheet, i: int) -> Color:
 	var img: Image = sheet.texture.get_image()
-	var r: Rect2i = sheet.region(i)
 	var seen: Dictionary = {}
-	for y: int in range(r.position.y, r.end.y):
-		for x: int in range(r.position.x, r.end.x):
-			var p: Color = img.get_pixel(x, y)
-			if p.a > 0.0:
-				seen[p] = int(seen.get(p, 0)) + 1
+	for r: Rect2i in sheet.variant_regions(i):
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var p: Color = img.get_pixel(x, y)
+				if p.a > 0.0:
+					seen[p] = int(seen.get(p, 0)) + 1
 	var fill := Color.BLACK
 	var best: int = 0
 	for p: Color in seen:
@@ -560,33 +552,38 @@ func test_bunker_at_height_7_does_not_clip_to_white() -> void:
 		assert_gt(maxf(fill.r, maxf(fill.g, fill.b)) - minf(fill.r, minf(fill.g, fill.b)), 0.2, "sand, not white")
 
 
-# E3-S55: Play draws the sheets' label-free textures, Build the labelled ones, by swapping the
-# ground's textures: its geometry stays as it is.
+# E3-S55: Play draws a sheet's play_texture when it has one, Build its texture, by swapping the
+# ground's textures: its geometry stays as it is. The final sheets have none (E5-S2), so a test
+# copy names one.
 func test_play_art_swaps_the_ground_textures_without_rebuilding() -> void:
-	var art := TileArt.load_default()
-	assert_not_null(art.surfaces.play_texture, "the placeholder surfaces name a label-free sheet")
+	var art: TileArt = TileArt.load_default().duplicate(true)
+	art.surfaces.play_texture = ImageTexture.create_from_image(art.surfaces.texture.get_image())
+	var view := CourseView.new()
+	view.terrain.art = art  # the same sizes, so the texture scale TerrainMesh read still holds
+	add_child_autofree(view)
 	var c := HeightsFixture.build()
-	_view.show_course(c)
-	for ch: TerrainMesh.Chunk in _view.chunks():
-		assert_eq(ch.texture, art.surfaces.texture, "Build: the labelled sheet")
+	view.show_course(c)
+	for ch: TerrainMesh.Chunk in view.chunks():
+		assert_eq(ch.texture, art.surfaces.texture, "Build: the sheet")
 		assert_eq(ch.land_texture, art.land.texture)
-	var before: Array = _view.terrain_digest()
-	_view.play_art = true
-	for ch: TerrainMesh.Chunk in _view.chunks():
-		assert_eq(ch.texture, art.surfaces.play_texture, "Play: the label-free sheet")
+	var before: Array = view.terrain_digest()
+	view.play_art = true
+	for ch: TerrainMesh.Chunk in view.chunks():
+		assert_eq(ch.texture, art.surfaces.play_texture, "Play: the play copy")
 		assert_eq(ch.land_texture, art.land.texture, "no play sheet: the one sheet")
-	assert_eq(_view.terrain_digest(), before, "the ground's geometry and colours stay as drawn")
-	_view.play_art = false
-	for ch: TerrainMesh.Chunk in _view.chunks():
-		assert_eq(ch.texture, art.surfaces.texture, "Build again: labelled")
+	assert_eq(view.terrain_digest(), before, "the ground's geometry and colours stay as drawn")
+	view.play_art = false
+	for ch: TerrainMesh.Chunk in view.chunks():
+		assert_eq(ch.texture, art.surfaces.texture, "Build again")
 
 
-func test_a_sheet_without_a_play_texture_draws_the_same_in_both_modes() -> void:
+func test_the_final_sheets_draw_the_same_in_both_modes() -> void:
+	var art := TileArt.load_default()
+	assert_eq(art.surfaces.texture_for(true), art.surfaces.texture, "final art: no play sheet, the one sheet in Play")
+	assert_eq(art.surfaces.texture_for(false), art.surfaces.texture)
 	var sheet := TileSheet.new()
-	sheet.texture = TileArt.load_default().edges.texture
-	assert_eq(sheet.texture_for(true), sheet.texture, "final art: no play sheet, the one sheet in Play")
-	assert_eq(sheet.texture_for(false), sheet.texture)
-	sheet.play_texture = TileArt.load_default().surfaces.play_texture
+	sheet.texture = art.land.texture
+	sheet.play_texture = art.surfaces.texture
 	assert_eq(sheet.texture_for(true), sheet.play_texture)
 	assert_eq(sheet.texture_for(false), sheet.texture)
 

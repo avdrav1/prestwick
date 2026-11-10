@@ -2,12 +2,6 @@
 """Generate placeholder art for Prestwick from art/palette.gpl. Stdlib only.
 
 Usage:
-  scripts/placeholder.py surfaces            -> art/tiles/surfaces_placeholder.png
-                                                and surfaces_play_placeholder.png (E3-S55)
-  scripts/placeholder.py risers              -> art/tiles/risers_placeholder.png
-                                                and risers_play_placeholder.png (E3-S55)
-  scripts/placeholder.py edges               -> art/tiles/edges_placeholder.png
-  scripts/placeholder.py land                -> art/tiles/land_placeholder.png
   scripts/placeholder.py golfer              -> art/sprites/golfer_{idle,walk,swing}_placeholder.png
                                                 and golfer_shirts_placeholder.png (E3-S28)
   scripts/placeholder.py clubhouse           -> art/sprites/clubhouse_placeholder.png (E5-S10)
@@ -19,9 +13,8 @@ Sheets follow the art-spec constants: PNG, no padding, 1 px transparent gutter
 between frames, one row. Every pixel is a palette color or fully transparent.
 Placeholders are never final; the spec in art/specs/ is the handoff.
 
-The labelled course sheets (surfaces, risers) also come in a label-free "play" version (E3-S55):
-the same frames, layout and patterns with the two-letter labels left out, which the course view
-draws in Play. The edge cue and land sheets have no labels, so they have no play version.
+The terrain is final art since E5-S2 (D62): scripts/art_terrain.py writes the surface and land
+sheets; the surface, riser and edge cue placeholders went with it.
 """
 from __future__ import annotations
 
@@ -36,7 +29,6 @@ PALETTE_PATH = ROOT / "art" / "palette.gpl"
 
 TILE_W = 64
 TILE_H = 32
-RISER_PX = 16
 GUTTER = 1
 
 Color = tuple[int, int, int, int]
@@ -151,239 +143,6 @@ def in_diamond(x: int, y: int, oy: int = 0) -> bool:
     """Pixel-center test for the 64x32 top diamond, shifted down by oy px."""
     cx, cy = TILE_W / 2, TILE_H / 2 + oy
     return abs(x + 0.5 - cx) / (TILE_W / 2) + abs(y + 0.5 - cy) / (TILE_H / 2) <= 1.0
-
-
-def in_riser_band(x: int, y: int) -> bool:
-    """One height step of side wall, in the same 64x32 box as a tile at the lower height.
-
-    The band is what the diamond sweeps as it rises one step (RISER_PX), minus the
-    raised diamond itself, so it fills exactly the gap between the two tops.
-
-    The sweep is sampled every half pixel: whole-pixel steps miss the corner columns 0
-    and 63 (the diamond never covers them), which left a 1 px seam between neighboring
-    walls in the course renderer (found in E1-S4).
-    """
-    if in_diamond(x, y, -RISER_PX):
-        return False
-    return any(in_diamond(x, y, -s / 2) for s in range(2 * RISER_PX + 1))
-
-
-# --- surfaces --------------------------------------------------------------
-
-# Index is the surface enum from /course-file: 0 fairway .. 7 cart_path, 8 oob.
-SURFACES = [
-    ("fairway", "FW"),
-    ("rough", "RO"),
-    ("green", "GR"),
-    ("tee", "TE"),
-    ("bunker", "BU"),
-    ("water", "WA"),
-    ("trees", "TR"),
-    ("cart_path", "CP"),
-    ("oob", "OB"),
-]
-
-
-def surface_pixel(name: str, x: int, y: int, p: dict[str, Color]) -> Color:
-    """Base color plus colorblind pattern. Periods divide 32x16, so tiles join seamlessly."""
-    if name == "fairway":  # plain
-        return p["fairway"]
-    if name == "rough":  # stippled: irregular dark and light flecks
-        if (x % 8, y % 8) in {(1, 1), (5, 2), (2, 5), (6, 6)}:
-            return p["rough_dark"]
-        if (x % 8, y % 8) in {(4, 4)}:
-            return p["fairway"]
-        return p["rough"]
-    if name == "green":  # cross-hatched: both 45 degree diagonals
-        if (x + y) % 8 == 0 or (x - y) % 8 == 0:
-            return p["green_dark"]
-        return p["green"]
-    if name == "tee":  # checkered: mown squares in two shades
-        return p["tee_light"] if ((x // 4) + (y // 4)) % 2 == 0 else p["tee_dark"]
-    if name == "bunker":  # dotted: regular grid of dots, rows offset
-        if y % 4 == 1 and (x + 2 * ((y // 4) % 2)) % 4 == 1:
-            return p["sand_dark"]
-        return p["sand"]
-    if name == "water":  # waves: small light crests, alternate rows offset
-        wx = (x + 4 * ((y // 8) % 2)) % 8
-        if (y % 8 == 3 and wx in (1, 2)) or (y % 8 == 4 and wx in (0, 3)):
-            return p["water_light"]
-        return p["water"]
-    if name == "trees":  # canopy: dark crowns with a lit pixel, on a staggered grid
-        cx = (x + 4 * ((y // 8) % 2)) % 8
-        cy = y % 8
-        d = (cx - 3.5) ** 2 + (cy - 3.5) ** 2
-        if d <= 4.5:
-            return p["tree_light_px"] if (cx, cy) == (3, 2) else p["tree"]
-        return p["tree_dark"]
-    if name == "cart_path":  # lined: lines along one isometric axis
-        if (x - 2 * y) % 8 == 0 or (x - 2 * y) % 8 == 1:
-            return p["path_dark"]
-        return p["path"]
-    if name == "oob":  # bold diagonal stripes
-        return p["oob_dark"] if ((x + y) // 4) % 2 == 0 else p["oob"]
-    raise KeyError(name)
-
-
-EDGE = {
-    "fairway": "fairway_dark", "rough": "rough_dark", "green": "green_dark", "tee": "tee_dark",
-    "bunker": "sand_dark", "water": "water_dark", "trees": "ink", "cart_path": "path_dark",
-    "oob": "slate_dark",
-}
-
-
-def surface_frame(name: str, label: str, p: dict[str, Color], labelled: bool = True) -> Image:
-    img = Image(TILE_W, TILE_H)
-    for y in range(TILE_H):
-        for x in range(TILE_W):
-            if not in_diamond(x, y):
-                continue
-            # Bottom edges only, so two neighbors share one 1 px seam.
-            if y >= TILE_H // 2 and not in_diamond(x, y + 1):
-                img.set(x, y, p[EDGE[name]])
-            else:
-                img.set(x, y, surface_pixel(name, x, y, p))
-    if not labelled:  # the play sheet (E3-S55): the pattern runs under where the label was
-        return img
-    # Label in the left corner, clear of the pattern's center.
-    lx, ly = 8, 14
-    for yy in range(ly - 1, ly + 6):
-        for xx in range(lx - 1, lx + 4 * len(label)):
-            img.set(xx, yy, p["ink"] if luminance(surface_pixel(name, 0, 0, p)) > 140 else p["chalk"])
-    draw_label(img, label, lx, ly, p["chalk"] if luminance(surface_pixel(name, 0, 0, p)) > 140 else p["ink"])
-    return img
-
-
-def build_surfaces(p: dict[str, Color], labelled: bool = True) -> Image:
-    p = dict(p)
-    p["tree_light_px"] = p["rough"]
-    return sheet([surface_frame(n, lbl, p, labelled) for n, lbl in SURFACES])
-
-
-# --- risers ----------------------------------------------------------------
-
-RISERS = [("both", "RB"), ("left", "RL"), ("right", "RR")]
-
-
-def riser_frame(which: str, label: str, p: dict[str, Color], labelled: bool = True) -> Image:
-    img = Image(TILE_W, TILE_H)
-    for y in range(TILE_H):
-        for x in range(TILE_W):
-            if not in_riser_band(x, y):
-                continue
-            left = x < TILE_W // 2
-            if (which == "left" and not left) or (which == "right" and left):
-                continue
-            # Strata run parallel to the face's top edge, every 5 px down the wall.
-            slope_y = y - (x // 2 if left else (TILE_W - 1 - x) // 2)
-            base = p["earth_dark"] if left else p["earth"]
-            stripe = p["ink"] if left else p["earth_dark"]
-            c = stripe if slope_y % 6 == 5 else base
-            if not in_riser_band(x, y + 1):  # foot of the wall
-                c = p["ink"]
-            if x in (TILE_W // 2 - 1, TILE_W // 2) and which == "both":  # front corner
-                c = p["earth_light"]
-            img.set(x, y, c)
-    if not labelled:  # the play sheet (E3-S55)
-        return img
-    if which in ("both", "left"):
-        draw_label(img, label, 6, 9, p["chalk"])
-    else:
-        draw_label(img, label, TILE_W - 6 - 4 * len(label), 9, p["chalk"])
-    return img
-
-
-def build_risers(p: dict[str, Color], labelled: bool = True) -> Image:
-    return sheet([riser_frame(w, lbl, p, labelled) for w, lbl in RISERS])
-
-
-# --- edge cue (E1-S10) -----------------------------------------------------
-
-# Frame names: "l" is the back-left edge (towards x - 1), "r" the back-right edge
-# (towards y - 1); the digit is the rise, 1 step or 2 for two or more. Order is fixed.
-EDGES = ["l1", "l2", "r1", "r2", "l1r1", "l1r2", "l2r1", "l2r2"]
-# The frame's anchor sits 2 px lower than a surface tile's, so the shadow line has room
-# above the diamond's top corner. Bands are measured straight down from the top edge.
-EDGE_ANCHOR_Y = 18
-# One lip per step class: a dark line, then a bright line 2 px below it. The first lip's
-# dark line lies outside the top (the shadow on the lower tile's side of the edge); the
-# second sits inside, so on light ground (sand, green) the count still reads as two dark
-# lines, and on dark ground as two bright ones. 2 px bands survive nearest sampling at 0.5x.
-EDGE_LIPS = [((-2, 0), (0, 2)), ((2, 4), (4, 6))]
-
-
-def edge_frame(name: str, p: dict[str, Color]) -> Image:
-    img = Image(TILE_W, TILE_H)
-    oy = EDGE_ANCHOR_Y - TILE_H // 2
-    rises = {"l": 0, "r": 0}
-    for side, n in zip(name[::2], name[1::2]):
-        rises[side] = int(n)
-    top_corner_y = EDGE_ANCHOR_Y - TILE_H / 2
-    for y in range(TILE_H):
-        for x in range(TILE_W):
-            inside = in_diamond(x, y, oy)
-            dx = x + 0.5 - TILE_W / 2
-            for side, sign in (("l", -1), ("r", 1)):
-                steps = rises[side]
-                if not steps:
-                    continue
-                # Straight down from the edge's whole line, not only its half of the frame,
-                # so the lines of neighbouring tiles along one edge join without gaps.
-                v = y + 0.5 - (top_corner_y + sign * dx / 2)
-                own_half = (dx < 0) if side == "l" else (dx >= 0)
-                for (d0, d1), (b0, b1) in EDGE_LIPS[:steps]:
-                    if d0 <= v < d1 and (inside or (own_half and d1 <= 0)):
-                        img.set(x, y, p["ink"])
-                    elif inside and b0 <= v < b1:
-                        img.set(x, y, p["chalk"])
-    return img
-
-
-def build_edges(p: dict[str, Color]) -> Image:
-    return sheet([edge_frame(n, p) for n in EDGES])
-
-
-# --- unowned land (E6-S5) -------------------------------------------------
-
-# Frame index is a mask of the edges that lie on a parcel edge: bit 0 "w" the back-left edge
-# (towards x - 1), bit 1 "n" the back-right (y - 1), bit 2 "e" the front-right (x + 1), bit 3
-# "s" the front-left (y + 1). Frame 0 "hatch" is the pattern alone.
-LAND_SIDES = ["w", "n", "e", "s"]
-LAND = ["hatch" + ("_" + "".join(LAND_SIDES[b] for b in range(4) if m >> b & 1) if m else "")
-        for m in range(16)]
-# Screen-diagonal hatch, 2 px of ink every 8 px. 8 divides 32 and 16, so the lines of
-# neighbouring tiles (and of tiles one step higher) join into one pattern.
-LAND_HATCH_PERIOD = 8
-LAND_HATCH_WIDTH = 2
-# The parcel edge line, px straight down (or up) from the edge, inside the top.
-LAND_EDGE_PX = 2
-# The line is dashed, a survey-stake line: chalk then ink, LAND_DASH_PX of screen x each.
-# The edge cue's lip is one solid chalk line (art/specs/edge_cue.md), so a dashed line never
-# reads as a one-step rise. 2 * 8 = 16 px divides 32, so dashes join along a parcel edge.
-LAND_DASH_PX = 8
-
-
-def land_frame(mask: int, p: dict[str, Color]) -> Image:
-    img = Image(TILE_W, TILE_H)
-    for y in range(TILE_H):
-        for x in range(TILE_W):
-            if not in_diamond(x, y):
-                continue
-            dx = (x + 0.5 - TILE_W / 2) / (TILE_W / 2)
-            dy = (y + 0.5 - TILE_H / 2) / (TILE_H / 2)
-            # Closeness to each edge's line, 1 on the line: w up-left, n up-right,
-            # e down-right, s down-left.
-            near = [-dx - dy, dx - dy, dx + dy, -dx + dy]
-            edge = any(mask >> b & 1 and (1 - near[b]) * (TILE_H / 2) < LAND_EDGE_PX for b in range(4))
-            if edge:
-                img.set(x, y, p["chalk"] if (x // LAND_DASH_PX) % 2 == 0 else p["ink"])
-            elif (x + y) % LAND_HATCH_PERIOD < LAND_HATCH_WIDTH:
-                img.set(x, y, p["ink"])
-    return img
-
-
-def build_land(p: dict[str, Color]) -> Image:
-    return sheet([land_frame(m, p) for m in range(len(LAND))])
 
 
 # --- golfer (E3-S5) --------------------------------------------------------
@@ -647,16 +406,6 @@ def main(argv: list[str]) -> int:
 
     p = load_palette()
     jobs: list[tuple[Path, Image]] = []
-    if args.thing in ("surfaces", "all"):
-        jobs.append((ROOT / "art/tiles/surfaces_placeholder.png", build_surfaces(p)))
-        jobs.append((ROOT / "art/tiles/surfaces_play_placeholder.png", build_surfaces(p, labelled=False)))
-    if args.thing in ("risers", "all"):
-        jobs.append((ROOT / "art/tiles/risers_placeholder.png", build_risers(p)))
-        jobs.append((ROOT / "art/tiles/risers_play_placeholder.png", build_risers(p, labelled=False)))
-    if args.thing in ("edges", "all"):
-        jobs.append((ROOT / "art/tiles/edges_placeholder.png", build_edges(p)))
-    if args.thing in ("land", "all"):
-        jobs.append((ROOT / "art/tiles/land_placeholder.png", build_land(p)))
     if args.thing in ("clubhouse", "all"):
         jobs.append((ROOT / "art/sprites/clubhouse_placeholder.png", build_clubhouse(p)))
     if args.thing in ("golfer", "all"):

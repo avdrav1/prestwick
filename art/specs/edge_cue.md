@@ -2,8 +2,8 @@
 
 > Status (E3-S58, D50): not drawn. The smooth ground's slope light (`course/terrain_mesh.gd`,
 > light from behind the hills) now shows rises that face away from the camera, so the lip is
-> gone from the map. `edges_placeholder.png` is unused by the game and kept only for
-> `art/tiles/tile_preview.tscn`; final art (E5) needs no edge cue frames.
+> gone from the map. Retired in E5-S2: `edges_placeholder.png`, `TileArt.edges` and its
+> generator are gone. The rest of this spec is kept as history.
 
 ## Purpose
 

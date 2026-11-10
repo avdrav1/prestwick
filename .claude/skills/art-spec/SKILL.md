@@ -9,7 +9,7 @@ Argument: what to spec. Examples: `surfaces`, `risers`, `golfer`, `ball`, `trees
 
 ## Constants (do not restate elsewhere)
 
-- Isometric 2:1. Tile footprint 64x32 px. Riser 16 px per height step, 7 steps max.
+- Isometric 2:1. Tile footprint 64x32 px. 16 px per height step, 7 steps max (no risers drawn since D50).
 - Golfer 24 px tall, 8 directions, animations: idle (2 frames), walk (4), swing (6).
 - Palette: `art/palette.gpl`, about 32 colors. No colors outside it.
 - Sheets are PNG, no padding, 1 px transparent gutter between frames. Named `<thing>_<state>.png`.
@@ -27,7 +27,7 @@ Final sheets are made by generator scripts in `scripts/` (`scripts/art_terrain.p
 
 ## Colorblind rule
 
-Every surface has a pattern as well as a color (fairway plain, rough stippled, green cross-hatched, bunker dotted, water waves, cart path lined). The spec names the pattern.
+Every surface has a pattern as well as a color (fairway mown stripes since E5-S2, rough stippled, green cross-hatched, bunker dotted, water waves, cart path lined). The spec names the pattern.
 
 ## Rules
 

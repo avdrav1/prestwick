@@ -3,10 +3,10 @@
 > Status (E3-S58, D50): not drawn. The course view draws the ground as a smooth mesh over the
 > bilinear surface the ball rolls on (`course/terrain_mesh.gd`), so a rise is a slope and no
 > risers are drawn; the map's two front edges and water banks are plain side faces in
-> `side_color` (`course/terrain_tuning.tres`), lit by their facing. The riser sheets
-> (`risers_placeholder.png`, `risers_play_placeholder.png`) are unused by the game and kept
-> only for `art/tiles/tile_preview.tscn`; final art (E5) needs no riser frames. The rest of this
-> spec is the terrace design D5 chose and D50 replaced.
+> `side_color` (`course/terrain_tuning.tres`), lit by their facing. Retired in E5-S2: the riser
+> sheets, `TileArt.risers` and the preview's use of them are gone, and their generator left
+> `scripts/placeholder.py`. The rest of this spec is the terrace design D5 chose and D50
+> replaced, kept as history.
 
 ## Purpose
 

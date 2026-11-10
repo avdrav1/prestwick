@@ -1,8 +1,8 @@
 class_name TilePreview
 extends Node2D
-## Test scene for the terrain placeholders (E1-S3), for scripts/screenshot.sh.
-## STRIP draws each surface frame at 2x with its name. MAP draws a 9x9 patch, one strip per
-## surface, on a stepped hill, so seams and risers show. Not the course renderer (E1-S4).
+## Test scene for the terrain art (E1-S3; final art E5-S2), for scripts/screenshot.sh.
+## STRIP draws each surface frame at 2x with its name. MAP draws a flat 9x9 patch, one strip per
+## surface, so seams and the patterns across tiles show. Not the course renderer (E1-S4).
 
 enum Show { STRIP, MAP }
 
@@ -52,36 +52,23 @@ func _draw_strip() -> void:
 		var pos := Vector2(i * STRIP_STEP, 0)
 		draw_texture_rect_region(sheet.texture, Rect2(pos, size), Rect2(sheet.region(i)))
 		draw_string(font, pos + Vector2(0, size.y + 16), sheet.frames[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
-	var risers: TileSheet = _art.risers
-	for i: int in risers.frame_count():
-		var pos := Vector2(i * STRIP_STEP, size.y + 32)
-		draw_texture_rect_region(risers.texture, Rect2(pos, size), Rect2(risers.region(i)))
-		draw_string(font, pos + Vector2(0, size.y + 16), "riser " + risers.frames[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 
 
-func _height(i: int, j: int) -> int:
-	return maxi(0, 3 - maxi(absi(i - 4), absi(j - 4)))
-
-
-func _center(i: int, j: int, h: int) -> Vector2:
+func _center(i: int, j: int) -> Vector2:
 	var half: Vector2 = Vector2(_art.surfaces.frame_size) / 2.0
-	return Vector2((i - j) * half.x, (i + j) * half.y - h * _art.riser_px)
+	return Vector2((i - j) * half.x, (i + j) * half.y)
 
 
+## A flat patch, one strip of tiles per surface, each tile its variant of the sheet's macro
+## repeat (TileSheet.variant_of), so the seams and the patterns across tiles show.
 func _draw_map() -> void:
-	var anchor := Vector2(_art.surfaces.anchor)
-	var riser_region := Rect2(_art.risers.region_named(&"both"))
-	# Painter's order: back to front by i + j, then each column bottom up.
+	var sheet: TileSheet = _art.surfaces
+	var anchor := Vector2(sheet.anchor)
 	for depth: int in range(0, 2 * MAP_SIZE - 1):
 		for i: int in MAP_SIZE:
 			var j: int = depth - i
 			if j < 0 or j >= MAP_SIZE:
 				continue
-			var h: int = _height(i, j)
-			for k: int in h:
-				draw_texture_rect_region(_art.risers.texture,
-						Rect2(_center(i, j, k) - anchor, riser_region.size), riser_region)
-			var surface: int = j % _art.surfaces.frame_count()
-			var region := Rect2(_art.surfaces.region(surface))
-			draw_texture_rect_region(_art.surfaces.texture,
-					Rect2(_center(i, j, h) - anchor, region.size), region)
+			var surface: int = j % sheet.frame_count()
+			var region := Rect2(sheet.region(sheet.variant_of(surface, Vector2i(i, j))))
+			draw_texture_rect_region(sheet.texture, Rect2(_center(i, j) - anchor, region.size), region)

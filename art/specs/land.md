@@ -33,7 +33,8 @@ one or more steps higher, join into one pattern without seams.
 
 ## Sheet
 
-- File: `art/tiles/land_<state>.png`. Placeholder: `art/tiles/land_placeholder.png`.
+- File: `art/tiles/land_final.png` (E5-S2, D62), written by `scripts/art_terrain.py`: the E6-S5
+  rule stands as final art.
 - One row of 16 frames, each 64x32, no padding, 1 px transparent gutter. Sheet is 1039x32.
 - Frame index is a mask of the edges that carry a parcel line: bit 0 `w` the back-left edge
   (screen upper-left, toward x - 1), bit 1 `n` the back-right (upper-right, toward y - 1),
@@ -62,10 +63,10 @@ tiles when the builder buys it or undoes the purchase (`CourseView.refresh_parce
   the parcel line's band is dashed where the edge cue's is solid;
   `tests/test_course_view.gd` checks when the overlay shows.
 
-## For the artist replacing it
+## Changing it
 
 - Keep `land_<state>.png`, 16 frames in mask order, 64x32, 1 px gutter, anchor (32, 16).
 - Keep a pattern that tiles on a period dividing 32 x 16 and an edge line that joins along a
   parcel edge; a fence, rope or survey-stake line is fine if it reads at 0.5x in grayscale.
   It must never be a solid bright line just inside the edge: that is the edge cue.
-- Only colors from `art/palette.gpl`. Regenerate with `python3 scripts/placeholder.py land`.
+- Only colors from `art/palette.gpl`. Change the rule in `scripts/art_terrain.py` and rerun it.

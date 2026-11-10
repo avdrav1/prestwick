@@ -928,16 +928,17 @@ static func top_shades(sheet: TileSheet, shades: PackedFloat32Array, shaded: Pac
 
 
 ## The largest modulate frame `i` takes before a coloured pixel's brightest channel passes 1:
-## 1 / that channel over the frame's opaque pixels with saturation at least HUE_MIN_SAT.
+## 1 / that channel over the frame's opaque pixels with saturation at least HUE_MIN_SAT, in
+## every variant of it (TileSheet.macro, E5-S2).
 ## Near-grey pixels (the chalk and ink of the 2-letter labels) are left out: clipping them only
 ## moves them toward white, not to another hue.
 static func frame_headroom(sheet: TileSheet, i: int) -> float:
 	var img: Image = sheet.texture.get_image()
-	var r: Rect2i = sheet.region(i)
 	var top: float = 0.0
-	for y: int in range(r.position.y, r.end.y):
-		for x: int in range(r.position.x, r.end.x):
-			var c: Color = img.get_pixel(x, y)
-			if c.a > 0.0 and c.s >= HUE_MIN_SAT:
-				top = maxf(top, maxf(c.r, maxf(c.g, c.b)))
+	for r: Rect2i in sheet.variant_regions(i):
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				var c: Color = img.get_pixel(x, y)
+				if c.a > 0.0 and c.s >= HUE_MIN_SAT:
+					top = maxf(top, maxf(c.r, maxf(c.g, c.b)))
 	return INF if top <= 0.0 else 1.0 / top
