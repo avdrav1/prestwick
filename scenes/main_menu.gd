@@ -1,7 +1,8 @@
 class_name MainMenu
 extends Control
 ## The main menu (E5-S5): Back to the course, New course, Load game, Save game, Import course,
-## Export course, Quit, over a dimmed course. Main opens it at start when it is the running
+## Export course, Sound settings (E5-S4: Main opens the AudioPanel and comes back here when it
+## closes), Quit, over a dimmed course. Main opens it at start when it is the running
 ## scene and on Esc (`menu`); Esc on a page goes back to the menu, on the menu closes it. Every
 ## control takes keyboard focus (arrows or Tab move it, Enter or Space presses) and the focused
 ## one draws a thick outline. The menu only asks: Main does each action (its signals) and the
@@ -20,6 +21,8 @@ signal save_requested
 signal import_requested(path: String)
 signal export_requested(course_name: String, author: String)
 signal quit_requested
+## E5-S4: Sound settings.
+signal sound_requested
 
 ## The same key as LandPanel's buy_cancel (Esc): a pending buy takes it first.
 const MENU_ACTION: StringName = &"menu"
@@ -34,6 +37,8 @@ const BACKDROP := Color(0.0, 0.0, 0.0, 0.55)
 ## The focused control's outline: thick and bright, so it reads over any button state.
 const FOCUS_COLOR := Color(1.0, 0.84, 0.3)
 const FOCUS_WIDTH: int = 3
+## The Sound settings button's place on the menu page (show_main's index).
+const SOUND_INDEX: int = 6
 
 var main_page: VBoxContainer
 var export_page: VBoxContainer
@@ -101,6 +106,7 @@ func _build_main(parent: Control) -> void:
 	_button(main_page, "Save game", func() -> void: _do(save_requested))
 	_button(main_page, "Import course", show_import)
 	_button(main_page, "Export course", show_export)
+	_button(main_page, "Sound settings", func() -> void: _do(sound_requested))
 	_button(main_page, "Quit", func() -> void: _do(quit_requested))
 	for c: Node in main_page.get_children():
 		_main_buttons.append(c as Button)

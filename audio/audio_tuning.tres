@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="AudioTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://audio/audio_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+default_master = 0.8
+default_music = 0.5
+default_ambient = 0.6
+default_sfx = 0.9
+music_level_db = -6.0
+ambient_level_db = -4.0
+music_swing_db = -40.0
+music_fade_out_s = 0.25
+music_fade_in_s = 2.0
+sting_min_gap_s = 1.5
+sfx_voices = 6

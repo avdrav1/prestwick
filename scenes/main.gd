@@ -82,6 +82,9 @@ var _feed_panel_top: float = -1.0
 @onready var main_menu: MainMenu = $HUD/MainMenu
 ## The balance, in Build and Play (E4-S2).
 @onready var money_panel: MoneyPanel = $HUD/MoneyPanel
+## E5-S4: the sound, and its F2 volume panel.
+@onready var game_audio: GameAudio = $GameAudio
+@onready var audio_panel: AudioPanel = $HUD/AudioPanel
 
 
 func _ready() -> void:
@@ -131,6 +134,9 @@ func _ready() -> void:
 	main_menu.export_requested.connect(export_course)
 	main_menu.quit_requested.connect(get_tree().quit)
 	main_menu.visibility_changed.connect(_on_menu_visibility_changed)
+	game_audio.bind(swing_control, shot_view, guest_sim.feed)
+	audio_panel.bind(game_audio)
+	main_menu.sound_requested.connect(open_sound_from_menu)
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -493,6 +499,15 @@ func open_menu() -> void:
 
 
 ## While the menu is open the arrow keys move its focus, not the map.
+## E5-S4: the menu's Sound settings opens the sound panel; closing it comes back to the menu,
+## focus on Sound settings.
+func open_sound_from_menu() -> void:
+	audio_panel.open()
+	audio_panel.closed.connect(func() -> void:
+		main_menu.open(course)
+		main_menu.show_main(MainMenu.SOUND_INDEX), CONNECT_ONE_SHOT)
+
+
 func _on_menu_visibility_changed() -> void:
 	camera.set_process(not main_menu.visible)
 

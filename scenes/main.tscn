@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=28 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -26,6 +26,8 @@
 [ext_resource type="Script" path="res://scenes/money_panel.gd" id="money_panel"]
 [ext_resource type="Script" path="res://scenes/rating_row.gd" id="rating_row"]
 [ext_resource type="Script" path="res://scenes/fee_panel.gd" id="fee_panel"]
+[ext_resource type="Script" path="res://audio/game_audio.gd" id="game_audio"]
+[ext_resource type="Script" path="res://scenes/audio_panel.gd" id="audio_panel"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -219,6 +221,13 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("main_menu")
+
+[node name="AudioPanel" type="PanelContainer" parent="HUD"]
+visible = false
+script = ExtResource("audio_panel")
+
+[node name="GameAudio" type="Node" parent="."]
+script = ExtResource("game_audio")
 
 [node name="TagClicks" type="Node" parent="."]
 script = ExtResource("19_tag_clicks")
