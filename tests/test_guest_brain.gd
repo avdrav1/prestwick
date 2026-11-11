@@ -1529,3 +1529,132 @@ func _stand(g: GuestGroup, from: Vector2, to: Vector2) -> void:
 		if not o.is_done():
 			o.step_from = from
 			o.position = to
+
+
+# --- E8-S2 (D64): the day's guests come when the first hole opens ---
+
+## The guest course with every hole closed by hand, and its builder.
+func _closed_course() -> CourseBuilder:
+	var b := GuestCourse.build()
+	for n: int in [1, 2, 3]:
+		b.close_hole(n)
+	return b
+
+
+## Each group's arrival second (-1 when it never arrived) and its guests' records, in order.
+static func _arrivals(brain: GuestBrain) -> Array:
+	var out: Array = []
+	for g: GuestGroup in brain.groups:
+		var at := -1
+		var recs: Array = []
+		for guest: Guest in g.guests:
+			if guest.arrived_s >= 0 and brain.guests.has(guest):
+				at = guest.arrived_s
+			for r: Guest.HoleRecord in guest.records:
+				recs.append([guest.id, r.number, r.score, r.start_s, r.end_s])
+		out.append([at, recs])
+	return out
+
+
+func _step_to(brain: GuestBrain, t: int) -> void:
+	while brain.second < t and not brain.day_over:
+		brain.step()
+
+
+func test_groups_turned_away_come_when_the_first_hole_opens() -> void:
+	var b := _closed_course()
+	var brain := GuestBrain.new(b.course, 3, tuning, model)
+	var n := brain.groups.size()
+	_step_to(brain, 120)
+	assert_eq(brain.turned_away, n, "every group came to a closed course and went home")
+	assert_eq(brain.guests.size(), 0)
+	assert_true(b.open_hole(1), "the player opens hole 1 at 120 s")
+	_step_to(brain, 121)
+	assert_eq(brain.late_starts, [Vector3i(0, 120, n)] as Array[Vector3i],
+			"one late start at 120 s, sending every group: 3 holes' worth of day is left")
+	assert_eq(brain.turned_away, 0, "none is turned away now")
+	var gap := tuning.arrival_window_s / n
+	for i: int in n:
+		assert_almost_eq(brain.groups[i].arrive_s, 120.0 + i * gap, 0.001,
+				"group %d one gap after the one before, as on a morning" % i)
+	_step_to(brain, 120 + ceili(tuning.arrival_window_s))
+	var arrived := 0
+	for g: GuestGroup in brain.groups:
+		if g.phase != GuestGroup.Phase.PENDING and not g.turned_away:
+			arrived += 1
+	assert_eq(arrived, n, "within arrival_window_s of the opening every group is out")
+	assert_eq(brain.guests.size(), tuning.arrivals_per_day, "the day's whole count")
+	brain.run_day()
+	var played := 0
+	for guest: Guest in brain.guests:
+		played += guest.records.size()
+	assert_gt(played, 0, "and they play the hole")
+
+
+func test_a_course_open_from_the_morning_has_no_late_start() -> void:
+	var brain := GuestBrain.new(GuestCourse.course(), 3, tuning, model)
+	brain.run_day()
+	assert_eq(brain.late_starts, [] as Array[Vector3i])
+	assert_eq(brain.turned_away, 0)
+
+
+func test_near_dusk_a_late_start_sends_only_the_groups_with_time_for_a_round() -> void:
+	var b := _closed_course()
+	var brain := GuestBrain.new(b.course, 3, tuning, model)
+	var n := brain.groups.size()
+	var gap := tuning.arrival_window_s / n
+	var per_hole := (tuning.day_s - tuning.arrival_window_s) / BuilderTuning.load_default().max_holes
+	assert_almost_eq(per_hole, 50.0, 0.001, "D46's 450 s for nine holes: 50 s a hole")
+	# Three holes ask for 150 s; at 360 s that leaves 30 s of sends.
+	_step_to(brain, 360)
+	for h: int in [1, 2, 3]:
+		b.open_hole(h)
+	assert_almost_eq(brain.late_round_s(), 150.0, 0.001)
+	_step_to(brain, 361)
+	var expect := 0
+	while expect < n and tuning.day_s - (360 + expect * gap) >= 150.0:
+		expect += 1
+	assert_between(expect, 1, n - 1, "some groups, not all")
+	assert_eq(brain.late_starts, [Vector3i(0, 360, expect)] as Array[Vector3i])
+	assert_eq(brain.turned_away, n - expect, "the rest do not come today")
+	brain.run_day()
+	var came := 0
+	for g: GuestGroup in brain.groups:
+		if not g.turned_away:
+			came += 1
+			assert_false(g.cut)
+		else:
+			assert_true(g.cut)
+	assert_eq(came, expect)
+	# Past the last second a round fits, nobody comes.
+	var late := _closed_course()
+	var none := GuestBrain.new(late.course, 3, tuning, model)
+	_step_to(none, 400)
+	for h: int in [1, 2, 3]:
+		late.open_hole(h)
+	none.run_day()
+	assert_eq(none.late_starts, [Vector3i(0, 400, 0)] as Array[Vector3i])
+	assert_eq(none.guests.size(), 0)
+	assert_eq(none.turned_away, n)
+
+
+func test_a_brain_given_the_late_starts_replays_the_day() -> void:
+	var b := _closed_course()
+	var first := GuestBrain.new(b.course, 3, tuning, model)
+	_step_to(first, 150)
+	b.open_hole(1)
+	b.open_hole(2)
+	b.open_hole(3)
+	first.run_day()
+	assert_eq(first.late_starts.size(), 1)
+	# The replay's course is open from its morning (a load's course is the one saved).
+	var again := GuestBrain.new(b.course, 3, tuning, model, [], null, -1, first.late_starts)
+	again.run_day()
+	assert_eq(_arrivals(again), _arrivals(first), "the same groups at the same seconds, the same rounds")
+	assert_eq(again.late_starts, first.late_starts, "and its own late starts to save again")
+	assert_eq(again.turned_away, first.turned_away)
+	assert_eq(again.ticks, first.ticks)
+	# Without them the open course would have its guests in the morning.
+	var morning := GuestBrain.new(b.course, 3, tuning, model)
+	morning.run_day()
+	assert_ne(_arrivals(morning), _arrivals(first))

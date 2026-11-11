@@ -388,3 +388,141 @@ func test_the_golfers_leave_the_course_while_a_skip_runs_and_come_back_after() -
 	view.update_view(1.0 / 60.0, sim.effective_speed())
 	assert_eq(view.figures().size(), sim.brain.on_course().size(), "drawn again where the skip stopped")
 	assert_gt(view.figures().size(), 0)
+
+
+# --- E8-S2 (D64): a late start when the first hole opens, at any speed and through a load ---
+
+const LATE_SAVE := "user://test_day_clock_late.json"
+const LATE_AT := 120
+const LATE_START := 5000
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(LATE_SAVE):
+		DirAccess.remove_absolute(LATE_SAVE)
+
+
+## The guest course with every hole closed by hand, and its builder.
+static func _closed_build() -> CourseBuilder:
+	var b := GuestCourse.build()
+	for n: int in [1, 2, 3]:
+		b.close_hole(n)
+	return b
+
+
+## A sim on a fresh closed guest course, its builder alongside.
+func _closed_sim() -> Array:
+	var b := _closed_build()
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(b.course, SEED)
+	sim.running = true
+	return [sim, b]
+
+
+## Advances `sim` in `delta` frames until its brain is at second LATE_AT, then opens every hole.
+func _open_at_late(sim: GuestSim, b: CourseBuilder, delta: float) -> void:
+	sim.advance(0.0)
+	while sim.brain.second < LATE_AT:
+		sim.advance(delta)
+	assert_eq(sim.brain.second, LATE_AT, "the holes open just as second %d comes" % LATE_AT)
+	assert_eq(sim.brain.turned_away, sim.brain.groups.size(), "every group went home to a closed course")
+	for n: int in [1, 2, 3]:
+		b.open_hole(n)
+
+
+func test_a_skip_after_a_late_start_gives_the_day_run_at_3x() -> void:
+	var run_pair := _closed_sim()
+	var run: GuestSim = run_pair[0]
+	var run_ends := _ended_states(run)
+	run.set_speed(3.0)
+	_open_at_late(run, run_pair[1], 1.0 / 60.0)
+	_run_until_day_ends(run, 1, 1.0 / 60.0, 100000)
+	var pair := _closed_sim()
+	var sim: GuestSim = pair[0]
+	var ends := _ended_states(sim)
+	_open_at_late(sim, pair[1], 1.0 / 60.0)
+	while sim.brain.second <= LATE_AT:
+		sim.advance(1.0 / 60.0)
+	assert_eq(sim.brain.late_starts, [Vector3i(0, LATE_AT, sim.brain.groups.size())] as Array[Vector3i],
+			"the step after the opening sends every group from that second")
+	_skip(sim)
+	assert_eq(ends.size(), 1)
+	assert_gt((ends[0][1][2] as Array).size(), 0, "the late guests came")
+	assert_eq(ends[0][1], run_ends[0][1], "the same end-of-day state as the day run at 3x")
+
+
+func _late_main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	var c := _closed_build().course
+	c.set_land_budget(LATE_START)
+	m.land_seed = SEED
+	m.show_course(c)
+	m.guest_sim.set_process(false)
+	m.feed_panel.set_process(false)
+	return m
+
+
+func _main_open_at_late(m: Main) -> void:
+	m.guest_sim.advance(0.0)
+	while m.guest_sim.brain.second < LATE_AT:
+		m.guest_sim.advance(1.0)
+	assert_eq(m.ledger.guests, 0, "nobody paid at a closed course")
+	for n: int in [1, 2, 3]:
+		assert_true(m.build_tool.builder.open_hole(n))
+
+
+func _main_skip(m: Main) -> void:
+	m.guest_sim.skip_to_morning()
+	var frames := 0
+	while m.guest_sim.skipping and frames < 100000:
+		m.guest_sim.skip_frame()
+		frames += 1
+	assert_eq(m.guest_sim.day, 2, "the skip reaches day 2's morning")
+
+
+func _feed_lines(m: Main) -> PackedStringArray:
+	var out := PackedStringArray()
+	for e: ReactionFeed.Entry in m.guest_sim.feed.entries:
+		out.append("%d %d %s x%d" % [e.day, e.second, e.text, e.count])
+	return out
+
+
+func test_the_morning_line_counts_the_late_guests_and_a_load_replays_them() -> void:
+	# The day run through: closed until 120 s, then opened.
+	var a := _late_main()
+	var came := [0]
+	a.guest_sim.day_ended.connect(func(_d: int, b: GuestBrain) -> void: came[0] = b.guests.size())
+	_main_open_at_late(a)
+	_main_skip(a)
+	assert_gt(came[0], 0, "the late guests came")
+	assert_string_contains(a.ledger.last_line, "(%d guests)" % came[0], "the morning line counts them")
+	assert_eq(a.money_panel.day_label.text.contains("%d guests" % came[0]), true)
+	# The same day saved after a few late guests paid, loaded into a fresh game, run to its end.
+	var b := _late_main()
+	_main_open_at_late(b)
+	while b.ledger.guests < 2:
+		b.guest_sim.advance(1.0)
+	assert_eq(b.save_game(LATE_SAVE), OK)
+	var text := FileAccess.get_file_as_string(LATE_SAVE)
+	assert_string_contains(text, "late_starts", "the save keeps the late start")
+	var n := _late_main()
+	assert_true(n.load_game(LATE_SAVE))
+	n.guest_sim.advance(0.0)
+	assert_eq(n.guest_sim.brain.late_starts, b.guest_sim.brain.late_starts, "the replay's late start")
+	_main_skip(n)
+	assert_eq(n.build_tool.builder.balance(), a.build_tool.builder.balance(), "the same balance")
+	assert_eq(n.money_panel.day_label.text, a.money_panel.day_label.text, "the same day's line")
+	assert_eq(_feed_lines(n), _feed_lines(a), "the same feed")
+	assert_eq(n.rating_history, a.rating_history, "the same rating")
+	# A save holds the field only when there was a late start.
+	var errors: Array[String] = []
+	var state := GameSave.from_json(text, errors)
+	assert_eq(errors, [] as Array[String])
+	assert_eq(state.late_starts, b.guest_sim.brain.late_starts)
+	var data: Dictionary = JSON.parse_string(text)
+	data["late_starts"] = [[0, -5, 2]]
+	assert_null(GameSave.from_json(JSON.stringify(data), errors), "a bad late start is refused")

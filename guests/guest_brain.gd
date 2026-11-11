@@ -101,8 +101,17 @@ var guests: Array[Guest] = []
 var second: int = 0
 var day_over: bool = false
 ## Groups that arrived to no open hole, or to a course with no clubhouse (E5-S11), and went
-## home at once.
+## home at once, and (E8-S2) groups a late start had no time for; a group a late start sends out
+## again no longer counts.
 var turned_away: int = 0
+## E8-S2 (D64): the day's late starts, in order, each Vector3i(first group, second, groups sent).
+## When groups went home to a closed course and a hole is open again at a step, that step sends
+## every group not yet out (those turned away and any still to come) from its second, in arrival
+## order, one every `arrival_window_s` / groups as on a normal morning, while the time left before
+## dusk holds a round of the open holes by the normal day's finish rule (`late_round_s`); the rest
+## do not come today. GuestSim saves them (E4-S11's replay) and a loaded day's brain takes them
+## (`p_late_starts`), so its replay sends the same groups at the same seconds.
+var late_starts: Array[Vector3i] = []
 ## The most Ball ticks one simulated second spent, sim-wide and by one guest; and the
 ## seconds that reached the sim's cap.
 var max_second_ticks: int = 0
@@ -154,7 +163,8 @@ var _terrain_key: String = ""
 ## (GuestClubTable.warm), before any guest ticks.
 func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 		p_model: ShotModel = null, p_groups: Array[GuestGroup] = [],
-		p_swing_tuning: SwingTuning = null, p_arrivals: int = -1) -> void:
+		p_swing_tuning: SwingTuning = null, p_arrivals: int = -1,
+		p_late_starts: Array[Vector3i] = []) -> void:
 	course = p_course
 	day_seed = p_day_seed
 	tuning = p_tuning if p_tuning != null else GuestTuning.load_default()
@@ -163,6 +173,9 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 	field = HeightField.new(course, model.params)
 	checks = HoleChecks.new(tuning, model.params)
 	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed, p_arrivals)
+	# E8-S2: a loaded day's late starts, replayed as the day under way made them.
+	for ls: Vector3i in p_late_starts:
+		_send_late(ls.x, ls.y, ls.z)
 	GuestClubTable.warm(model)
 
 
@@ -503,6 +516,7 @@ func _update(t: int) -> void:
 		return
 	for guest: Guest in guests:
 		guest.step_from = guest.position
+	_start_late(t)
 	for g: GuestGroup in groups:
 		if g.phase == GuestGroup.Phase.PENDING and g.arrive_s <= t:
 			_arrive(g, t)
@@ -525,6 +539,7 @@ func _arrive(g: GuestGroup, t: int) -> void:
 	var n := next_open_hole(0)
 	if n == 0 or not course.has_clubhouse():
 		g.phase = GuestGroup.Phase.DONE
+		g.turned_away = true
 		turned_away += 1
 		return
 	# E5-S11: out of the clubhouse door; the walk to the first tee is the first hole's pace walk.
@@ -541,6 +556,68 @@ func _arrive(g: GuestGroup, t: int) -> void:
 	for guest: Guest in g.guests:
 		guest_arrived.emit(guest)
 	_head_for(g, n, t, false)  # the step's group pass moves it
+
+
+## E8-S2 (D64): the seconds of day a late group needs before dusk to play the course's open
+## holes by the normal day's finish rule: the last group of a normal morning arrives at
+## `arrival_window_s` with `day_s` less that left, which D46 sized for a round of the most holes
+## a course holds (BuilderTuning.max_holes), so each open hole asks for that share.
+func late_round_s() -> float:
+	var open := 0
+	var seen := {}
+	for h: HoleData in course.holes:
+		if not seen.has(h.number) and _playable(h.number):
+			open += 1
+		seen[h.number] = true
+	var per_hole := (tuning.day_s - tuning.arrival_window_s) / float(maxi(_max_holes(), 1))
+	return open * per_hole
+
+
+static func _max_holes() -> int:
+	return BuilderTuning.load_default().max_holes
+
+
+## E8-S2: at second `t`, when groups went home to a closed course (turned away, not cut) and a
+## hole is open now with the clubhouse standing, sends every group not yet out from `t` (see
+## `late_starts`). The groups turned away and those still to come follow one another in
+## arrival order, so they are the groups from the first turned-away one on.
+func _start_late(t: int) -> void:
+	var from := -1
+	for i: int in groups.size():
+		var g := groups[i]
+		if g.turned_away and not g.cut:
+			from = i
+			break
+	if from < 0 or next_open_hole(0) == 0 or not course.has_clubhouse():
+		return
+	var gap := tuning.arrival_window_s / maxf(groups.size(), 1.0)
+	var need := late_round_s()
+	var count := 0
+	while from + count < groups.size() and tuning.day_s - (t + count * gap) >= need:
+		count += 1
+	_send_late(from, t, count)
+
+
+## Sends groups `from` on out again from second `t`: the first `count` one every
+## `arrival_window_s` / groups seconds, the rest cut (they do not come today). Kept in
+## `late_starts`.
+func _send_late(from: int, t: int, count: int) -> void:
+	var gap := tuning.arrival_window_s / maxf(groups.size(), 1.0)
+	for i: int in range(maxi(from, 0), groups.size()):
+		var g := groups[i]
+		if g.turned_away:
+			g.turned_away = false
+			turned_away -= 1
+		var k := i - from
+		if k < count:
+			g.phase = GuestGroup.Phase.PENDING
+			g.arrive_s = t + k * gap
+		else:
+			g.phase = GuestGroup.Phase.DONE
+			g.turned_away = true
+			g.cut = true
+			turned_away += 1
+	late_starts.append(Vector3i(from, t, count))
 
 
 ## Group `g` heads for hole `n`: joins its queue and, with `update`, starts this second's

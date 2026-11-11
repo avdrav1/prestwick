@@ -4,7 +4,8 @@ extends RefCounted
 ## holding the course (course format v2, through CourseSave, so the land owned and the land
 ## budget come with it), the guests' seed, the day to resume at the morning of, the money, the
 ## rating history, the green fee (E4-S6), the guest feed, and (E4-S11) what the saved day's
-## morning drew and its guests paid so far, so its replay is the day the player saved. Only course/ save code writes CourseData on load
+## morning drew and its guests paid so far, and (E8-S2) when the first hole's opening sent out the
+## groups a closed course had turned away, so its replay is the day the player saved. Only course/ save code writes CourseData on load
 ## (CLAUDE.md): the course is read by CourseSave.from_dict and nothing here writes it.
 ##
 ## Guests out on the course are not saved (D38: none stays overnight), so a load resumes at the
@@ -45,6 +46,10 @@ class State:
 	## E4-S11: what each guest of the saved day paid before the save, in arrival order
 	## (DayLedger.paid): the replay's first guests pay these, the rest the fee.
 	var fees_paid: Array[int] = []
+	## E8-S2 (D64): the saved day's late starts so far (GuestSim.morning_late_starts), each
+	## Vector3i(first group, second, groups sent), so the replay sends the groups a closed
+	## course turned away at the seconds the uninterrupted day did. Empty in a save without them.
+	var late_starts: Array[Vector3i] = []
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
@@ -82,6 +87,11 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		data["arrivals"] = state.arrivals
 	if not state.fees_paid.is_empty():
 		data["fees_paid"] = state.fees_paid.duplicate()
+	if not state.late_starts.is_empty():
+		var late: Array = []
+		for ls: Vector3i in state.late_starts:
+			late.append([ls.x, ls.y, ls.z])
+		data["late_starts"] = late
 	return JSON.stringify(data, "  ", false)
 
 
@@ -160,6 +170,17 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 					errors.append("fees_paid must hold whole dollars, 0 or more")
 					break
 				s.fees_paid.append(int(v))
+	# E8-S2: a new field with a default, as `fee`: [[first group, second, groups sent], ...].
+	if data.has("late_starts"):
+		var late: Variant = data["late_starts"]
+		if typeof(late) != TYPE_ARRAY:
+			errors.append("late_starts must be a list")
+		else:
+			for v: Variant in late:
+				if not _is_late_start(v):
+					errors.append("late_starts must hold [group, second, count], whole numbers 0 or more")
+					break
+				s.late_starts.append(Vector3i(int(v[0]), int(v[1]), int(v[2])))
 	# E4-S13: an E4-S11 save's "second" held the fee over the morning's ceiling; the ceiling no
 	# longer moves within a day (D59), so it is ignored.
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
@@ -174,3 +195,12 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 		return null
 	s.feed_data = data["feed"]
 	return s
+
+
+static func _is_late_start(v: Variant) -> bool:
+	if typeof(v) != TYPE_ARRAY or (v as Array).size() != 3:
+		return false
+	for x: Variant in v:
+		if (typeof(x) != TYPE_FLOAT and typeof(x) != TYPE_INT) or x != floorf(x) or x < 0:
+			return false
+	return true

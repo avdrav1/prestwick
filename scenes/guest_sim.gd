@@ -98,6 +98,8 @@ var day_arrivals: int = 0
 var fee: int = -1
 ## E4-S11: the arrivals a loaded day's morning drew (resume_at), -1 to draw them at the morning.
 var _resume_arrivals: int = -1
+## E8-S2: the late starts of a loaded day (resume_at), for its first brain.
+var _resume_late_starts: Array[Vector3i] = []
 ## E4-S13: the stars shown (stars()), set at dusk (D59). 3 until a course's first dusk.
 var _stars: float = 3.0
 
@@ -222,6 +224,15 @@ func morning_arrivals() -> int:
 	return _resume_arrivals if brain == null else day_arrivals
 
 
+## E8-S2 (D64): the late starts of the day a save made now resumes at (GuestBrain.late_starts:
+## the groups a closed course sent home and the first hole's opening sent out again), so its
+## replay sends them at the same seconds. Read after morning_day().
+func morning_late_starts() -> Array[Vector3i]:
+	if brain == null:
+		return _resume_late_starts.duplicate()
+	return brain.late_starts.duplicate()
+
+
 ## The mean moves live; the stars shown, the ceiling and the fee wait for dusk (D59).
 func _on_feed_changed() -> void:
 	rating_changed.emit(rating())
@@ -245,6 +256,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_stale.clear()
 	feed.clear()
 	_resume_arrivals = -1
+	_resume_late_starts.clear()
 	_show_stars(rating())
 	set_fee(economy.start_fee)
 
@@ -252,7 +264,8 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 ## E4-S7: a loaded game resumes at the morning of day `d` (from 1): the next day built is `d`,
 ## from its own seed, as if the days before it had run. Guests out at the save are not kept.
 ## E4-S11: `arrivals` are the guests day `d`'s morning drew (morning_arrivals; -1: draw them).
-func resume_at(d: int, arrivals: int = -1) -> void:
+## E8-S2: `late_starts` are that day's late starts (morning_late_starts), replayed as made.
+func resume_at(d: int, arrivals: int = -1, late_starts: Array[Vector3i] = []) -> void:
 	_settle()
 	brain = null
 	_set_skipping(false)
@@ -260,6 +273,7 @@ func resume_at(d: int, arrivals: int = -1) -> void:
 	day = _first_day
 	_stale.clear()
 	_resume_arrivals = arrivals
+	_resume_late_starts = late_starts.duplicate()
 
 
 ## E4-S7: the day a save made now resumes at the morning of: the day under way, or 1 (or a
@@ -441,8 +455,12 @@ func _new_day(d: int) -> void:
 	_stale.clear()
 	var resumed := _resume_arrivals >= 0 and d == _first_day
 	day_arrivals = _resume_arrivals if resumed else arrivals_today()
+	var late: Array[Vector3i] = []
+	if d == _first_day:
+		late.assign(_resume_late_starts)
 	_resume_arrivals = -1
-	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals)
+	_resume_late_starts.clear()
+	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals, late)
 	brain.reacted.connect(_on_reacted.bind(brain))
 	brain.reached_first_tee.connect(func(g: Guest) -> void: guest_arrived.emit(g))
 	day_started.emit(day)

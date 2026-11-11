@@ -45,6 +45,11 @@ var struck: bool = false
 ## Seconds in a row its next stroke has been held by groups on other holes alone (E3-S22,
 ## GuestBrain.hold_for): at `cross_hold_max_s` it plays on.
 var cross_held_s: int = 0
+## E8-S2 (D64): it arrived to no open hole (or no clubhouse) and went home (phase DONE, counted in
+## GuestBrain.turned_away). A late start sends it out again when the first hole opens, unless
+## `cut`: a late start found no time left for it before dusk, and it does not come today.
+var turned_away: bool = false
+var cut: bool = false
 
 
 func size() -> int:

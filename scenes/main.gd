@@ -500,6 +500,8 @@ func save_game(path: String = GameSave.PATH) -> Error:
 	s.feed_data = guest_sim.feed.to_save(s.day)
 	# E4-S11: what that morning drew, for the replay.
 	s.arrivals = guest_sim.morning_arrivals()
+	# E8-S2: and when groups a closed course turned away were sent out again.
+	s.late_starts = guest_sim.morning_late_starts()
 	economy_to_save(s)
 	var dropped: Array[int] = []
 	var err := GameSave.save_file(s, path, dropped)
@@ -520,7 +522,7 @@ func load_game(path: String = GameSave.PATH) -> bool:
 		return false
 	land_seed = s.seed_value
 	show_course(s.course)
-	guest_sim.resume_at(s.day, s.arrivals)
+	guest_sim.resume_at(s.day, s.arrivals, s.late_starts)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
 	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.load_notes()))
