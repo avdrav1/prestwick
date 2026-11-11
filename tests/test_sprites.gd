@@ -4,6 +4,7 @@ extends GutTest
 ## with guests; the ball and the hole markers draw from their sheets.
 
 const PALETTE_PATH: String = "res://art/palette.gpl"
+const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 
 
 func _palette() -> Dictionary:
@@ -90,6 +91,68 @@ func test_a_tree_stands_on_every_trees_tile_and_sorts_with_guests() -> void:
 	view.refresh_cell(Vector2i(4, 4))
 	assert_eq(view.trees.tree_count(), 2)
 	assert_null(view.trees.row_of(Vector2i(4, 4)))
+
+
+## The trees as [row key y, foot, tint] per tile, for comparing two views.
+func _trees_of(view: CourseView) -> Dictionary:
+	var out: Dictionary = {}
+	for row: Node in view.trees.get_children():
+		var r := row as TreeView.Row
+		for cell: Vector2i in r.trees:
+			var t: Array = r.trees[cell]
+			out[cell] = [r.position.y, t[0], t[1], t[2]]
+	return out
+
+
+func test_tree_edits_redraw_only_what_they_change_and_match_a_fresh_view() -> void:
+	# E5-S15: refresh_cells works tile by tile. A paint that neither adds nor removes trees nor
+	# moves a height redraws no row; one that does leaves the trees as a fresh show_course would.
+	var c := CourseData.create(16, 16, Surface.Type.ROUGH, 2)
+	for y: int in range(3, 12):
+		for x: int in range(3, 12):
+			if (x + 2 * y) % 3 != 0:
+				c.set_tile(x, y, 2, Surface.Type.TREES)
+	var view := CourseView.new()
+	add_child_autofree(view)
+	view.show_course(c)
+	var rows: Array[Node] = view.trees.get_children()
+	# Fairway painted over rough: no tree changes, every Row node is the same object.
+	var fair: Array[Vector2i] = []
+	for x: int in 16:
+		if c.get_surface(x, 14) == Surface.Type.ROUGH:
+			c.set_tile(x, 14, 2, Surface.Type.FAIRWAY)
+			fair.append(Vector2i(x, 14))
+	view.refresh_cells(fair)
+	assert_eq(view.trees.get_children(), rows, "a paint off the trees keeps every row")
+	# Trees in and out, and heights moved under and beside trees.
+	var edits: Array[Vector2i] = []
+	for cell: Vector2i in [Vector2i(4, 4), Vector2i(5, 5), Vector2i(6, 7), Vector2i(10, 3)]:
+		c.set_tile(cell.x, cell.y, 2, Surface.Type.ROUGH)
+		edits.append(cell)
+	for cell: Vector2i in [Vector2i(1, 1), Vector2i(13, 13)]:
+		c.set_tile(cell.x, cell.y, 2, Surface.Type.TREES)
+		edits.append(cell)
+	for cell: Vector2i in [Vector2i(7, 7), Vector2i(8, 9), Vector2i(2, 2)]:
+		c.set_tile(cell.x, cell.y, 5, c.get_surface(cell.x, cell.y))
+		edits.append(cell)
+	view.refresh_cells(edits)
+	var fresh := CourseView.new()
+	add_child_autofree(fresh)
+	fresh.show_course(c)
+	assert_eq(view.trees.tree_count(), fresh.trees.tree_count())
+	assert_eq(_trees_of(view), _trees_of(fresh), "every tree's row, frame, foot and tint as a fresh view's")
+	assert_eq(view.trees.get_child_count(), fresh.trees.get_child_count(), "no empty row left behind")
+
+
+func test_a_trees_foot_is_the_drawn_ground_at_its_tile_centre() -> void:
+	# E5-S15: TreeView stands a tree at its tile's own height, reading no neighbour; that holds
+	# only while the drawn ground at a land tile's centre is its height.
+	var c: CourseData = NineHoles.land()
+	for y: int in range(0, c.height, 3):
+		for x: int in range(0, c.width, 3):
+			if c.get_surface(x, y) != Surface.Type.WATER:
+				assert_almost_eq(TerrainMesh.ground_at(c, Vector2(x, y)), float(c.get_height(x, y)), 1e-6,
+						"tile (%d, %d)" % [x, y])
 
 
 func test_tree_variants_are_fixed_per_tile() -> void:

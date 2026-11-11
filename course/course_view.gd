@@ -716,8 +716,6 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 		return
 	_pending_cells.append_array(cells)
 	trees.refresh_cells(cells)
-	if _course.decor_cells().size() > 0:
-		decor.refresh()  # its ground may have moved
 	# The markers read the course, not the drawn ground, so they follow the batch at once: a
 	# height moved in it may cover or uncover an issue box's foot.
 	var shaped := {}
@@ -732,6 +730,9 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 				shaped[cell] = true
 	if not shaped.is_empty():
 		_follow_shape(shaped)
+		# E5-S15: the decor stands on the drawn ground, which only a height or water moves.
+		if _course.decor_cells().size() > 0:
+			decor.refresh()
 	_drain(terrain.tuning.refresh_tiles_per_frame)
 
 
