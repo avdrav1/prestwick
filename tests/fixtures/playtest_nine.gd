@@ -37,11 +37,18 @@ extends RefCounted
 ## the land's lone trees on holes 2 and 6's lines are cleared. Hole 1 (its turn round the hill,
 ## behind the trees) and hole 8 (its landing area past the south hill's crest) stay blind.
 ##
+## Cart paths (E9-S3, D65): PATHS joins the three long walks between holes, the 2nd green to the
+## 3rd tee (98 yd round the trees and bunker west of the green), the 4th green up to the raised
+## 5th tee (64 yd, up three steps) and the 7th green to the 8th tee (112 yd), each from a tile
+## beside the green to one beside the tee, so guests walk them faster (`walk_surface_speed`)
+## and none of the three draws the long walk complaint (E9-S2). Painted 1 tile wide over rough
+## and trees only, never over a hole's own tiles.
+##
 ## Build order: heights first (greens, tees and ponds set, FILLS raised, the land's other ponds
 ## kept, the ground round them eased so neighbours differ by one step and at most one riser
 ## every 2 tiles along an axis, the land generator's slope rule), then FILLS painted rough,
 ## every hole's trees and clears, then each hole's fairway, bunkers, water, tee box and green,
-## then the tees, cups and pars, then the clubhouse (E5-S9, D60) on the allowed spot nearest
+## then the cart paths (E9-S3), then the tees, cups and pars, then the clubhouse (E5-S9, D60) on the allowed spot nearest
 ## hole 1's tee (ClubhouseRule.spot_beside, CLUBHOUSE_REACH), where the nine finishes, and last
 ## every hole is opened, so no edit lands in an open hole's footprint.
 
@@ -57,6 +64,17 @@ const CLUBHOUSE_REACH: int = 8
 ## Land ponds filled (Rect2i, only their water tiles): the pond across hole 1's first leg and
 ## the one across the end of hole 5's sweep.
 const FILLS: Array[Rect2i] = [Rect2i(0, 32, 21, 14), Rect2i(72, 37, 13, 11)]
+
+## E9-S3: cart paths, polylines of tile centres painted 1 tile wide over rough and trees:
+## [the green the walk leaves, the tee it reaches, the polyline].
+const PATHS: Array = [
+	# The 2nd green west, south of the trees beside it, to the north of the 3rd tee box.
+	[2, 3, [Vector2(80, 5), Vector2(78, 6), Vector2(68, 6), Vector2(67, 7), Vector2(67, 10)]],
+	# The 4th green's north-west corner, past its bunker, up to the foot of the raised 5th tee.
+	[4, 5, [Vector2(113, 121), Vector2(113, 118), Vector2(110, 116), Vector2(108, 116)]],
+	# Below the 7th green, south-east to the 8th tee.
+	[7, 8, [Vector2(60, 102), Vector2(69, 116)]],
+]
 
 const HOLES: Array = [
 	{
@@ -193,6 +211,8 @@ static func build(b: CourseBuilder) -> Array[int]:
 			_paint(b, course, strip(c[0], c[1]), Surface.Type.ROUGH)
 	for spec: Dictionary in HOLES:
 		_paint_hole(b, course, spec)
+	for p: Array in PATHS:
+		_paint(b, course, path_tiles(course, p[2]), Surface.Type.CART_PATH)
 	for spec: Dictionary in HOLES:
 		var n: int = spec["n"]
 		b.place_tee(n, spec["tee"], spec["par"])
@@ -209,6 +229,18 @@ static func build(b: CourseBuilder) -> Array[int]:
 
 
 # --- shapes ---
+
+## E9-S3: a cart path's tiles, 1 wide along `points`, only where the course is rough or trees.
+static func path_tiles(course: CourseData, points: Array) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for t: Vector2i in strip(points, 1.0):
+		if not course.in_bounds(t.x, t.y):
+			continue
+		var s := course.get_surface(t.x, t.y)
+		if s == Surface.Type.ROUGH or s == Surface.Type.TREES:
+			out.append(t)
+	return out
+
 
 ## Tiles whose centres fall inside the ellipse [centre, half length, half width, angle].
 static func ellipse(e: Array) -> Array[Vector2i]:

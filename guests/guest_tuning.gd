@@ -23,7 +23,8 @@ var arrival_window_s: float = 0.0
 var walk_yd_per_s: float = 0.0
 var walk_surface_speed: PackedFloat64Array = PackedFloat64Array()
 var walk_climb_s_per_step: float = 0.0
-## E3-S4: a walk may follow a cart path with a tile within cart_path_reach_yd of both ends.
+## E3-S4: a walk may follow a cart path with a tile within cart_path_reach_yd of both ends
+## (E9-S3: 25 yd, 15 before, which no path round a 30 yd green reached from its cup).
 ## E9-S1 (D65): it does when that route is quicker than the straight walk (E3-S4's
 ## cart_path_max_detour, a cap on its length, is retired).
 var cart_path_reach_yd: float = 0.0

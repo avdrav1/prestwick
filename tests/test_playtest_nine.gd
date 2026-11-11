@@ -5,7 +5,7 @@ extends GutTest
 ## fairways sweep 35 to 75 degrees in smooth arcs, no sharp corner, and whose line of play
 ## (D47) sets their par, every hole's fairway at least 3 tiles from every other hole's,
 ## contoured greens D7 holds a ball on, every tee shot but holes 1 and 8 seen from the tee
-## (E4-S9), and the file in step with the fixture.
+## (E4-S9), cart paths on its long walks (E9-S3), and the file in step with the fixture.
 
 var _v: CourseValidator
 var _c: CourseData
@@ -269,3 +269,37 @@ func test_most_tee_shots_are_seen_from_the_tee() -> void:
 			assert_true(s.blind, "hole %d blind by its routing" % h.number)
 		else:
 			assert_true(s.fair(), "hole %d seen from the tee (blind at %s)" % [h.number, s.blind_at])
+
+
+## E9-S3 (D65): cart paths join the nine's three long walks (the 2nd green to the 3rd tee, the
+## 4th to the 5th, the 7th to the 8th), so guests walk them along the path, quicker than they
+## would with no path laid, and no walk between holes, nor the clubhouse's to the 1st tee, is
+## long without one for a guest of middling patience.
+func test_cart_paths_join_the_long_walks() -> void:
+	var tuning := GuestTuning.load_default()
+	var cache := GuestWalk.Cache.new()
+	var joined := {}
+	for p: Array in PlaytestNine.PATHS:
+		var from := _hole(p[0])
+		var to := _hole(p[1])
+		var w := GuestWalk.route(_c, _yd(from.cup), _yd(to.tee), tuning, 5.0, cache)
+		assert_true(w.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
+		assert_gte(w.path_share(), tuning.walk_path_share, "most of it on the path")
+		assert_lt(w.duration, w.bare_s, "quicker than with no path laid")
+		joined[p[1]] = true
+		gut.p("walk %d to %d: %.0f yd, %.2f s on the path (%.2f s with none; %.0f%% on path)" % [
+				p[0], p[1], w.length, w.duration, w.bare_s, 100.0 * w.path_share()])
+	assert_eq(joined.size(), 3, "three walks joined")
+	var limit := GuestReaction.walk_limit(5, tuning)
+	var prev := _c.clubhouse_door()
+	for n: int in range(1, 10):
+		var h := _hole(n)
+		var w := GuestWalk.route(_c, _yd(prev), _yd(h.tee), tuning, 5.0, cache)
+		assert_true(w.duration <= limit or w.path_share() >= tuning.walk_path_share,
+				"the walk to the %d tee: %.2f s against %.2f, %.0f%% on path" % [n, w.duration,
+					limit, 100.0 * w.path_share()])
+		prev = h.cup
+
+
+func _yd(t: Vector2i) -> Vector2:
+	return (Vector2(t) + Vector2(0.5, 0.5)) * 5.0

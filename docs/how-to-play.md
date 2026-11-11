@@ -29,12 +29,13 @@ How far each club goes with a perfect swing from flat fairway, in yards:
 | pw | 113 | 123 |
 | sw | 102 | 110 |
 - **Clubhouse** moves the clubhouse (right-click or R turns its door); guests start and finish there. **Decor** places scenery that never touches the ball.
+- **Cart path** ($5 a tile) is the quick way round for guests: they walk half as fast again on a path, and slower through trees, bunkers, water and up hills. Lay one from beside a green to the next tee (or from the clubhouse to the first tee) where the walk is long, and guests take it whenever it saves them time. A ball bounces and runs on a path, so keep paths off the line of play.
 - The **fee slider** sets the green fee. Higher fees bring fewer guests; the most you can charge is $25 per star.
 
 ## Guests, money and stars
 
 - Each morning guests arrive at the clubhouse, pay at the first tee and play your open holes. If none is open yet they go home, and come back as soon as your first hole opens, while the day has time for a round. Each open hole costs $5 a day to keep up.
-- When guests finish a hole they say what they thought: the feed on the left and the tags on the map show it. Click one to jump to that hole. Complaints name what to fix (a blind tee shot, a dull hole, a slow wait).
+- When guests finish a hole they say what they thought: the feed on the left and the tags on the map show it. Click one to jump to that hole. Complaints name what to fix (a blind tee shot, a dull hole, a slow wait, or a long walk from one green to the next tee with no cart path, which alone is enough for a complaint). A cart path that turns a long walk into a quick one can earn a word of praise.
 - At dusk their verdicts set your stars (1 to 5). More stars bring more guests and a higher fee ceiling.
 - **P** pauses, **1** and **3** run the day at 1x and 3x, **M** skips to the next morning.
 
