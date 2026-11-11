@@ -113,9 +113,9 @@ static func crossing_holes() -> CourseData:
 		b.place_tee(spec[0], tee, spec[3])
 		b.place_cup(spec[0], cup)
 		b.set_par(spec[0], spec[3])
-	# Each hole's painting sits in the other's footprint: open them last.
+	# Each hole opened itself once legal (E8-S1, D64); check both stand open.
 	for n: int in [1, 2]:
-		var opened := b.open_hole(n)
+		var opened: bool = b.hole(n).open
 		assert(opened, "crossing hole %d opens" % n)
 	b.move_clubhouse_beside(CROSS_TEE_1)  # E5-S11
 	return c
@@ -142,4 +142,4 @@ static func _finish(b: CourseBuilder, tee: Vector2i, cup: Vector2i, par: int) ->
 	b.set_par(1, par)
 	# E5-S11 (D60): the clubhouse beside the tee, where guests arrive and leave.
 	b.move_clubhouse_beside(tee)
-	return b.open_hole(1)
+	return b.hole(1).open

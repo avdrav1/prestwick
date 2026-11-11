@@ -182,8 +182,11 @@ func _build() -> bool:
 	_click(cup)
 	_print_issues(b, "green painted round the cup")
 	_check(b.issues_for(1).is_empty(), "then it passes every rule")
-	_main.hole_panel.open_button.pressed.emit()
-	_check(b.hole(1) != null and b.hole(1).open, "Open opens it")
+	# E8-S1 (D64): no Open press: a legal hole opens itself and says so.
+	_check(b.hole(1) != null and b.hole(1).open, "and it opens itself")
+	_check(_main.hole_open_notice.visible
+			and _main.hole_open_notice.label.text == "Hole 1 is open: guests will play it",
+			"with the notice \"%s\"" % _main.hole_open_notice.label.text)
 	var cost := start - b.balance()
 	print("  cost: %s (balance %s to %s); the HUD reads \"%s\"" % [LandPrices.money(cost),
 			LandPrices.money(start), LandPrices.money(b.balance()), _main.money_panel.balance_label.text])

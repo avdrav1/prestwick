@@ -4,7 +4,9 @@ extends PanelContainer
 ## status, par 3/4/5, the Open button and every failing rule with its tile and reason. A view
 ## onto a BuildTool and its builder: buttons go through the tool, and refresh() (on the tool's
 ## settings_changed and after every builder check, from Main) shows the builder's state.
-## Open is enabled only when the hole is closed and all six rules pass (D11, D30).
+## Open is enabled only when the hole is closed and all six rules pass (D11, D30); since E8-S1
+## (D64) a hole opens itself once they pass, so Open is for a hole the player closed by hand,
+## whose status reads "closed by you".
 ##
 ## The hole list (E3-S2) sits above: one row per hole in number order, up to
 ## BuilderTuning.max_holes. A row's number button picks the hole for the tee and cup tools
@@ -45,6 +47,10 @@ extends PanelContainer
 ## tag drawn under this panel is still in reach. A hole with no tag shows none.
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
+## E8-S1 (D64): the Open and Close buttons' tooltips.
+const OPEN_TIP: String = "Open the hole to guests again (it opens itself once every rule passes, unless you closed it)"
+const CLOSE_TIP: String = "Close the hole to guests: it stays closed until you open it"
+
 signal play_requested(number: int, slot: int)
 ## Emitted when a row's tag is pressed (E3-S43): Main picks and frames the hole, as a click on
 ## its map tag does, so a tag under a panel can still be reached.
@@ -204,7 +210,7 @@ func _ready() -> void:
 		par_buttons.append(b)
 	open_button = Button.new()
 	open_button.text = "Open"
-	open_button.tooltip_text = "Open the hole to guests (every rule must pass)"
+	open_button.tooltip_text = OPEN_TIP
 	open_button.focus_mode = Control.FOCUS_NONE
 	open_button.pressed.connect(func() -> void: _tool.open_hole())
 	row.add_child(open_button)
@@ -274,6 +280,8 @@ func refresh() -> void:
 		status_label.text = "Status: no tee or cup yet"
 	elif h.open:
 		status_label.text = "Status: open"
+	elif h.closed_by_hand:
+		status_label.text = "Status: closed by you"
 	else:
 		status_label.text = "Status: closed"
 	var shown: int = _tool.shown_par()
@@ -496,8 +504,7 @@ func _refresh_list(b: CourseBuilder) -> void:
 		_refresh_tag(r, tallies.get(slots[i], Vector2i.ZERO))
 		r.open_button.text = "Close" if h.open else "Open"
 		r.open_button.disabled = not h.open and not b.can_open(h.number)
-		r.open_button.tooltip_text = "Close the hole to guests" if h.open \
-				else "Open the hole to guests (every rule must pass)"
+		r.open_button.tooltip_text = CLOSE_TIP if h.open else OPEN_TIP
 		if r.duplicate:
 			r.up_button.disabled = b.free_number(h.number, -1) == 0
 			r.down_button.disabled = b.free_number(h.number, 1) == 0

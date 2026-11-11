@@ -183,7 +183,7 @@ func test_the_160_yd_par3_fits_the_starting_block() -> void:
 	assert_true(b.place_cup(1, CUP))
 	assert_eq(CourseValidator.yardage(TEE, CUP), 160)
 	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue], "D30: the footprint need not be owned")
-	assert_true(b.open_hole(1))
+	assert_true(b.hole(1).open, "it opens itself (E8-S1)")
 
 
 # --- rule 6 and rule 3 through the builder ---

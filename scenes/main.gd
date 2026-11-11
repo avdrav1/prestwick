@@ -85,6 +85,8 @@ var _sound_from_menu: bool = false
 @onready var cup_pointer: CupPointer = $HUD/CupPointer
 ## The save and load notice (E4-S7).
 @onready var save_notice: SaveNotice = $HUD/SaveNotice
+## E8-S1 (D64): "Hole 1 is open: guests will play it" as a hole opens itself.
+@onready var hole_open_notice: HoleOpenNotice = $HUD/HoleOpenNotice
 ## E5-S5: New course, Load game, Save game, Import course, Export course, Quit.
 @onready var main_menu: MainMenu = $HUD/MainMenu
 ## The balance, in Build and Play (E4-S2).
@@ -193,6 +195,7 @@ func show_course(c: CourseData) -> void:
 	camera.restore_zoom()
 	builder.tiles_changed.connect(_on_tiles_changed)
 	builder.holes_changed.connect(course_view.refresh_holes)
+	builder.holes_opened.connect(hole_open_notice.show_holes)
 	builder.checked.connect(_on_checked)
 	builder.land_changed.connect(course_view.refresh_parcel)
 	builder.clubhouse_changed.connect(course_view.refresh_clubhouse)
@@ -520,7 +523,7 @@ func load_game(path: String = GameSave.PATH) -> bool:
 	guest_sim.resume_at(s.day, s.arrivals)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
-	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.closed_on_load))
+	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.load_notes()))
 	return true
 
 
@@ -573,7 +576,7 @@ func import_course(path: String) -> bool:
 		save_notice.show_lines(SaveNotice.import_lines(path, errors, null, []))
 		return false
 	show_course(c)
-	save_notice.show_lines(SaveNotice.import_lines(path, [], c, build_tool.builder.closed_on_load))
+	save_notice.show_lines(SaveNotice.import_lines(path, [], c, build_tool.builder.load_notes()))
 	return true
 
 

@@ -9,6 +9,9 @@ const PATH: String = "res://scenes/hole_panel_tuning.tres"
 ## summary (HolePanel.issues_summary, E3-S27). tests/test_hole_list.gd holds it with every rule
 ## failing.
 @export var max_height: float = 280.0
+## E8-S1 (D64): how long the "Hole 1 is open: guests will play it" notice stays up, real
+## seconds (HoleOpenNotice), after a hole opens itself.
+@export var open_notice_s: float = 4.0
 
 
 static func load_default() -> HolePanelTuning:

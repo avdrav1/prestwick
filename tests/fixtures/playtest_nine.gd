@@ -203,7 +203,7 @@ static func build(b: CourseBuilder) -> Array[int]:
 	b.move_clubhouse(spot[0], spot[1])
 	var opened: Array[int] = []
 	for spec: Dictionary in HOLES:
-		if b.open_hole(spec["n"]):
+		if b.hole(spec["n"]).open:
 			opened.append(spec["n"])
 	return opened
 

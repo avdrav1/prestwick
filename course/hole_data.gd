@@ -15,30 +15,40 @@ var par: int = 3
 var tee: Vector2i = Vector2i.ZERO
 var cup: Vector2i = Vector2i.ZERO
 var open: bool = true
+## E8-S1 (D64): the player closed it with Close. The builder opens a closed hole that passes
+## every rule by itself, except one closed by hand: that stays closed until Open is pressed.
+## A rule closing the hole leaves it false. In a file it is the hole object's optional
+## "closed_by_hand": true, absent when false, so a hole without it writes as before.
+var closed_by_hand: bool = false
 
 
 func _init(p_number: int = 1, p_par: int = 3, p_tee: Vector2i = Vector2i.ZERO,
-		p_cup: Vector2i = Vector2i.ZERO, p_open: bool = true) -> void:
+		p_cup: Vector2i = Vector2i.ZERO, p_open: bool = true, p_closed_by_hand: bool = false) -> void:
 	number = p_number
 	par = p_par
 	tee = p_tee
 	cup = p_cup
 	open = p_open
+	closed_by_hand = p_closed_by_hand
 
 
-## Course format version 1 hole object.
+## Course format version 1 hole object, with "closed_by_hand" only when set (E8-S1, D64: an
+## optional field of the same format version, as E5-S3's decor).
 func to_dict() -> Dictionary:
-	return {
+	var out := {
 		"number": number,
 		"par": par,
 		"tee": [tee.x, tee.y],
 		"cup": [cup.x, cup.y],
 		"open": open,
 	}
+	if closed_by_hand:
+		out["closed_by_hand"] = true
+	return out
 
 
 func copy() -> HoleData:
-	return HoleData.new(number, par, tee, cup, open)
+	return HoleData.new(number, par, tee, cup, open, closed_by_hand)
 
 
 ## Parses a format v1 hole object. Returns null and appends to `errors` when malformed.
@@ -52,9 +62,12 @@ static func from_dict(data: Dictionary, errors: Array[String]) -> HoleData:
 	var o: Variant = data.get("open", true)
 	if typeof(o) != TYPE_BOOL:
 		errors.append("hole: open must be true or false")
+	var by_hand: Variant = data.get("closed_by_hand", false)
+	if typeof(by_hand) != TYPE_BOOL:
+		errors.append("hole: closed_by_hand must be true or false")
 	if errors.size() > start:
 		return null
-	return HoleData.new(n, p, t, c, o)
+	return HoleData.new(n, p, t, c, o, by_hand)
 
 
 static func _read_tile(data: Dictionary, key: String, errors: Array[String]) -> Vector2i:

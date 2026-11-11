@@ -2,6 +2,8 @@ extends GutTest
 ## E2-S3: opening a hole (D11). Open is enabled only when all six rules pass. An edit inside
 ## an open hole's footprint closes it; after every build edit the validator reruns for every
 ## open hole and closes any that now fails. Failing rules reach the view, tile and reason.
+## E8-S1 (D64): a hole opens itself once every rule passes (unless closed by hand), so an edit
+## in the footprint closes it only while the edit lasts.
 ## Play never waits for the validator (pillar 1).
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -22,7 +24,7 @@ func _open_par3(c: CourseData) -> CourseBuilder:
 	b.paint(CUP, Surface.Type.GREEN, 3)
 	b.place_tee(1, TEE, 3)
 	b.place_cup(1, CUP)
-	assert_true(b.open_hole(1), "the par 3 opens")
+	assert_true(b.hole(1).open, "the par 3 opens itself (E8-S1, D64)")
 	return b
 
 
@@ -76,11 +78,13 @@ func test_open_only_when_every_rule_passes() -> void:
 	assert_false(b.hole(1).open)
 	b.paint(CUP, Surface.Type.GREEN, 1)
 	assert_eq(b.issues_for(1), [], "all six pass")
-	assert_true(b.can_open(1))
-	assert_true(b.open_hole(1))
-	assert_true(b.hole(1).open)
+	assert_true(b.hole(1).open, "and it opens itself (E8-S1, D64)")
 	assert_false(b.can_open(1), "already open")
 	assert_false(b.open_hole(1))
+	b.close_hole(1)
+	assert_true(b.can_open(1), "closed by hand, Open is offered")
+	assert_true(b.open_hole(1))
+	assert_true(b.hole(1).open)
 	b.undo()
 	assert_false(b.hole(1).open, "Open is on the undo stack too")
 
@@ -92,9 +96,10 @@ func test_wrong_par_cannot_open() -> void:
 	b.place_tee(1, TEE, 4)
 	b.place_cup(1, CUP)
 	assert_eq(_rules(b.issues_for(1)), [4] as Array[int], "150 yd is a par 3")
+	assert_false(b.hole(1).open)
 	assert_false(b.open_hole(1))
 	b.set_par(1, 3)
-	assert_true(b.open_hole(1))
+	assert_true(b.hole(1).open, "the right par opens it")
 
 
 func test_a_course_brought_in_with_a_failing_open_hole_has_it_closed() -> void:
@@ -141,7 +146,7 @@ func test_a_pre_d33_open_short_par4_loads_closed_until_set_to_par3() -> void:
 	assert_false(b.hole(1).open, "the builder closes it")
 	assert_eq(_rules(b.issues_for(1)), [4] as Array[int], "280 yd is a par 3 since D33")
 	assert_true(b.set_par(1, 3))
-	assert_true(b.open_hole(1), "set to par 3 it opens")
+	assert_true(b.hole(1).open, "set to par 3 it opens itself")
 
 
 ## D47 (E3-S25): a course saved before rule 4 measured doglegs round their corner may hold
@@ -173,7 +178,7 @@ func test_a_dogleg_saved_as_a_straight_par4_loads_closed_with_a_notice_line() ->
 		assert_string_starts_with(b.closed_on_load[0],
 				"Hole 1 closed: 512 yd round the dogleg is a par 5, not par 4")
 	assert_true(b.set_par(1, 5))
-	assert_true(b.open_hole(1), "set to par 5 it opens")
+	assert_true(b.hole(1).open, "set to par 5 it opens itself")
 	assert_eq(b.closed_on_load.size(), 1, "the notice is the load's, not later edits'")
 
 
@@ -188,15 +193,24 @@ func test_a_course_that_loads_clean_has_no_notice_lines() -> void:
 
 # --- an edit inside the footprint closes the hole ---
 
-func test_an_edit_inside_the_footprint_closes_a_passing_hole() -> void:
+## E8-S1 (D64): the footprint closes it while a drag lasts; the rerun at its end opens it again
+## when it still passes, so a click edit that keeps it legal leaves it open.
+func test_an_edit_inside_the_footprint_closes_a_passing_hole_while_it_lasts() -> void:
 	var c := _course()
 	var b := _open_par3(c)
+	b.begin_stroke()
 	b.paint(Vector2i(20, 24), Surface.Type.FAIRWAY, 1)
 	assert_false(b.hole(1).open, "a paint inside the footprint closes it")
-	assert_eq(b.issues_for(1), [], "although it still passes")
-	assert_true(b.open_hole(1), "until Open is pressed again")
+	b.end_stroke()
+	assert_eq(b.issues_for(1), [], "it still passes")
+	assert_true(b.hole(1).open, "so it opens itself again as the drag ends")
+	b.begin_stroke()
 	b.raise(Vector2i(10, 21), 1)
 	assert_false(b.hole(1).open, "a height edit closes it too")
+	b.end_stroke()
+	assert_true(b.hole(1).open)
+	b.raise(Vector2i(12, 21), 1)
+	assert_true(b.hole(1).open, "a click edit that keeps it legal leaves it open")
 
 
 func test_an_edit_outside_the_footprint_leaves_it_open() -> void:
@@ -211,25 +225,29 @@ func test_an_edit_outside_the_footprint_leaves_it_open() -> void:
 func test_a_brush_reaching_into_the_footprint_closes_it() -> void:
 	var c := _course()
 	var b := _open_par3(c)
+	b.begin_stroke()
 	b.paint(Vector2i(20, 28), Surface.Type.BUNKER, 5)
 	assert_false(b.hole(1).open, "the 5x5 brush's top row is at y 26")
+	b.end_stroke()
 
 
-func test_moving_its_own_tee_or_cup_closes_it() -> void:
+func test_moving_its_own_tee_or_cup_closes_it_unless_it_still_passes() -> void:
 	var c := _course()
 	var b := _open_par3(c)
 	b.place_tee(1, TEE + Vector2i(0, 1))
-	assert_false(b.hole(1).open, "moving the tee")
-	assert_true(b.open_hole(1))
-	b.place_cup(1, CUP + Vector2i(1, 0))
-	assert_false(b.hole(1).open, "moving the cup")
+	assert_true(b.hole(1).open, "the tee moved and the hole still passes: open (D64)")
+	b.place_cup(1, CUP + Vector2i(4, 0))
+	assert_false(b.hole(1).open, "the cup moved off the green: closed")
+	assert_eq(_rules(b.issues_for(1)), [2] as Array[int])
+	b.place_cup(1, CUP)
+	assert_true(b.hole(1).open, "back on the green: open again")
 
 
 func test_undoing_the_edit_that_closed_it_restores_it() -> void:
 	var c := _course()
 	var b := _open_par3(c)
 	var open_hash: String = c.content_hash()
-	b.paint(Vector2i(20, 20), Surface.Type.FAIRWAY, 3)
+	b.paint(CUP, Surface.Type.ROUGH, 1)
 	assert_false(b.hole(1).open)
 	b.undo()
 	assert_true(b.hole(1).open, "undo puts the course back as it was, open hole included")
@@ -244,9 +262,8 @@ func test_water_on_a_rule3_path_outside_the_footprint_closes_it() -> void:
 	# A lake across the whole capsule (y 14 to 26) and past it: inside the footprint, so it
 	# closes the hole, but the path still goes round its ends.
 	_paint_column(b, 20, 10, 30, Surface.Type.WATER)
-	assert_false(b.hole(1).open)
 	assert_eq(b.issues_for(1), [], "the path goes round the end of the lake")
-	assert_true(b.open_hole(1))
+	assert_true(b.hole(1).open, "so it opens again as the drag ends (D64)")
 	# Water on the path round the top end, outside the footprint: still a path round the bottom.
 	_paint_column(b, 20, 0, 9, Surface.Type.WATER)
 	assert_true(b.hole(1).open, "outside the footprint and the hole still passes")
@@ -270,8 +287,8 @@ func test_another_holes_tee_moved_into_its_zone_closes_it() -> void:
 	b.paint(Vector2i(35, 35), Surface.Type.GREEN, 3)
 	b.place_tee(2, Vector2i(5, 35), 3)
 	b.place_cup(2, Vector2i(35, 35))
-	assert_true(b.open_hole(1))
-	assert_true(b.open_hole(2))
+	assert_true(b.hole(1).open)
+	assert_true(b.hole(2).open)
 	b.place_tee(2, Vector2i(60, 26))
 	assert_true(b.hole(1).open, "inside hole 1's footprint, outside its zone: another hole's tee is not hole 1's edit")
 	b.place_tee(2, Vector2i(53, 24))
@@ -348,7 +365,7 @@ func test_neighbouring_highlights_lay_their_text_out_clear_of_each_other() -> vo
 	assert_eq(v.issue_markers()[0].stack, 0.0, "a lone box sits just above its tile")
 
 
-func test_open_button_opens_a_passing_hole_and_highlights_clear() -> void:
+func test_a_passing_hole_opens_itself_and_highlights_clear() -> void:
 	var m := _main()
 	_click(m, BuildTool.Tool.TEE, Vector2i(2, 10))
 	_click(m, BuildTool.Tool.CUP, Vector2i(15, 10))
@@ -356,15 +373,17 @@ func test_open_button_opens_a_passing_hole_and_highlights_clear() -> void:
 	_click(m, BuildTool.Tool.PAINT, Vector2i(15, 10))
 	assert_eq(m.course_view.issue_markers().size(), 0, "nothing fails, nothing is highlighted")
 	var panel: HolePanel = m.hole_panel
-	assert_false(panel.open_button.disabled)
-	panel.open_button.pressed.emit()
-	assert_true(m.build_tool.builder.hole(1).open)
+	assert_true(m.build_tool.builder.hole(1).open, "it opened itself (E8-S1, D64)")
 	assert_true(panel.open_button.disabled, "an open hole cannot be opened again")
 	assert_string_contains(panel.status_label.text, "open")
 	m.build_tool.select_surface(Surface.Type.FAIRWAY)
 	_click(m, BuildTool.Tool.PAINT, Vector2i(8, 10))
-	assert_false(m.build_tool.builder.hole(1).open, "a paint in the footprint closes it")
+	assert_true(m.build_tool.builder.hole(1).open, "a paint in the footprint that keeps it legal")
+	m.build_tool.set_hole_open(1, false)
+	assert_false(m.build_tool.builder.hole(1).open, "closed by hand")
 	assert_false(panel.open_button.disabled, "and Open is offered again")
+	panel.open_button.pressed.emit()
+	assert_true(m.build_tool.builder.hole(1).open, "Open reopens it")
 
 
 func test_highlights_show_in_build_only() -> void:
@@ -430,8 +449,8 @@ func test_a_300_yd_par3_with_a_tee_outside_its_zone_opens() -> void:
 	var b := _long_par3_and_a_tee(Vector2i(65, 20), Vector2i(53, 27))  # 35 yd from the centre
 	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue])
 	assert_eq(b.issues_for(2), [] as Array[CourseValidator.Issue])
-	assert_true(b.open_hole(1))
-	assert_true(b.open_hole(2))
+	assert_true(b.hole(1).open)
+	assert_true(b.hole(2).open)
 
 
 func test_a_299_yd_par3_has_no_zone_and_a_tee_where_it_would_be_opens() -> void:
@@ -443,8 +462,8 @@ func test_a_299_yd_par3_has_no_zone_and_a_tee_where_it_would_be_opens() -> void:
 	assert_null(CourseValidator.new().landing_zone(b.hole(1)), "under zone_from_yd, no zone")
 	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue])
 	assert_eq(b.issues_for(2), [] as Array[CourseValidator.Issue])
-	assert_true(b.open_hole(1))
-	assert_true(b.open_hole(2))
+	assert_true(b.hole(1).open)
+	assert_true(b.hole(2).open)
 
 
 func test_par4_and_par5_zones_are_unchanged() -> void:

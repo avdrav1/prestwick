@@ -25,7 +25,8 @@ func _cup(k: int) -> Vector2i:
 
 
 ## Builds `count` par 3s through `b`, numbered as the builder picks (next_hole_number), each
-## cup on a green, each opened. Returns the numbers in build order.
+## cup on a green, each open (it opens itself, E8-S1), or closed by hand when `open` is false.
+## Returns the numbers in build order.
 func _build(b: CourseBuilder, count: int, open: bool = true) -> Array[int]:
 	var out: Array[int] = []
 	for k: int in count:
@@ -34,7 +35,9 @@ func _build(b: CourseBuilder, count: int, open: bool = true) -> Array[int]:
 		assert_true(b.place_tee(n, _tee(k), 3), "hole %d's tee" % n)
 		assert_true(b.place_cup(n, _cup(k)), "hole %d's cup" % n)
 		if open:
-			assert_true(b.open_hole(n), "hole %d opens" % n)
+			assert_true(b.hole(n).open, "hole %d opens itself (E8-S1, D64)" % n)
+		else:
+			b.close_hole(n)
 		out.append(n)
 	return out
 
@@ -1165,7 +1168,7 @@ func test_the_details_show_an_approach_hint_apart_from_the_rules() -> void:
 	assert_true(b.place_tee(1, Vector2i(2, 3), 3) and b.place_cup(1, Vector2i(22, 3)))
 	# Hole 2's tee 30 yd past hole 1's cup.
 	assert_true(b.place_tee(2, Vector2i(28, 3), 3) and b.place_cup(2, Vector2i(22, 30)))
-	assert_true(b.open_hole(1) and b.open_hole(2), "a hint never stops a hole opening")
+	assert_true(b.hole(1).open and b.hole(2).open, "a hint never stops a hole opening")
 	var m := _main_with(c)
 	var panel: HolePanel = m.hole_panel
 	panel.rows_for(2)[0].pick_button.pressed.emit()

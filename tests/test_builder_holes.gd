@@ -292,14 +292,15 @@ func test_an_undo_puts_back_the_reads_a_later_paint_moves_the_turn_by() -> void:
 	assert_true(b.paint(Vector2i(66, 57), Surface.Type.FAIRWAY, 1))
 	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
 	b.end_stroke()
-	assert_false(c.holes[0].open)
+	assert_eq(b.slot_lines()[0].size(), 2, "straight after the stroke")
 	assert_true(b.undo())
 	assert_true(c.holes[0].open)
 	assert_eq(b.lines_now()[0], line, "the dogleg's line, kept")
 	assert_eq(b.lines_now()[0], v.line_of_play(c, c.holes[0]), "as a fresh measure has it")
 	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
 	assert_eq(b.lines_now()[0].size(), 2, "the landing zone's read still counts: measured again")
-	assert_false(c.holes[0].open, "and the hole closes on it")
+	# E8-S1 (D64): the footprint closes it and the rerun opens it again, since it still passes.
+	assert_true(c.holes[0].open, "still legal straight, so open after the paint")
 	# A step that kept no lines (a paint outside a stroke) searches the reads as it writes.
 	assert_true(b.undo())
 	assert_eq(b.lines_now()[0], line)
@@ -332,3 +333,178 @@ func test_a_turn_reads_nothing_but_the_tiles_it_names() -> void:
 	var none := {}
 	assert_null(v.turn_point(c, short, none))
 	assert_true(none.is_empty())
+
+
+# --- E8-S1 (D64): a hole opens itself the moment it passes every rule ---
+
+## A 150 yd par 3 along y = 20 on an 80 x 40 rough plot, its cup on a green: legal once both
+## are placed.
+const AUTO_TEE := Vector2i(5, 20)
+const AUTO_CUP := Vector2i(35, 20)
+
+
+func _auto_course() -> CourseData:
+	return CourseData.create(80, 40, Surface.Type.ROUGH, 2)
+
+
+## Hole 1 built legal on `c`: green first, then tee and cup, so the cup is what makes it legal.
+func _legal_par3(c: CourseData) -> CourseBuilder:
+	var b := CourseBuilder.new(c)
+	b.paint(AUTO_CUP, Surface.Type.GREEN, 3)
+	b.place_tee(1, AUTO_TEE, 3)
+	b.place_cup(1, AUTO_CUP)
+	return b
+
+
+func test_a_hole_opens_itself_the_moment_it_passes_every_rule() -> void:
+	var b := CourseBuilder.new(_auto_course())
+	var opened: Array = []
+	b.holes_opened.connect(func(numbers: Array[int]) -> void: opened.append(numbers))
+	b.place_tee(1, AUTO_TEE, 3)
+	assert_false(b.hole(1).open, "a tee alone fails rule 1")
+	b.place_cup(1, AUTO_CUP)
+	assert_false(b.hole(1).open, "the cup on rough fails rule 2")
+	assert_eq(opened, [], "no notice while it fails")
+	b.paint(AUTO_CUP, Surface.Type.GREEN, 3)
+	assert_true(b.hole(1).open, "the green makes it legal and it opens, no Open pressed")
+	assert_false(b.hole(1).closed_by_hand)
+	assert_eq(opened, [[1]], "one notice, for hole 1")
+	assert_eq(CourseBuilder.opened_line([1]), "Hole 1 is open: guests will play it")
+	assert_eq(CourseBuilder.opened_line([2, 3]), "Holes 2 and 3 are open: guests will play them")
+	assert_false(b.can_open(1), "nothing for Open to do")
+	b.paint(Vector2i(60, 5), Surface.Type.BUNKER, 1)
+	assert_eq(opened.size(), 1, "an edit elsewhere gives no second notice")
+
+
+func test_close_by_hand_holds_until_open_by_hand() -> void:
+	var b := _legal_par3(_auto_course())
+	assert_true(b.hole(1).open)
+	assert_true(b.close_hole(1))
+	assert_false(b.hole(1).open)
+	assert_true(b.hole(1).closed_by_hand, "Close marks it closed by hand")
+	b.paint(Vector2i(20, 24), Surface.Type.FAIRWAY, 1)
+	b.set_par(1, 4)
+	b.set_par(1, 3)
+	b.place_tee(1, AUTO_TEE + Vector2i(0, 1))
+	assert_false(b.hole(1).open, "no edit opens a hole closed by hand")
+	assert_true(b.can_open(1))
+	assert_true(b.open_hole(1), "Open opens it")
+	assert_true(b.hole(1).open)
+	assert_false(b.hole(1).closed_by_hand, "and clears the flag")
+
+
+func test_a_rule_closes_it_and_it_reopens_once_fixed() -> void:
+	var b := _legal_par3(_auto_course())
+	var opened: Array = []
+	b.holes_opened.connect(func(numbers: Array[int]) -> void: opened.append(numbers))
+	b.paint(AUTO_CUP, Surface.Type.ROUGH, 1)
+	assert_false(b.hole(1).open, "the cup on rough breaks it and it closes, as before")
+	assert_false(b.hole(1).closed_by_hand, "a rule's close is not the player's")
+	b.paint(AUTO_CUP, Surface.Type.GREEN, 1)
+	assert_true(b.hole(1).open, "fixed, it opens itself again")
+	assert_eq(opened, [[1]])
+	# Closed by hand, then broken and fixed: it stays closed.
+	b.close_hole(1)
+	b.paint(AUTO_CUP, Surface.Type.ROUGH, 1)
+	b.paint(AUTO_CUP, Surface.Type.GREEN, 1)
+	assert_false(b.hole(1).open, "a hole closed by hand stays closed through a break and a fix")
+	assert_eq(opened.size(), 1)
+
+
+func test_an_edit_in_the_footprint_that_keeps_it_legal_keeps_it_open() -> void:
+	var b := _legal_par3(_auto_course())
+	var opened: Array = []
+	b.holes_opened.connect(func(numbers: Array[int]) -> void: opened.append(numbers))
+	b.paint(Vector2i(20, 24), Surface.Type.FAIRWAY, 1)
+	assert_true(b.hole(1).open, "a click edit in the footprint: closed and reopened by its rerun")
+	b.begin_stroke()
+	b.paint(Vector2i(20, 20), Surface.Type.FAIRWAY, 1)
+	assert_false(b.hole(1).open, "a drag in the footprint closes it while it lasts (D11)")
+	b.paint(Vector2i(21, 20), Surface.Type.FAIRWAY, 1)
+	b.end_stroke()
+	assert_true(b.hole(1).open, "and it opens again when the drag ends")
+	assert_eq(opened, [], "a hole that was open before the edit gives no notice")
+
+
+func test_undo_restores_the_open_and_by_hand_flags() -> void:
+	var b := _legal_par3(_auto_course())
+	b.undo()
+	assert_false(b.hole(1).open, "undoing the cup leaves a tee alone: closed")
+	b.place_cup(1, AUTO_CUP)
+	assert_true(b.hole(1).open)
+	b.close_hole(1)
+	b.undo()
+	assert_true(b.hole(1).open, "undo of Close: open again")
+	assert_false(b.hole(1).closed_by_hand, "and not closed by hand")
+	b.close_hole(1)
+	b.open_hole(1)
+	b.undo()
+	assert_false(b.hole(1).open, "undo of Open: closed")
+	assert_true(b.hole(1).closed_by_hand, "by hand, as before the press")
+	b.paint(Vector2i(60, 5), Surface.Type.BUNKER, 1)
+	assert_false(b.hole(1).open, "and it stays so")
+
+
+func test_the_by_hand_flag_is_an_optional_field_of_format_3() -> void:
+	var c := _auto_course()
+	var b := _legal_par3(c)
+	var open_text := CourseSave.to_json(c)
+	assert_false(open_text.contains("closed_by_hand"), "a hole not closed by hand writes as before")
+	b.close_hole(1)
+	var data: Dictionary = JSON.parse_string(CourseSave.to_json(c))
+	assert_eq(int(data["version"]), CourseData.FORMAT_VERSION, "no version bump")
+	assert_eq(data["holes"][0]["closed_by_hand"], true)
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_dict(data, errors)
+	assert_eq(errors, [] as Array[String])
+	assert_true(loaded.holes[0].closed_by_hand)
+	assert_false(loaded.holes[0].open)
+	var lb := CourseBuilder.new(loaded)
+	assert_false(lb.hole(1).open, "a hole closed by hand loads closed")
+	assert_eq(lb.load_notes(), [] as Array[String], "and says nothing")
+	assert_eq(loaded.content_hash(), c.content_hash())
+	data["holes"][0]["closed_by_hand"] = "yes"
+	assert_null(CourseSave.from_dict(data, errors), "a flag that is not true or false is refused")
+
+
+func test_a_course_from_before_d64_opens_its_legal_closed_holes_and_says_so() -> void:
+	var c := _auto_course()
+	c.set_tile(AUTO_CUP.x, AUTO_CUP.y, 2, Surface.Type.GREEN)
+	var hs: Array[HoleData] = [HoleData.new(1, 3, AUTO_TEE, AUTO_CUP, false),
+			HoleData.new(2, 3, AUTO_TEE + Vector2i(0, 12), AUTO_CUP + Vector2i(0, 12), false)]
+	c.set_holes(hs)
+	var errors: Array[String] = []
+	var loaded := CourseSave.from_json(CourseSave.to_json(c), errors)
+	var b := CourseBuilder.new(loaded)
+	assert_true(b.hole(1).open, "a legal hole the file had closed, never by hand, opens")
+	assert_false(b.hole(2).open, "hole 2's cup is on rough: it stays closed")
+	assert_eq(b.opened_on_load, ["Hole 1 is open: guests will play it"] as Array[String])
+	assert_eq(b.load_notes(), ["Hole 1 is open: guests will play it"] as Array[String])
+	assert_false(b.can_undo(), "opening it is not an undo step")
+
+
+func test_the_hud_shows_one_notice_as_a_hole_opens_itself() -> void:
+	var m := _main()
+	var c: CourseData = m.course
+	m.build_tool.select_tool(BuildTool.Tool.TEE)
+	m.build_tool.press_at(_at(c, Vector2i(2, 10)))
+	m.build_tool.release()
+	m.build_tool.select_surface(Surface.Type.GREEN)
+	m.build_tool.select_tool(BuildTool.Tool.PAINT)
+	m.build_tool.press_at(_at(c, Vector2i(15, 10)))
+	m.build_tool.release()
+	assert_false(m.hole_open_notice.visible, "no notice before the hole is legal")
+	m.build_tool.select_tool(BuildTool.Tool.CUP)
+	m.build_tool.press_at(_at(c, Vector2i(15, 10)))
+	m.build_tool.release()
+	assert_true(m.build_tool.builder.hole(1).open, "the cup on the green opens it")
+	assert_true(m.hole_open_notice.visible, "and the notice shows")
+	assert_eq(m.hole_open_notice.label.text, "Hole 1 is open: guests will play it")
+	assert_eq(m.hole_open_notice.mouse_filter, Control.MOUSE_FILTER_IGNORE, "it takes no clicks")
+	assert_string_contains(m.hole_panel.status_label.text, "open")
+	m.hole_open_notice._process(m.hole_open_notice.tuning.open_notice_s + 0.1)
+	assert_false(m.hole_open_notice.visible, "it goes by itself")
+	m.hole_panel.rows[0].open_button.pressed.emit()
+	assert_false(m.build_tool.builder.hole(1).open, "the row's Close closes it")
+	assert_eq(m.hole_panel.status_label.text, "Status: closed by you")
+	assert_false(m.hole_panel.open_button.disabled, "Open is offered to reopen it")

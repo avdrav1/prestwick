@@ -415,7 +415,7 @@ func _paint_walls(b: CourseBuilder) -> int:
 	b.end_stroke()
 	var n := 0
 	for spec: Array in NineHoles.HOLES:
-		n += 1 if b.open_hole(spec[0]) else 0
+		n += 1 if b.hole(spec[0]).open else 0
 	return n
 
 

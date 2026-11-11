@@ -59,7 +59,6 @@ var main: Main
 func _ready() -> void:
 	var b: CourseBuilder = GuestCourse.build()
 	b.paint(Vector2i(32, 6), Surface.Type.BUNKER, 1)
-	b.open_hole(2)
 	if money >= 0:
 		b.course.set_land_budget(money)
 	main = MAIN_SCENE.instantiate() as Main
@@ -80,7 +79,6 @@ func _ready() -> void:
 			var spec: Array = GuestCourse.HOLES[edit_hole - 1]
 			var mid: Vector2i = (spec[1] + spec[2]) / 2
 			main.build_tool.builder.paint(mid, Surface.Type.BUNKER, 1)
-			main.build_tool.builder.open_hole(edit_hole)
 		main.guest_sim.brain.step()
 	if skip_frames > 0:
 		main.guest_sim.skip_to_morning()

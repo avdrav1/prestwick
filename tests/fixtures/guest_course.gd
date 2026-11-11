@@ -27,9 +27,9 @@ static func build() -> CourseBuilder:
 		b.paint(cup, Surface.Type.GREEN, 5)
 		b.place_tee(n, tee, 3)
 		b.place_cup(n, cup)
-	# Hole 2's tee sits in hole 1's footprint, so painting it closed hole 1: open them last.
+	# Each hole opened itself once legal (E8-S1, D64); check they all stand open.
 	for spec: Array in HOLES:
-		var opened := b.open_hole(spec[0])
+		var opened: bool = b.hole(spec[0]).open
 		assert(opened, "fixture hole %d opens" % spec[0])
 	# E5-S11 (D60): the clubhouse beside hole 1's tee, where guests arrive and leave.
 	b.move_clubhouse_beside(HOLES[0][1])

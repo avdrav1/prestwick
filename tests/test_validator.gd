@@ -953,7 +953,7 @@ func test_painting_a_neighbours_fairway_does_not_close_an_open_hole() -> void:
 	# hole's fairway is painted across its 240 yd ring.
 	var c := _beside(Vector2i(5, 10), Vector2i(6, 10), Vector2i(5, 50), Vector2i(85, 50), 4)
 	var bld := CourseBuilder.new(c)
-	assert_true(bld.open_hole(1))
+	assert_true(bld.hole(1).open)
 	bld.begin_stroke()
 	for cell: Vector2i in BuildTool.grid_line(Vector2i(5, 10), Vector2i(95, 10)):
 		bld.paint(cell, Surface.Type.FAIRWAY, 5)
@@ -1052,16 +1052,21 @@ func test_a_doglegs_footprint_follows_tee_to_turn_to_cup() -> void:
 
 func test_an_edit_at_a_doglegs_corner_closes_it() -> void:
 	# A bunker on the inside of the corner: outside the straight capsule (31 tiles off the
-	# diagonal), on the second leg. The hole still passes; the footprint closes it.
+	# diagonal), on the second leg. The hole still passes; the footprint closes it while the
+	# edit lasts, and it opens itself again when the edit ends (E8-S1, D64).
 	var c := _dogleg(Vector2i(6, 6), Vector2i(60, 6), Vector2i(60, 60), 5)
 	var b := CourseBuilder.new(c)
-	assert_true(b.open_hole(1), "the dogleg opens")
+	assert_true(b.hole(1).open, "the dogleg opens itself")
+	b.begin_stroke()
 	b.paint(Vector2i(58, 14), Surface.Type.BUNKER, 1)
 	assert_false(b.hole(1).open, "an edit at the corner closes it")
+	b.end_stroke()
 	assert_true(b.issues_for(1).is_empty(), "though it still passes")
-	assert_true(b.open_hole(1), "and Open reopens it")
+	assert_true(b.hole(1).open, "so it opens again as the edit ends")
+	b.begin_stroke()
 	b.paint(Vector2i(33, 33), Surface.Type.BUNKER, 1)
 	assert_true(b.hole(1).open, "an edit on the straight line, off the line of play, leaves it open")
+	b.end_stroke()
 
 
 # --- the approach hint (E3-S39): never a rule ---

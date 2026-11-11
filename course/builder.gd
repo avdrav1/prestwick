@@ -14,20 +14,26 @@ extends RefCounted
 ## or lower moves each tile at most once, so a drag lifts ground one step, not one per frame.
 ##
 ## Holes (E2-S3, D11, docs/design.md Hole validation rules): place_tee and place_cup create
-## the hole with that number, closed, or move its tee or cup. A hole opens only through
-## open_hole, and only while every rule of course/validator.gd passes. An open hole closes
-## when a surface or height edit touches a tile of its footprint, or when its own tee or cup
-## moves. After every edit (a stroke counts as one, checked when it ends) and every undo the
-## validator reruns for every hole: `issues` holds the result, and any open hole that now
-## fails a rule closes. Undo puts the holes back as the step found them, open flags included.
-## The same check runs when the builder is made, so a course that comes in with a failing open
-## hole has it closed at once (no undo step, no signal: nothing is connected yet).
+## the hole with that number, closed, or move its tee or cup. An open hole closes when a
+## surface or height edit touches a tile of its footprint, or when its own tee or cup moves.
+## After every edit (a stroke counts as one, checked when it ends) and every undo the
+## validator reruns for every hole: `issues` holds the result, any open hole that now fails a
+## rule closes, and (E8-S1, D64) any closed hole that passes every rule opens itself unless the
+## player closed it by hand (HoleData.closed_by_hand, set by close_hole, cleared by open_hole),
+## emitting `holes_opened` with the numbers. So a hole is in play the moment it is legal
+## (pillar 1), an edit in its footprint that leaves it legal leaves it open once the edit ends,
+## and a hole a rule closed opens again once fixed. Undo puts the holes back as the step found
+## them, open and by-hand flags included. The same check runs when the builder is made, so a
+## course that comes in with a failing open hole has it closed at once, and one with a closed
+## hole that passes and was not closed by hand (every file from before D64) has it opened
+## (no undo step, no signal: nothing is connected yet; closed_on_load and opened_on_load).
 ##
 ## The hole list (E3-S2): a course holds at most BuilderTuning.max_holes holes (9), numbered 1
 ## to that. A tee or cup for a number with no hole creates it; next_hole_number gives the
 ## lowest free number, so holes are numbered in build order. A number outside 1 to max_holes,
 ## or a new hole past max_holes, is refused (TOO_MANY_HOLES). renumber_hole moves a hole to
-## another number, swapping with the hole that had it; close_hole closes an open hole. Both
+## another number, swapping with the hole that had it; close_hole closes an open hole by hand
+## and open_hole opens one closed by hand (E8-S1). Each
 ## are undo steps, keep the course's hole order (course/save.gd writes it as it is) and leave
 ## every other hole's open flag alone.
 ##
@@ -81,6 +87,10 @@ signal tiles_changed(cells: Array[Vector2i])
 ## Emitted after the holes list changed: a tee or cup placed or moved, a par set, a hole
 ## opened or closed, or an undo of any of those.
 signal holes_changed
+## E8-S1 (D64): the holes numbered `numbers` opened themselves on an edit or an undo (the rerun
+## found them closed, passing every rule and not closed by hand). After holes_changed. Not for
+## open_hole (the player's own press) nor for the builder's own check when it is made.
+signal holes_opened(numbers: Array[int])
 ## Emitted after the validator reran (every edit and undo), with `issues`.
 signal checked(issues: Dictionary)
 ## Emitted after a parcel was bought, or a purchase undone, with that parcel.
@@ -171,7 +181,17 @@ var closed_on_load: Array[String]:
 	get:
 		return _closed_on_load.duplicate()
 
+## E8-S1 (D64): one line per closed hole the course brought in that the builder opened when it
+## was made, "Hole 2 is open: guests will play it", in course order (a file from before D64,
+## which had no by-hand flag, with a legal hole never opened), for the load and import notice.
+var opened_on_load: Array[String]:
+	get:
+		return _opened_on_load.duplicate()
+
 var _closed_on_load: Array[String] = []
+var _opened_on_load: Array[String] = []
+## E8-S1: the hole numbers the reruns since the last _announce opened by themselves.
+var _opened: Array[int] = []
 var _course: CourseData
 var _tuning: BuilderTuning
 var _validator: CourseValidator
@@ -230,11 +250,35 @@ func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: Co
 		was_open.append(h.open)
 	_rerun(Step.new())
 	_holes_dirty = false
+	_opened.clear()
 	for i: int in _course.holes.size():
 		var own: Array = _slot_issues[i]
 		if was_open[i] and not _course.holes[i].open and not own.is_empty():
 			_closed_on_load.append("Hole %d closed: %s" % [_course.holes[i].number,
 					(own[0] as CourseValidator.Issue).reason])
+		elif not was_open[i] and _course.holes[i].open:
+			_opened_on_load.append(opened_line([_course.holes[i].number]))
+
+
+## What the load and import notice lists after its first line (D35, E8-S1): closed_on_load,
+## then opened_on_load.
+func load_notes() -> Array[String]:
+	var out: Array[String] = _closed_on_load.duplicate()
+	out.append_array(_opened_on_load)
+	return out
+
+
+## E8-S1: the notice for holes that opened themselves: "Hole 1 is open: guests will play it",
+## or "Holes 1 and 2 are open: guests will play them".
+static func opened_line(numbers: Array[int]) -> String:
+	if numbers.size() == 1:
+		return "Hole %d is open: guests will play it" % numbers[0]
+	var names := PackedStringArray()
+	for n: int in numbers:
+		names.append(str(n))
+	var last: String = names[names.size() - 1]
+	names.remove_at(names.size() - 1)
+	return "Holes %s and %s are open: guests will play them" % [", ".join(names), last]
 
 
 ## A new course on the blank plot (D10): BuilderTuning's size, every tile its surface and
@@ -622,7 +666,8 @@ func yardage_at(slot: int) -> int:
 	return _validator.hole_yardage(_course, _course.holes[slot])
 
 
-## True when hole `number` exists, is closed and passes every rule.
+## True when hole `number` exists, is closed and passes every rule. Since E8-S1 (D64) such a
+## hole is one the player closed by hand (any other opens itself), or one inside a drag.
 func can_open(number: int) -> bool:
 	var h: HoleData = hole(number)
 	return h != null and not h.open and _issues.has(number) and (_issues[number] as Array).is_empty()
@@ -660,29 +705,35 @@ func set_par(number: int, par: int, slot: int = -1) -> bool:
 	return true
 
 
-## Opens hole `number` (Open in the HUD). False unless can_open: guests play only holes that
-## pass every rule. Pressing Open is an undo step like any other edit.
+## Opens hole `number` (Open in the HUD) and clears its by-hand flag (E8-S1), so a rule that
+## closes it later lets it open itself again once fixed. False unless can_open: guests play
+## only holes that pass every rule. Pressing Open is an undo step like any other edit.
 func open_hole(number: int) -> bool:
 	if not can_open(number):
 		return false
 	end_stroke()
 	var hs: Array[HoleData] = _holes_copy()
-	hs[_find(hs, number)].open = true
+	var i: int = _find(hs, number)
+	hs[i].open = true
+	hs[i].closed_by_hand = false
 	var step := Step.new()
 	_write_holes(step, hs)
 	_finish(step)
 	return true
 
 
-## Closes open hole `number` (the hole list's Close), an undo step. False when there is no
-## such hole or it is closed already.
+## Closes open hole `number` (the hole list's Close) by hand, an undo step: it stays closed,
+## whatever is built, until open_hole (E8-S1, D64). False when there is no such hole or it is
+## closed already.
 func close_hole(number: int) -> bool:
 	var h: HoleData = hole(number)
 	if h == null or not h.open:
 		return false
 	end_stroke()
 	var hs: Array[HoleData] = _holes_copy()
-	hs[_find(hs, number)].open = false
+	var i: int = _find(hs, number)
+	hs[i].open = false
+	hs[i].closed_by_hand = true
 	var step := Step.new()
 	_write_holes(step, hs)
 	_finish(step)
@@ -1073,8 +1124,9 @@ func _finish(step: Step) -> void:
 	_announce()
 
 
-## Reruns the validator for every hole and closes each open one that now fails a rule,
-## recording the holes in `step` first.
+## Reruns the validator for every hole, closes each open one that now fails a rule and opens
+## each closed one that passes and was not closed by hand (E8-S1, D64; noted for holes_opened
+## when it was not open before the step), recording the holes in `step` first.
 func _rerun(step: Step) -> void:
 	_slot_yards = []
 	_slot_lines = []
@@ -1093,12 +1145,25 @@ func _rerun(step: Step) -> void:
 				or not _course.in_bounds(h.cup.x, h.cup.y) else _validator.line_of_play_through(h, turns[i]))
 	_issues = CourseValidator.by_number(_course, _slot_issues)
 	var hs: Array[HoleData] = _holes_copy()
-	var closed: bool = false
-	for h: HoleData in hs:
-		if h.open and not (_issues.get(h.number, []) as Array).is_empty():
+	var changed: bool = false
+	# E8-S1: whether each slot was open before the step (its first hole write kept them), so a
+	# hole an edit closed in its footprint and the rerun opens again is not announced as opened.
+	var was_open: Array[bool] = []
+	for h: HoleData in (step.holes if step.holes != null else hs):
+		was_open.append(h.open)
+	for i: int in hs.size():
+		var h: HoleData = hs[i]
+		var passes: bool = (_slot_issues[i] as Array).is_empty() \
+				and (_issues.get(h.number, []) as Array).is_empty()
+		if h.open and not passes:
 			h.open = false
-			closed = true
-	if closed:
+			changed = true
+		elif not h.open and passes and not h.closed_by_hand:
+			h.open = true
+			changed = true
+			if i >= was_open.size() or not was_open[i]:
+				_opened.append(h.number)
+	if changed:
 		_write_holes(step, hs)
 
 
@@ -1120,6 +1185,10 @@ func _announce() -> void:
 	if _holes_dirty:
 		_holes_dirty = false
 		holes_changed.emit()
+	if not _opened.is_empty():
+		var numbers: Array[int] = _opened.duplicate()
+		_opened.clear()
+		holes_opened.emit(numbers)
 	checked.emit(_issues)
 
 

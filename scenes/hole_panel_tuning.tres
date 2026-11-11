@@ -5,3 +5,4 @@
 [resource]
 script = ExtResource("1_tuning")
 max_height = 280.0
+open_notice_s = 4.0

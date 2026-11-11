@@ -37,6 +37,8 @@ Clubhouse (version 3, E5-S9, D60): `clubhouse` is the 3x3 clubhouse's centre til
 
 Decor (E5-S3): an optional `decor` list of `[x, y, kind]`, one per tile, kind an index into `CourseData.DECOR_KINDS` (`bench_x`, `bench_y`, `flag`, `sign`). Absent when the course has none, so files without decor are unchanged and stay version 3. Scenery only: nothing that plays reads it.
 
+Closed by hand (E8-S1, D64): a hole object may carry `"closed_by_hand": true` (true or false; absent means false, and it is written only when true, so files stay version 3). Since D64 a hole opens itself once it passes every rule; a hole the player closed with Close carries the flag and stays closed until opened by hand. A closed hole that passes and has no flag (every older file) is opened when the builder is made.
+
 ## Headless entry point
 
 `validate`, `generate` and `inspect` run through `course/course_file.gd` (E2-S2, E2-S18):
