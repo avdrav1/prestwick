@@ -279,6 +279,33 @@ func test_a_dogleg_whose_turn_an_edit_moves_still_closes() -> void:
 	assert_eq(b.lines_now()[0], line)
 
 
+## E7-S5: an undo of a stroke that kept its lines writes its tiles without searching the lines'
+## reads, since it puts the lines and their reads back whole: after it the reads still count,
+## so the same fairway write at the landing zone measures the line again and closes the hole.
+func test_an_undo_puts_back_the_reads_a_later_paint_moves_the_turn_by() -> void:
+	var c := ReactionHoles.dogleg_par4()
+	var b := CourseBuilder.new(c)
+	var v := b.validator
+	var line: PackedVector2Array = b.slot_lines()[0]
+	var z := Vector2i((v.landing_zone(c.holes[0]) as Vector2).round())
+	b.begin_stroke()
+	assert_true(b.paint(Vector2i(66, 57), Surface.Type.FAIRWAY, 1))
+	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
+	b.end_stroke()
+	assert_false(c.holes[0].open)
+	assert_true(b.undo())
+	assert_true(c.holes[0].open)
+	assert_eq(b.lines_now()[0], line, "the dogleg's line, kept")
+	assert_eq(b.lines_now()[0], v.line_of_play(c, c.holes[0]), "as a fresh measure has it")
+	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
+	assert_eq(b.lines_now()[0].size(), 2, "the landing zone's read still counts: measured again")
+	assert_false(c.holes[0].open, "and the hole closes on it")
+	# A step that kept no lines (a paint outside a stroke) searches the reads as it writes.
+	assert_true(b.undo())
+	assert_eq(b.lines_now()[0], line)
+	assert_true(c.holes[0].open)
+
+
 ## E3-S61: the tiles turn_point reads hold every tile whose surface can change its answer: a
 ## fairway tile painted on any other leaves the turn where it was.
 func test_a_turn_reads_nothing_but_the_tiles_it_names() -> void:

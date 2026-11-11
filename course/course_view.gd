@@ -733,13 +733,16 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 	# height moved in it may cover or uncover an issue box's foot.
 	var shaped := {}
 	var w: int = _course.width
+	var hgt: int = _course.height
+	# E7-S5: the packed tiles read in place, not three calls a tile (an undo of 585 tiles).
+	var tiles: PackedByteArray = _course.packed_tiles()
 	for cell: Vector2i in cells:
-		if _course.in_bounds(cell.x, cell.y):
-			var h: int = _course.get_height(cell.x, cell.y)
-			if _course.get_surface(cell.x, cell.y) == Surface.Type.WATER:
-				h |= WATER_MARK
-			if _heights_marked[cell.y * w + cell.x] != h:
-				_heights_marked[cell.y * w + cell.x] = h
+		if cell.x >= 0 and cell.y >= 0 and cell.x < w and cell.y < hgt:
+			var i: int = cell.y * w + cell.x
+			var t: int = tiles[i]
+			var h: int = (t >> 4) | (WATER_MARK if (t & 0x0F) == Surface.Type.WATER else 0)
+			if _heights_marked[i] != h:
+				_heights_marked[i] = h
 				shaped[cell] = true
 	if not shaped.is_empty():
 		_follow_shape(shaped)
@@ -802,17 +805,22 @@ func _classify(limit: int) -> int:
 	var done: int = end - _pending_at
 	var reshaped: Array[Vector2i] = []
 	var moved: Array[Vector2i] = []
+	var w: int = _course.width
+	var hgt: int = _course.height
+	# E7-S5: the packed tiles read in place, as refresh_cells does.
+	var tiles: PackedByteArray = _course.packed_tiles()
 	for n: int in range(_pending_at, end):
 		var cell: Vector2i = _pending_cells[n]
-		if not _course.in_bounds(cell.x, cell.y):
+		if cell.x < 0 or cell.y < 0 or cell.x >= w or cell.y >= hgt:
 			continue
-		var i: int = cell.y * _course.width + cell.x
-		var h: int = _course.get_height(cell.x, cell.y)
+		var i: int = cell.y * w + cell.x
+		var t: int = tiles[i]
+		var h: int = t >> 4
 		var here_moved: bool = _heights_seen[i] != h
 		if here_moved:
 			_heights_seen[i] = h
 			moved.append(cell)
-		var water: bool = _course.get_surface(cell.x, cell.y) == Surface.Type.WATER
+		var water: bool = (t & 0x0F) == Surface.Type.WATER
 		if not here_moved and water == terrain.water_seen(cell):
 			var k := terrain.chunk_key(cell)
 			if not _pending_paint.has(k):

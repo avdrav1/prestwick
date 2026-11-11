@@ -94,12 +94,16 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 	if _course == null:
 		return
 	var w: int = _course.width
+	var hgt: int = _course.height
+	# E7-S5: the packed tiles read in place, not three calls a tile (an undo of 585 tiles).
+	var tiles: PackedByteArray = _course.packed_tiles()
 	var dirty := {}
 	for cell: Vector2i in cells:
-		if not _course.in_bounds(cell.x, cell.y):
+		if cell.x < 0 or cell.y < 0 or cell.x >= w or cell.y >= hgt:
 			continue
 		var i: int = cell.y * w + cell.x
-		var m: int = _mark(cell.x, cell.y)
+		var t: int = tiles[i]
+		var m: int = (t >> 4) | (MARK_TREES if (t & 0x0F) == Surface.Type.TREES else 0)
 		var was: int = _marks[i]
 		if m == was:
 			continue

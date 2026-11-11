@@ -144,6 +144,46 @@ func test_tree_edits_redraw_only_what_they_change_and_match_a_fresh_view() -> vo
 	assert_eq(view.trees.get_child_count(), fresh.trees.get_child_count(), "no empty row left behind")
 
 
+func test_a_stroke_over_trees_and_its_undo_leave_the_view_as_a_fresh_one() -> void:
+	# E7-S5: refresh_cells and the ground's sort read the packed tiles in place. A builder stroke
+	# of fairway over trees, beside water, and its undo, each followed through CourseView as Main
+	# does (tiles_changed), leave the trees and the ground as a fresh view draws them; a cell
+	# off the map in a batch is skipped.
+	var c := CourseData.create(16, 16, Surface.Type.ROUGH, 2)
+	for y: int in range(3, 12):
+		for x: int in range(3, 12):
+			if (x + 2 * y) % 3 != 0:
+				c.set_tile(x, y, 2 + (x % 2), Surface.Type.TREES)
+	for x: int in range(3, 12):
+		c.set_tile(x, 13, 0, Surface.Type.WATER)
+	var b := CourseBuilder.new(c)
+	var view := CourseView.new()
+	add_child_autofree(view)
+	view.show_course(c)
+	b.tiles_changed.connect(view.refresh_cells)
+	var before: Dictionary = _trees_of(view)
+	var count: int = view.trees.tree_count()
+	b.begin_stroke()
+	for x: int in range(2, 13, 2):
+		assert_true(b.paint(Vector2i(x, 7), Surface.Type.FAIRWAY, 3))
+	b.end_stroke()
+	assert_lt(view.trees.tree_count(), count, "the stroke took trees out")
+	var fresh := CourseView.new()
+	add_child_autofree(fresh)
+	fresh.show_course(c)
+	assert_eq(_trees_of(view), _trees_of(fresh), "after the stroke, as a fresh view")
+	assert_eq(view.terrain_digest(), fresh.terrain_digest())
+	assert_true(b.undo())
+	view.refresh_cells([Vector2i(-1, 4), Vector2i(4, 16)] as Array[Vector2i])
+	assert_eq(view.trees.tree_count(), count, "the undo stood every tree again")
+	assert_eq(_trees_of(view), before, "each in its row, frame, foot and tint as before")
+	var again := CourseView.new()
+	add_child_autofree(again)
+	again.show_course(c)
+	assert_eq(view.terrain_digest(), again.terrain_digest(), "and the ground as a fresh view's")
+	assert_eq(view.trees.get_child_count(), again.trees.get_child_count())
+
+
 func test_a_trees_foot_is_the_drawn_ground_at_its_tile_centre() -> void:
 	# E5-S15: TreeView stands a tree at its tile's own height, reading no neighbour; that holds
 	# only while the drawn ground at a land tile's centre is its height.

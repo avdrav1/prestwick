@@ -843,10 +843,17 @@ func undo() -> bool:
 	if _undo.is_empty():
 		return false
 	var step: Step = _undo.pop_back()
+	# E7-S5: a step that kept its lines of play puts them back whole below, so its tiles skip
+	# _set_tile's search of the kept lines' reads (an off-line drag's undo: 585 tiles, about
+	# 1 ms of its frame, docs/decisions/e7-s5-perf.txt).
+	var lines_back: bool = not step.lines.is_empty()
 	var cells: Array[Vector2i] = []
 	for c: Vector2i in step.tiles:
 		var packed: int = step.tiles[c]
-		_set_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
+		if lines_back:
+			_write_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
+		else:
+			_set_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
 		cells.append(c)
 	if not cells.is_empty():
 		tiles_changed.emit(cells)
@@ -932,6 +939,12 @@ func _set_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
 			if (_lines_reads[k] as Dictionary).has(c):
 				_lines_now.erase(k)
 				_lines_reads.erase(k)
+	_write_tile(c, h, s)
+
+
+## Writes one tile and notes it for rule 3's graph; _set_tile less the lines of play, for a
+## caller that sets _lines_now itself (undo of a step that kept its lines).
+func _write_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
 	_course.set_tile(c.x, c.y, h, s)
 	_reach_dirty[c] = true
 	_reach_revision += 1
