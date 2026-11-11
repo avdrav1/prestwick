@@ -5,7 +5,19 @@ Every `.wav` file in this folder is original. Each one is synthesized by
 envelopes, no samples, recordings or third-party sound) and belongs to the project like
 its code. Nothing here is under a third-party license.
 
-To regenerate them (the output is deterministic, so an unchanged script writes the same bytes):
+The music in `audio/music/` is not generated and not covered by the note above (E7-S7).
+Both tracks are © avdrav, used by the artist's permission:
+
+| File | Track | Source | Played when |
+| --- | --- | --- | --- |
+| `music/music_build_scaffold.ogg` | "Scaffold" by avdrav (3:55) | https://youtu.be/NbCPoNUXgcA | Build, loops, Music bus |
+| `music/music_play_progress.ogg` | "Progress" by avdrav (4:22) | https://youtu.be/9DHUdqY3RJo | Play, loops, Music bus |
+
+They are the artist's masters converted to Ogg Vorbis, not re-encoded or edited since. Their
+looping is set in their `.import` files. Neither is part of the project's own license; ask the
+artist before using them anywhere else.
+
+To regenerate the generated sounds (the output is deterministic, so an unchanged script writes the same bytes):
 
 ```
 python3 scripts/gen_audio.py          # writes audio/*.wav
@@ -33,4 +45,3 @@ godot --headless --path . --import    # re-imports them
 | `praise.wav` | rising major arpeggio | a guest's praise in the feed |
 | `complaint.wav` | sagging "wah-wah" | a guest's complaint in the feed |
 | `ambient.wav` | 12 s wind and birdsong, loops | always, Ambient bus |
-| `music.wav` | 8 s loop, 120 BPM, I-vi-IV-V in C | always, Music bus; drops out during a swing |

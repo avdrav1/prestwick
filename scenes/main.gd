@@ -148,6 +148,9 @@ func _ready() -> void:
 	main_menu.quit_requested.connect(get_tree().quit)
 	main_menu.visibility_changed.connect(_on_menu_visibility_changed)
 	game_audio.bind(swing_control, shot_view, guest_sim.feed)
+	# E7-S7: Build plays Scaffold and Play plays Progress, crossfading on a mode change.
+	game_audio.set_music(_music_track(), true)
+	mode_changed.connect(func(_m: Mode) -> void: game_audio.set_music(_music_track()))
 	audio_panel.bind(game_audio)
 	main_menu.sound_requested.connect(open_sound_from_menu)
 	# E5-S6: F6's stops, in order, and the camera following the Build cursor.
@@ -685,6 +688,11 @@ func update_cup_pointer() -> void:
 		cup_pointer.hide_marker()
 		return
 	cup_pointer.follow(camera.screen_point(tile_world(h.cup)), free_view_rect(), h.number)
+
+
+## The music for the mode now (GameAudio.Track).
+func _music_track() -> GameAudio.Track:
+	return GameAudio.Track.PLAY if mode == Mode.PLAY else GameAudio.Track.BUILD
 
 
 func toggle_mode() -> void:

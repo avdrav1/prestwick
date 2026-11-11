@@ -1,9 +1,16 @@
 class_name GameAudio
 extends Node
 ## Every sound the game plays (E5-S4), on the buses of audio/bus_layout.tres: the ambient bed
-## (Ambient) and the music loop (Music) from the start, the shot sounds and stings (SFX). The
-## files are made by scripts/gen_audio.py (audio/LICENSE.md). A listener only: it reads the
-## swing, the shot and the feed and never changes them.
+## (Ambient) and the music (Music) from the start, the shot sounds and stings (SFX). The sounds
+## are made by scripts/gen_audio.py; the music is the artist's own (E7-S7, audio/LICENSE.md). A
+## listener only: it reads the swing, the shot and the feed and never changes them.
+##
+## The music (E7-S7): Build plays Scaffold and Play plays Progress (Track, MUSIC_FILES), each
+## looping, each at music_level_db plus its own gain (AudioTuning.music_build_gain_db,
+## music_play_gain_db). Main calls set_music on a mode change and the tracks crossfade over
+## music_crossfade_s, equal power: the two weights sum to 1, so neither is at full while the
+## other sounds. A faded-out track pauses where it was and its mode picks it up there, so a
+## quick Build, Play, Build never starts a track over.
 ##
 ## Readability first (pillar 2), a shot says its surface twice:
 ## - the strike, by the lie (SwingControl.lie_surface when `struck` fires): STRIKE, and `putt`
@@ -13,7 +20,7 @@ extends Node
 ## A flight the trees block (Ball.scattered) rustles when it is blocked; a ball that rolls into
 ## water or OB (Ball.penalty_strokes) splashes or buzzes when it stops there, unless its landing
 ## already said so; a holed ball plays `cup`.
-## The music drops by AudioTuning.music_swing_db while a swing is in progress or its ball is
+## The music (whichever track) drops by AudioTuning.music_swing_db while a swing is in progress or its ball is
 ## moving, and comes back after. A guest's praise or complaint (ReactionFeed.added) plays its
 ## sting, at most one every sting_min_gap_s.
 ##
@@ -22,7 +29,13 @@ extends Node
 signal played(id: StringName)
 
 const SOUND_DIR: String = "res://audio/"
-const MUSIC: StringName = &"music"
+const MUSIC_DIR: String = "res://audio/music/"
+## The music for each mode: Build, then Play.
+enum Track { BUILD, PLAY }
+const MUSIC_FILES: Dictionary = {
+	Track.BUILD: "music_build_scaffold.ogg",
+	Track.PLAY: "music_play_progress.ogg",
+}
 const AMBIENT: StringName = &"ambient"
 const PUTT: StringName = &"putt"
 const SPLASH: StringName = &"splash"
@@ -57,7 +70,12 @@ var tuning: AudioTuning
 var settings: AudioSettings
 ## Where the settings are kept; tests point it at a file of their own.
 var settings_path: String = AudioSettings.PATH
-var music_player: AudioStreamPlayer
+## One player per Track, both on the Music bus.
+var music_players: Array[AudioStreamPlayer] = []
+## The track the mode wants; the crossfade moves toward it.
+var music_track: Track = Track.BUILD
+## Each track's crossfade weight, 0 to 1, by Track; the two always sum to 1.
+var music_mix: Array[float] = [1.0, 0.0]
 var ambient_player: AudioStreamPlayer
 var sfx_players: Array[AudioStreamPlayer] = []
 ## Every sound played, oldest first (the last `HISTORY_MAX`).
@@ -91,15 +109,16 @@ func _ready() -> void:
 		tuning = AudioTuning.load_default()
 	settings = AudioSettings.load_from(settings_path, tuning)
 	settings.apply()
-	music_player = _player(&"Music", "Music")
+	for t: int in MUSIC_FILES:
+		var p := _player(&"Music", "Music%s" % Track.keys()[t].capitalize())
+		p.stream = music_stream(t as Track)
+		music_players.append(p)
 	ambient_player = _player(&"Ambient", "Ambient")
 	for i in maxi(1, tuning.sfx_voices):
 		sfx_players.append(_player(&"SFX", "Sfx%d" % i))
-	music_player.volume_db = tuning.music_level_db
 	ambient_player.volume_db = tuning.ambient_level_db
-	music_player.stream = sound(MUSIC)
 	ambient_player.stream = sound(AMBIENT)
-	music_player.play()
+	set_music(music_track, true)
 	ambient_player.play()
 	var root := get_tree().root
 	if not root.tree_exiting.is_connected(_drain_mixer):
@@ -108,7 +127,7 @@ func _ready() -> void:
 
 ## Stops every player as the scene goes.
 func _exit_tree() -> void:
-	for p: AudioStreamPlayer in [music_player, ambient_player] + sfx_players:
+	for p: AudioStreamPlayer in music_players + [ambient_player] + sfx_players:
 		if p != null:
 			p.stop()
 			p.stream = null
@@ -160,6 +179,40 @@ func music_ducked() -> bool:
 			and (_swing_control.swing.in_progress() or _swing_control.is_ball_moving())
 
 
+## The music for `track` (audio/music/, MUSIC_FILES), cached; null when the file is missing.
+func music_stream(track: Track) -> AudioStream:
+	var key := StringName("music/%d" % track)
+	if not _streams.has(key):
+		var path: String = MUSIC_DIR + MUSIC_FILES[track]
+		_streams[key] = load(path) as AudioStream if ResourceLoader.exists(path) else null
+	return _streams[key]
+
+
+## The player of the track playing now (the one the mode wants).
+func music_player() -> AudioStreamPlayer:
+	return music_players[music_track] if music_track < music_players.size() else null
+
+
+## Track `track`'s own gain, dB, from the tuning.
+func music_gain_db(track: Track) -> float:
+	return tuning.music_play_gain_db if track == Track.PLAY else tuning.music_build_gain_db
+
+
+## Plays `track` from now on: crossfades to it over music_crossfade_s, or at once when
+## `instant`. A track still sounding (or paused by an earlier fade) carries on where it was.
+func set_music(track: Track, instant: bool = false) -> void:
+	music_track = track
+	if instant or tuning.music_crossfade_s <= 0.0:
+		for t in music_mix.size():
+			music_mix[t] = 1.0 if t == track else 0.0
+	var p := music_player()
+	if p != null and p.stream != null:
+		p.stream_paused = false
+		if not p.playing:
+			p.play()
+	_apply_music()
+
+
 ## The stream for sound `id` (audio/<id>.wav), cached; null when the file is missing.
 func sound(id: StringName) -> AudioStream:
 	if not _streams.has(id):
@@ -186,7 +239,7 @@ func _process(delta: float) -> void:
 	advance(delta)
 
 
-## One frame: the shot's polled sounds, the music's drop and the sting clock.
+## One frame: the shot's polled sounds, the music's crossfade and drop, and the sting clock.
 func advance(delta: float) -> void:
 	_since_sting += delta
 	_poll_ball()
@@ -194,8 +247,22 @@ func advance(delta: float) -> void:
 	var span := tuning.music_fade_out_s if target < music_offset_db else tuning.music_fade_in_s
 	var rate := absf(tuning.music_swing_db) / maxf(span, 0.001)
 	music_offset_db = move_toward(music_offset_db, target, rate * delta)
-	if music_player != null:
-		music_player.volume_db = tuning.music_level_db + music_offset_db
+	var step := delta / tuning.music_crossfade_s if tuning.music_crossfade_s > 0.0 else 1.0
+	for t in music_mix.size():
+		music_mix[t] = move_toward(music_mix[t], 1.0 if t == music_track else 0.0, step)
+	_apply_music()
+
+
+## Sets each music player's level from its gain, its crossfade weight (equal power) and the
+## swing's drop; pauses a track that has faded out.
+func _apply_music() -> void:
+	for t in music_players.size():
+		var p := music_players[t]
+		var w := music_mix[t]
+		p.volume_db = tuning.music_level_db + music_gain_db(t as Track) + music_offset_db \
+				+ maxf(linear_to_db(sqrt(w)), -80.0)
+		if t != music_track and w <= 0.0 and p.playing and not p.stream_paused:
+			p.stream_paused = true
 
 
 func _on_struck(shot: ShotLaunch) -> void:

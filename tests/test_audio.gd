@@ -4,6 +4,9 @@ extends GutTest
 ## trees, water, OB and the cup theirs, a guest's verdict its sting); the music drops out during
 ## a swing; the volumes persist in user://; the F2 panel works by keyboard; the main scene
 ## starts the music and the bed.
+## E7-S7: the artist's music. Build plays Scaffold and Play plays Progress, each looping, at its
+## tuned gain; a mode change crossfades and ends with one track; a quick return carries on;
+## the swing's drop works on both.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const SETTINGS := "user://test_audio_settings.cfg"
@@ -84,7 +87,7 @@ func _fire(course: CourseData, carry: float, launch_deg: float = 30.0) -> Array:
 
 func test_every_sound_file_loads() -> void:
 	var a := _audio()
-	var ids: Array[StringName] = [GameAudio.MUSIC, GameAudio.AMBIENT, GameAudio.PUTT, GameAudio.SPLASH,
+	var ids: Array[StringName] = [GameAudio.AMBIENT, GameAudio.PUTT, GameAudio.SPLASH,
 			GameAudio.TREES, GameAudio.OOB, GameAudio.CUP, GameAudio.PRAISE, GameAudio.COMPLAINT]
 	ids.append_array(GameAudio.STRIKE.values())
 	ids.append_array(GameAudio.LAND.values())
@@ -94,9 +97,8 @@ func test_every_sound_file_loads() -> void:
 
 func test_the_beds_loop_and_the_one_shots_do_not() -> void:
 	var a := _audio()
-	for id: StringName in [GameAudio.MUSIC, GameAudio.AMBIENT]:
-		var s := a.sound(id) as AudioStreamWAV
-		assert_eq(s.loop_mode, AudioStreamWAV.LOOP_FORWARD, "%s loops (its smpl chunk)" % id)
+	var bed := a.sound(GameAudio.AMBIENT) as AudioStreamWAV
+	assert_eq(bed.loop_mode, AudioStreamWAV.LOOP_FORWARD, "the bed loops (its smpl chunk)")
 	for id: StringName in [GameAudio.PUTT, GameAudio.SPLASH, GameAudio.PRAISE]:
 		assert_eq((a.sound(id) as AudioStreamWAV).loop_mode, AudioStreamWAV.LOOP_DISABLED, "%s plays once" % id)
 
@@ -108,7 +110,9 @@ func test_the_bus_layout_has_master_music_ambient_and_sfx() -> void:
 
 func test_players_sit_on_their_buses() -> void:
 	var a := _audio()
-	assert_eq(a.music_player.bus, &"Music")
+	assert_eq(a.music_players.size(), GameAudio.Track.size(), "a music player per track")
+	for p in a.music_players:
+		assert_eq(p.bus, &"Music")
 	assert_eq(a.ambient_player.bus, &"Ambient")
 	for p in a.sfx_players:
 		assert_eq(p.bus, &"SFX")
@@ -236,7 +240,8 @@ func test_music_drops_out_during_a_swing_and_comes_back() -> void:
 	assert_true(a.music_ducked(), "the first click starts the swing")
 	a.advance(a.tuning.music_fade_out_s + 0.01)
 	assert_almost_eq(a.music_offset_db, a.tuning.music_swing_db, 0.01, "down within the fade out")
-	assert_almost_eq(a.music_player.volume_db, a.tuning.music_level_db + a.tuning.music_swing_db, 0.01)
+	assert_almost_eq(a.music_player().volume_db, a.tuning.music_level_db
+			+ a.music_gain_db(a.music_track) + a.tuning.music_swing_db, 0.01)
 	sc.swing.reset()
 	assert_false(a.music_ducked())
 	a.advance(a.tuning.music_fade_in_s * 0.5)
@@ -279,6 +284,143 @@ func test_praise_and_complaint_stings_with_a_gap() -> void:
 	n.kind = GuestReaction.Kind.NEUTRAL
 	feed.added.emit(n)
 	assert_eq(a.history.size(), 2, "a neutral is quiet")
+
+
+# --- the music (E7-S7) ----------------------------------------------------------------
+
+## A track's amplitude now, linear, from its player's level less its gain and the swing's drop.
+func _amp(a: GameAudio, t: GameAudio.Track) -> float:
+	return db_to_linear(a.music_players[t].volume_db - a.tuning.music_level_db
+			- a.music_gain_db(t) - a.music_offset_db)
+
+
+func test_the_music_files_load_and_loop() -> void:
+	var a := _audio()
+	for t: GameAudio.Track in [GameAudio.Track.BUILD, GameAudio.Track.PLAY]:
+		var s := a.music_stream(t) as AudioStreamOggVorbis
+		assert_not_null(s, "audio/music/%s loads as Ogg Vorbis" % GameAudio.MUSIC_FILES[t])
+		if s == null:
+			continue
+		assert_true(s.loop, "%s loops (its .import)" % GameAudio.MUSIC_FILES[t])
+		assert_gt(s.get_length(), 200.0, "the whole track, not a clip")
+		assert_same(a.music_players[t].stream, s, "on its own player")
+	assert_false(ResourceLoader.exists("res://audio/music.wav"), "the generated loop is gone")
+
+
+func test_build_plays_scaffold_and_play_plays_progress() -> void:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	m.guest_sim.set_process(false)
+	var a := m.game_audio
+	a.set_process(false)
+	assert_eq(a.music_track, GameAudio.Track.BUILD)
+	assert_string_ends_with(a.music_player().stream.resource_path, "music_build_scaffold.ogg")
+	assert_true(a.music_player().playing, "Scaffold in Build")
+	assert_false(a.music_players[GameAudio.Track.PLAY].playing, "Progress waits for Play")
+	m.set_mode(Main.Mode.PLAY)
+	assert_eq(a.music_track, GameAudio.Track.PLAY)
+	a.advance(a.tuning.music_crossfade_s + 0.01)
+	assert_string_ends_with(a.music_player().stream.resource_path, "music_play_progress.ogg")
+	assert_true(a.music_player().playing, "Progress in Play")
+	assert_true(a.music_players[GameAudio.Track.BUILD].stream_paused, "Scaffold faded out and paused")
+	m.set_mode(Main.Mode.BUILD)
+	a.advance(a.tuning.music_crossfade_s + 0.01)
+	assert_eq(a.music_track, GameAudio.Track.BUILD)
+	assert_false(a.music_player().stream_paused, "Scaffold back in Build")
+	assert_true(a.music_players[GameAudio.Track.PLAY].stream_paused)
+
+
+func test_the_crossfade_ends_with_one_track_and_never_two_at_full() -> void:
+	var a := _audio()
+	assert_gt(a.tuning.music_crossfade_s, 0.0, "a crossfade, not a cut")
+	assert_lt(a.tuning.music_crossfade_s, 5.0, "a short one")
+	a.set_music(GameAudio.Track.PLAY)
+	var frames := 0
+	var mid_seen := false
+	while a.music_mix[GameAudio.Track.PLAY] < 1.0 and frames < 1000:
+		a.advance(1.0 / 60.0)
+		frames += 1
+		var b := _amp(a, GameAudio.Track.BUILD)
+		var p := _amp(a, GameAudio.Track.PLAY)
+		assert_almost_eq(b * b + p * p, 1.0, 0.001, "equal power at frame %d" % frames)
+		assert_false(b > 0.99 and p > 0.99, "never both at full")
+		if b > 0.1 and p > 0.1:
+			mid_seen = true
+	assert_true(mid_seen, "the two overlap: a crossfade, not a cut")
+	assert_almost_eq(frames / 60.0, a.tuning.music_crossfade_s, 1.0 / 30.0, "over music_crossfade_s")
+	assert_eq(a.music_mix, [0.0, 1.0] as Array[float], "ends with one track")
+	assert_true(a.music_players[GameAudio.Track.BUILD].stream_paused, "the other is paused")
+	assert_true(a.music_players[GameAudio.Track.PLAY].playing)
+	assert_false(a.music_players[GameAudio.Track.PLAY].stream_paused)
+	assert_almost_eq(a.music_player().volume_db,
+			a.tuning.music_level_db + a.tuning.music_play_gain_db, 0.001, "at its full level")
+
+
+func test_a_quick_return_carries_on_and_never_restarts() -> void:
+	var a := _audio()
+	var build := a.music_players[GameAudio.Track.BUILD]
+	build.seek(30.0)
+	var at := build.get_playback_position()
+	assert_gt(at, 29.0, "Scaffold 30 s in")
+	# Back within the fade: the track never stopped.
+	a.set_music(GameAudio.Track.PLAY)
+	a.advance(a.tuning.music_crossfade_s * 0.5)
+	assert_true(build.playing and not build.stream_paused, "still sounding mid-fade")
+	a.set_music(GameAudio.Track.BUILD)
+	assert_gt(build.get_playback_position(), at - 0.01, "not from the top")
+	a.advance(a.tuning.music_crossfade_s)
+	assert_eq(a.music_mix, [1.0, 0.0] as Array[float])
+	# Back after a full fade: it was paused, and picks up where it was.
+	a.set_music(GameAudio.Track.PLAY)
+	a.advance(a.tuning.music_crossfade_s + 0.01)
+	assert_true(build.stream_paused)
+	a.set_music(GameAudio.Track.BUILD)
+	assert_false(build.stream_paused)
+	assert_true(build.playing)
+	assert_gt(build.get_playback_position(), at - 0.01, "not from the top")
+
+
+func test_the_swing_drop_works_on_both_tracks() -> void:
+	for t: GameAudio.Track in [GameAudio.Track.BUILD, GameAudio.Track.PLAY]:
+		var rig := _rig(_course(Surface.Type.FAIRWAY), Vector2i(1, 5))
+		var a: GameAudio = rig[0]
+		var sc: SwingControl = rig[1]
+		a.set_music(t, true)
+		var full := a.tuning.music_level_db + a.music_gain_db(t)
+		a.advance(0.1)
+		assert_almost_eq(a.music_player().volume_db, full, 0.001, "full before the swing")
+		sc.swing.click()
+		a.advance(a.tuning.music_fade_out_s + 0.01)
+		assert_almost_eq(a.music_player().volume_db, full + a.tuning.music_swing_db, 0.01,
+				"%s drops during the swing" % GameAudio.Track.keys()[t])
+		sc.swing.reset()
+		a.advance(a.tuning.music_fade_in_s + 0.01)
+		assert_almost_eq(a.music_player().volume_db, full, 0.01,
+				"%s comes back" % GameAudio.Track.keys()[t])
+
+
+func test_the_track_gains_come_from_the_tuning() -> void:
+	var t := AudioTuning.new()
+	t.music_level_db = -2.0
+	t.music_build_gain_db = -11.0
+	t.music_play_gain_db = -3.0
+	var a := GameAudio.new()
+	a.tuning = t
+	a.settings_path = SETTINGS
+	add_child_autofree(a)
+	a.set_process(false)
+	assert_eq(a.music_gain_db(GameAudio.Track.BUILD), -11.0)
+	assert_eq(a.music_gain_db(GameAudio.Track.PLAY), -3.0)
+	assert_almost_eq(a.music_player().volume_db, -13.0, 0.001, "Scaffold at level + its gain")
+	a.set_music(GameAudio.Track.PLAY, true)
+	assert_almost_eq(a.music_player().volume_db, -5.0, 0.001, "Progress at level + its gain")
+	# The shipped tuning levels the masters (Scaffold -10.9 LUFS, +0.7 dBTP; Progress -15.9 LUFS,
+	# -0.2 dBTP): about 5 dB apart, the louder's peak under 0 dBFS.
+	var d := AudioTuning.load_default()
+	assert_almost_eq(d.music_play_gain_db - d.music_build_gain_db, 5.0, 0.5, "about 5 dB apart")
+	assert_lt(0.7 + d.music_level_db + d.music_build_gain_db, 0.0, "Scaffold's peak under 0 dBFS")
+	assert_lt(-0.2 + d.music_level_db + d.music_play_gain_db, 0.0, "Progress's peak under 0 dBFS")
 
 
 # --- settings --------------------------------------------------------------------------
@@ -369,8 +511,8 @@ func test_the_main_scene_plays_the_music_and_the_bed() -> void:
 	var m := MAIN_SCENE.instantiate() as Main
 	m.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child_autofree(m)
-	assert_not_null(m.game_audio.music_player.stream)
-	assert_true(m.game_audio.music_player.playing, "music")
+	assert_not_null(m.game_audio.music_player().stream)
+	assert_true(m.game_audio.music_player().playing, "music")
 	assert_true(m.game_audio.ambient_player.playing, "ambient bed")
 	assert_eq(m.audio_panel._audio, m.game_audio, "the panel is bound")
 

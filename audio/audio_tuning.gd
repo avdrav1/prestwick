@@ -11,9 +11,18 @@ const PATH: String = "res://audio/audio_tuning.tres"
 @export_range(0.0, 1.0) var default_music: float = 0.5
 @export_range(0.0, 1.0) var default_ambient: float = 0.6
 @export_range(0.0, 1.0) var default_sfx: float = 0.9
-## The music loop's and the ambient bed's own player level, dB, under their bus volume.
+## The music's and the ambient bed's own player level, dB, under their bus volume.
 @export var music_level_db: float = -6.0
 @export var ambient_level_db: float = -4.0
+## Each music track's own gain, dB, on top of music_level_db (E7-S7). The artist's masters differ
+## in loudness (Scaffold -10.9 LUFS, peak +0.7 dBTP; Progress -15.9 LUFS, -0.2 dBTP), so these
+## level them to the old generated loop's -20 LUFS, under the shot sounds, the louder one's
+## peak well under 0 dBFS.
+@export var music_build_gain_db: float = -9.0
+@export var music_play_gain_db: float = -4.0
+## Switching Build and Play crossfades the tracks over this many seconds (equal power: neither
+## is ever at full while the other sounds). 0 cuts at once.
+@export var music_crossfade_s: float = 1.5
 ## During a swing (first click until the ball rests) the music drops by this much, dB, so the
 ## shot's sounds read alone (pillar 2). It fades down over music_fade_out_s and back over
 ## music_fade_in_s.
