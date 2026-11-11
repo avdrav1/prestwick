@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prestwick playtest</title>
+<meta name="description" content="Build a golf course, then play it. Download the Prestwick playtest build.">
+<style>
+  :root {
+    --bg: #f4f1e8; --panel: #ffffff; --ink: #1f2a1f; --muted: #5b665b;
+    --accent: #3f7d3a; --accent-ink: #ffffff; --line: #d9d4c4; --code: #ece8db;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141a14; --panel: #1d251d; --ink: #e7ecdf; --muted: #a3ae9f;
+      --accent: #6fb062; --accent-ink: #0f160f; --line: #2f3a2f; --code: #263026;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 2.4rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.25rem; margin: 36px 0 10px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; font-size: 1.1rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 12px; }
+  a.btn { display: inline-block; background: var(--accent); color: var(--accent-ink);
+    text-decoration: none; font-weight: 600; padding: 12px 18px; border-radius: 8px; }
+  a.btn.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  a { color: var(--accent); }
+  .small { color: var(--muted); font-size: 0.92rem; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+  ul { padding-left: 1.2em; } li { margin: 4px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  td { border-top: 1px solid var(--line); padding: 6px 8px 6px 0; vertical-align: top; }
+  td:first-child { white-space: nowrap; font-weight: 600; padding-right: 16px; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Prestwick</h1>
+  <p class="lead">Build a golf course, then play it. Guests play it too, pay a green fee, and tell you what they think.</p>
+
+  <div class="card">
+    <strong>Playtest build 0.6.0-rc1</strong>
+    <div class="buttons">
+      <a class="btn" href="https://github.com/avdrav1/prestwick/releases/download/v0.6.0-rc1/prestwick-0.6.0-rc1-win.exe">Download for Windows</a>
+      <a class="btn" href="https://github.com/avdrav1/prestwick/releases/download/v0.6.0-rc1/prestwick-0.6.0-rc1-linux.x86_64">Download for Linux</a>
+      <a class="btn secondary" href="https://github.com/avdrav1/prestwick/releases/download/v0.6.0-rc1/playtest_nine.json">Example course</a>
+    </div>
+    <p class="small">One file, nothing to install. Windows may warn about an unknown app: choose <em>More info</em>, then <em>Run anyway</em>. On Linux, run <code>chmod +x prestwick-0.6.0-rc1-linux.x86_64</code> first. The example course opens with <em>Import course</em> in the menu (put the file in the folder the Import page's <em>Open folder</em> shows).</p>
+  </div>
+
+  <h2>How to play</h2>
+  <ul>
+    <li><strong>Goal:</strong> build a nine-hole course that earns 3 stars without running out of money. You start with $5,000.</li>
+    <li><strong>Build:</strong> click <em>New hole</em>, place a <em>Tee</em> and a <em>Cup</em>, paint a green round the cup and fairway between. The panel at the top right says what is wrong until the hole is legal; then <em>Open</em> it. Painting and shaping cost money; undo gives it back.</li>
+    <li><strong>Guests:</strong> each morning they leave the clubhouse, pay at the first tee and play your open holes. Their comments show on the left and on the map; click one to jump to that hole. At dusk their verdicts set your stars, and more stars bring more guests.</li>
+    <li><strong>Play a hole yourself:</strong> <code>Tab</code> switches Build and Play. Aim with the mouse or arrow keys; swing with Space or a click: once to start, again for power, again for accuracy.</li>
+  </ul>
+  <table>
+    <tr><td>Esc</td><td>Menu: new course, save, load, import and export courses, sound</td></tr>
+    <tr><td>P / 1 / 3 / M</td><td>Pause, normal speed, fast, skip to morning</td></tr>
+    <tr><td>F5 / F9</td><td>Save / load</td></tr>
+    <tr><td>G / T</td><td>Green view / contour lines</td></tr>
+    <tr><td>F1</td><td>Every key (the whole game works from the keyboard)</td></tr>
+  </table>
+
+  <h2>Tell us what happened</h2>
+  <p>Play for half an hour or so, then <a href="https://github.com/avdrav1/prestwick/issues/new?title=Playtest%3A+&amp;body=Version%3A+0.6.0-rc1%0AOS%3A+%0A%0AWhat+I+built+and+played%3A%0A%0AWhat+confused+me%3A%0A%0AWhat+broke+(if+anything)%3A%0A%0AWhat+I+liked%3A%0A">open a playtest report</a> (needs a free GitHub account). Short notes are fine: what confused you, what broke, what you liked. If you made a course you're proud of, export it and attach the file.</p>
+
+  <footer>
+    All builds and notes: <a href="https://github.com/avdrav1/prestwick/releases">github.com/avdrav1/prestwick/releases</a>.
+    Art and sound are generated by scripts in the repo.
+  </footer>
+</main>
+</body>
+</html>
