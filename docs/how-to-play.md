@@ -30,7 +30,11 @@ Run the game. The menu opens: choose **New course** (or **Import course** to ope
 
 ## Saving
 
-**F5** saves, **F9** loads (a load starts that day again from its morning). **Export course** in the menu writes a course file to send to a friend; it opens with $5,000.
+**F5** saves, **F9** loads (a load starts that day again from its morning). Each asks first when it would replace something: "Save over your saved game from Day 4?" or "Load Day 4 and lose today's progress?". **Enter** says yes, **Esc** says no.
+
+The game also saves itself each morning, keeping the last 3 mornings apart from your own save, which it never touches. **Load game** in the menu (Esc) lists your saved game and each of those mornings with its day, balance and the date and time it was saved; pick one to load it. Starting a new course keeps the old course's morning saves until the new course makes its first one.
+
+**Export course** in the menu writes a course file to send to a friend; it opens with $5,000.
 
 ## Keys
 

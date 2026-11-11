@@ -17,7 +17,7 @@ const SECTIONS: Array = [
 		[[&"help_toggle"], "This help (Esc closes it)"],
 		[[&"menu"], "Main menu: new course, load, save, import, export, sound, quit (Esc again closes it; a key map, notice or parcel asked about takes Esc first)"],
 		[[&"audio_settings"], "Sound volumes (Esc closes them)"],
-		[[&"save_game", &"load_game"], "Save / load the game (Esc closes the notice)"],
+		[[&"save_game", &"load_game"], "Save / load the game (each asks first; Esc closes the notice)"],
 		[[&"sim_pause", &"sim_speed_1", &"sim_speed_3"], "Pause / run the guests' day at 1x / 3x"],
 		[[&"sim_skip"], "Skip to morning"],
 		[[&"pan_up", &"pan_left", &"pan_down", &"pan_right"], "Pan the view"],

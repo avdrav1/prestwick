@@ -9,7 +9,7 @@ signal mode_changed(new_mode: Mode)
 const TOGGLE_ACTION: StringName = &"toggle_mode"
 ## Fires the debug shot in Play, in debug builds only (E2-S8; F3).
 const DEBUG_SHOT_ACTION: StringName = &"debug_shot"
-## Save and load the game (E4-S7; F5 and F9 until E5's menus).
+## Save and load the game (E4-S7; F5 and F9). E8-S4: each asks first (request_save, request_load).
 const SAVE_ACTION: StringName = &"save_game"
 const LOAD_ACTION: StringName = &"load_game"
 ## Opens the main menu (E5-S5; Esc).
@@ -29,6 +29,20 @@ var mode: Mode = Mode.BUILD
 var course: CourseData
 ## The seed of the latest New course's land (new_course), so it can be made again.
 var land_seed: int = -1
+## E8-S4: the game in play's id (GameSave.State.save_id): a new one with each course shown (New
+## course, New sandbox, an import), the file's on a load. Its autosaves rotate among its own.
+var save_id: String = ""
+## E8-S4: the manual save's file (F5, F9, the menu), and the autosaves' folder.
+var save_path: String = GameSave.PATH
+var autosave_folder: String = GameSave.AUTOSAVE_FOLDER
+## E8-S4: the autosaves kept, the newest (the user, 2026-11-11: the last 3 mornings).
+@export var autosave_slots: int = 3
+## E8-S4: the game writes an autosave each morning after a dusk. On when Main is the running scene
+## (the game itself); a test or a playtest that adds Main to its own tree turns it on itself, with
+## its own `autosave_folder`, so it never writes over the player's autosaves.
+var autosaves: bool = false
+## A dusk has come since the last morning, so the next morning autosaves (_on_day_started).
+var _dusk_passed: bool = false
 ## The course rating (GuestSim.rating, 1 to 5) at each day's end, oldest first (E4-S5,
 ## _on_day_ended); a new course empties it and a save carries it (E4-S7).
 var rating_history: Array[float] = []
@@ -94,6 +108,8 @@ var _sound_from_menu: bool = false
 ## E5-S4: the sound, and its F2 volume panel.
 @onready var game_audio: GameAudio = $GameAudio
 @onready var audio_panel: AudioPanel = $HUD/AudioPanel
+## E8-S4: the question a save over the saved game or a load asks first.
+@onready var confirm_dialog: ConfirmDialog = $HUD/ConfirmDialog
 ## E5-S6: the HUD in the keyboard's reach (F6) and the key map (F1).
 @onready var hud_focus: HudFocus = $HudFocus
 @onready var help_overlay: HelpOverlay = $HUD/HelpOverlay
@@ -143,12 +159,13 @@ func _ready() -> void:
 	guest_sim.day_ended.connect(_on_day_ended)
 	guest_sim.day_started.connect(_on_day_started)
 	main_menu.new_course_requested.connect(func() -> void: new_course())
-	main_menu.load_requested.connect(func() -> void: load_game())
-	main_menu.save_requested.connect(func() -> void: save_game())
+	main_menu.load_requested.connect(func(path: String) -> void: request_load(path, true))
+	main_menu.save_requested.connect(func() -> void: request_save(true))
 	main_menu.import_requested.connect(import_course)
 	main_menu.export_requested.connect(export_course)
 	main_menu.quit_requested.connect(get_tree().quit)
 	main_menu.visibility_changed.connect(_on_menu_visibility_changed)
+	confirm_dialog.visibility_changed.connect(_on_menu_visibility_changed)
 	game_audio.bind(swing_control, shot_view, guest_sim.feed)
 	# E7-S7: Build plays Scaffold and Play plays Progress, crossfading on a mode change.
 	game_audio.set_music(_music_track(), true)
@@ -158,8 +175,9 @@ func _ready() -> void:
 	# E5-S6: F6's stops, in order, and the camera following the Build cursor.
 	hud_focus.bind([build_palette, swing_panel, hole_panel, land_panel, feed_panel, mode_button,
 			new_course_button, new_sandbox_button, sim_speed_panel, fee_panel, save_notice] as Array[Control],
-			[main_menu, audio_panel] as Array[Control])
+			[main_menu, audio_panel, confirm_dialog] as Array[Control])
 	build_tool.cursor_moved.connect(_on_cursor_moved)
+	autosaves = get_tree().current_scene == self
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -181,6 +199,8 @@ func _ready() -> void:
 ## one with none frames the course centre at the player's zoom.
 func show_course(c: CourseData) -> void:
 	course = c
+	save_id = new_save_id()
+	_dusk_passed = false
 	rating_history.clear()
 	_replay_fees.clear()
 	shot_view.clear()
@@ -476,10 +496,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		toggle_mode()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(SAVE_ACTION):
-		save_game()
+		request_save()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(LOAD_ACTION):
-		load_game()
+		request_load()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(MENU_ACTION):
 		open_menu()
@@ -489,10 +509,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Saves the game to `path` (E4-S7, GameSave): the course, the guests' seed, the morning of the
-## day under way, the economy (economy_to_save) and the feed as it stood that morning. The notice
-## says so, and names any half-placed hole the file leaves out.
-func save_game(path: String = GameSave.PATH) -> Error:
+## Saves the game to `path` (E4-S7, GameSave; empty: `save_path`), with no question: the course,
+## the guests' seed, the morning of the day under way, the economy (economy_to_save) and the feed
+## as it stood that morning. The notice says so, and names any half-placed hole the file leaves
+## out. F5 and the menu go through request_save.
+func save_game(path: String = "") -> Error:
+	var s := save_state()
+	var dropped: Array[int] = []
+	var err := GameSave.save_file(s, path if not path.is_empty() else save_path, dropped)
+	save_notice.show_lines(SaveNotice.save_lines(err, s.day, dropped, course))
+	return err
+
+
+## The game as a save holds it now (E4-S7): the morning of the day under way.
+func save_state() -> GameSave.State:
 	var s := GameSave.State.new()
 	s.course = course
 	s.seed_value = guest_sim.base_seed
@@ -503,17 +533,66 @@ func save_game(path: String = GameSave.PATH) -> Error:
 	# E8-S2: and when groups a closed course turned away were sent out again.
 	s.late_starts = guest_sim.morning_late_starts()
 	economy_to_save(s)
-	var dropped: Array[int] = []
-	var err := GameSave.save_file(s, path, dropped)
-	save_notice.show_lines(SaveNotice.save_lines(err, s.day, dropped, course))
+	s.save_id = save_id
+	s.saved_at = int(Time.get_unix_time_from_system())
+	return s
+
+
+## E8-S4: a fresh game id: the real time and a random part.
+static func new_save_id() -> String:
+	return "%d-%06d" % [int(Time.get_unix_time_from_system()), randi() % 1000000]
+
+
+## E8-S4: F5 and the menu's Save game. Over a saved game it asks first ("Save over your saved game
+## from Day 4?", Enter saves, Esc leaves it); with none it saves straight away. From the menu, no
+## goes back to the menu.
+func request_save(from_menu: bool = false) -> void:
+	var old := GameSave.read_entry(save_path, false)
+	if old == null:
+		save_game()
+		return
+	var question: String = "Save over your saved game from Day %d?" % old.state.day if old.readable() \
+			else "Save over your saved game? It can't be read (%s)." % old.error
+	var back := func() -> void:
+		open_menu()
+		main_menu.show_main(MainMenu.SAVE_INDEX)
+	confirm_dialog.ask(question, "Save", func() -> void: save_game(), back if from_menu else Callable())
+
+
+## E8-S4: F9 (the manual save) and the Load page's picks (`path`; empty: `save_path`). A save that
+## would load asks first ("Load Day 4 and lose today's progress?", Enter loads, Esc leaves the game
+## as it is); one that is missing or cannot be read goes to load_game, whose notice says why and
+## leaves the game alone. From the menu, no goes back to the Load page.
+func request_load(path: String = "", from_menu: bool = false) -> void:
+	var at: String = path if not path.is_empty() else save_path
+	var e := GameSave.read_entry(at, false)
+	if e == null or not e.readable():
+		load_game(at)
+		return
+	var back := func() -> void:
+		open_menu()
+		main_menu.show_load()
+	confirm_dialog.ask("Load Day %d and lose today's progress?" % e.state.day, "Load",
+			func() -> void: load_game(at), back if from_menu else Callable())
+
+
+## E8-S4: writes the morning's autosave (GameSave.autosave_file: the newest `autosave_slots` of
+## this game kept, the manual save untouched). Quiet: no notice, a warning only when it fails.
+func autosave() -> Error:
+	var s := save_state()
+	var err := GameSave.autosave_file(s, autosave_folder, autosave_slots)
+	if err != OK:
+		push_warning("main: autosave failed: %s" % error_string(err))
 	return err
 
 
-## Loads the game saved at `path` (E4-S7): the course with a fresh builder, the morning of the
-## saved day, its feed and economy; the notice lists every hole the builder closed on load with
-## its reason (D35, D47). A missing or faulty save changes nothing but the notice. True when
-## it loaded.
-func load_game(path: String = GameSave.PATH) -> bool:
+## Loads the game saved at `path` (E4-S7; empty: `save_path`), with no question: the course with a
+## fresh builder, the morning of the saved day, its feed and economy; the notice lists every hole
+## the builder closed on load with its reason (D35, D47). A missing or faulty save changes
+## nothing but the notice. True when it loaded. F9 and the Load page go through request_load.
+func load_game(path: String = "") -> bool:
+	if path.is_empty():
+		path = save_path
 	var errors: Array[String] = []
 	var s := GameSave.load_file(path, errors, guest_sim.tuning.rating_window,
 			guest_sim.feed_tuning.max_entries)
@@ -522,6 +601,9 @@ func load_game(path: String = GameSave.PATH) -> bool:
 		return false
 	land_seed = s.seed_value
 	show_course(s.course)
+	# E8-S4: the game the file is of goes on (a save from before it stays a new game).
+	if not s.save_id.is_empty():
+		save_id = s.save_id
 	guest_sim.resume_at(s.day, s.arrivals, s.late_starts)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
@@ -529,8 +611,11 @@ func load_game(path: String = GameSave.PATH) -> bool:
 	return true
 
 
-## Opens the main menu (E5-S5) over the course.
+## Opens the main menu (E5-S5) over the course. E8-S4: its Load page reads this game's saves.
 func open_menu() -> void:
+	main_menu.save_path = save_path
+	main_menu.autosave_folder = autosave_folder
+	main_menu.autosave_slots = autosave_slots
 	main_menu.open(course)
 
 
@@ -544,20 +629,20 @@ func open_sound_from_menu() -> void:
 	audio_panel.open()
 	audio_panel.closed.connect(func() -> void:
 		_sound_from_menu = false
-		main_menu.open(course)
+		open_menu()
 		main_menu.show_main(MainMenu.SOUND_INDEX), CONNECT_ONE_SHOT)
 
 
 func _on_menu_visibility_changed() -> void:
-	camera.set_process(not main_menu.visible)
+	camera.set_process(not main_menu.visible and not confirm_dialog.visible)
 	_hold_day_for_menu()
 
 
 ## 2026-11-10: pauses the guests' day as the menu path opens (the menu, or the sound panel
-## opened from it) and puts back the speed the player had when it is fully closed; a day the
-## player had paused stays paused.
+## opened from it, or E8-S4's save or load question) and puts back the speed the player had when
+## it is fully closed; a day the player had paused stays paused.
 func _hold_day_for_menu() -> void:
-	var open := main_menu.visible or _sound_from_menu
+	var open := main_menu.visible or _sound_from_menu or confirm_dialog.visible
 	if open and not _menu_holds_day:
 		_menu_holds_day = true
 		_speed_under_menu = guest_sim.speed
@@ -657,12 +742,19 @@ func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
 	_replay_fees.clear()
 	b.debit(upkeep)
 	money_panel.refresh()
+	_dusk_passed = true
 
 
-## A new morning (E4-S4): the ledger starts on it.
+## A new morning (E4-S4): the ledger starts on it. E8-S4: a morning after a dusk (not the first
+## of a course or of a load) writes the autosave, after the dusk's accounting, so it holds the
+## morning a load of it replays from.
 func _on_day_started(d: int) -> void:
 	var b: CourseBuilder = build_tool.builder
 	ledger.start(d, b.balance(), b.has_unlimited_money())
+	if _dusk_passed:
+		_dusk_passed = false
+		if autosaves:
+			autosave()
 
 
 ## Keeps the camera on a moving ball (E2-S8), unless the player panned away to scout.

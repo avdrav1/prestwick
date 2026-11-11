@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3]
+[gd_scene load_steps=32 format=3]
 
 [ext_resource type="Script" path="res://scenes/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://course/course_view.gd" id="2_view"]
@@ -29,6 +29,7 @@
 [ext_resource type="Script" path="res://scenes/fee_panel.gd" id="fee_panel"]
 [ext_resource type="Script" path="res://audio/game_audio.gd" id="game_audio"]
 [ext_resource type="Script" path="res://scenes/audio_panel.gd" id="audio_panel"]
+[ext_resource type="Script" path="res://scenes/confirm_dialog.gd" id="confirm_dialog"]
 [ext_resource type="Script" path="res://scenes/hud_focus.gd" id="hud_focus"]
 [ext_resource type="Script" path="res://scenes/help_overlay.gd" id="help_overlay"]
 
@@ -242,6 +243,16 @@ script = ExtResource("main_menu")
 [node name="AudioPanel" type="PanelContainer" parent="HUD"]
 visible = false
 script = ExtResource("audio_panel")
+
+[node name="ConfirmDialog" type="Control" parent="HUD"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("confirm_dialog")
 
 [node name="GameAudio" type="Node" parent="."]
 script = ExtResource("game_audio")

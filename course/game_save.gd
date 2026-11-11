@@ -17,8 +17,14 @@ extends RefCounted
 
 ## The save format's version. A new field with a default reads under the same version.
 const FORMAT_VERSION: int = 1
-## Where the game saves (one slot until E5's menus).
+## Where the game saves: the manual save (F5, the menu's Save game).
 const PATH: String = "user://save.json"
+## E8-S4: where the morning autosaves go, `AUTOSAVE_NAME` % slot (1 to the slot count) in this
+## folder, apart from the manual save, which an autosave never touches.
+const AUTOSAVE_FOLDER: String = "user://"
+const AUTOSAVE_NAME: String = "autosave_%d.json"
+const MONTHS: PackedStringArray = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
+		"Oct", "Nov", "Dec"]
 
 
 ## Everything a save holds. `money` and `rating_history` are the economy's, filled by
@@ -53,6 +59,15 @@ class State:
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
+	## E8-S4: the game this save is of (Main.save_id): a New course, New sandbox or import starts
+	## a new one and a load takes the file's. Autosaves rotate among the game's own. Empty in a
+	## save from before it (a load gives the game a new id).
+	var save_id: String = ""
+	## E8-S4: when it was written, Unix seconds (real time); 0 in a save from before it.
+	var saved_at: int = 0
+	## E8-S4: an autosave's number within its game, from 1, one up on each autosave (the newest
+	## is the highest); 0 in a manual save.
+	var autosave: int = 0
 
 
 ## Writes `state` to `path` as JSON, replacing any save there only once the new one is written
@@ -87,6 +102,12 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		data["arrivals"] = state.arrivals
 	if not state.fees_paid.is_empty():
 		data["fees_paid"] = state.fees_paid.duplicate()
+	if not state.save_id.is_empty():
+		data["save_id"] = state.save_id
+	if state.saved_at > 0:
+		data["saved_at"] = state.saved_at
+	if state.autosave > 0:
+		data["autosave"] = state.autosave
 	if not state.late_starts.is_empty():
 		var late: Array = []
 		for ls: Vector3i in state.late_starts:
@@ -181,6 +202,16 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 					errors.append("late_starts must hold [group, second, count], whole numbers 0 or more")
 					break
 				s.late_starts.append(Vector3i(int(v[0]), int(v[1]), int(v[2])))
+	# E8-S4: new fields with defaults, as `fee`.
+	if data.has("save_id"):
+		if typeof(data["save_id"]) != TYPE_STRING:
+			errors.append("save_id must be text")
+		else:
+			s.save_id = data["save_id"]
+	if data.has("saved_at"):
+		s.saved_at = CourseData.read_int(data, "saved_at", errors)
+	if data.has("autosave"):
+		s.autosave = CourseData.read_int(data, "autosave", errors)
 	# E4-S13: an E4-S11 save's "second" held the fee over the morning's ceiling; the ceiling no
 	# longer moves within a day (D59), so it is ignored.
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
@@ -204,3 +235,146 @@ static func _is_late_start(v: Variant) -> bool:
 		if (typeof(x) != TYPE_FLOAT and typeof(x) != TYPE_INT) or x != floorf(x) or x < 0:
 			return false
 	return true
+
+
+# --- E8-S4: autosaves and the Load page's list ---
+
+## One save the Load page lists: the manual save or an autosave, read whole (so one that would
+## not load is listed as unreadable, with why).
+class Entry:
+	extends RefCounted
+	var path: String = ""
+	## True for an autosave, false for the manual save.
+	var is_autosave: bool = false
+	## The save as read; null when it cannot be read.
+	var state: State
+	## Why it cannot be read (the first reason); empty when it can.
+	var error: String = ""
+	## When it was written, Unix seconds: the file's `saved_at`, else the file's own time.
+	var saved_at: int = 0
+
+	func readable() -> bool:
+		return state != null
+
+	## "Saved game: Day 5, $3,200, 11 Nov 2026 14:32", "Autosave: Day 7, ..." or
+	## "Autosave: can't be read (reason)".
+	func label() -> String:
+		var kind: String = "Autosave" if is_autosave else "Saved game"
+		if state == null:
+			return "%s: can't be read (%s)" % [kind, error]
+		var money: String = "unlimited money" if state.unlimited_money else LandPrices.money(state.money)
+		return "%s: Day %d, %s, %s" % [kind, state.day, money, GameSave.date_text(saved_at)]
+
+
+## The autosave file of `slot` (from 1) in `folder`.
+static func autosave_path(slot: int, folder: String = AUTOSAVE_FOLDER) -> String:
+	return folder.path_join(AUTOSAVE_NAME % slot)
+
+
+## Reads the save at `path` for the Load page. Null when there is no file.
+static func read_entry(path: String, is_autosave: bool) -> Entry:
+	if not FileAccess.file_exists(path):
+		return null
+	var e := Entry.new()
+	e.path = path
+	e.is_autosave = is_autosave
+	var errors: Array[String] = []
+	e.state = load_file(path, errors)
+	if e.state == null:
+		e.error = errors[0] if not errors.is_empty() else "cannot read it"
+	e.saved_at = e.state.saved_at if e.state != null and e.state.saved_at > 0 else \
+			FileAccess.get_modified_time(path)
+	return e
+
+
+## Every save the Load page lists: the manual save at `manual_path` first, when there is one, then
+## the autosaves in `folder`'s `slots` slots, newest first (unreadable ones last).
+static func list_saves(manual_path: String = PATH, folder: String = AUTOSAVE_FOLDER,
+		slots: int = 3) -> Array[Entry]:
+	var out: Array[Entry] = []
+	var manual := read_entry(manual_path, false)
+	if manual != null:
+		out.append(manual)
+	var autos: Array[Entry] = []
+	for n: int in range(1, slots + 1):
+		var e := read_entry(autosave_path(n, folder), true)
+		if e != null:
+			autos.append(e)
+	autos.sort_custom(_newer)
+	out.append_array(autos)
+	return out
+
+
+static func _newer(a: Entry, b: Entry) -> bool:
+	if a.readable() != b.readable():
+		return a.readable()
+	if a.saved_at != b.saved_at:
+		return a.saved_at > b.saved_at
+	var an: int = a.state.autosave if a.state != null else 0
+	var bn: int = b.state.autosave if b.state != null else 0
+	return an > bn
+
+
+## Writes `state` as an autosave in `folder` (E8-S4). The slots hold one game's autosaves, its
+## newest `slots`: the new one takes an empty slot, or one holding another game's or an
+## unreadable file, else this game's oldest; once it is written, any slot still holding another
+## game's autosave or an unreadable one is cleared. So a new game leaves an old game's autosaves
+## alone until it writes its own. Sets `state.autosave` to one above the game's newest. The
+## manual save is never touched. Half-placed holes go to `dropped` as save_file.
+static func autosave_file(state: State, folder: String = AUTOSAVE_FOLDER, slots: int = 3,
+		dropped: Array[int] = []) -> Error:
+	DirAccess.make_dir_recursive_absolute(folder)
+	var mine: Dictionary = {}  # slot -> its autosave number, this game's readable slots
+	var others: Array[int] = []  # slots holding another game's or an unreadable file
+	var empty: Array[int] = []
+	for n: int in range(1, slots + 1):
+		var path := autosave_path(n, folder)
+		if not FileAccess.file_exists(path):
+			empty.append(n)
+			continue
+		var head: Dictionary = _head(path)
+		if head.is_empty() or String(head.get("save_id", "")) != state.save_id or state.save_id.is_empty():
+			others.append(n)
+		else:
+			mine[n] = int(head.get("autosave", 0))
+	var newest: int = 0
+	var oldest_slot: int = -1
+	for n: int in mine:
+		newest = maxi(newest, mine[n])
+		if oldest_slot < 0 or mine[n] < mine[oldest_slot]:
+			oldest_slot = n
+	var target: int = oldest_slot
+	if not empty.is_empty():
+		target = empty[0]
+	elif not others.is_empty():
+		target = others[0]
+	state.autosave = newest + 1
+	var err := save_file(state, autosave_path(target, folder), dropped)
+	if err != OK:
+		return err
+	for n: int in others:
+		if n != target:
+			DirAccess.remove_absolute(autosave_path(n, folder))
+	return OK
+
+
+## The fields of the save at `path` the slots are kept by (save_id, autosave), without reading its
+## course; empty when it is not a readable save.
+static func _head(path: String) -> Dictionary:
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK:
+		return {}
+	var data: Variant = json.data
+	if typeof(data) != TYPE_DICTIONARY or not (data as Dictionary).has("save_version"):
+		return {}
+	var d: Dictionary = data
+	if typeof(d.get("save_id")) != TYPE_STRING or typeof(d.get("autosave")) not in [TYPE_INT, TYPE_FLOAT]:
+		return {}
+	return d
+
+
+## A real date and time, local: "11 Nov 2026 14:32".
+static func date_text(unix: int) -> String:
+	var bias: int = int(Time.get_time_zone_from_system().get("bias", 0))
+	var t: Dictionary = Time.get_datetime_dict_from_unix_time(unix + bias * 60)
+	return "%d %s %d %02d:%02d" % [t.day, MONTHS[int(t.month) - 1], t.year, t.hour, t.minute]

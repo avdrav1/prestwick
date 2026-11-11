@@ -548,11 +548,18 @@ func test_new_course_and_load_and_save_go_through_main() -> void:
 	m.main_menu.main_buttons()[1].pressed.emit()
 	assert_false(m.main_menu.visible)
 	assert_not_same(m.course, before, "New course made a new course")
+	if FileAccess.file_exists(GameSave.PATH):
+		DirAccess.remove_absolute(GameSave.PATH)
 	m.open_menu()
-	m.main_menu.main_buttons()[3].pressed.emit()
+	m.main_menu.main_buttons()[MainMenu.SAVE_INDEX].pressed.emit()
 	assert_string_starts_with(m.save_notice.label.text, "Saved day")
+	# E8-S4: Load game opens the Load page; its pick asks before it loads.
 	m.open_menu()
-	m.main_menu.main_buttons()[2].pressed.emit()
+	m.main_menu.main_buttons()[MainMenu.LOAD_INDEX].pressed.emit()
+	assert_true(m.main_menu.load_page.visible)
+	m.main_menu.load_buttons()[0].pressed.emit()
+	assert_true(m.confirm_dialog.visible)
+	m.confirm_dialog.answer(true)
 	assert_string_starts_with(m.save_notice.label.text, "Loaded day")
 	if FileAccess.file_exists(GameSave.PATH):
 		DirAccess.remove_absolute(GameSave.PATH)

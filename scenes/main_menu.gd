@@ -14,9 +14,15 @@ extends Control
 ## to drop a friend's file in), each a button labelled with its name, author, par and yardage,
 ## or with why it cannot be read; pressing one imports it (Main.import_course, which refuses a
 ## bad file with its reason and leaves the game alone).
+##
+## E8-S4: Load game opens the Load page: the manual save and each autosave (GameSave.list_saves),
+## each a button with its day, balance and real date and time, or why it cannot be read; pressing
+## one asks Main to load it (`load_requested`), which asks before it replaces the game. Save game
+## asks Main to save, which asks before it writes over the saved game.
 
 signal new_course_requested
-signal load_requested
+## E8-S4: the save picked on the Load page.
+signal load_requested(path: String)
 signal save_requested
 signal import_requested(path: String)
 signal export_requested(course_name: String, author: String)
@@ -39,6 +45,14 @@ const FOCUS_COLOR := Color(1.0, 0.84, 0.3)
 const FOCUS_WIDTH: int = 3
 ## The Sound settings button's place on the menu page (show_main's index).
 const SOUND_INDEX: int = 6
+## E8-S4: the Load game and Save game buttons' places on the menu page.
+const LOAD_INDEX: int = 2
+const SAVE_INDEX: int = 3
+
+## E8-S4: where the Load page reads the saves (Main sets them to its own).
+var save_path: String = GameSave.PATH
+var autosave_folder: String = GameSave.AUTOSAVE_FOLDER
+var autosave_slots: int = 3
 
 var main_page: VBoxContainer
 var export_page: VBoxContainer
@@ -52,6 +66,10 @@ var folder_label: Label
 var import_list: VBoxContainer
 var import_back_button: Button
 var empty_label: Label
+var load_page: VBoxContainer
+var load_list: VBoxContainer
+var load_back_button: Button
+var load_empty_label: Label
 
 var _course: CourseData
 var _main_buttons: Array[Button] = []
@@ -92,6 +110,7 @@ func _ready() -> void:
 	_build_main(pages)
 	_build_export(pages)
 	_build_import(pages)
+	_build_load(pages)
 	hide()
 
 
@@ -102,7 +121,7 @@ func _build_main(parent: Control) -> void:
 	var close_button := _button(main_page, "Back to the course", close)
 	close_button.tooltip_text = "Esc"
 	_button(main_page, "New course", func() -> void: _do(new_course_requested))
-	_button(main_page, "Load game", func() -> void: _do(load_requested))
+	_button(main_page, "Load game", show_load)
 	_button(main_page, "Save game", func() -> void: _do(save_requested))
 	_button(main_page, "Import course", show_import)
 	_button(main_page, "Export course", show_export)
@@ -174,6 +193,31 @@ func _build_import(parent: Control) -> void:
 	import_back_button = _button(row, "Back", show_main.bind(4))
 
 
+func _build_load(parent: Control) -> void:
+	load_page = VBoxContainer.new()
+	parent.add_child(load_page)
+	var head := Label.new()
+	head.text = "Load game"
+	load_page.add_child(head)
+	var note := Label.new()
+	note.text = "Your saved game, and the game as it stood each of the last mornings."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size.x = PANEL_WIDTH - 32.0
+	load_page.add_child(note)
+	load_list = VBoxContainer.new()
+	load_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	load_page.add_child(load_list)
+	load_empty_label = Label.new()
+	load_empty_label.text = "No saved games yet. F5 saves; the game saves itself each morning."
+	load_empty_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	load_empty_label.custom_minimum_size.x = PANEL_WIDTH - 48.0
+	load_list.add_child(load_empty_label)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_END
+	load_page.add_child(row)
+	load_back_button = _button(row, "Back", show_main.bind(LOAD_INDEX))
+
+
 func _button(parent: Control, text: String, action: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -213,6 +257,16 @@ func import_buttons() -> Array[Button]:
 	return out
 
 
+## E8-S4: the Load page's save buttons, in list order (the manual save, then the autosaves,
+## newest first).
+func load_buttons() -> Array[Button]:
+	var out: Array[Button] = []
+	for c: Node in load_list.get_children():
+		if c is Button:
+			out.append(c as Button)
+	return out
+
+
 ## Opens the menu on its first page for `course` (the Export page names and measures it).
 func open(course: CourseData) -> void:
 	_course = course
@@ -229,6 +283,7 @@ func show_main(index: int = 0) -> void:
 	main_page.show()
 	export_page.hide()
 	import_page.hide()
+	load_page.hide()
 	_main_buttons[clampi(index, 0, _main_buttons.size() - 1)].grab_focus()
 
 
@@ -236,6 +291,7 @@ func show_main(index: int = 0) -> void:
 func show_export() -> void:
 	main_page.hide()
 	import_page.hide()
+	load_page.hide()
 	export_page.show()
 	name_edit.text = _course.course_name if _course != null else ""
 	author_edit.text = _course.author if _course != null else ""
@@ -255,6 +311,7 @@ func refresh_export() -> void:
 func show_import() -> void:
 	main_page.hide()
 	export_page.hide()
+	load_page.hide()
 	import_page.show()
 	folder_label.text = "Course files in %s" % ProjectSettings.globalize_path(CourseExport.FOLDER)
 	for b: Button in import_buttons():
@@ -274,6 +331,29 @@ func show_import() -> void:
 		picks[0].grab_focus()
 
 
+## E8-S4: the Load page: the saves as they are on disk now, focus on the first.
+func show_load() -> void:
+	main_page.hide()
+	export_page.hide()
+	import_page.hide()
+	load_page.show()
+	for b: Button in load_buttons():
+		load_list.remove_child(b)
+		b.queue_free()
+	var entries := GameSave.list_saves(save_path, autosave_folder, autosave_slots)
+	load_empty_label.visible = entries.is_empty()
+	for e: GameSave.Entry in entries:
+		var b := _button(load_list, e.label(), _load.bind(e.path))
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		b.tooltip_text = e.label()
+	var picks := load_buttons()
+	if picks.is_empty():
+		load_back_button.grab_focus()
+	else:
+		picks[0].grab_focus()
+
+
 ## Esc before the focused control sees it: a LineEdit would take it to stop editing.
 func _input(event: InputEvent) -> void:
 	if not visible or not event.is_action_pressed(MENU_ACTION):
@@ -282,6 +362,8 @@ func _input(event: InputEvent) -> void:
 		close()
 	elif export_page.visible:
 		show_main(5)
+	elif load_page.visible:
+		show_main(LOAD_INDEX)
 	else:
 		show_main(4)
 	get_viewport().set_input_as_handled()
@@ -309,6 +391,11 @@ func _export() -> void:
 func _import(path: String) -> void:
 	close()
 	import_requested.emit(path)
+
+
+func _load(path: String) -> void:
+	close()
+	load_requested.emit(path)
 
 
 func _open_folder() -> void:

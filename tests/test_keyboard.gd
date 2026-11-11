@@ -15,6 +15,9 @@ const CUP := Vector2i(17, 10)
 const MAX_STROKES: int = 10
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 
+## E8-S4: the manual save these tests write, not the player's.
+const SAVE_PATH := "user://test_keyboard_save.json"
+
 var _m: Main
 
 
@@ -28,6 +31,12 @@ func before_each() -> void:
 	_m.camera.set_process(false)
 	_m.guest_sim.set_process(false)
 	_m.feed_panel.set_process(false)
+	_m.save_path = SAVE_PATH
+
+
+func after_each() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		DirAccess.remove_absolute(SAVE_PATH)
 
 
 # --- keys ---
@@ -455,6 +464,7 @@ func test_save_notice_closes_by_esc_and_its_ok_is_in_reach() -> void:
 	_tap(KEY_ESCAPE)
 	assert_false(_m.save_notice.visible, "Esc closes the notice")
 	_tap(KEY_F5)
+	_tap(KEY_ENTER)  # E8-S4: over the saved game F5 asks first
 	_tap(KEY_F6, true)
 	assert_eq(_focus(), _m.save_notice.ok_button, "Shift+F6 from the map reaches the notice's OK last in the round")
 	_tap(KEY_ENTER)
@@ -538,3 +548,112 @@ func test_the_main_menu_keeps_its_focus_from_f6_and_esc_goes_in_order() -> void:
 	assert_eq(_focus(), sound_focus, "nor while the sound panel is open")
 	_tap(KEY_ESCAPE)
 	assert_false(_m.audio_panel.visible)
+
+
+# --- E8-S4: the save and load questions ---
+
+func test_f5_over_a_saved_game_asks_and_esc_leaves_it() -> void:
+	_tap(KEY_F5)
+	assert_false(_m.confirm_dialog.visible, "no saved game yet: F5 saves straight away")
+	assert_true(FileAccess.file_exists(SAVE_PATH))
+	_tap(KEY_ESCAPE)
+	var saved := FileAccess.get_file_as_string(SAVE_PATH)
+	_m.build_tool.builder.paint(Vector2i(5, 5), Surface.Type.FAIRWAY, 1)
+	_tap(KEY_F5)
+	assert_true(_m.confirm_dialog.visible, "now F5 asks")
+	assert_eq(_m.confirm_dialog.label.text, "Save over your saved game from Day 1?")
+	assert_eq(_focus(), _m.confirm_dialog.yes_button, "the question has the keys, on yes")
+	# While it asks, no other key reaches the game.
+	_tap(KEY_TAB)
+	assert_eq(_m.mode, Main.Mode.BUILD, "Tab moves between the answers, not Build and Play")
+	assert_true(_m.confirm_dialog.is_ancestor_of(_focus()))
+	_tap(KEY_F6)
+	assert_false(_m.hud_focus.active, "F6 does not take the keys from it")
+	_tap(KEY_F9)
+	assert_eq(_m.confirm_dialog.label.text, "Save over your saved game from Day 1?", "nor F9")
+	_tap(KEY_ESCAPE)
+	assert_false(_m.confirm_dialog.visible, "Esc answers no")
+	assert_false(_m.main_menu.visible, "and does not open the menu with it")
+	assert_eq(FileAccess.get_file_as_string(SAVE_PATH), saved, "the saved game is as it was")
+	_tap(KEY_F5)
+	_tap(KEY_ENTER)
+	assert_false(_m.confirm_dialog.visible)
+	assert_ne(FileAccess.get_file_as_string(SAVE_PATH), saved, "Enter saves over it")
+	assert_string_starts_with(_m.save_notice.label.text, "Saved day 1")
+
+
+func test_f9_asks_before_it_replaces_the_game() -> void:
+	_tap(KEY_F5)
+	_tap(KEY_ESCAPE)
+	var c: CourseData = _m.course
+	_tap(KEY_F9)
+	assert_true(_m.confirm_dialog.visible)
+	assert_eq(_m.confirm_dialog.label.text, "Load Day 1 and lose today's progress?")
+	assert_eq(_focus(), _m.confirm_dialog.yes_button)
+	_tap(KEY_ESCAPE)
+	assert_same(_m.course, c, "Esc keeps the game in play")
+	_tap(KEY_F9)
+	_tap(KEY_RIGHT)
+	assert_eq(_focus(), _m.confirm_dialog.no_button, "the arrows move to Cancel")
+	_tap(KEY_ENTER)
+	assert_same(_m.course, c, "Enter on Cancel answers no")
+	_tap(KEY_F9)
+	_tap(KEY_ENTER)
+	assert_not_same(_m.course, c, "Enter on yes loads")
+	assert_eq(_m.save_notice.label.text, "Loaded day 1.")
+
+
+func test_the_question_comes_first_in_the_esc_order() -> void:
+	_tap(KEY_F5)  # the notice is up
+	_tap(KEY_F1)
+	assert_true(_m.help_overlay.is_open())
+	_tap(KEY_F9)
+	assert_true(_m.confirm_dialog.visible)
+	_tap(KEY_ESCAPE)
+	assert_false(_m.confirm_dialog.visible, "Esc closes the question first")
+	assert_true(_m.help_overlay.is_open(), "then the key map")
+	assert_true(_m.save_notice.visible, "and the notice are still up")
+	_tap(KEY_ESCAPE)
+	assert_false(_m.help_overlay.is_open())
+	_tap(KEY_ESCAPE)
+	assert_false(_m.save_notice.visible)
+	_tap(KEY_ESCAPE)
+	assert_true(_m.main_menu.visible, "the menu last")
+
+
+func test_the_menus_load_page_lists_the_saves_and_asks_before_loading() -> void:
+	_tap(KEY_F5)
+	_tap(KEY_ESCAPE)
+	var c: CourseData = _m.course
+	_tap(KEY_ESCAPE)
+	assert_true(_m.main_menu.visible)
+	_tap(KEY_TAB)
+	_tap(KEY_TAB)
+	assert_eq(_focus(), _m.main_menu.main_buttons()[MainMenu.LOAD_INDEX])
+	_tap(KEY_ENTER)
+	assert_true(_m.main_menu.load_page.visible, "Load game opens the Load page")
+	var picks := _m.main_menu.load_buttons()
+	assert_eq(picks.size(), 1, "the saved game (no autosave yet)")
+	assert_string_starts_with(picks[0].text, "Saved game: Day 1, ")
+	assert_eq(_focus(), picks[0])
+	_tap(KEY_ENTER)
+	assert_true(_m.confirm_dialog.visible, "picking it asks")
+	assert_eq(_focus(), _m.confirm_dialog.yes_button)
+	_tap(KEY_ESCAPE)
+	assert_true(_m.main_menu.load_page.visible, "no goes back to the Load page")
+	assert_same(_m.course, c)
+	_tap(KEY_ENTER)
+	_tap(KEY_ENTER)
+	assert_false(_m.main_menu.visible)
+	assert_not_same(_m.course, c, "yes loads it")
+	_tap(KEY_ESCAPE)  # the notice
+	_tap(KEY_ESCAPE)
+	_tap(KEY_TAB)
+	_tap(KEY_TAB)
+	_tap(KEY_TAB)
+	assert_eq(_focus(), _m.main_menu.main_buttons()[MainMenu.SAVE_INDEX])
+	_tap(KEY_ENTER)
+	assert_true(_m.confirm_dialog.visible, "Save game asks too, over the saved game")
+	_tap(KEY_ESCAPE)
+	assert_true(_m.main_menu.visible, "and no goes back to the menu")
+	assert_eq(_focus(), _m.main_menu.main_buttons()[MainMenu.SAVE_INDEX])

@@ -4,16 +4,25 @@ extends GutTest
 ## at the morning of the saved day; a corrupt file shows an error and leaves the game alone; a
 ## load lists every hole the validator closed with its reason (D35, D47); a save names the
 ## half-placed holes it leaves out (E2-S12).
+## E8-S4: a save over the saved game and a load each ask first; each morning after a dusk the game
+## writes an autosave, the newest 3 of the game kept apart from the manual save; the Load page's
+## list holds the manual save and every autosave, a broken one listed as unreadable.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const V1_SAVE := "res://tests/fixtures/save_v1_short_par4.json"
 const PATH := "user://test_save.json"
+## E8-S4: the autosaves' folder in these tests.
+const AUTO := "user://test_autosaves/"
 
 
 func after_each() -> void:
 	if FileAccess.file_exists(PATH):
 		DirAccess.remove_absolute(PATH)
+	for n: int in range(1, 6):
+		var p := GameSave.autosave_path(n, AUTO)
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(p)
 
 
 func _main() -> Main:
@@ -291,3 +300,183 @@ func test_the_keys_save_and_load() -> void:
 	for action: String in [Main.SAVE_ACTION, Main.LOAD_ACTION]:
 		assert_true(InputMap.has_action(action), action)
 	assert_true(GameSave.PATH.begins_with("user://"))
+
+
+# --- E8-S4: autosaves, the Load page's list, the questions ---
+
+## A save of game `id` on `day`, written `at` (Unix seconds).
+func _state(id: String, day: int, at: int = 1_700_000_000) -> GameSave.State:
+	var s := GameSave.State.new()
+	s.course = GuestCourse.course()
+	s.feed_data = ReactionFeed.new().to_save(day)
+	s.day = day
+	s.money = 100 * day
+	s.save_id = id
+	s.saved_at = at
+	return s
+
+
+func _auto_days() -> Array[int]:
+	var out: Array[int] = []
+	for e: GameSave.Entry in GameSave.list_saves(PATH, AUTO, 3):
+		if e.is_autosave and e.readable():
+			out.append(e.state.day)
+	return out
+
+
+func test_the_save_id_and_time_round_trip_and_an_old_save_has_none() -> void:
+	var s := _state("g1", 2, 1_762_860_000)
+	var back := GameSave.from_json(GameSave.to_json(s))
+	assert_eq(back.save_id, "g1")
+	assert_eq(back.saved_at, 1_762_860_000)
+	assert_eq(back.autosave, 0, "a manual save is no autosave")
+	var old := GameSave.load_file(V1_SAVE)
+	assert_not_null(old, "an old save.json still loads")
+	assert_eq(old.save_id, "")
+	assert_eq(old.saved_at, 0)
+
+
+func test_autosaves_keep_the_newest_three_and_never_touch_the_manual_save() -> void:
+	assert_eq(GameSave.save_file(_state("g1", 1), PATH), OK)
+	var manual := FileAccess.get_file_as_string(PATH)
+	for day: int in range(2, 7):
+		assert_eq(GameSave.autosave_file(_state("g1", day, 1_700_000_000 + day), AUTO, 3), OK)
+	assert_eq(_auto_days(), [6, 5, 4] as Array[int], "the newest three, newest first")
+	assert_false(FileAccess.file_exists(GameSave.autosave_path(4, AUTO)), "three slots, no more")
+	assert_eq(FileAccess.get_file_as_string(PATH), manual, "the manual save is as it was")
+	for n: int in range(1, 4):
+		assert_false(FileAccess.file_exists(GameSave.autosave_path(n, AUTO) + ".tmp"),
+				"each written whole, temp then rename")
+	# Written within one second, the number still tells the newest.
+	for day: int in [7, 8]:
+		GameSave.autosave_file(_state("g1", day, 1_700_000_100), AUTO, 3)
+	assert_eq(_auto_days(), [8, 7, 6] as Array[int])
+
+
+func test_a_new_course_keeps_the_old_courses_autosaves_until_it_writes_its_own() -> void:
+	for day: int in [2, 3, 4]:
+		GameSave.autosave_file(_state("old", day, 1_700_000_000 + day), AUTO, 3)
+	var m := _main()
+	m.autosave_folder = AUTO
+	m.save_path = PATH
+	m.new_course(7)
+	assert_ne(m.save_id, "old", "a New course is a new game")
+	assert_eq(_auto_days(), [4, 3, 2] as Array[int], "starting it leaves the old game's autosaves")
+	assert_eq(m.autosave(), OK)
+	var entries := GameSave.list_saves(PATH, AUTO, 3)
+	assert_eq(entries.size(), 1, "its own autosave replaces the old game's")
+	assert_eq(entries[0].state.save_id, m.save_id)
+
+
+func test_a_broken_autosave_is_listed_as_unreadable_and_leaves_the_game_alone() -> void:
+	GameSave.autosave_file(_state("g1", 2, 1_700_000_002), AUTO, 3)
+	var f := FileAccess.open(GameSave.autosave_path(2, AUTO), FileAccess.WRITE)
+	f.store_string("{\"save_version\": 1, \"course\": {")
+	f.close()
+	var entries := GameSave.list_saves(PATH, AUTO, 3)
+	assert_eq(entries.size(), 2)
+	assert_true(entries[0].readable())
+	assert_false(entries[1].readable(), "listed, after the readable ones")
+	assert_string_starts_with(entries[1].label(), "Autosave: can't be read (")
+	var m := _main()
+	m.show_course(GuestCourse.course())
+	var c: CourseData = m.course
+	m.request_load(entries[1].path)
+	assert_false(m.confirm_dialog.visible, "nothing to ask: it cannot load")
+	assert_same(m.course, c, "the game is left alone")
+	assert_string_ends_with(m.save_notice.label.text, "Your game is unchanged.")
+	# The next autosave takes the broken slot.
+	m.save_id = "g1"
+	m.autosave_folder = AUTO
+	m.autosave()
+	for e: GameSave.Entry in GameSave.list_saves(PATH, AUTO, 3):
+		assert_true(e.readable())
+
+
+func test_the_load_list_gives_each_saves_day_balance_and_date() -> void:
+	GameSave.save_file(_state("g1", 5, 1_762_860_000), PATH)
+	GameSave.autosave_file(_state("g1", 7, 1_762_870_000), AUTO, 3)
+	var sandbox := _state("g1", 8, 1_762_880_000)
+	sandbox.unlimited_money = true
+	GameSave.autosave_file(sandbox, AUTO, 3)
+	var labels: Array[String] = []
+	for e: GameSave.Entry in GameSave.list_saves(PATH, AUTO, 3):
+		labels.append(e.label())
+	assert_eq(labels, [
+		"Saved game: Day 5, $500, %s" % GameSave.date_text(1_762_860_000),
+		"Autosave: Day 8, unlimited money, %s" % GameSave.date_text(1_762_880_000),
+		"Autosave: Day 7, $700, %s" % GameSave.date_text(1_762_870_000),
+	] as Array[String], "the manual save first, then the autosaves, newest first")
+	var re := RegEx.create_from_string("^\\d{1,2} [A-Z][a-z]{2} \\d{4} \\d{2}:\\d{2}$")
+	assert_not_null(re.search(GameSave.date_text(1_762_860_000)), "a real date and time: %s" %
+			GameSave.date_text(1_762_860_000))
+
+
+func test_each_morning_after_a_dusk_autosaves_without_changing_the_day_and_loads_as_any_save() -> void:
+	var m := _main()
+	m.autosaves = true
+	m.autosave_folder = AUTO
+	m.save_path = PATH
+	m.land_seed = 5
+	var c := GuestCourse.course()
+	c.set_land_budget(5000)
+	m.show_course(c)
+	m.guest_sim.advance(0.0)
+	assert_eq(_auto_days(), [] as Array[int], "day 1's own morning writes none")
+	m.guest_sim.brain.run_day()
+	m.guest_sim.advance(0.0)  # dusk: upkeep, then day 2's morning
+	assert_eq(m.guest_sim.day, 2)
+	assert_eq(m.guest_sim.brain.second, 0, "the autosave left the day at its morning")
+	assert_false(m.guest_sim.brain.day_over)
+	assert_eq(_auto_days(), [2] as Array[int], "day 2's morning wrote one")
+	var entry: GameSave.Entry = GameSave.list_saves(PATH, AUTO, 3)[0]
+	assert_eq(entry.state.money, m.build_tool.builder.balance(), "after day 1's accounting")
+	assert_eq(entry.state.rating_history, m.rating_history, "day 1's rating included")
+	assert_eq(entry.state.save_id, m.save_id)
+	assert_false(FileAccess.file_exists(PATH), "the manual save is not written")
+	# Day 2 run through, then the autosave loaded in a fresh game and day 2 replayed.
+	m.guest_sim.brain.run_day()
+	m.guest_sim.advance(0.0)
+	var lines := _texts(m.guest_sim.feed)
+	var balance: int = m.build_tool.builder.balance()
+	var history := m.rating_history.duplicate()
+	var n := _main()
+	assert_true(n.load_game(entry.path))
+	assert_eq(n.save_id, m.save_id, "the loaded game is the same game")
+	assert_eq(n.guest_sim.morning_day(), 2)
+	n.guest_sim.advance(0.0)
+	n.guest_sim.brain.run_day()
+	n.guest_sim.advance(0.0)
+	assert_eq(_texts(n.guest_sim.feed), lines, "the replayed day gives the same lines")
+	assert_eq(n.build_tool.builder.balance(), balance, "and ends on the same balance")
+	assert_eq(n.rating_history, history, "and the same rating history")
+
+
+func test_a_save_over_the_saved_game_and_a_load_ask_first() -> void:
+	var m := _main()
+	m.save_path = PATH
+	m.show_course(GuestCourse.course())
+	m.request_save()
+	assert_false(m.confirm_dialog.visible, "no saved game: it saves straight away")
+	assert_string_starts_with(m.save_notice.label.text, "Saved day 1")
+	var first := FileAccess.get_file_as_string(PATH)
+	m.guest_sim.advance(0.0)
+	m.guest_sim.brain.run_day()
+	m.guest_sim.advance(0.0)
+	m.request_save()
+	assert_true(m.confirm_dialog.visible)
+	assert_eq(m.confirm_dialog.label.text, "Save over your saved game from Day 1?")
+	m.confirm_dialog.answer(false)
+	assert_eq(FileAccess.get_file_as_string(PATH), first, "no leaves the saved game")
+	m.request_save()
+	m.confirm_dialog.answer(true)
+	assert_eq(GameSave.load_file(PATH).day, 2, "yes saves over it")
+	var c: CourseData = m.course
+	m.request_load()
+	assert_eq(m.confirm_dialog.label.text, "Load Day 2 and lose today's progress?")
+	m.confirm_dialog.answer(false)
+	assert_same(m.course, c, "no leaves the game")
+	m.request_load()
+	m.confirm_dialog.answer(true)
+	assert_not_same(m.course, c, "yes loads")
+	assert_eq(m.save_notice.label.text, "Loaded day 2.")
