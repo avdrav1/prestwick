@@ -36,8 +36,10 @@ extends Control
 ## corner shows the frame. The turn holds while the putt rolls and is taken again at the next
 ## rest (`turn_for`). The mouse maps back through the same turn (to_yards).
 ##
-## Drawn in code with art/palette.gpl colours until the final art (E5-S3). Numbers in
-## scenes/green_view_tuning.tres.
+## Drawn in code with art/palette.gpl colours, except the cup, the pin and the ball, which are
+## the course's sprites (E7-S2, D62: the hole marker sheet's cup drawn round, the pin waving
+## with the course's, BallArt's player ball), at sprite_scale and upright whatever the turn.
+## Numbers in scenes/green_view_tuning.tres.
 
 const TOGGLE_ACTION: StringName = &"toggle_green_view"
 
@@ -46,7 +48,6 @@ const INK := Color8(26, 28, 34)
 const SLATE_DARK := Color8(58, 60, 70)
 const CHALK := Color8(240, 236, 224)
 const SUN_YELLOW := Color8(240, 200, 58)
-const FLAG_RED := Color8(216, 58, 58)
 ## Per surface (Surface.Type order): base, pattern colour.
 const SURFACE_COLORS: Array = [
 	[Color8(111, 174, 74), Color8(86, 150, 60)],  # fairway, fairway_dark
@@ -636,16 +637,11 @@ func _draw_overlay() -> void:
 	var ci := _overlay
 	# The overlay draws in panel points (to_panel): the content starts at the panel's _origin.
 	ci.draw_set_transform(-_origin())
-	var cup: Variant = cup_point()
-	if cup != null:
-		var at := to_panel(cup as Vector2)
-		var r := maxf(tuning.cup_radius_px, control.model.params.cup_radius / _yards_per_tile() * tile_px)
-		ci.draw_circle(at, r + 1.5, CHALK)
-		ci.draw_circle(at, r, INK)
-		# The pin's flag, so the cup reads at a glance.
-		ci.draw_line(at, at + Vector2(0, -r * 3.2), CHALK, 2.0)
-		ci.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -r * 3.2),
-				at + Vector2(r * 2.2, -r * 2.6), at + Vector2(0, -r * 2.0)]), FLAG_RED)
+	# E7-S2 (D62): the cup, the pin and the ball are the course's sprites, upright (unturned).
+	if cup_point() != null:
+		var cup: Array = HoleMarker.SHEET_FRAMES[&"cup"]
+		ci.draw_texture_rect_region(HoleMarker.sheet_texture(), cup_rect(), cup[0])
+		ci.draw_texture_rect(pin_texture(), pin_rect(), false)
 	var dr := tuning.dot_radius_px
 	for d: Vector2 in dot_points():
 		ci.draw_circle(d, dr + 1.0, INK)
@@ -653,9 +649,44 @@ func _draw_overlay() -> void:
 	var mp: Variant = marker_panel()
 	if mp != null and not control.is_ball_moving():
 		_draw_marker(ci, mp as Vector2)
-	var ball := ball_panel()
-	ci.draw_circle(ball, tuning.ball_radius_px + 1.5, INK)
-	ci.draw_circle(ball, tuning.ball_radius_px, CHALK)
+	var br := ball_rect()
+	BallArt.draw(ci, br.get_center(), br.size.x * 0.5, false, false)
+
+
+## The cup's rect in the panel (E7-S2): the marker sheet's 2:1 cup frame drawn round, as seen
+## from above, centred on the cup; its hole (the frame's inner 10 of 12 px) never smaller than
+## the real cup at the panel's scale nor cup_radius_px. Empty with no cup.
+func cup_rect() -> Rect2:
+	var cup: Variant = cup_point()
+	if cup == null:
+		return Rect2()
+	var w: float = (HoleMarker.SHEET_FRAMES[&"cup"][0] as Rect2).size.x
+	var r := maxf(tuning.cup_radius_px, control.model.params.cup_radius / _yards_per_tile() * tile_px)
+	var d := maxf(w * tuning.sprite_scale, 2.0 * r * w / (w - 2.0))
+	return Rect2(to_panel(cup as Vector2) - Vector2.ONE * d * 0.5, Vector2.ONE * d)
+
+
+## The pin's rect in the panel (E7-S2): the course's pin (HoleMarker's pole and waving pennant)
+## at sprite_scale, its foot on the cup, upright whatever the panel's turn. Empty with no cup.
+func pin_rect() -> Rect2:
+	var cup: Variant = cup_point()
+	if cup == null:
+		return Rect2()
+	var pin: Array = HoleMarker.SHEET_FRAMES[&"pin_0"]
+	var k := tuning.sprite_scale
+	return Rect2(to_panel(cup as Vector2) - (pin[1] as Vector2) * k, (pin[0] as Rect2).size * k)
+
+
+## The pin's texture: the one every pin on the course draws, so it waves with them (E7-S1).
+func pin_texture() -> Texture2D:
+	return HoleMarker.pennant_texture()
+
+
+## The ball's rect in the panel (E7-S2): the player's ball frame (BallArt, 8 px) at
+## sprite_scale, never under ball_radius_px, centred on the ball.
+func ball_rect() -> Rect2:
+	var d := maxf(2.0 * tuning.ball_radius_px, 8.0 * tuning.sprite_scale)
+	return Rect2(ball_panel() - Vector2.ONE * d * 0.5, Vector2.ONE * d)
 
 
 ## The putter's marker as the AimView draws it, round (top-down): a sun_yellow ring on an ink

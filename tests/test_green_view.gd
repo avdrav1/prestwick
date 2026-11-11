@@ -507,3 +507,31 @@ func test_the_ball_in_the_panel_follows_the_putt_each_frame() -> void:
 	assert_gt(frames, 30, "the roll took frames")
 	assert_gt(moved, gv.tile_px * 2.0, "and the drawn ball crossed the panel")
 	assert_eq(gv.dot_points().size(), 0, "no aim line while it rolls")
+
+
+func test_the_pin_cup_and_ball_are_the_sprite_art_upright() -> void:
+	# E7-S2 (D62): the inset draws the hole marker sheet's cup, the course's waving pin and the
+	# player's ball frame at its sprite scale, upright whatever its turn.
+	var m := _main("contoured")
+	var gv := m.green_view
+	var made := GreenViewShot.course("contoured")
+	_rest(m, made.ball, made.cup)
+	assert_true(gv.is_open)
+	var k: float = gv.tuning.sprite_scale
+	assert_eq(k, roundf(k), "a whole-pixel scale, so the pixel art stays crisp")
+	assert_same(gv.pin_texture(), HoleMarker.pennant_texture(), "the course's pin, waving with it")
+	for radians: float in [gv.turn, gv.turn + 1.0]:
+		gv.turn_to(radians)
+		var cup := gv.to_panel(gv.cup_point() as Vector2)
+		var cr: Rect2 = gv.cup_rect()
+		assert_almost_eq(cr.get_center().distance_to(cup), 0.0, 0.001, "the cup on the cup")
+		assert_eq(cr.size.x, cr.size.y, "the cup seen from above: its 2:1 frame drawn round")
+		assert_gte(cr.size.x, (HoleMarker.SHEET_FRAMES[&"cup"][0] as Rect2).size.x * k)
+		var pin: Array = HoleMarker.SHEET_FRAMES[&"pin_0"]
+		var pr: Rect2 = gv.pin_rect()
+		assert_eq(pr.size, (pin[0] as Rect2).size * k, "the pin at the sprite scale, unturned")
+		assert_almost_eq((pr.position + (pin[1] as Vector2) * k).distance_to(cup), 0.0, 0.001,
+				"the pole's foot in the cup")
+		var br: Rect2 = gv.ball_rect()
+		assert_almost_eq(br.get_center().distance_to(gv.ball_panel()), 0.0, 0.001, "the ball on the ball")
+		assert_eq(br.size, Vector2.ONE * maxf(2.0 * gv.tuning.ball_radius_px, 8.0 * k), "the ball frame's size")

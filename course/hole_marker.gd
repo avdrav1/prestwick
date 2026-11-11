@@ -253,6 +253,11 @@ func _draw_frame(frame: StringName, foot: Vector2) -> void:
 static var _texture: Texture2D
 
 
+## The marker sheet (art/sprites/hole_markers.png), loaded once; GreenView draws its cup too.
+static func sheet_texture() -> Texture2D:
+	return _sheet_texture()
+
+
 static func _sheet_texture() -> Texture2D:
 	if _texture == null:
 		_texture = load(SHEET_PATH) as Texture2D

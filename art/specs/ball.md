@@ -35,8 +35,8 @@ shrinks and moves away as the ball climbs).
 
 ## Code that reads it
 
-`scenes/shot_view.gd` (player), `scenes/guest_view.gd` (guests) once E5-S3 swaps the circles
-for the sheet. The minimum on-screen size (3 px radius) holds: below 1x the frame is drawn at a
+`scenes/shot_view.gd` (player), `scenes/guest_view.gd` (guests), and `scenes/green_view.gd`
+(the player's ball in the overhead green inset, at its `sprite_scale`, E7-S2). The minimum on-screen size (3 px radius) holds: below 1x the frame is drawn at a
 scale that keeps it 8 px on screen.
 
 ## Changing it (scripts/art_sprites.py, D62)

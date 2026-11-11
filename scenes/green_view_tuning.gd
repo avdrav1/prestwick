@@ -46,8 +46,13 @@ const PATH: String = "res://scenes/green_view_tuning.tres"
 @export var arrow_steep_fall: float = 2.0
 @export var arrow_length: float = 0.6
 @export var arrow_width: float = 2.0
-## Drawn sizes, screen px: the ball, the cup (at least; never smaller than the real cup at
-## the panel's scale), the putter's marker ring and the putt line's dots.
+## E7-S2: the sprites (cup, pin, ball) drawn at this whole-number times their sheet size, so
+## the pixel art stays crisp. A tile is 24 to 40 px here against 36 px along a tile's edge at
+## the course's 1x, so 1 matches the course art's 1x.
+@export var sprite_scale: float = 1.0
+## Drawn sizes, screen px (at least, for the sprites): the ball's radius to its outline's
+## outer edge, the cup's hole (never smaller than the real cup at the panel's scale), the
+## putter's marker ring and the putt line's dots.
 @export var ball_radius_px: float = 4.0
 @export var cup_radius_px: float = 5.0
 @export var marker_radius_px: float = 8.0

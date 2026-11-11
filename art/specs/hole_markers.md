@@ -6,7 +6,8 @@
 > anchor. The pennant waves (E7-S1): `pin_0`, `pin_1`, `pin_2`, `pin_1`, round again, each frame
 > `pennant_frame_s` (`course/builder_tuning.tres`); every pin draws one shared texture
 > (`HoleMarker.pennant_texture`) whose pixels CourseView's clock swaps, so no pin redraws. The
-> overhead green inset (`scenes/green_view.gd`) keeps its code drawing.
+> overhead green inset (`scenes/green_view.gd`, E7-S2) draws the same pin (waving with the
+> course's) and the `cup` frame drawn round (seen from above), at its `sprite_scale`, upright.
 
 ## Purpose
 
@@ -42,8 +43,8 @@ pole stays 30 px tall at 1x.
 
 ## Code that reads it
 
-`course/hole_marker.gd` (`_draw`), `scenes/green_view.gd` (the overhead green inset draws its
-own pin and cup; it keeps code drawing unless E5-S3 says otherwise).
+`course/hole_marker.gd` (`_draw`), `scenes/green_view.gd` (the overhead green inset: `cup_rect`,
+`pin_rect`, E7-S2).
 
 ## Changing it (scripts/art_sprites.py, D62)
 
