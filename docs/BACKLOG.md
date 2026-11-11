@@ -1312,6 +1312,27 @@ Done when: 0.6.0-rc2 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc2 (tag `v0.6.0-rc2`): tests 1173/1173, playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. Published as a GitHub pre-release with both builds, the example course and how-to-play, and the download page (gh-pages) points at it.
 
+## E8: Playtest fixes — active
+
+Fixes from playing the 0.6.0 release candidates, shipped as the next rc. Runs alongside E5's people-only stories.
+
+Done when: the next 0.6.0 release candidate is cut with every story below checked.
+
+- [ ] E8-S1 Open a hole the moment it passes every rule. A finished hole is in play (pillar 1).
+  - Note: (found by the user in rc2, 2026-11-11) the user built a legal hole and saw no guests: it sat closed because Open is a manual step. Pillar 1 says every hole is playable the moment you place it, and SimGolf puts a hole in play once it has a tee and pin. The user chose auto-open (D64).
+  - Accept: a hole that becomes legal opens itself and shows one short notice ("Hole 1 is open: guests will play it"); Close still works, and a hole closed by hand stays closed until reopened by hand; an edit that breaks an open hole closes it as today, and it reopens itself once fixed unless the player had closed it by hand; loading a course or save keeps each hole's state and its by-hand flag (format note in the Done note); undo restores both.
+  - Test: `tests/test_builder_holes.gd`; screenshot of the notice.
+  - Touches: `course/`, `scenes/`, `tests/`
+- [ ] E8-S2 Send the day's guests when the first hole opens. No waiting for tomorrow.
+  - Note: (found with E8-S1) groups arrive only in the first `arrival_window_s` (90 s) of a day and go home at once if no hole is open, so a first hole opened mid-morning gets nobody until the next day. The user chose: if the day's arrivals went home to a closed course, they start arriving when the first hole opens (D64).
+  - Accept: on a day whose groups were turned away, opening the first hole sends the day's arrival count out over the next `arrival_window_s` from that moment (fewer if dusk is near, by the same finish rule as a normal day), and the morning line counts them; skip to morning and save/load replays still match an uninterrupted day (E4-S3, E4-S7, E4-S11).
+  - Test: `tests/test_guest_brain.gd`, `tests/test_day_clock.gd`.
+  - Touches: `guests/`, `scenes/`, `tests/`
+- [ ] E8-S3 Cut the next release candidate. Testers get the fixes.
+  - Accept: `/ship-it` as for 0.6.0-rc2 (E7-S6), tag, GitHub pre-release with the builds, the download page pointed at it.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
