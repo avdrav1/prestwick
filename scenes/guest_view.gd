@@ -53,6 +53,10 @@ extends Node2D
 ## the ball at its height with a shadow under it in flight, on the drawn ground (D50) on the ground. Off screen there is no replay: the ball
 ## shows again where it rests. A ball at rest shows where it lies until the hole is finished.
 
+## Skip to morning (E7-S4): while the sim skips, the day jumps many seconds a frame, so there
+## is nothing to animate; the figures are taken off the course (the speed panel's line shows
+## the day going by) and drawn again from the brain when the skip ends or is stopped.
+
 ## Ball look: ShotView's placeholder (art/palette.gpl chalk, ink), until E5-S3's sprite, drawn
 ## at GuestViewTuning.ball_scale of the player's ball so a guest's ball is never mistaken for it.
 @export var ball_color: Color = Color8(240, 236, 224)
@@ -158,6 +162,9 @@ func figure(guest: Guest) -> Figure:
 
 ## Brings the drawing up to the sim after `delta` real seconds at `speed` (0 paused).
 func update_view(delta: float, speed: float) -> void:
+	if sim != null and sim.skipping:
+		clear()
+		return
 	var brain: GuestBrain = sim.brain if sim != null else null
 	if brain != _brain:
 		clear()

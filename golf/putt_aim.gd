@@ -159,11 +159,13 @@ func advance(max_ticks: int, max_usec: int = -1, until_answer: bool = false) -> 
 	var out_of_time := false
 	while not done and not out_of_time and (max_ticks < 0 or used < max_ticks) \
 			and not (until_answer and prediction != null):
-		while not _ball.is_at_rest() and (max_ticks < 0 or used < max_ticks):
+		if deadline < 0:
+			# E7-S4: no clock to read, so the roll runs in one call (Ball.run).
+			used += _ball.run(max_ticks - used if max_ticks >= 0 else -1)
+		while deadline >= 0 and not _ball.is_at_rest() and (max_ticks < 0 or used < max_ticks):
 			_ball.step()
 			used += 1
-			if deadline >= 0 and used % _TIME_CHECK_TICKS == 0 \
-					and Time.get_ticks_usec() >= deadline:
+			if used % _TIME_CHECK_TICKS == 0 and Time.get_ticks_usec() >= deadline:
 				out_of_time = true
 				break
 		if not _ball.is_at_rest():

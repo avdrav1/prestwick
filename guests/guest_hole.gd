@@ -210,10 +210,7 @@ func advance(max_ticks: int, flight_ticks: int = -1) -> int:
 			var cap := left
 			if flight_ticks >= 0:
 				cap = flight_ticks if cap < 0 else mini(cap, flight_ticks)
-			var n := 0
-			while not ball.is_at_rest() and (cap < 0 or n < cap):
-				ball.step()
-				n += 1
+			var n := ball.run(cap)
 			used += n
 			ball_ticks += n
 			strokes[-1].ball_ticks += n

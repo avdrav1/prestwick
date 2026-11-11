@@ -145,9 +145,7 @@ func advance(max_ticks: int) -> int:
 			continue
 		if _ball == null:
 			_launch()
-		while not _ball.is_at_rest() and (max_ticks < 0 or used < max_ticks):
-			_ball.step()
-			used += 1
+		used += _ball.run(max_ticks - used if max_ticks >= 0 else -1)
 		if not _ball.is_at_rest():
 			break
 		var p := ShotPrediction.of_ball(_ball, _shot.start)

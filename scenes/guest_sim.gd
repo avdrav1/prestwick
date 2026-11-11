@@ -14,7 +14,7 @@ extends Node
 ## day's brain still `brain` while it runs: the one hook a day's end settles through (E4-S4's
 ## upkeep attaches here). Then the next morning starts at once (`day_started`), with the next
 ## day's seed. Skip to morning (`skip_to_morning`) runs the rest of the day over frames, as
-## fast as `skip_frame_ticks` and `skip_steps_per_frame` allow (GuestBrain.advance_skip), the
+## fast as `skip_frame_ms` and `skip_steps_per_frame` allow (GuestBrain.advance_skip), the
 ## same steps as at any speed, so the end-of-day state is the same; the speed is kept, so a
 ## skip from pause lands on the morning paused, and choosing a speed stops a skip where it is.
 ##
@@ -127,6 +127,30 @@ func _ready() -> void:
 	_ensure_feed()
 
 
+## E7-S4: while a skip runs, the next batch of the day's Ball work runs on the pool's threads
+## as the frame is drawn (GuestBrain.serve_ahead), when no script runs, and is counted once the
+## drawing is done (settle), so the threads are not idle while the frame waits for the screen.
+func _enter_tree() -> void:
+	RenderingServer.frame_pre_draw.connect(_on_frame_pre_draw)
+	RenderingServer.frame_post_draw.connect(_settle)
+
+
+func _exit_tree() -> void:
+	RenderingServer.frame_pre_draw.disconnect(_on_frame_pre_draw)
+	RenderingServer.frame_post_draw.disconnect(_settle)
+	_settle()
+
+
+func _on_frame_pre_draw() -> void:
+	if skipping and brain != null and is_processing():
+		brain.serve_ahead()
+
+
+func _settle() -> void:
+	if brain != null:
+		brain.settle()
+
+
 func _ensure_feed() -> void:
 	if tuning == null:
 		tuning = GuestTuning.load_default()
@@ -213,6 +237,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_ensure_feed()
 	course = c
 	base_seed = p_base_seed
+	_settle()
 	brain = null
 	day = 0
 	_set_skipping(false)
@@ -228,6 +253,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 ## from its own seed, as if the days before it had run. Guests out at the save are not kept.
 ## E4-S11: `arrivals` are the guests day `d`'s morning drew (morning_arrivals; -1: draw them).
 func resume_at(d: int, arrivals: int = -1) -> void:
+	_settle()
 	brain = null
 	_set_skipping(false)
 	_first_day = maxi(d, 1)
@@ -356,12 +382,14 @@ func skip_to_morning() -> void:
 	_set_skipping(true)
 
 
-## One frame of a skip: up to `skip_frame_ticks` of Ball work and `skip_steps_per_frame`
-## seconds; at dusk the day ends and the skip stops on the next morning. Returns the steps.
+## One frame of a skip: whole seconds until `skip_frame_ms` of real time has gone, at most
+## `skip_steps_per_frame` (E7-S4); at dusk the day ends and the skip stops on the next morning.
+## Returns the steps.
 func skip_frame() -> int:
 	if not skipping or not _ready_day():
 		return 0
-	var stepped := brain.advance_skip(tuning.skip_frame_ticks, tuning.skip_steps_per_frame)
+	var stepped := brain.advance_skip(tuning.skip_steps_per_frame,
+			roundi(tuning.skip_frame_ms * 1000.0))
 	if brain.day_over:
 		_end_day()
 		_set_skipping(false)
@@ -369,6 +397,7 @@ func skip_frame() -> int:
 
 
 func _set_skipping(on: bool) -> void:
+	_settle()
 	if skipping == on:
 		return
 	skipping = on

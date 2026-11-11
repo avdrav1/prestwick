@@ -103,11 +103,12 @@ var frame_guest_ms_max: float = 0.0
 ## the frame budget reads it; a second's ticks (guest_ticks_per_s, sim_ticks_per_s) count
 ## every tick as 1, so the day is the same.
 var putt_tick_weight: float = 1.0
-## E4-S3: skip to morning runs the rest of the day over frames (GuestBrain.advance_skip), each
-## serving at most `skip_frame_ticks` Ball ticks (putt ticks counted at `putt_tick_weight`) and
-## stepping at most `skip_steps_per_frame` seconds, so the HUD and the views stay live while
-## it runs (a busy day's Ball work at once is about 11 s, headless, on PlaytestNine).
-var skip_frame_ticks: int = 0
+## E4-S3: skip to morning runs the rest of the day over frames (GuestBrain.advance_skip), so
+## the HUD stays live while it runs. E7-S4: a skip frame runs whole seconds, each served at
+## once on several threads, until `skip_frame_ms` of real time has gone (at least one second a
+## frame), and at most `skip_steps_per_frame` of them (was `skip_frame_ticks` 1,000 Ball ticks
+## and 60 seconds a frame: a busy day on PlaytestNine took 11 to 15 s).
+var skip_frame_ms: float = 0.0
 var skip_steps_per_frame: int = 0
 ## PuttAim's putt_aim_max_runs for guests (the player keeps golf/swing_tuning.tres's).
 var guest_putt_max_runs: int = 0
@@ -209,7 +210,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.frame_guest_ms_max = _float(d, "frame_guest_ms_max", errors)
 	t.guest_putt_max_runs = CourseData.read_int(d, "guest_putt_max_runs", errors)
 	t.putt_tick_weight = _float(d, "putt_tick_weight", errors)
-	t.skip_frame_ticks = CourseData.read_int(d, "skip_frame_ticks", errors)
+	t.skip_frame_ms = _float(d, "skip_frame_ms", errors)
 	t.skip_steps_per_frame = CourseData.read_int(d, "skip_steps_per_frame", errors)
 	t.patience_min = CourseData.read_int(d, "patience_min", errors)
 	t.patience_max = CourseData.read_int(d, "patience_max", errors)
@@ -326,8 +327,8 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "frame_ticks_per_real_s", t.frame_ticks_per_real_s, 1)
 	_positive(errors, "frame_guest_ms_max", t.frame_guest_ms_max)
 	_at_least(errors, "putt_tick_weight", t.putt_tick_weight, 1.0, " (a putt tick costs no less than another)")
-	# E4-S3: a skip frame can serve one putt tick and run one second, so a skip always ends.
-	_at_least(errors, "skip_frame_ticks", t.skip_frame_ticks, ceili(t.putt_tick_weight), " (one putt tick)")
+	# E4-S3, E7-S4: a skip frame runs at least one second, so a skip always ends.
+	_positive(errors, "skip_frame_ms", t.skip_frame_ms)
 	_at_least(errors, "skip_steps_per_frame", t.skip_steps_per_frame, 1)
 	if t.praise_passes < 1 or t.praise_passes > 4:
 		errors.append("praise_passes (%s) must be 1 to 4 (the four checks)" % t.praise_passes)

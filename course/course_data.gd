@@ -239,6 +239,17 @@ func is_parcel_owned(p: Vector2i) -> bool:
 	return _owned[_parcel_index(p)] != 0
 
 
+## E7-S4: the packed tiles (height << 4 | surface, row by row) and the owned flags (one byte a
+## parcel, row by row), for HeightField's reads. Read only: a copy on write, so a write here
+## leaves the caller's copy as it was (HeightField takes them again when `revision` moves).
+func packed_tiles() -> PackedByteArray:
+	return _tiles
+
+
+func packed_owned() -> PackedByteArray:
+	return _owned
+
+
 ## True when tile (x, y) is on an owned parcel. Off-map tiles are never owned.
 @warning_ignore("integer_division")
 func is_owned(x: int, y: int) -> bool:

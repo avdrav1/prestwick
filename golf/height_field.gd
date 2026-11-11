@@ -11,11 +11,37 @@ var course: CourseData
 var yards_per_tile: float
 var yards_per_step: float
 
+## E7-S4: the course's packed tiles and owned flags (CourseData.packed_tiles, packed_owned) as
+## of its `revision` `_rev`, read straight by height_at, gradient_at and the surface reads: a
+## Ball tick makes dozens of them, and before they cost a GDScript call per tile read
+## (CourseData.get_height, is_owned, get_surface) and per axis. Every read first checks the
+## revision, so a write by the builder is seen at the next read, as before. The answers are
+## the same bit for bit: the same lerps in the same order, each axis's blend rounded to a
+## 32-bit float as _axis's Vector4 rounds it.
+var _rev: int = -1
+var _tiles: PackedByteArray
+var _owned: PackedByteArray
+var _w: int = 0
+var _h: int = 0
+## Parcels along a row (CourseData.parcels_wide), for the owned flags' index.
+var _pw: int = 0
+
 
 func _init(p_course: CourseData, params: BallParams) -> void:
 	course = p_course
 	yards_per_tile = params.yards_per_tile
 	yards_per_step = params.yards_per_step
+
+
+## Takes the course's packed arrays again (it was written since they were taken).
+@warning_ignore("integer_division")
+func _sync() -> void:
+	_rev = course.revision
+	_tiles = course.packed_tiles()
+	_owned = course.packed_owned()
+	_w = course.width
+	_h = course.height
+	_pw = (_w + CourseData.PARCEL_TILES - 1) / CourseData.PARCEL_TILES
 
 
 ## Tile holding the ground point (x, y) in yards.
@@ -59,14 +85,24 @@ func ground_screen(p: Vector3) -> Vector2:
 ## whatever is painted on it, though its heights still shape the ground (height_at). On a
 ## fully owned course (New sandbox, every version 1 file) it is the tile's own surface.
 func surface_at(x: float, y: float) -> Surface.Type:
-	return surface_of(tile_at(x, y))
+	return _surface(floori(x / yards_per_tile), floori(y / yards_per_tile))
 
 
 ## Surface the ball plays on `tile`, as surface_at.
 func surface_of(tile: Vector2i) -> Surface.Type:
-	if not course.is_owned(tile.x, tile.y):
+	return _surface(tile.x, tile.y)
+
+
+## CourseData.is_owned and get_surface on the packed arrays (E7-S4).
+@warning_ignore("integer_division")
+func _surface(tx: int, ty: int) -> Surface.Type:
+	if course.revision != _rev:
+		_sync()
+	if tx < 0 or ty < 0 or tx >= _w or ty >= _h:
 		return Surface.Type.OOB
-	return course.get_surface(tile.x, tile.y)
+	if _owned[(ty / CourseData.PARCEL_TILES) * _pw + tx / CourseData.PARCEL_TILES] == 0:
+		return Surface.Type.OOB
+	return (_tiles[ty * _w + tx] & 0x0F) as Surface.Type
 
 
 ## Surface painted under (x, y), owned or not (off the map is Surface.Type.OOB). Only the
@@ -74,32 +110,124 @@ func surface_of(tile: Vector2i) -> Surface.Type:
 ## still stop a flight, as trees past the white stakes do, and are drawn there, so the shot
 ## reads as it plays. Touchdown, roll, rest and the drop read surface_at.
 func painted_surface_at(x: float, y: float) -> Surface.Type:
-	var t := tile_at(x, y)
-	return course.get_surface(t.x, t.y)
+	if course.revision != _rev:
+		_sync()
+	var tx := floori(x / yards_per_tile)
+	var ty := floori(y / yards_per_tile)
+	if tx < 0 or ty < 0 or tx >= _w or ty >= _h:
+		return Surface.Type.OOB
+	return (_tiles[ty * _w + tx] & 0x0F) as Surface.Type
 
 
 ## Ground height in yards at (x, y).
+## E7-S4: `_axis` and CourseData.get_height spelled out on the packed tiles (_sync); the
+## indices are clamped onto the map, so no read is off it.
 func height_at(x: float, y: float) -> float:
-	var ax := _axis(x, course.width)
-	var ay := _axis(y, course.height)
-	var h00 := course.get_height(int(ax.x), int(ay.x))
-	var h10 := course.get_height(int(ax.y), int(ay.x))
-	var h01 := course.get_height(int(ax.x), int(ay.y))
-	var h11 := course.get_height(int(ax.y), int(ay.y))
-	var top := lerpf(h00, h10, ax.z)
-	var bottom := lerpf(h01, h11, ax.z)
-	return lerpf(top, bottom, ay.z) * yards_per_step
+	if course.revision != _rev:
+		_sync()
+	if _w == 0 or _h == 0:
+		return 0.0
+	# _axis, x then y: the low and high tile and the blend, rounded to 32 bits as Vector4 holds it.
+	var ux := x / yards_per_tile - 0.5
+	var x0 := 0
+	var x1 := 0
+	var bx := 0.0
+	if ux <= 0.0 or _w < 2:
+		pass
+	elif ux >= _w - 1:
+		x0 = _w - 1
+		x1 = x0
+	else:
+		x0 = floori(ux)
+		x1 = x0 + 1
+		bx = Vector2(ux - x0, 0.0).x
+	var uy := y / yards_per_tile - 0.5
+	var r0 := 0
+	var r1 := 0
+	var by := 0.0
+	if uy <= 0.0 or _h < 2:
+		pass
+	elif uy >= _h - 1:
+		r0 = (_h - 1) * _w
+		r1 = r0
+	else:
+		var y0 := floori(uy)
+		r0 = y0 * _w
+		r1 = r0 + _w
+		by = Vector2(uy - y0, 0.0).x
+	var top := lerpf(_tiles[r0 + x0] >> 4, _tiles[r0 + x1] >> 4, bx)
+	var bottom := lerpf(_tiles[r1 + x0] >> 4, _tiles[r1 + x1] >> 4, bx)
+	return lerpf(top, bottom, by) * yards_per_step
 
 
 ## Slope (dh/dx, dh/dy) in yards per yard at (x, y). Zero across the clamped map edge.
 ## The bilinear slope along an axis jumps at each tile centre on that axis; exactly on a
 ## centre it is the mean of the slopes on both sides (E2-S4), so a ball set there feels
 ## no one-sided pull (a pit's floor line is level, not the wall beyond it).
+## E7-S4: `_axis`, `_centred_slope` and `_segment_slope` spelled out on the packed tiles
+## (_sync), the same lerps in the same order.
 func gradient_at(x: float, y: float) -> Vector2:
-	var ax := _axis(x, course.width)
-	var ay := _axis(y, course.height)
-	var dfx := _centred_slope(x, course.width, ax, ay, true)
-	var dfy := _centred_slope(y, course.height, ay, ax, false)
+	if course.revision != _rev:
+		_sync()
+	if _w == 0 or _h == 0:
+		return Vector2.ZERO
+	var ux := x / yards_per_tile - 0.5
+	var x0 := 0
+	var x1 := 0
+	var bx := 0.0
+	var wx := 0.0
+	if ux <= 0.0 or _w < 2:
+		pass
+	elif ux >= _w - 1:
+		x0 = _w - 1
+		x1 = x0
+	else:
+		x0 = floori(ux)
+		x1 = x0 + 1
+		bx = Vector2(ux - x0, 0.0).x
+		wx = 1.0
+	var uy := y / yards_per_tile - 0.5
+	var y0 := 0
+	var y1 := 0
+	var by := 0.0
+	var wy := 0.0
+	if uy <= 0.0 or _h < 2:
+		pass
+	elif uy >= _h - 1:
+		y0 = _h - 1
+		y1 = y0
+	else:
+		y0 = floori(uy)
+		y1 = y0 + 1
+		by = Vector2(uy - y0, 0.0).x
+		wy = 1.0
+	var t := _tiles
+	var w := _w
+	var r0 := y0 * w
+	var r1 := y1 * w
+	var dfx := 0.0
+	if _w < 2 or ux < 0.0 or ux > _w - 1 or ux != floorf(ux):
+		dfx = lerpf((t[r0 + x1] >> 4) - (t[r0 + x0] >> 4), (t[r1 + x1] >> 4) - (t[r1 + x0] >> 4),
+				by) * wx
+	else:
+		var i := int(ux)
+		var left := lerpf((t[r0 + i] >> 4) - (t[r0 + i - 1] >> 4),
+				(t[r1 + i] >> 4) - (t[r1 + i - 1] >> 4), by) if i > 0 else 0.0
+		var right := lerpf((t[r0 + i + 1] >> 4) - (t[r0 + i] >> 4),
+				(t[r1 + i + 1] >> 4) - (t[r1 + i] >> 4), by) if i < _w - 1 else 0.0
+		dfx = 0.5 * (left + right)
+	var dfy := 0.0
+	if _h < 2 or uy < 0.0 or uy > _h - 1 or uy != floorf(uy):
+		dfy = lerpf((t[r1 + x0] >> 4) - (t[r0 + x0] >> 4), (t[r1 + x1] >> 4) - (t[r0 + x1] >> 4),
+				bx) * wy
+	else:
+		var j := int(uy)
+		var rj := j * w
+		var up := lerpf((t[rj + x0] >> 4) - (t[rj - w + x0] >> 4),
+				(t[rj + x1] >> 4) - (t[rj - w + x1] >> 4), bx) if j > 0 else 0.0
+		var down := lerpf((t[rj + w + x0] >> 4) - (t[rj + x0] >> 4),
+				(t[rj + w + x1] >> 4) - (t[rj + x1] >> 4), bx) if j < _h - 1 else 0.0
+		dfy = 0.5 * (up + down)
 	return Vector2(dfx, dfy) * (yards_per_step / yards_per_tile)
 
 
@@ -111,38 +239,3 @@ func normal_at(x: float, y: float) -> Vector3:
 ## Unit normal of ground with slope `g` (dh/dx, dh/dy), z up.
 static func normal_for(g: Vector2) -> Vector3:
 	return Vector3(-g.x, -g.y, 1.0).normalized()
-
-
-## Height difference in steps per tile along one axis at `v` (yards on that axis), across
-## the other axis's blend `cross`. `a` is _axis(v). On an exact tile centre, the mean of the
-## segments either side (a side past the map edge is level).
-func _centred_slope(v: float, count: int, a: Vector4, cross: Vector4, along_x: bool) -> float:
-	var u := v / yards_per_tile - 0.5
-	if count < 2 or u < 0.0 or u > count - 1 or u != floorf(u):
-		return _segment_slope(int(a.x), int(a.y), cross, along_x) * a.w
-	var i := int(u)
-	var left := _segment_slope(i - 1, i, cross, along_x) if i > 0 else 0.0
-	var right := _segment_slope(i, i + 1, cross, along_x) if i < count - 1 else 0.0
-	return 0.5 * (left + right)
-
-
-## Steps from tile `i0` to tile `i1` along one axis, blended across the other by `cross`.
-func _segment_slope(i0: int, i1: int, cross: Vector4, along_x: bool) -> float:
-	var c0 := int(cross.x)
-	var c1 := int(cross.y)
-	if along_x:
-		return lerpf(course.get_height(i1, c0) - course.get_height(i0, c0),
-				course.get_height(i1, c1) - course.get_height(i0, c1), cross.z)
-	return lerpf(course.get_height(c0, i1) - course.get_height(c0, i0),
-			course.get_height(c1, i1) - course.get_height(c1, i0), cross.z)
-
-
-## For one axis: (low tile, high tile, blend 0..1, 1 inside the map or 0 where clamped).
-func _axis(v: float, count: int) -> Vector4:
-	var u := v / yards_per_tile - 0.5
-	if u <= 0.0 or count < 2:
-		return Vector4(0, 0, 0, 0)
-	if u >= count - 1:
-		return Vector4(count - 1, count - 1, 0, 0)
-	var i0 := floori(u)
-	return Vector4(i0, i0 + 1, u - i0, 1.0)

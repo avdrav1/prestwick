@@ -137,6 +137,12 @@ var _clock: float = 0.0
 ## (E3-S74; before, any tile or parcel write; GuestWalk.Cache.follow). A cached route is the one
 ## a fresh search finds, so the day is the same with or without it.
 var _route_cache := GuestWalk.Cache.new()
+## E7-S4: the batch serve_ahead left running on the pool (-1: none), its guests, their ticks
+## before it and the index after them, until `settle` counts it.
+var _ahead_task: int = -1
+var _ahead: Array[Guest] = []
+var _ahead_before := PackedInt32Array()
+var _ahead_end: int = 0
 ## HoleChecks.terrain_key of the course this step ("" until a reaction needs it); dropped
 ## before the next step.
 var _terrain_key: String = ""
@@ -167,6 +173,7 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 ## (E3-S14, E3-S35). A due step whose second's work is not yet served waits
 ## for later frames. Returns the steps it ran.
 func advance_real(delta: float, speed: float) -> int:
+	settle()
 	frame_ticks = 0
 	if day_over or speed <= 0.0 or delta <= 0.0:
 		return 0
@@ -217,24 +224,150 @@ func run_day() -> void:
 
 
 ## Skip to morning (E4-S3): runs the day on as fast as one frame allows, the same steps
-## `step` and `advance_real` run, so the day is the same. Serves up to `max_ticks` of Ball work
-## (counted as the frame budget counts it, putt ticks at `putt_tick_weight`) and steps each
-## second it finishes, at most `max_steps` of them; a second whose work is not yet served
-## waits for the next call. `frame_ticks` holds what it served. Real time is not read: the
-## clock's share of a second (`step_fraction`) is left where it was. Returns the steps run.
-func advance_skip(max_ticks: int, max_steps: int) -> int:
+## `step` and `advance_real` run, so the day is the same. E7-S4: whole seconds, each served at
+## once (serve_second, its guests' Ball work spread over threads unless `threads` is false)
+## and then stepped, at most `max_steps` of them, and none that would pass `max_usec` (below
+## 0: no limit) of real time since the call began, taking the next second to cost what the
+## last one did; at least one second runs. How the day
+## is cut into frames changes when it ends in real time, never what happens in it (E3-S14), so
+## reading the clock here is safe. `frame_ticks` holds the Ball ticks it served. The clock's
+## share of a second (`step_fraction`) is left where it was. Returns the steps run.
+func advance_skip(max_steps: int, max_usec: int = -1, threads: bool = true) -> int:
 	frame_ticks = 0
-	var left := max_ticks
+	var t0 := Time.get_ticks_usec()
+	var before := ticks
 	var stepped := 0
 	while not day_over and stepped < max_steps:
+		var s0 := Time.get_ticks_usec()
 		if not dusk_due():
-			left -= serve(left)
-			if not second_served():
-				break
+			serve_second(threads)
 		step()
 		stepped += 1
-	frame_ticks = max_ticks - left
+		# A second costs about what the one before it did: stop before one that would not fit.
+		var now := Time.get_ticks_usec()
+		if max_usec >= 0 and now - t0 + (now - s0) > max_usec:
+			break
+	frame_ticks = ticks - before
 	return stepped
+
+
+## E7-S4: spends all of this second's Ball work still owed, exactly as `serve(-1)` does, with
+## the guests' work run side by side on WorkerThreadPool's threads (`threads`; else one after
+## another on this one). A guest's work reads only its own play and the course, which nothing
+## writes while this runs (CourseData is read-only to guests, and the builder runs on this
+## thread, which waits here), so guests can run at once. What ties them is the sim's cap: each
+## guest in turn gets the rest of its own budget or what the sim has left, whichever is less.
+## So a batch (_gather) is the guests from `_cursor` on whose own budgets all fit in what the
+## sim has left: none of them can be cut by those before it, and each gets its full budget, as
+## in turn. A guest that might be cut waits for the batch's real use: then its whole budget
+## fits and it starts the next batch, or it does not and it is served alone, cut, as serve
+## would. Returns the ticks served (with what serve_ahead had served of this second).
+func serve_second(threads: bool = true) -> int:
+	var served := settle()
+	while _cursor < guests.size():
+		var sim_left := tuning.sim_ticks_per_s - _sim_used
+		if sim_left <= 0:
+			_cursor = guests.size()
+			break
+		var batch: Array[Guest] = []
+		var gives := PackedInt32Array()
+		var i := _gather(batch, gives)
+		if batch.is_empty():
+			if i < guests.size():
+				# Its budget is more than the sim has left: served alone, cut, as serve does.
+				var g := guests[i]
+				served += _served(g, g.hole.advance(mini(tuning.guest_ticks_per_s - g.second_ticks,
+						sim_left)))
+			_cursor = i + 1
+			continue
+		if batch.size() == 1 or not threads:
+			for k in batch.size():
+				served += _served(batch[k], batch[k].hole.advance(gives[k]))
+		else:
+			var before := PackedInt32Array()
+			for g: Guest in batch:
+				before.append(g.hole.ticks)
+			# The pool's threads take all but the first; this thread, which would only wait,
+			# takes the first.
+			var task := WorkerThreadPool.add_group_task(func(k: int) -> void:
+				batch[k + 1].hole.advance(gives[k + 1]), batch.size() - 1, -1, true)
+			batch[0].hole.advance(gives[0])
+			WorkerThreadPool.wait_for_group_task_completion(task)
+			for k in batch.size():
+				served += _served(batch[k], batch[k].hole.ticks - before[k])
+		_cursor = i
+	return served
+
+
+## E7-S4: fills `batch` and `gives` with the guests from `_cursor` on that have Ball work this
+## second and the rest of their own budget for it, while those budgets all fit in what the sim
+## has left; passes over guests with none. Returns the index it stopped at: the first guest
+## whose budget did not fit, or the end.
+func _gather(batch: Array[Guest], gives: PackedInt32Array) -> int:
+	var room := tuning.sim_ticks_per_s - _sim_used
+	var i := _cursor
+	while i < guests.size():
+		var g := guests[i]
+		var give := tuning.guest_ticks_per_s - g.second_ticks
+		if g.is_done() or g.hole == null or g.hole.is_finished() or give <= 0:
+			i += 1
+			continue
+		if give > room:
+			break
+		room -= give
+		batch.append(g)
+		gives.append(give)
+		i += 1
+	return i
+
+
+## E7-S4: starts the next batch of this second's Ball work (_gather) on the pool's threads and
+## returns at once, so it runs while this thread does something else: GuestSim calls it while
+## the frame is drawn (RenderingServer.frame_pre_draw), when no script runs, and `settle`
+## counts it once drawing is done. Until then nothing may read or change the guests' plays or
+## write the course: every other GuestBrain entry settles first. Returns true when it started
+## one (not when one is already out, the day is over or at dusk, or nothing is owed).
+func serve_ahead() -> bool:
+	if _ahead_task >= 0 or day_over or dusk_due() or _cursor >= guests.size() \
+			or tuning.sim_ticks_per_s - _sim_used <= 0:
+		return false
+	var batch: Array[Guest] = []
+	var gives := PackedInt32Array()
+	var end := _gather(batch, gives)
+	if batch.is_empty():
+		return false
+	_ahead = batch
+	_ahead_end = end
+	_ahead_before.clear()
+	for g: Guest in batch:
+		_ahead_before.append(g.hole.ticks)
+	_ahead_task = WorkerThreadPool.add_group_task(func(k: int) -> void:
+		batch[k].hole.advance(gives[k]), batch.size(), -1, true)
+	return true
+
+
+## E7-S4: waits for the batch serve_ahead started, if any, and counts it as serve_second would
+## have. Returns the ticks it served.
+func settle() -> int:
+	if _ahead_task < 0:
+		return 0
+	WorkerThreadPool.wait_for_group_task_completion(_ahead_task)
+	_ahead_task = -1
+	var served := 0
+	for k in _ahead.size():
+		served += _served(_ahead[k], _ahead[k].hole.ticks - _ahead_before[k])
+	_cursor = _ahead_end
+	_ahead = []
+	return served
+
+
+## Counts `n` ticks `g` just spent, as serve does. Returns `n`.
+func _served(g: Guest, n: int) -> int:
+	g.second_ticks += n
+	g.ticks += n
+	_sim_used += n
+	ticks += n
+	return n
 
 
 ## True when every second of the day has been played and only dusk is left (E4-S3): it is
@@ -247,6 +380,7 @@ func dusk_due() -> bool:
 ## day's last second it is dusk (D38): everyone still out leaves; no Ball work is owed, since
 ## no stroke still in the air can give a record (E4-S3).
 func step() -> void:
+	settle()
 	if day_over:
 		return
 	if dusk_due():
@@ -290,6 +424,7 @@ func _measure_need() -> void:
 ## Guests with nothing to do are passed over even with no ticks left to give, so a second
 ## whose work is done reads as served (second_served).
 func serve(max_ticks: int, max_raw: int = -1) -> int:
+	settle()
 	var cost := 0.0
 	var raw := 0
 	while _cursor < guests.size():
@@ -587,6 +722,7 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 ## step start the hole afresh), so it plays and judges the new version. Returns the plays of
 ## groups that have struck: they judge a version that is gone (GuestSim drops their verdicts).
 func slot_edited(slot: int) -> Array[GuestHole]:
+	settle()
 	var stale: Array[GuestHole] = []
 	for guest: Guest in guests:
 		if guest.hole == null or guest.hole_recorded or guest.hole.slot != slot or guest.is_done():

@@ -1,13 +1,18 @@
 extends GutTest
 ## E4-S3: the day clock and its speeds (docs/design.md Economy and time). A day is `day_s` 540
 ## simulated seconds, 9 real minutes at 1x and 3 at 3x; pause holds it; skip to morning runs the
-## rest of the day at once (sliced over frames by `skip_frame_ticks` and
-## `skip_steps_per_frame`) and gives the same end-of-day state as running it at the same seed;
+## rest of the day at once (sliced over frames by `skip_frame_ms` and `skip_steps_per_frame`,
+## E7-S4: whole seconds, the guests' Ball work on several threads) and gives the same end-of-day
+## state as running it at the same seed;
 ## each day ends once, through GuestSim.day_ended (the hook E4-S4's fees and upkeep attach to),
 ## and the next morning starts at once.
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
+## E7-S4's Accept: a full day of D58's most guests on the playtest nine skips in under 3 real
+## seconds (the window adds its frames: scripts/skip_perf.gd times that).
+const NINE_GUESTS := 24
+const NINE_SKIP_MAX_S := 3.0
 const SEED := 3
 ## E5-S12: the most real time a day at 3x may be held for its Ball work (GuestBrain.held_frames).
 const MAX_HELD_S := 0.5
@@ -163,19 +168,110 @@ func test_skip_from_mid_day_and_while_paused_gives_the_same_day() -> void:
 	assert_eq(sim.clock_s(), t, "and stays there")
 
 
-func test_a_skip_frame_keeps_to_its_budget() -> void:
+func test_a_skip_frame_runs_whole_seconds_within_its_time() -> void:
 	var sim := _sim()
 	sim.skip_to_morning()
-	var budget := sim.tuning.skip_frame_ticks
 	var steps_max := sim.tuning.skip_steps_per_frame
-	var worst := 0
+	var frames := 0
+	var worked := 0
 	while sim.skipping:
 		var b := sim.brain
+		var ticks := b.ticks
+		var second := b.second
 		var stepped := sim.skip_frame()
-		assert_true(stepped <= steps_max, "at most %d seconds a frame (%d)" % [steps_max, stepped])
-		worst = maxi(worst, b.frame_ticks)
-	assert_gt(worst, 0, "the skip did Ball work")
-	assert_true(worst <= budget, "no skip frame served more than %d ticks (%d)" % [budget, worst])
+		frames += 1
+		assert_between(stepped, 1, steps_max, "at least one second a frame, at most %d" % steps_max)
+		if not b.day_over:
+			assert_eq(b.second, second + stepped, "whole seconds: the clock moved by the steps")
+		assert_eq(b.frame_ticks, b.ticks - ticks, "frame_ticks counts what the frame served")
+		worked = maxi(worked, b.frame_ticks)
+	assert_gt(worked, 0, "the skip did Ball work")
+	assert_gt(frames, 1, "over frames")
+	# With no time to spare, each frame runs one second.
+	var tight := _sim()
+	tight.tuning = GuestTuning.from_file(GuestTuning.PATH)
+	tight.tuning.skip_frame_ms = 0.001
+	tight.skip_to_morning()
+	tight.skip_frame()
+	assert_eq(tight.brain.second, 1, "one second when the frame's time is spent")
+
+
+## E7-S4: the playtest nine with D58's most guests, the busiest day the game draws.
+func _nine_brain() -> GuestBrain:
+	return GuestBrain.new(CourseSave.load_file(PlaytestNine.PATH), 1, null, null, [], null,
+			NINE_GUESTS)
+
+
+static func _brain_state(b: GuestBrain) -> Array:
+	var out: Array = []
+	for g: Guest in b.guests:
+		var hole: Array = []
+		if g.hole != null:
+			hole = [g.hole.state, g.hole.ball_at, g.hole.ticks, g.hole.strokes.size(),
+					g.hole.score.strokes]
+		var recs: Array = []
+		for r: Guest.HoleRecord in g.records:
+			recs.append([r.number, r.score, r.wait_s, r.start_s, r.end_s])
+		out.append([g.id, g.state, g.position, g.ticks, g.second_ticks, hole, recs])
+	return [b.second, b.ticks, b.max_second_ticks, b.capped_seconds, out]
+
+
+func test_threads_serve_a_second_as_one_thread_does() -> void:
+	var one := _nine_brain()
+	var threaded := _nine_brain()
+	var ahead := _nine_brain()
+	var seconds := 150
+	while one.second < seconds:
+		one.serve(-1)
+		one.step()
+		threaded.advance_skip(1, -1, true)
+		# Part of the next second served while the frame is drawn (GuestSim, frame_pre_draw),
+		# counted after (frame_post_draw), then the frame's own seconds.
+		ahead.serve_ahead()
+		ahead.settle()
+		ahead.advance_skip(1, -1, true)
+		if one.second % 15 == 0:
+			assert_eq(_brain_state(threaded), _brain_state(one), "threads, second %d" % one.second)
+			assert_eq(_brain_state(ahead), _brain_state(one), "served ahead, second %d" % one.second)
+	assert_gt(one.guests.size(), 12, "the morning's guests are out")
+	assert_gt(one.ticks, 100000, "and busy")
+
+
+func test_serve_ahead_waits_for_its_batch_before_anything_reads_the_guests() -> void:
+	var b := _nine_brain()
+	while b.second < 60:
+		b.advance_skip(10, -1, true)
+	var plain := _nine_brain()
+	while plain.second < 60:
+		plain.advance_skip(10, -1, false)
+	assert_true(b.serve_ahead(), "a batch starts")
+	assert_false(b.serve_ahead(), "one at a time")
+	b.step()  # settles first: the second's work is all counted, then the step
+	plain.serve(-1)
+	plain.step()
+	assert_eq(_brain_state(b), _brain_state(plain))
+	assert_eq(b.settle(), 0, "nothing left to count")
+
+
+func test_a_full_day_on_the_playtest_nine_skips_in_under_3_s() -> void:
+	if BestTime.later(self):
+		return
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(CourseSave.load_file(PlaytestNine.PATH), 0)
+	sim.resume_at(1, NINE_GUESTS)
+	sim.running = true
+	var ends := _ended_states(sim)
+	var t0 := Time.get_ticks_usec()
+	var frames := _skip(sim)
+	var real_s := (Time.get_ticks_usec() - t0) / 1e6
+	assert_eq(ends.size(), 1, "the day ended")
+	assert_eq((ends[0][1][2] as Array).size(), NINE_GUESTS, "with all its guests")
+	gut.p("a %d-guest day on the playtest nine: skipped in %.2f s over %d frames (headless)" % [
+			NINE_GUESTS, real_s, frames])
+	assert_lt(real_s, NINE_SKIP_MAX_S, "a full day skips in under %.0f s%s" % [NINE_SKIP_MAX_S,
+			BestTime.load_note()])
 
 
 func test_a_speed_pressed_while_skipping_stops_the_skip_where_it_is() -> void:
@@ -271,3 +367,24 @@ func test_the_speed_panel_has_skip_to_morning_by_button_and_key_in_build_and_pla
 	assert_true(m.guest_sim.is_paused())
 	assert_eq(m.guest_sim.day, day)
 	assert_true(InputMap.has_action(&"sim_skip"), "the M key is in the input map")
+
+
+func test_the_golfers_leave_the_course_while_a_skip_runs_and_come_back_after() -> void:
+	var m := _main()
+	var sim := m.guest_sim
+	var view: GuestView = m.guest_view
+	sim.set_speed(3.0)
+	while sim.clock_s() < 120.0:
+		sim.advance(1.0 / 60.0)
+	view.update_view(1.0 / 60.0, sim.effective_speed())
+	var out := view.figures().size()
+	assert_gt(out, 0, "golfers out on the course at 2:00")
+	sim.skip_to_morning()
+	sim.skip_frame()
+	view.update_view(1.0 / 60.0, sim.effective_speed())
+	assert_eq(view.figures().size(), 0, "none drawn while the day jumps: the speed panel's line shows it")
+	assert_string_contains(m.sim_speed_panel.status_text(), "skipping")
+	sim.set_speed(1.0)  # stops the skip where it is
+	view.update_view(1.0 / 60.0, sim.effective_speed())
+	assert_eq(view.figures().size(), sim.brain.on_course().size(), "drawn again where the skip stopped")
+	assert_gt(view.figures().size(), 0)
