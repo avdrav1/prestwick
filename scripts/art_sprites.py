@@ -74,147 +74,229 @@ def save(path: Path, img: Image, p: dict[str, Color]) -> None:
 # --- golfer (art/specs/golfer.md) ---------------------------------------------------------------
 
 GW, GH = ph.GOLFER_W, ph.GOLFER_H
-CX = ph.GOLFER_ANCHOR[0]
-# Club angle per swing frame, degrees from straight down, toward the facing side: address,
-# takeaway, top, down, impact, finish (as the placeholder; the ball leaves on frame 4).
-SWING_DEG = [12, -55, -150, -70, 12, 150]
-# Hands per swing frame, relative to (CX, 14), toward the facing side (+x) and up (-y).
-SWING_HANDS = [(1, 0), (-2, -2), (-2, -6), (-1, -2), (1, 0), (2, -6)]
+# E7-S3: the figure is drawn in one of five views facing right (or the camera, or away) and
+# mirrored about the frame's middle (x -> 23 - x) for the views that face left. The body is 8 px
+# across from the front and 8 px deep from the side, so the profile is no thinner than the front.
+GOLFER_VIEW = {"s": ("front", 1), "se": ("front3q", 1), "sw": ("front3q", -1), "e": ("side", 1),
+               "w": ("side", -1), "ne": ("back3q", 1), "nw": ("back3q", -1), "n": ("back", 1)}
+BACK_VIEWS = ("back", "back3q")
+# Head and cap, rows 2 to 8, x 7 to 16, facing right: R cap, S skin, H hair, K eye.
+GOLFER_HEADS = {
+    "front": ["...RRRR...",
+              "..RRRRRR..",
+              "..RRRRRR..",
+              ".RRRRRRRR.",
+              "..SKSSKS..",
+              "..SSSSSS..",
+              "...SSSS..."],
+    "front3q": ["...RRRR...",
+                "..RRRRRR..",
+                "..RRRRRRR.",
+                "..HRRRRRRR",
+                "..HSSKSKS.",
+                "..SSSSSSS.",
+                "...SSSSS.."],
+    "side": ["...RRRR...",
+             "..RRRRRR..",
+             "..RRRRRRRR",
+             "..HHHSSS..",
+             "..HHSSKSS.",
+             "..HHSSSS..",
+             "...SSSS..."],
+    "back3q": ["...RRRR...",
+               "..RRRRRR..",
+               "..RRRRRRRR",
+               "..HHHHHHS.",
+               "..HHHHHSS.",
+               "..HHHHHS..",
+               "...HHHS..."],
+    "back": ["...RRRR...",
+             "..RRRRRR..",
+             "..RRRRRR..",
+             "..HHHHHH..",
+             "..HHHHHH..",
+             "..HHHHHH..",
+             "...SSSS..."],
+}
+# Torso, rows 9 to 16, x 7 to 16: the shirt (the key colour), rounded shoulders, 8 px wide.
+GOLFER_TORSO = ["..CCCCCC.."] + [".CCCCCCCC."] * 7
+# Where the arms hang from, facing right (one arm seen from the side).
+GOLFER_SHOULDERS = {"front": [(7, 10), (16, 10)], "front3q": [(7, 10), (16, 10)],
+                    "side": [(12, 10)], "back3q": [(7, 10), (16, 10)], "back": [(7, 10), (16, 10)]}
+# Legs per view and frame, facing right: (hip x, foot x, foot lift), each leg 3 px wide.
+GOLFER_STAND = {"front": [(8, 8, 0), (13, 13, 0)], "front3q": [(9, 9, 0), (12, 12, 0)],
+                "side": [(10, 10, 0), (11, 11, 0)], "back3q": [(9, 9, 0), (12, 12, 0)],
+                "back": [(8, 8, 0), (13, 13, 0)]}
+# The walk (contact, pass, contact, pass): a stride along the facing; seen from the front or
+# back the far foot lifts. The body dips a pixel on the contact frames.
+GOLFER_STRIDE = {
+    "front": [[(8, 8, 1), (13, 13, 0)], [(8, 8, 2), (13, 13, 0)],
+              [(8, 8, 0), (13, 13, 1)], [(8, 8, 0), (13, 13, 2)]],
+    "front3q": [[(9, 7, 1), (12, 14, 0)], [(10, 10, 2), (12, 12, 0)],
+                [(11, 14, 0), (9, 7, 1)], [(10, 10, 0), (12, 12, 2)]],
+    "side": [[(10, 7, 1), (11, 15, 0)], [(10, 9, 2), (11, 12, 0)],
+             [(10, 14, 0), (11, 8, 1)], [(10, 12, 0), (11, 9, 2)]],
+    "back3q": [[(9, 7, 0), (12, 14, 1)], [(10, 10, 0), (12, 12, 2)],
+               [(11, 14, 1), (9, 7, 0)], [(10, 10, 2), (12, 12, 0)]],
+    "back": [[(8, 8, 0), (13, 13, 1)], [(8, 8, 0), (13, 13, 2)],
+             [(8, 8, 1), (13, 13, 0)], [(8, 8, 2), (13, 13, 0)]],
+}
+# The arms swing against the legs: each arm's hand x offset per walk frame.
+GOLFER_ARM_SWING = [(1, -1), (0, 0), (-1, 1), (0, 0)]
+# The side view's arm: its hand per walk frame (back, by the hip, forward, by the hip; the idle
+# hand is the hip one), facing right.
+GOLFER_SIDE_HANDS = [(10, 15), (13, 16), (16, 14), (13, 16)]
+# The swing, for a swing through to +x: (hands, club degrees from straight down toward +x,
+# negative back, club length, head dip, upper-body lean, legs). Frames: address, takeaway, top,
+# down, impact, finish; the ball leaves on frame 4 (golfer.tres swing_impact_frame).
+GOLFER_SWING = [
+    ((12, 16), 4, 7, 1, 0, [(8, 7, 0), (13, 14, 0)]),
+    ((8, 14), -80, 8, 1, 0, [(8, 7, 0), (13, 14, 0)]),
+    ((6, 7), -160, 8, 0, -1, [(8, 7, 0), (13, 13, 0)]),
+    ((9, 12), -55, 8, 1, 0, [(8, 7, 0), (13, 14, 0)]),
+    ((13, 16), 8, 7, 1, 0, [(8, 8, 1), (13, 14, 0)]),
+    ((17, 8), 172, 8, 0, 1, [(9, 10, 1), (13, 14, 0)]),
+]
+GOLFER_SWING_SIDE = [
+    ((15, 16), 28, 7, 1, 1, [(9, 9, 0), (11, 12, 0)]),
+    ((10, 14), -80, 8, 1, 0, [(9, 9, 0), (11, 12, 0)]),
+    ((8, 7), -160, 8, 0, -1, [(9, 9, 0), (11, 12, 0)]),
+    ((11, 12), -55, 8, 1, 0, [(9, 9, 0), (11, 12, 0)]),
+    ((15, 16), 30, 7, 1, 1, [(9, 9, 1), (11, 12, 0)]),
+    ((17, 8), 172, 8, 0, 1, [(10, 11, 1), (11, 12, 0)]),
+]
+
+
+def golfer_swing_body(d: str) -> tuple[str, int]:
+    """A golfer stands side-on to the shot, the target on their left (right-handed): the body
+    faces the swing direction turned 90 degrees clockwise on screen. Returns that facing and
+    the side the club goes through to in the drawn, unmirrored frame (+1 right, -1 left)."""
+    dirs = ph.GOLFER_DIRS
+    b = dirs[(dirs.index(d) + 2) % 8]
+    view, fb = GOLFER_VIEW[b]
+    return b, (1 if view == "side" else ph.GOLFER_DIR_STEP[d][0] * fb)
+
+
+def _line(x0: int, y0: int, x1: int, y1: int) -> list[tuple[int, int]]:
+    steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+    return [(round(x0 + (x1 - x0) * k / steps), round(y0 + (y1 - y0) * k / steps))
+            for k in range(steps + 1)]
 
 
 def golfer_frame(state: str, d: str, n: int, p: dict[str, Color]) -> Image:
+    swing = state == "swing"
+    r = 1
+    if swing:
+        d, r = golfer_swing_body(d)
+    view, fb = GOLFER_VIEW[d]
+    back = view in BACK_VIEWS
     img = Image(GW, GH)
-    sx, sy = ph.GOLFER_DIR_STEP[d]
-    back = sy < 0
-    profile = sy == 0
-    face = sx if sx else 1           # the side the club and brim go to
-    bob = 1 if state == "idle" and n == 1 else 0
-    walk = state == "walk"
-    lift = 1 if walk and n in (1, 3) else 0       # the passing frames rise a pixel
-    top = bob - lift
-    skin, cap, hair = p["skin"], p["flag_red"], p["earth_dark"]
-    shirt, pants, shoe = p["chalk"], p["slate_dark"], p["earth_dark"]
     body: set[tuple[int, int]] = set()
+    head: set[tuple[int, int]] = set()
+    skin, shirt, pants, shoe = p["skin"], p["chalk"], p["slate_dark"], p["earth_dark"]
+    key = {"R": p["flag_red"], "S": skin, "H": p["earth_dark"], "K": p["ink"]}
 
-    def put(x: int, y: int, c: Color) -> None:
-        img.set(x, y, c)
-        body.add((x, y))
+    def put(x: int, y: int, c: Color, into: set[tuple[int, int]] | None = None) -> None:
+        x = GW - 1 - x if fb < 0 else x
+        if 0 <= x < GW and 0 <= y < GH:
+            img.set(x, y, c)
+            body.add((x, y))
+            if into is not None:
+                into.add((x, y))
 
-    # Legs and shoes: two 2 px legs from row 17; a stride spreads them along the facing.
-    stride = [2, 0, -2, 0][n] if walk else 0
-    half = 1 if profile else 2   # legs closer together seen from the side
-    for i, sgn in enumerate((-1, 1)):
-        lx = CX - half if sgn < 0 else CX + half - 2
-        for y in range(17, 22):
-            t = (y - 16) / 5
-            off = round(stride * (1 if i == 0 else -1) * t * (face if (profile or sx) else 0))
-            # Seen from the front or back a stride shows as one foot lifted.
-            up = 1 if (not sx and stride and ((stride > 0) == (i == 0))) else 0
-            if y <= 21 - up:
-                for x in (lx + off, lx + off + 1):
-                    put(x, y, pants)
-        foot_off = round(stride * (1 if i == 0 else -1) * (face if (profile or sx) else 0))
-        up = 1 if (not sx and stride and ((stride > 0) == (i == 0))) else 0
-        fx = lx + foot_off
-        put(fx, 22 - up, shoe)
-        put(fx + 1, 22 - up, shoe)
-        if profile or sx:
-            put(fx + (2 if face > 0 else -1), 22 - up, shoe)   # the toe points the facing way
-    # Shirt: rows 9 + top to 16, the shirt key (chalk) only on rows 9 to 16.
-    w0, w1 = (CX - 2, CX + 1) if profile else (CX - 3, CX + 2)
-    for y in range(max(9, 9 + top), 17):
-        for x in range(w0, w1 + 1):
-            if y == max(9, 9 + top) and x in (w0, w1):
-                continue  # round shoulders
-            put(x, y, shirt)
-    # Arms: chalk sleeves on the shoulders, skin forearms; a walk swings them, a swing holds the
-    # club in both hands.
-    if state == "swing":
-        hx = CX + face * SWING_HANDS[n][0]
-        hy = 14 + SWING_HANDS[n][1]
-        for (shx, shy) in ((w0, 10), (w1, 10)):
-            steps = max(abs(hx - shx), abs(hy - shy), 1)
-            for k in range(steps + 1):
-                ax = round(shx + (hx - shx) * k / steps)
-                ay = round(shy + (hy - shy) * k / steps)
-                if 9 <= ay <= 11 and abs(ax - shx) <= 1:
-                    continue  # the sleeve is the shirt's
-                if not (w0 <= ax <= w1 and 9 <= ay <= 16):
-                    put(ax, ay, skin)
-        put(hx, hy, skin)
+    # The pose. A swing to the left mirrors its hands, club, lean and legs.
+    if swing:
+        hands, deg, length, dip, lean, legs = (GOLFER_SWING_SIDE if view == "side" else GOLFER_SWING)[n]
+        if r < 0:
+            hands = (GW - 1 - hands[0], hands[1])
+            deg, lean = -deg, -lean
+            legs = [(GW - 3 - h, GW - 3 - f, lift) for (h, f, lift) in legs]
+        top = 0
     else:
-        swing_arm = [1, 0, -1, 0][n] if walk else 0
-        if profile:
-            # Seen from the side the near arm hangs along the body: a hand at its front edge,
-            # swinging fore and aft on a walk.
-            hx = (w1 + 1) if face > 0 else (w0 - 1)
-            put(hx + swing_arm * face if swing_arm * face > 0 else hx, 14 + top, skin)
+        dip, lean, deg, length = 0, 0, 10, 8
+        if state == "walk":
+            legs, top = GOLFER_STRIDE[view][n], (1 if n in (0, 2) else 0)
         else:
-            for side, sgn in ((w0 - 1, -1), (w1 + 1, 1)):
-                a_off = swing_arm * sgn
-                for y in range(10 + top, 12 + top):
-                    put(side, y, shirt if 9 <= y <= 16 else skin)
-                for y in range(12 + top, 15 + top):
-                    put(side + (a_off if y >= 13 + top else 0), y, skin)
-    # Head: skin face, or hair from behind; hair on the back half seen from the side.
-    hy0 = 4 + top
-    for y in range(hy0, hy0 + 5):
-        for x in range(CX - 2, CX + 2):
-            c = skin
-            if back:
-                c = hair
-            elif profile and (x - CX + 0.5) * face < 0 and y < hy0 + 3:
-                c = hair
-            put(x, y, c)
-    # Cap: crown row and band; the brim points where the golfer faces.
-    for x in range(CX - 2, CX + 2):
-        put(x, hy0 - 1, cap)
-        put(x, hy0, cap)
-    for x in range(CX - 1, CX + 1):
-        put(x, hy0 - 2, cap)
-    if not back:
-        if profile:
-            put(CX + (2 if face > 0 else -3), hy0 + 1, cap)
-            put(CX + (3 if face > 0 else -4), hy0 + 1, cap)
+            legs, top = GOLFER_STAND[view], (1 if n == 1 else 0)
+        swing_x = GOLFER_ARM_SWING[n] if state == "walk" else (0, 0)
+    # Legs: 3 px trousers from the hips to each foot, the shoe below (a lifted foot higher),
+    # its toe toward the facing in the side and three-quarter views.
+    hip_y = 17 + top
+    for x in range(min(h for h, _, _ in legs), max(h for h, _, _ in legs) + 3):
+        put(x, hip_y, pants)
+    toe = 1 if view in ("side", "front3q", "back3q") else 0
+    for (hx, fx, lift) in legs:
+        foot_y = 22 - lift
+        for y in range(hip_y + 1, foot_y):
+            x = round(hx + (fx - hx) * (y - hip_y) / max(foot_y - hip_y, 1))
+            for k in range(3):
+                put(x + k, y, pants)
+        for k in range(3 + toe):
+            put(fx + k, foot_y, shoe)
+    shoulders = [(x + lean, y + top) for (x, y) in GOLFER_SHOULDERS[view]]
+
+    def arm(sh: tuple[int, int], hand: tuple[int, int]) -> None:
+        for i, (x, y) in enumerate(_line(sh[0], sh[1], hand[0], hand[1])):
+            put(x, y, shirt if i < 2 and 9 <= y <= 16 else skin)
+
+    # Hanging arms (idle, walk); the side view's one arm swings fore and aft over the shirt.
+    if not swing:
+        if view == "side":
+            hx, hy = GOLFER_SIDE_HANDS[n] if state == "walk" else GOLFER_SIDE_HANDS[1]
+            hands = (hx, hy + top)
         else:
-            for x in range(CX - 2, CX + 2):
-                put(x, hy0 + 1, cap)
-            if sx:
-                put(CX + (2 if sx > 0 else -3), hy0 + 1, cap)
-    # Eyes on the facing side.
-    if not back:
-        ey = hy0 + 2
-        if profile:
-            img.set(CX + (1 if face > 0 else -2), ey, p["ink"])
-        elif sx:
-            img.set(CX + (1 if sx > 0 else -2), ey, p["ink"])
-            img.set(CX + (-1 if sx > 0 else 0), ey, p["ink"])
+            hands = (16, 15 + top)
+    if swing and back:
+        for sh in shoulders:
+            arm(sh, hands)
+    # Torso: the shirt on rows 9 to 16 only (the key never leaves them).
+    for i, row in enumerate(GOLFER_TORSO):
+        y = 9 + i + top
+        if y > 16:
+            break
+        for j, ch in enumerate(row):
+            if ch == "C":
+                put(7 + j + (lean if i < 4 else 0), y, shirt)
+    if not swing:
+        if view == "side":
+            arm(shoulders[0], hands)
+            # An ink edge behind the forearm parts it from the shirt.
+            for i, (x, y) in enumerate(_line(*shoulders[0], *hands)):
+                bx = x - 1 if fb > 0 else GW - x
+                if i >= 2 and img.get(bx, y) == shirt:
+                    img.set(bx, y, p["ink"])
         else:
-            img.set(CX - 2, ey, p["ink"])
-            img.set(CX + 1, ey, p["ink"])
-    # Outline: ink round the whole figure.
+            for k, sh in enumerate(shoulders):
+                frontal = view in ("front", "back")
+                dx = 0 if frontal else swing_x[k]
+                dy = -1 if (frontal and swing_x[k] > 0) else 0
+                arm(sh, (sh[0] + dx, 15 + top + dy))
+            hands = (16 + (0 if view in ("front", "back") else swing_x[1]), 15 + top)
+    # Head and cap.
+    for i, row in enumerate(GOLFER_HEADS[view]):
+        for j, ch in enumerate(row):
+            if ch in key:
+                put(7 + j + lean, 2 + i + top + dip, key[ch], head)
+    if swing and not back:
+        for sh in shoulders:
+            arm(sh, hands)
     outline_mask(img, body, p["ink"])
-    # The club: slate_light shaft from the hands, an ink head at its end.
-    if state == "swing":
-        hx = CX + face * SWING_HANDS[n][0]
-        hy = 14 + SWING_HANDS[n][1]
-        deg = SWING_DEG[n]
-    else:
-        hx, hy, deg = CX + face * (3 if profile else 4), 14 + top, 8
-        if back:
-            hx = CX - face * 4
-    a = math.radians(deg)
-    end = (hx, hy)
-    for i in range(1, 10):
-        x = hx + round(face * math.sin(a) * i)
-        y = hy + round(math.cos(a) * i)
+    # The club: a slate_light shaft from the hands and an ink head. It passes behind the head,
+    # and behind the body when seen from behind or carried.
+    hx = GW - 1 - hands[0] if fb < 0 else hands[0]
+    a = math.radians(deg * fb)
+    end = None
+    for i in range(1, length + 1):
+        x = hx + round(math.sin(a) * i)
+        y = hands[1] + round(math.cos(a) * i)
         if not (0 <= x < GW and 0 <= y < GH):
             break
-        if (x, y) in body:
+        if (x, y) in head or ((back or not swing) and (x, y) in body):
             continue
         img.set(x, y, p["slate_light"])
         end = (x, y)
-    img.set(end[0], end[1], p["ink"])
+    if end is not None:
+        img.set(end[0], end[1], p["ink"])
     return img
 
 

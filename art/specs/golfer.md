@@ -99,6 +99,26 @@ to 16 with rounded shoulders and sleeves, slate_dark legs 17 to 21 and earth_dar
 outline round the figure; the walk strides on frames 0 and 2 and rises a pixel on the passing
 frames, the arms swinging; the swing holds the club in both hands through its six angles.
 
+Redrawn fuller and looser (E7-S3, the same script): five views (front, front three-quarter,
+side, back three-quarter, back), drawn facing right and mirrored for the left-facing
+directions. The body is 8 px across from the front and 8 px deep from the side, so the profile
+is no thinner than the front (`tests/test_sprites.gd`); 3 px trouser legs; arms hang from the
+shoulders in skin with chalk sleeves, the side view's one arm parted from the shirt by an ink
+edge. Rows: cap 2 to 4 with the brim on row 5 from the front and row 4 from the side (from the
+back three-quarter view its tip shows on the facing side, with a sliver of cheek, so `ne` and
+`nw` no longer read as `n`), head 5 to 8, shirt 9 to 16, legs 17 to 21, shoes 22. The walk
+dips the body a pixel on the contact frames (the shirt cannot rise above row 9), the feet
+spread along the facing in the side and three-quarter views and the far foot lifts from the
+front and back; the arms swing against the legs. The swing is side-on: the golfer stands with
+the target on their left, so the body faces the swing direction turned 90 degrees clockwise
+(an `e` swing is drawn from the front, a `w` swing from the back, `n` and `s` swings in
+profile), and the club goes back to one side and through to the other: address with the
+feet apart and the club head on the ground between them, takeaway with the club level behind,
+the top with the hands above the back shoulder and the club up, the downswing with the club
+lagging, impact with the back heel up, and the finish with the hands high on the target side
+and the club up there (`golfer_swing_body` in the script; the test checks that the top and
+the finish raise the club on opposite sides). Sheets: `docs/decisions/e7-s3-golfer-sheets.png`.
+
 Directions are screen directions, clockwise from straight down the screen (toward the
 camera): `s`, `sw`, `w`, `nw`, `n`, `ne`, `e`, `se`. Frame names are `<dir>_<n>`, `n` from 0:
 `s_0`, `s_1`, `sw_0`, ... In grid terms (Iso: x = (i - j) × 32, y = (i + j) × 16) `se` is

@@ -241,3 +241,74 @@ func test_every_pin_shows_the_one_pennant_the_course_view_turns() -> void:
 	assert_eq(HoleMarker.pennant_shown, 0, "back to still: it wraps")
 	view.tick_pennant(s * 0.1)
 	assert_eq(HoleMarker.pennant_shown, 0, "no change inside a frame's time")
+
+
+# E7-S3: the golfer redrawn fuller and looser (scripts/art_sprites.py, art/specs/golfer.md).
+const CLUB := Color8(168, 168, 176)
+const SHOE := Color8(94, 60, 38)
+
+
+func _golfer(sheet: TileSheet, frame: String) -> Image:
+	return sheet.texture.get_image().get_region(sheet.region(sheet.frame_index(StringName(frame))))
+
+
+## The widest span of a colour on rows y0 to y1 (inclusive) of a frame, 0 when it is absent.
+func _span(f: Image, c: Color, y0: int, y1: int) -> int:
+	var lo: int = 99
+	var hi: int = -1
+	for y: int in range(y0, y1 + 1):
+		for x: int in f.get_width():
+			if f.get_pixel(x, y).is_equal_approx(c):
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+	return hi - lo + 1 if hi >= 0 else 0
+
+
+func test_the_golfers_profile_is_as_wide_as_its_front() -> void:
+	var art := GolferArt.load_default()
+	for sheet: TileSheet in [art.idle, art.walk]:
+		var front: int = _span(_golfer(sheet, "s_0"), art.shirt_key, 13, 15)
+		assert_gte(front, 8, "the front body is 8 px across")
+		for d: String in ["e", "w", "n", "se", "sw", "ne", "nw"]:
+			var w: int = _span(_golfer(sheet, d + "_0"), art.shirt_key, 13, 15)
+			assert_gte(w, front, "%s is as wide as the front body (%d < %d)" % [d, w, front])
+
+
+func test_the_golfers_swing_goes_back_and_through() -> void:
+	var art := GolferArt.load_default()
+	for d: String in GolferArt.DIRS:
+		var x_of := func(frame: int) -> float:
+			var f: Image = _golfer(art.swing, "%s_%d" % [d, frame])
+			var s: float = 0.0
+			var n: int = 0
+			for y: int in 24:
+				for x: int in 24:
+					if f.get_pixel(x, y).is_equal_approx(CLUB):
+						if frame != 0:
+							assert_lt(y, 9, "%s_%d: the club is up above the shoulders" % [d, frame])
+						s += x
+						n += 1
+			assert_gt(n, 2, "%s_%d: the club shows" % [d, frame])
+			return s / maxi(n, 1) - 11.5
+		var top: float = x_of.call(2)
+		var finish: float = x_of.call(5)
+		assert_lt(top * finish, 0.0, "%s: the backswing and the follow-through rise on opposite sides" % d)
+		assert_gt(absf(top - finish), 6.0, "%s: by a clear margin" % d)
+		assert_gt(_span(_golfer(art.swing, d + "_0"), CLUB, 17, 23), 0, "%s: the club is down at address" % d)
+
+
+func test_the_golfers_walk_strides() -> void:
+	var art := GolferArt.load_default()
+	for d: String in ["e", "w", "se", "sw", "ne", "nw"]:
+		var stand: int = _span(_golfer(art.idle, d + "_0"), SHOE, 18, 23)
+		for n: int in [0, 2]:
+			var stride: int = _span(_golfer(art.walk, "%s_%d" % [d, n]), SHOE, 18, 23)
+			assert_gte(stride, stand + 3, "%s_%d: the feet spread (%d against %d standing)" % [d, n, stride, stand])
+	for d: String in ["s", "n"]:
+		for n: int in 4:
+			var f: Image = _golfer(art.walk, "%s_%d" % [d, n])
+			var low: int = 0
+			for x: int in 24:
+				if f.get_pixel(x, 22).is_equal_approx(SHOE):
+					low += 1
+			assert_lt(low, 6, "%s_%d: one foot is off the ground" % [d, n])

@@ -27,6 +27,9 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 @export var catch_walk_past: bool = false
 ## The guest days' base seed (GuestSim.start), or below 0 for the course's own.
 @export var day_base_seed: int = -1
+## The camera's zoom level (CameraTuning.zoom_levels index): 2 is 1x, 1 is 0.5x. E7-S3's
+## guests on a tee at 0.5x: guest_flight_shot_tee_swing_0_5x.tscn.
+@export var zoom_level: float = 2.0
 
 var main: Main
 var caught: bool = false
@@ -44,7 +47,7 @@ func _ready() -> void:
 	main.set_process(false)
 	main.aim_view.visible = false
 	main.guest_sim.set_speed(3.0)
-	main.camera.set_zoom_level(2.0)
+	main.camera.set_zoom_level(zoom_level)
 	main.camera.tracking = false
 	main.camera.position = main.tile_world(Vector2i(8, 6))
 
