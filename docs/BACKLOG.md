@@ -1312,7 +1312,7 @@ Done when: 0.6.0-rc2 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc2 (tag `v0.6.0-rc2`): tests 1173/1173, playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. Published as a GitHub pre-release with both builds, the example course and how-to-play, and the download page (gh-pages) points at it.
 
-## E8: Playtest fixes — active
+## E8: Playtest fixes — done
 
 Fixes from playing the 0.6.0 release candidates, shipped as the next rc. Runs alongside E5's people-only stories.
 
@@ -1342,10 +1342,11 @@ Done when: the next 0.6.0 release candidate is cut with every story below checke
   - Test: `tests/test_build_ruler.gd` (yardage and par text, the auto-par rule, rings present only when they should be), `tests/test_keyboard.gd` (the ruler follows the keyboard cursor); screenshots at 0.5x and 1x.
   - Touches: `scenes/`, `course/`, `docs/`
   - Done 2026-11-11: `scenes/build_ruler.gd` (`BuildRuler`, one overlay node, a child of the BuildTool, hidden whenever the tool is inactive, so in Play): with the Cup tool and the picked hole's tee down, a line on the ground from the tee to the mouse or keyboard cursor with "285 yd: par 3" (`CourseValidator.turn_point` with the cup at the cursor, so on a hole whose own fairway already bends the ruler runs tee -> turn -> cursor with a dot at the turn, D47/D51; otherwise the straight line; the number is the `hole_yardage` the cup then gets). With the Tee or Cup tool, rings round the tee on the drawn ground, clipped to the map: the driver's carry and total (`Club.total_yd`, new in `golf/clubs.tres`, the measured totals from docs/design.md Clubs; `tests/test_clubs.gd` remeasures them) and rule 4's `par4_min_yd` and `par5_min_yd`, each labelled where it crosses the line being measured. Measured only on a change of cursor, tee, tool or ground, rings laid only on a tee or ground change (D52). Auto par: the tools place with `CourseBuilder.place_tee/place_cup(..., auto_par)`, so a hole with both gets its yardage's par in the same undo step (on a tee move too, not only the cup), unless `HoleData.par_by_hand` (set by the par buttons, saved as the optional `"par_by_hand": true`); the hole panel says when a hand-picked par disagrees. First-hole hint in the hole panel until a cup is down (`first_par3_min_yd`/`max_yd` in `course/builder_tuning.tres`). F1 help and `docs/how-to-play.md` list each club's carry and total. Note: the backlog's "about 295 with roll" is the pre-E6-S19 driver; the measured total is 282 yd. At 0.5x and nearer the rings are mostly off screen round the tee (the carry ring is 47 tiles out); they read at 0.175x or when the view is on the landing area. Screenshots `docs/decisions/e8-s5-*.png`. Tests: `tests/test_build_ruler.gd` (17), `tests/test_keyboard.gd`, `tests/test_clubs.gd`.
-- [ ] E8-S3 Cut the next release candidate. Testers get the fixes.
+- [x] E8-S3 Cut the next release candidate. Testers get the fixes.
   - Accept: `/ship-it` as for 0.6.0-rc2 (E7-S6), tag, GitHub pre-release with the builds, the download page pointed at it.
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`
+  - Done 2026-11-11: `/ship-it` cut 0.6.0-rc3 (tag `v0.6.0-rc3`) with E8-S1, S2, S4 and S5: tests 1216/1216 (a first run under load 12 failed one timed test and passed on rerun), playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
 ## E9: Cart paths matter — planned
 
