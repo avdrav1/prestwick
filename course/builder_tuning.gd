@@ -32,6 +32,9 @@ const PATH: String = "res://course/builder_tuning.tres"
 ## At 0.5x and nearer they are drawn at their own size; at the farthest zoom step (0.175x) they
 ## grow to show as at 0.5x, over the terrain, so a framed hole's tee and pin still read.
 @export var marker_min_screen_scale: float = 0.5
+## The pin's pennant (E7-S1, art/specs/hole_markers.md): seconds each wave frame shows, in the
+## cycle still, mid, full, mid (HoleMarker.PENNANT_CYCLE); 0 holds it still.
+@export var pennant_frame_s: float = 0.18
 
 ## Unowned land (E6-S5, art/specs/land.md): the modulate on the ground (and side face) of a
 ## tile on a parcel the player does not own (E3-S58; on every top, riser and edge cue before). The hatch and parcel lines are the pattern.

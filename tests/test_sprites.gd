@@ -199,3 +199,45 @@ func test_hole_marker_frames_keep_their_spec() -> void:
 	for f: StringName in HoleMarker.SHEET_FRAMES:
 		var rr: Rect2 = HoleMarker.SHEET_FRAMES[f][0]
 		assert_true(Rect2(Vector2.ZERO, Vector2(img.get_size())).encloses(rr), "%s inside the sheet" % f)
+
+
+func test_the_pennant_waves_and_wraps() -> void:
+	# E7-S1: one wave cycle is pin_0, pin_1, pin_2, pin_1, then pin_0 again, each frame
+	# pennant_frame_s seconds (BuilderTuning).
+	var s: float = BuilderTuning.load_default().pennant_frame_s
+	assert_gt(s, 0.0, "a tunable rate")
+	var seen: Array[int] = []
+	for i: int in 9:
+		seen.append(HoleMarker.pennant_frame((i + 0.5) * s, s))
+	assert_eq(seen, [0, 1, 2, 1, 0, 1, 2, 1, 0], "advances with time and wraps")
+	assert_eq(HoleMarker.pennant_frame(1000.0 * HoleMarker.PENNANT_CYCLE.size() * s + 0.5 * s, s), 0,
+			"wraps however long the course has been open")
+	assert_eq(HoleMarker.pennant_frame(5.0, 0.0), 0, "a zero rate holds the still frame")
+
+
+func test_every_pin_shows_the_one_pennant_the_course_view_turns() -> void:
+	# E7-S1: every pin draws the one shared pennant texture; the view's clock writes the frame
+	# into it, so the wave costs one 16 x 36 upload per frame change, whatever the hole count.
+	# (Headless, the dummy renderer keeps a texture's first pixels, so the frame written is read
+	# from pennant_image; the screenshot shows the texture itself waving.)
+	var sheet: Image = (load(HoleMarker.SHEET_PATH) as Texture2D).get_image()
+	var frame_data := func(i: int) -> PackedByteArray:
+		var r: Rect2 = HoleMarker.SHEET_FRAMES[StringName("pin_%d" % i)][0]
+		return sheet.get_region(Rect2i(r)).get_data()
+	var view := CourseView.new()
+	add_child_autofree(view)
+	var s: float = view.pennant_frame_s
+	assert_eq(HoleMarker.pennant_texture(), HoleMarker.pennant_texture(), "one texture for every pin")
+	assert_eq(HoleMarker.pennant_texture().get_size(), Vector2(16, 36))
+	view.tick_pennant(-view.pennant_time)
+	assert_eq(HoleMarker.pennant_shown, 0)
+	assert_eq(HoleMarker.pennant_image().get_data(), frame_data.call(0), "still at the start")
+	view.tick_pennant(s * 1.01)
+	assert_eq(HoleMarker.pennant_shown, 1)
+	assert_eq(HoleMarker.pennant_image().get_data(), frame_data.call(1), "mid wave")
+	view.tick_pennant(s)
+	assert_eq(HoleMarker.pennant_image().get_data(), frame_data.call(2), "full wave")
+	view.tick_pennant(s * 2.0)
+	assert_eq(HoleMarker.pennant_shown, 0, "back to still: it wraps")
+	view.tick_pennant(s * 0.1)
+	assert_eq(HoleMarker.pennant_shown, 0, "no change inside a frame's time")

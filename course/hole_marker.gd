@@ -37,6 +37,8 @@ const SHEET_FRAMES: Dictionary = {
 	&"pin_1": [Rect2(39, 0, 16, 36), Vector2(2, 34)],
 	&"pin_2": [Rect2(56, 0, 16, 36), Vector2(2, 34)],
 }
+## E7-S1: the pennant's wave, as pin frames in order: still, mid, full, mid, then round again.
+const PENNANT_CYCLE: Array[int] = [0, 1, 2, 1]
 ## How many tiles in front label_covered looks for higher ground before casting rays: at 0.5x
 ## the number stands about two tiles' worth of height over its tile.
 const LIFT_REACH: int = 4
@@ -235,7 +237,9 @@ func _draw() -> void:
 			_draw_frame(&"tee_block", Vector2(side * tee_block_offset, -block_lift[i] / k))
 	else:
 		_draw_frame(&"cup", Vector2.ZERO)
-		_draw_frame(&"pin_0", Vector2.ZERO)
+		# The pole and its waving pennant (E7-S1): the one texture every pin shares.
+		var pin: Array = SHEET_FRAMES[&"pin_0"]
+		draw_texture(pennant_texture(), -(pin[1] as Vector2))
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -253,6 +257,50 @@ static func _sheet_texture() -> Texture2D:
 	if _texture == null:
 		_texture = load(SHEET_PATH) as Texture2D
 	return _texture
+
+
+## The pin frame (0 still, 1 mid wave, 2 full wave) the pennant shows `t` seconds into its wave
+## at `frame_s` seconds a frame (BuilderTuning.pennant_frame_s, E7-S1); PENNANT_CYCLE wraps. A
+## rate of 0 or less holds the still frame.
+static func pennant_frame(t: float, frame_s: float) -> int:
+	if frame_s <= 0.0:
+		return 0
+	return PENNANT_CYCLE[posmod(int(floorf(t / frame_s)), PENNANT_CYCLE.size())]
+
+
+## The pin frame the shared pennant texture shows now.
+static var pennant_shown: int = 0
+static var _pennant: ImageTexture
+static var _pennant_frames: Array[Image] = []
+
+
+## The pole and pennant every pin draws (E7-S1): one texture shared by all of them, whose
+## pixels show_pennant swaps for the next wave frame. The pins' draw commands keep pointing at
+## it, so the wave redraws no pin and costs one 16 x 36 upload a frame change, whatever the
+## hole count.
+static func pennant_texture() -> ImageTexture:
+	if _pennant == null:
+		var sheet: Image = _sheet_texture().get_image()
+		for i: int in 3:
+			var r: Rect2 = SHEET_FRAMES[StringName("pin_%d" % i)][0]
+			_pennant_frames.append(sheet.get_region(Rect2i(r)))
+		_pennant = ImageTexture.create_from_image(_pennant_frames[pennant_shown])
+	return _pennant
+
+
+## The pixels of the frame pennant_texture shows now.
+static func pennant_image() -> Image:
+	pennant_texture()
+	return _pennant_frames[pennant_shown]
+
+
+## Shows pin frame `frame` on every pin (its pixels into pennant_texture), if not shown already.
+static func show_pennant(frame: int) -> void:
+	if frame == pennant_shown and _pennant != null:
+		return
+	var tex: ImageTexture = pennant_texture()
+	pennant_shown = frame
+	tex.update(_pennant_frames[frame])
 
 
 ## The tee's hole number, on `label`, at screen size (text_scale).

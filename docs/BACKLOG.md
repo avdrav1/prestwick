@@ -1269,11 +1269,12 @@ Ships as 0.6.0-rc2 for E5-S8's testers. Runs alongside E5, whose last stories (S
 
 Done when: 0.6.0-rc2 is cut with every story below checked.
 
-- [ ] E7-S1 Wave the pin's pennant. The flag reads as alive and shows where the cup is from afar.
+- [x] E7-S1 Wave the pin's pennant. The flag reads as alive and shows where the cup is from afar.
   - Note: (from E5-S3) the pennant's wave frames exist in `art/sprites/hole_markers.png` but are not animated.
   - Accept: every cup's pennant cycles its wave frames at a tunable rate, in Build and Play, at every zoom; frames stay in step with nothing else (no per-frame cost that grows with the hole count).
   - Test: `tests/test_sprites.gd`: the pennant's frame advances with time and wraps; screenshot.
   - Touches: `course/`, `tests/`
+  - Done 2026-11-11: every pin draws one shared `ImageTexture` (`HoleMarker.pennant_texture`) in place of the `pin_0` region; CourseView's one clock (`tick_pennant`, from `_process`, in Build and Play at every zoom) picks the frame (`HoleMarker.pennant_frame`: `PENNANT_CYCLE` still, mid, full, mid, wrapping) and `HoleMarker.show_pennant` writes that frame's pixels into the texture only when it changes. The pins' draw commands keep pointing at the texture, so the wave redraws no pin: one 16 x 36 upload a frame change, whatever the hole count. Rate `pennant_frame_s` 0.18 s (`course/builder_tuning.tres`; 0 holds it still), a line in `docs/design.md`; `art/specs/hole_markers.md` status updated. Tests: `tests/test_sprites.gd` (the frame advances with time and wraps, a zero rate holds; one shared texture, and the view's clock turns it 0, 1, 2, back to 0, with no change inside a frame's time; headless keeps a texture's first pixels, so the frame written is read back from `pennant_image`). Screenshots looked at: `docs/decisions/e7-s1-pennant-0.5x.png` (one pin at 10, 21 and 32 frames in Build, 8x: still, mid and full wave) and `-pennant-play-0.175x.png` (Play at the farthest step, two frames, different pennants).
 - [ ] E7-S2 Draw the green view's pin and ball from the sprites. The inset matches the course.
   - Note: (from E5-S3) `scenes/green_view.gd` still draws its own pin and ball in code; it should use the hole marker and ball sprites (D62), turned upright with the view (E3-S71).
   - Accept: the green view's pin, cup and ball are the sprite art at the inset's scale; the putt line, marker and contours are unchanged.

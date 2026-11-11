@@ -3,7 +3,9 @@
 > Status (E5-S3): final art, `python3 scripts/art_sprites.py markers` (D62). `HoleMarker` draws
 > two `tee_block` frames either side of the tile centre and the `cup` under `pin_0`, scaled by
 > its shape_scale; the frames differ in size, so `HoleMarker.SHEET_FRAMES` names each region and
-> anchor. The pennant's wave frames (`pin_1`, `pin_2`) are drawn but not animated yet. The
+> anchor. The pennant waves (E7-S1): `pin_0`, `pin_1`, `pin_2`, `pin_1`, round again, each frame
+> `pennant_frame_s` (`course/builder_tuning.tres`); every pin draws one shared texture
+> (`HoleMarker.pennant_texture`) whose pixels CourseView's clock swaps, so no pin redraws. The
 > overhead green inset (`scenes/green_view.gd`) keeps its code drawing.
 
 ## Purpose

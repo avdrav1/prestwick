@@ -15,6 +15,7 @@ clubhouse_tee_search = 12
 issue_box_max_stack = 96.0
 issue_box_max_side = 160.0
 marker_min_screen_scale = 0.5
+pennant_frame_s = 0.18
 unowned_tint = Color(0.62, 0.62, 0.68, 1)
 height_shade = PackedFloat32Array(0.8, 0.9, 1, 1.025, 1.05, 1.07, 1.09, 1.1)
 height_shaded = PackedStringArray("rough", "water", "trees", "oob")

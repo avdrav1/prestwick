@@ -161,6 +161,10 @@ var issue_max_side: float = 0.0
 ## The smallest a hole marker shows on screen, times its 1x size (BuilderTuning
 ## marker_min_screen_scale, D45).
 var marker_min_screen_scale: float = 0.5
+## The pins' pennant wave (E7-S1): seconds a frame (BuilderTuning.pennant_frame_s) and how long
+## it has waved. One clock for every pin, in Build and Play, at every zoom.
+var pennant_frame_s: float = 0.18
+var pennant_time: float = 0.0
 
 ## Whether the ground draws its sheets' Play textures (TileSheet.texture_for, E3-S55).
 var play_art: bool = false:
@@ -196,6 +200,7 @@ func _init() -> void:
 	issue_max_stack = tuning.issue_box_max_stack
 	issue_max_side = tuning.issue_box_max_side
 	marker_min_screen_scale = tuning.marker_min_screen_scale
+	pennant_frame_s = tuning.pennant_frame_s
 	terrain = TerrainMesh.new(TerrainTuning.load_default(), TileArt.load_default(), tuning)
 	# The ground's chunks Y-sort with everything else through this Y-sorted child at the origin.
 	_ground_root = Node2D.new()
@@ -599,7 +604,8 @@ func issue_label_rects() -> Array[Rect2]:
 	return out
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	tick_pennant(delta)
 	# The frame's budget counts what edits drew before this (input runs first), and starts
 	# again after it.
 	if drawing_pending():
@@ -614,6 +620,13 @@ func _process(_delta: float) -> void:
 		return
 	if not is_equal_approx(s, _issue_layout_scale):
 		layout_issue_labels(s)
+
+
+## Moves the pins' pennant wave on by `delta` seconds (E7-S1): a new frame goes into the one
+## texture every pin draws (HoleMarker.show_pennant), so no pin redraws.
+func tick_pennant(delta: float) -> void:
+	pennant_time += delta
+	HoleMarker.show_pennant(HoleMarker.pennant_frame(pennant_time, pennant_frame_s))
 
 
 ## Keeps every tee marker's hole number at its screen size at a zoom of `scale` screen px per
