@@ -1377,6 +1377,37 @@ Done when: on a course with a far tee, laying a cart path between the green and 
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc4 (tag `v0.6.0-rc4`) with E9-S1 to S3 (D65): tests 1230/1230, playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
+## E10: First-hour fixes — active
+
+From the rc4 tester's first impressions (`docs/playtests/2026-11-11-rc-testers.md`): the game must say what to do, aiming must hold still, the swing bar must explain itself, and water must behave like water. Ships as the next release candidate (rc5).
+
+Done when: rc5 is cut with every story below checked.
+
+- [ ] E10-S1 Give a new course a goal checklist. A new player always knows the next step.
+  - Note: (tester, rc4) "I'm not sure what I should be doing": tried Play with no hole, found Tee and Cup late, didn't know what the clubhouse does, whether a second hole is possible, or how to make money. The user chose a SimGolf-style goal checklist.
+  - Accept: on a New course a small panel lists steps that tick as they are done, each with a one-line how: place a tee (pick Tee, click your land), place a cup (the ruler shows the length), paint a green round the cup, the hole opens, guests arrive from the clubhouse and pay (that is how you make money), buy a parcel, build hole 2, reach 3 stars. The panel collapses to a one-line "Next: ..." and can be reopened from the menu; it is saved with the game; done steps stay done. Play hole is disabled while no hole has a tee and cup, with a tooltip saying why. The Clubhouse tool's tooltip says what the clubhouse does. Keyboard reachable (F6).
+  - Test: `tests/test_goals.gd`; screenshots of the panel at the start and mid-way.
+  - Touches: `scenes/`, `course/`, `tests/`
+- [ ] E10-S2 Hold the camera still while aiming. Small mouse moves aim; they do not pan.
+  - Note: (tester, rc4) "small mouse movements translate to big camera movements ... hard to steady it and actually aim". The user chose: the camera holds still while aiming and glides only when the aim marker would leave a safe box covering most of the screen; C still recentres.
+  - Accept: while aiming with the mouse or keys, the camera does not move as long as the ball and the aim marker are inside the safe box (tunable margins); when the marker leaves it the camera glides (eased, tunable speed) just enough to bring it back; the green view and zoom keep working; no jump when switching club or aiming by keys.
+  - Test: `tests/test_play_camera.gd` (or the camera tests that exist); a short recorded sequence of frames.
+  - Touches: `scenes/`, `tests/`
+- [ ] E10-S3 Explain the swing bar. Power reads as yards.
+  - Note: (tester, rc4) "not sure how my swing relates to the distance ... I think I'm supposed to stop it so that my swing is in the green part?" The user chose all three: labels on the bar, a live distance readout, and a one-time practice hint.
+  - Accept: the bar shows the club's yards at 50%, 100% and max (from `golf/clubs.tres` and the lie), and the green zone is labelled for accuracy; while the power click is being set, a readout shows the yards that power gives and the landing marker on the map moves with it; the first swing of a new game shows a short hint (click 1 starts, click 2 sets distance, click 3 in the green zone keeps it straight), dismissed by swinging, never shown again (saved in settings). Putts read in feet or yards to the cup as today.
+  - Test: `tests/test_swing.gd`; screenshots of the bar with labels and the readout.
+  - Touches: `scenes/`, `golf/` (read only), `tests/`
+- [ ] E10-S4 Let water find its level. No more towering pools.
+  - Note: (tester, rc4) "you can paint water on the land at any height ... I could make really tall, towering pools". The user chose: painting water floods the connected low ground up to the lowest rim around it, so water never stands on a hill. Needs a `/decision` (the water rule, its cost: each flooded tile charged at water's price, as one undo step, and what happens to existing courses and generated land with water above its rim).
+  - Accept: painting water on a tile fills the basin it sits in (connected tiles at or below the fill level, the lowest height at which the water would spill), within owned land, charged per tile, one undo step; painting water where no basin holds it (a peak or a slope that drains off the map or onto unowned land) fills nothing and says why ("water would run off: dig a hollow first"); raising or lowering ground next to water re-levels it (drains or spreads) as part of the same step; holes, clubhouse and decor in the way are respected (tees and greens refuse flooding with a reason). Loaded courses and generated land keep their water as is (generated land already sits in hollows: check and say).
+  - Test: `tests/test_water.gd`; screenshots of a filled pond before and after.
+  - Touches: `course/`, `tests/`
+- [ ] E10-S5 Cut the next release candidate (rc5).
+  - Accept: `/ship-it` as for E9-S4; tag, GitHub pre-release, download page.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
