@@ -16,6 +16,11 @@ if ! command -v "$GODOT" >/dev/null 2>&1; then
 fi
 # A fresh clone has no .godot/ class cache; class_name lookups fail until imported once.
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || { echo "import failed" >&2; exit 1; }
+# The smoke saves, loads and writes settings: give it a throwaway user:// so it never touches
+# the player's own saves, autosaves or settings ($XDG_DATA_HOME/godot/app_userdata/Prestwick).
+PLAYTEST_DATA="$(mktemp -d)"
+trap 'rm -rf "$PLAYTEST_DATA"' EXIT
+export XDG_DATA_HOME="$PLAYTEST_DATA"
 cmd=("$GODOT" --headless --path . --fixed-fps 60 -s res://scripts/playtest.gd)
 
 status=0

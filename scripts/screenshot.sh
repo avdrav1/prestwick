@@ -17,6 +17,10 @@ fi
 
 GODOT="${GODOT:-godot}"
 if [ -x .bin/godot ]; then GODOT=.bin/godot; fi
+# A throwaway user:// so a fixture never writes the player's saves or settings.
+SHOT_DATA="$(mktemp -d)"
+trap 'rm -rf "$SHOT_DATA"' EXIT
+export XDG_DATA_HOME="$SHOT_DATA"
 if ! command -v "$GODOT" >/dev/null 2>&1; then
   echo "godot not found. Run scripts/install_godot.sh or set GODOT=/path/to/godot" >&2
   exit 2
