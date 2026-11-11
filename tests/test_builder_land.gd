@@ -139,6 +139,7 @@ func test_bought_land_can_be_edited() -> void:
 func test_the_sandbox_edits_everywhere() -> void:
 	var c := CourseBuilder.new_sandbox()
 	var b := _builder(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	assert_true(b.paint(Vector2i(0, 0), Surface.Type.WATER, 3))
 	assert_true(b.place_tee(1, Vector2i(127, 127), 3))
 	assert_eq(_refusals, [] as Array[String])

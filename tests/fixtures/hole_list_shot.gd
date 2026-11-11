@@ -45,6 +45,7 @@ func _ready() -> void:
 		return
 	main.show_course(c)
 	main.hole_panel.row_for(3).pick_button.pressed.emit()
+	main.build_tool.builder.level_water = false  # D66: a water tile as a plain paint
 	main.build_tool.builder.paint(Vector2i(4, 44), Surface.Type.WATER, 1)
 	main.build_tool.builder.paint(Vector2i(6, 44), Surface.Type.ROUGH, 1)
 	if picked_faults:

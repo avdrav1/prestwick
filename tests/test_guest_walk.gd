@@ -20,6 +20,7 @@ func _strip(surface: Surface.Type = Surface.Type.ROUGH) -> CourseData:
 
 func _paint(c: CourseData, cells: Array, surface: Surface.Type) -> void:
 	var b := CourseBuilder.new(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	b.begin_stroke()
 	for cell: Vector2i in cells:
 		b.paint(cell, surface, 1)

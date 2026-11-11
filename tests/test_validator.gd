@@ -670,6 +670,7 @@ func test_reach_update_relabels_only_when_a_crossing_changes() -> void:
 func test_a_cached_check_gives_the_same_issues_as_a_fresh_one_after_edits() -> void:
 	var c := LandGenerator.generate(7)
 	var b := CourseBuilder.new(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	var NineHoles: GDScript = load("res://tests/fixtures/nine_holes.gd")
 	NineHoles.build(b)
 	_assert_matches_fresh(b, "nine holes built")

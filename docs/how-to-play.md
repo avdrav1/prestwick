@@ -29,6 +29,7 @@ How far each club goes with a perfect swing from flat fairway, in yards:
 | pw | 113 | 123 |
 | sw | 102 | 110 |
 - **Clubhouse** moves the clubhouse (right-click or R turns its door); guests start and finish there. **Decor** places scenery that never touches the ball.
+- **Water** finds its level: dig a hollow (Lower), then paint water in it and the whole hollow fills, flat, up to just under its lowest edge, at water's price for each tile filled. Water on a hill, on open flat ground, or in a hollow that touches the map's edge or land you don't own would run off, so nothing is painted. Water won't cover a tee, a green, a hole's tee or cup, the clubhouse or decor. Raise and Lower skip water; lowering the bank beside a pond to the water's level lets the water spread onto it, or drain away if that opens a way out.
 - **Cart path** ($5 a tile) is the quick way round for guests: they walk half as fast again on a path, and slower through trees, bunkers, water and up hills. Lay one from beside a green to the next tee (or from the clubhouse to the first tee) where the walk is long, and guests take it whenever it saves them time. A ball bounces and runs on a path, so keep paths off the line of play.
 - The **fee slider** sets the green fee. Higher fees bring fewer guests; the most you can charge is $25 per star.
 

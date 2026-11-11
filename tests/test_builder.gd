@@ -49,6 +49,7 @@ func test_every_palette_surface_paints() -> void:
 	assert_eq(CourseBuilder.PALETTE.size(), Surface.COUNT, "every surface of docs/design.md, oob included (D9)")
 	var c := _flat()
 	var b := CourseBuilder.new(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	for n: int in CourseBuilder.PALETTE.size():
 		var s: Surface.Type = CourseBuilder.PALETTE[n]
 		b.paint(Vector2i(n, 0), s, 1)
@@ -108,6 +109,7 @@ func test_50_edits_then_50_undos_restore_the_hash() -> void:
 	var c := HeightsFixture.build()
 	var original: String = c.content_hash()
 	var b := CourseBuilder.new(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 50
 	var sizes := BuilderTuning.load_default().brush_sizes
@@ -244,6 +246,7 @@ func test_main_paints_through_the_builder_in_build_mode() -> void:
 	var tool: BuildTool = m.build_tool
 	assert_true(tool.active, "starts in Build")
 	assert_same(tool.builder.course, m.course, "the tool writes the shown course")
+	tool.builder.level_water = false  # D66: water as a plain paint here, not a flood
 	tool.select_surface(Surface.Type.WATER)
 	tool.brush_size = 3
 	tool.press_at(_at(Vector2i(4, 4), 0, Vector2(0.5, 0.5)))

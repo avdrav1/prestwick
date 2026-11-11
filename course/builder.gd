@@ -81,6 +81,16 @@ extends RefCounted
 ## edits the rest of its tiles, and one with only clubhouse tiles is refused, CLUBHOUSE_HERE),
 ## and no tee or cup; a tee or cup that would run its hole's straight line through it is
 ## refused (CLUBHOUSE_IN_THE_WAY), as a move across a hole's line of play is.
+##
+## Water finds its level (E10-S4, D66, course/water_level.gd): painting water floods the basin
+## the dab lands in, flat at one step under its lowest rim, charged water's price for each tile
+## it changes, as the dab's one step; water that would run off (off the map or off owned land)
+## is refused (RUNS_OFF), and so is a basin over a tee or green, a hole's tee or cup, the
+## clubhouse or decor (FLOODS). Raise and lower skip water tiles (KEEPS_LEVEL when a brush has
+## nothing else); a lower that brings a tile to the level of water beside it re-levels that water
+## in its own step: spreads it over its basin, charged as a paint, or drains it to rough when it
+## now reaches a drain. Loaded water is kept as it is. `level_water` false paints water as before
+## D66 (fixtures that lay water on flat ground); the game never sets it.
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
@@ -123,6 +133,13 @@ const TOO_MANY_HOLES: String = "a course has at most %d holes"
 const CLUBHOUSE_HERE: String = "the clubhouse is here"
 ## The reason a tee or cup whose hole's line would run through the clubhouse is refused (E5-S9).
 const CLUBHOUSE_IN_THE_WAY: String = "the clubhouse is in the way"
+## D66: the reason water painted where its basin reaches a drain is refused.
+const RUNS_OFF: String = "water would run off: dig a hollow first"
+## D66: the reason a flood over a tee, a green, a hole's tee or cup, the clubhouse or decor is
+## refused, with what it would cover (WaterLevel.blocker).
+const FLOODS: String = "water would flood %s: raise the ground round it first"
+## D66: the reason a raise or lower with only water under the brush is refused.
+const KEEPS_LEVEL: String = "water keeps its level: paint it first"
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
@@ -234,6 +251,14 @@ var _lines_now: Dictionary = {}
 ## The tiles each kept line's turn read ({tile: true}), by the same key.
 var _lines_reads: Dictionary = {}
 var _lines_revision: int = -1
+## D66: water finds its level when painted, and re-levels on a lower beside it. Fixtures that
+## lay water on flat ground as before D66 set it false; the game never does.
+var level_water: bool = true
+## D66: within a stroke, the tiles (index -> 1) a water search found to run off, so a drag over
+## open ground does not search the same plain each frame. Valid while no ground moves: a flood
+## raises only tiles of a basin that holds, which cannot make a runoff tile hold. Cleared when a
+## stroke begins or ends and on every raise or lower.
+var _runoff: PackedByteArray = PackedByteArray()
 
 
 func _init(p_course: CourseData, p_tuning: BuilderTuning = null, p_validator: CourseValidator = null,
@@ -376,6 +401,8 @@ func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 	assert(Surface.is_valid(surface), "surface out of range")
 	if _refuse(edit_refusal(center, size)):
 		return false
+	if surface == Surface.Type.WATER and level_water:
+		return _paint_water(center, size)
 	var cells: Array[Vector2i] = _paint_cells(center, surface, size)
 	var cost: int = cells.size() * _economy.price_of(surface)
 	if _refuse(money_refusal(cost)):
@@ -391,6 +418,9 @@ func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 func paint_cost(center: Vector2i, surface: Surface.Type, size: int) -> int:
 	if _course.has_unlimited_budget():
 		return 0
+	if surface == Surface.Type.WATER and level_water:
+		var plan: Array = _plan_water(center, size)
+		return 0 if not (plan[1] as String).is_empty() else (plan[0] as Dictionary).size() * _economy.price_of(surface)
 	return _paint_cells(center, surface, size).size() * _economy.price_of(surface)
 
 
@@ -400,7 +430,14 @@ func paint_cost(center: Vector2i, surface: Surface.Type, size: int) -> int:
 func lift_cost(center: Vector2i, size: int, delta: int) -> int:
 	if _course.has_unlimited_budget():
 		return 0
-	return _lift_cells(center, size, delta).size() * _economy.height_step_price
+	var cells: Array[Vector2i] = _lift_cells(center, size, delta)
+	var spread: int = 0
+	if delta < 0 and level_water:
+		var plan: Array = _plan_relevel(cells, delta)
+		if not (plan[2] as String).is_empty():
+			return 0
+		spread = (plan[0] as Dictionary).size()
+	return cells.size() * _economy.height_step_price + spread * _economy.price_of(Surface.Type.WATER)
 
 
 ## Raises the owned ground under the brush one step, clamped at MAX_HEIGHT. True when any
@@ -420,6 +457,7 @@ func begin_stroke() -> void:
 	end_stroke()
 	_stroke = Step.new()
 	_stroke_lifted = {}
+	_runoff = PackedByteArray()
 	if _course.revision == _lines_revision:
 		_stroke.lines = _lines_now.duplicate()
 		_stroke.lines_reads = _lines_reads.duplicate()
@@ -432,6 +470,7 @@ func end_stroke() -> void:
 	var step: Step = _stroke
 	_stroke = null
 	_stroke_lifted = {}
+	_runoff = PackedByteArray()
 	if not step.is_empty():
 		_finish(step)
 
@@ -955,15 +994,158 @@ func _lift(center: Vector2i, size: int, delta: int) -> bool:
 	if _refuse(edit_refusal(center, size)):
 		return false
 	var cells: Array[Vector2i] = _lift_cells(center, size, delta)
-	var cost: int = cells.size() * _economy.height_step_price
+	if cells.is_empty() and level_water:
+		for c: Vector2i in _owned_cells(brush_cells(center, size)):
+			if _course.get_surface(c.x, c.y) == Surface.Type.WATER:
+				_refuse(KEEPS_LEVEL)
+				return false
+	var spread := {}
+	var drain := {}
+	if delta < 0 and level_water and not cells.is_empty():
+		var plan: Array = _plan_relevel(cells, delta)
+		if _refuse(plan[2]):
+			return false
+		spread = plan[0]
+		drain = plan[1]
+	var cost: int = cells.size() * _economy.height_step_price \
+			+ spread.size() * _economy.price_of(Surface.Type.WATER)
 	if _refuse(money_refusal(cost)):
 		return false
+	_runoff = PackedByteArray()
 	var tiles := {}
 	for c: Vector2i in cells:
 		_write(tiles, c, _course.get_height(c.x, c.y) + delta, _course.get_surface(c.x, c.y))
 		if _stroke != null:
 			_stroke_lifted[c] = true
+	for c: Vector2i in spread:
+		_write(tiles, c, spread[c], Surface.Type.WATER)
+	for c: Vector2i in drain:
+		_write(tiles, c, _course.get_height(c.x, c.y), Surface.Type.ROUGH)
 	return _commit(tiles, cost)
+
+
+## D66: paints water as a flood (_plan_water), charged water's price per tile it changes.
+func _paint_water(center: Vector2i, size: int) -> bool:
+	var plan: Array = _plan_water(center, size)
+	if _refuse(plan[1]):
+		return false
+	var writes: Dictionary = plan[0]
+	var cost: int = writes.size() * _economy.price_of(Surface.Type.WATER)
+	if _refuse(money_refusal(cost)):
+		return false
+	# A flood may write thousands of tiles: read each old value from the packed tiles once.
+	var tiles := {}
+	var packed: PackedByteArray = _course.packed_tiles()
+	var w: int = _course.width
+	for c: Vector2i in writes:
+		tiles[c] = packed[c.y * w + c.x]
+		_set_tile(c, writes[c], Surface.Type.WATER)
+	return _commit(tiles, cost)
+
+
+## D66: what painting water with a brush of `size` on `center` would write, [writes, refusal]:
+## `writes` maps each tile the flood changes to its water level (the union of the basins of the
+## owned brush tiles not already water that hold, WaterLevel.fill); `refusal` is FLOODS when a
+## basin would cover a tee, a green, a hole's tee or cup, the clubhouse or decor, RUNS_OFF when
+## no brush tile's basin holds, else "". Seeds a search found to run off within the open stroke
+## are not searched again (_runoff).
+func _plan_water(center: Vector2i, size: int) -> Array:
+	var writes := {}
+	var w: int = _course.width
+	if _runoff.size() != w * _course.height:
+		_runoff = PackedByteArray()
+		_runoff.resize(w * _course.height)
+	var covered := {}
+	var ran_off: bool = false
+	var held: bool = false
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
+		var i: int = c.y * w + c.x
+		if _course.get_surface(c.x, c.y) == Surface.Type.WATER or covered.has(i):
+			continue
+		if _runoff[i] != 0:
+			ran_off = true
+			continue
+		var basin: WaterLevel.Basin = WaterLevel.fill(_course, c)
+		for j: int in basin.runoff:
+			_runoff[j] = 1
+		if not basin.holds():
+			ran_off = true
+			continue
+		held = true
+		var blocked: String = WaterLevel.blocker(_course, basin.cells)
+		if not blocked.is_empty():
+			return [{}, FLOODS % blocked]
+		var tiles: PackedByteArray = _course.packed_tiles()
+		var wet: int = (basin.level << 4) | Surface.Type.WATER
+		for j: int in basin.cells:
+			covered[j] = true
+			if tiles[j] != wet:
+				@warning_ignore("integer_division")
+				writes[Vector2i(j % w, j / w)] = basin.level
+	if _stroke == null:
+		_runoff = PackedByteArray()
+	return [writes, RUNS_OFF if ran_off and not held else ""]
+
+
+## D66: what lowering `cells` by `delta` (below 0) does to water beside them, [spread, drain,
+## refusal]. Each owned water tile next to a lowered tile whose new height is that water's level
+## is re-levelled at its level over the new ground (WaterLevel.fill with the lowered heights,
+## the level fixed): if its basin still holds, `spread` maps every tile of it that is not water
+## at that level to the level; if it now reaches a drain, `drain` holds the owned water tiles
+## connected to it at that level, which become rough. Higher water first; a tile is given to the
+## first water that reaches it. `refusal` is FLOODS when a spread would cover a tee, a green, a
+## hole's tee or cup, the clubhouse or decor.
+func _plan_relevel(cells: Array[Vector2i], delta: int) -> Array:
+	var spread := {}
+	var drain := {}
+	var w: int = _course.width
+	var over := {}
+	for c: Vector2i in cells:
+		over[c.y * w + c.x] = _course.get_height(c.x, c.y) + delta
+	var seeds: Array = []
+	for c: Vector2i in cells:
+		var hc: int = over[c.y * w + c.x]
+		for d: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+			var n: Vector2i = c + d
+			if _course.in_bounds(n.x, n.y) and _course.is_owned(n.x, n.y) \
+					and _course.get_surface(n.x, n.y) == Surface.Type.WATER and _course.get_height(n.x, n.y) == hc:
+				seeds.append([hc, n])
+	if seeds.is_empty():
+		return [spread, drain, ""]
+	seeds.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	var done := {}
+	for sd: Array in seeds:
+		var level: int = sd[0]
+		var n: Vector2i = sd[1]
+		if done.has(n):
+			continue
+		var basin: WaterLevel.Basin = WaterLevel.fill(_course, n, over, level)
+		if basin.holds():
+			var blocked: String = WaterLevel.blocker(_course, basin.cells)
+			if not blocked.is_empty():
+				return [{}, {}, FLOODS % blocked]
+			for j: int in basin.cells:
+				@warning_ignore("integer_division")
+				var t := Vector2i(j % w, j / w)
+				if done.has(t):
+					continue
+				done[t] = true
+				var ht: int = over.get(j, _course.get_height(t.x, t.y))
+				if _course.get_surface(t.x, t.y) != Surface.Type.WATER or ht != level:
+					spread[t] = level
+		else:
+			var stack: Array[Vector2i] = [n]
+			done[n] = true
+			while not stack.is_empty():
+				var t: Vector2i = stack.pop_back()
+				drain[t] = true
+				for d: Vector2i in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.DOWN, Vector2i.UP]:
+					var m: Vector2i = t + d
+					if not done.has(m) and _course.in_bounds(m.x, m.y) and _course.is_owned(m.x, m.y) \
+							and _course.get_surface(m.x, m.y) == Surface.Type.WATER and _course.get_height(m.x, m.y) == level:
+						done[m] = true
+						stack.append(m)
+	return [spread, drain, ""]
 
 
 ## The owned tiles under the brush that painting `surface` would change.
@@ -976,12 +1158,14 @@ func _paint_cells(center: Vector2i, surface: Surface.Type, size: int) -> Array[V
 
 
 ## The owned tiles under the brush that raising or lowering by `delta` would move: not at the
-## clamp, and not moved already by the open stroke.
+## clamp, not moved already by the open stroke, and (D66) not water.
 func _lift_cells(center: Vector2i, size: int, delta: int) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c: Vector2i in _owned_cells(brush_cells(center, size)):
 		if _stroke != null and _stroke_lifted.has(c):
 			continue
+		if level_water and _course.get_surface(c.x, c.y) == Surface.Type.WATER:
+			continue  # D66: water keeps its level; raise and lower move ground
 		var h: int = _course.get_height(c.x, c.y)
 		if clampi(h + delta, 0, CourseData.MAX_HEIGHT) != h:
 			out.append(c)
@@ -997,7 +1181,8 @@ func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
 
 ## Writes one tile and notes it for rule 3's graph and the lines of play (_lines_now).
 func _set_tile(c: Vector2i, h: int, s: Surface.Type) -> void:
-	if (_course.get_surface(c.x, c.y) == Surface.Type.FAIRWAY) != (s == Surface.Type.FAIRWAY):
+	if not _lines_reads.is_empty() \
+			and (_course.get_surface(c.x, c.y) == Surface.Type.FAIRWAY) != (s == Surface.Type.FAIRWAY):
 		for k: Vector4i in _lines_reads.keys():
 			if (_lines_reads[k] as Dictionary).has(c):
 				_lines_now.erase(k)
@@ -1048,9 +1233,12 @@ func _commit(tiles: Dictionary, cost: int = 0) -> bool:
 		return false
 	var step: Step = _stroke if _stroke != null else Step.new()
 	_charge(step, cost)
-	for c: Vector2i in tiles:
-		if not step.tiles.has(c):
-			step.tiles[c] = tiles[c]
+	if step.tiles.is_empty():
+		step.tiles = tiles  # the caller's own, not kept: the step takes it
+	else:
+		for c: Vector2i in tiles:
+			if not step.tiles.has(c):
+				step.tiles[c] = tiles[c]
 	var cells: Array[Vector2i] = []
 	cells.assign(tiles.keys())
 	_close_footprints(step, cells)

@@ -170,6 +170,7 @@ func test_undoing_a_drag_refunds_the_whole_drag() -> void:
 func test_undo_refunds_the_charge_whatever_the_balance_did_since() -> void:
 	var c := _land_course()
 	var b := _builder(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	var price: int = b.parcel_price(NEXT_PARCEL)
 	assert_true(b.buy_parcel(NEXT_PARCEL))
 	b.paint(AT, Surface.Type.WATER, 1)
@@ -199,6 +200,7 @@ func test_an_edit_costing_more_than_the_balance_is_refused_whole() -> void:
 func test_a_drag_stops_charging_where_the_money_runs_out() -> void:
 	var c := _land_course(10 * _econ.price_of(Surface.Type.WATER) + 5)
 	var b := _builder(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	b.begin_stroke()
 	for x: int in range(50, 70):
 		b.paint(Vector2i(x, 60), Surface.Type.WATER, 1)
@@ -254,6 +256,7 @@ func test_a_negative_balance_never_ends_the_game() -> void:
 func test_new_sandbox_charges_nothing() -> void:
 	var c := CourseBuilder.new_sandbox()
 	var b := _builder(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	assert_true(b.has_unlimited_money())
 	assert_eq(b.paint_cost(AT, Surface.Type.WATER, 5), 0)
 	assert_true(b.paint(AT, Surface.Type.WATER, 5))

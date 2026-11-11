@@ -562,6 +562,7 @@ func test_a_collapsed_panel_stays_under_its_limit_with_nine_failing_holes() -> v
 func _nine_failing_worst() -> CourseData:
 	var c: CourseData = NineHoles.land(7)
 	var b := CourseBuilder.new(c)
+	b.level_water = false  # D66: water as a plain paint here, not a flood
 	NineHoles.build(b)
 	for spec: Array in NineHoles.HOLES:
 		b.paint(spec[3], Surface.Type.WATER, 1)

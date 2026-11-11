@@ -201,6 +201,10 @@ static func course() -> CourseData:
 ## Builds the course on `b`'s course. Returns the numbers that opened.
 static func build(b: CourseBuilder) -> Array[int]:
 	var course: CourseData = b.course
+	# D66: its water was laid as paint before water found its level; kept so the nine (and
+	# courses/playtest_nine.json, and every table measured on it) stays as it was.
+	var level_water: bool = b.level_water
+	b.level_water = false
 	var filled := _filled(course)
 	_shape(b, course, filled)
 	_paint(b, course, filled, Surface.Type.ROUGH)
@@ -221,6 +225,7 @@ static func build(b: CourseBuilder) -> Array[int]:
 	var first: Vector2i = (HOLES[0] as Dictionary)["tee"]
 	var spot: Array = ClubhouseRule.spot_beside(course, first, b.slot_lines(), CLUBHOUSE_REACH)
 	b.move_clubhouse(spot[0], spot[1])
+	b.level_water = level_water
 	var opened: Array[int] = []
 	for spec: Dictionary in HOLES:
 		if b.hole(spec["n"]).open:

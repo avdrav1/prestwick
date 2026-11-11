@@ -36,6 +36,7 @@ func _rules(issues: Array) -> Array[int]:
 
 
 func _paint_column(b: CourseBuilder, x: int, from_y: int, to_y: int, s: Surface.Type) -> void:
+	b.level_water = false  # D66: a water column as a plain paint, not a flood
 	b.begin_stroke()
 	for y: int in range(from_y, to_y + 1):
 		b.paint(Vector2i(x, y), s, 1)
