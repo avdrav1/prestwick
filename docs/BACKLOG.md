@@ -1240,6 +1240,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Accept: `/ship-it` produces Linux and Windows builds with an example course and a one-page how-to-play. Trademark check on "Prestwick" done by a person before any public post, as the design doc requires. Fresh-machine install works on each OS.
   - Test: launch each build on a machine without Godot.
   - Touches: `docs/`, `courses/`
+  - Progress 2026-11-11: `/ship-it` cut the playtest build 0.6.0-rc1 (tag `v0.6.0-rc1`): Linux and Windows builds with `courses/playtest_nine.json` and the one-page `docs/how-to-play.md` copied beside them; tests 1150/1150, playtest smoke and the shirt render check pass, `check_build.sh` boots the Linux build. Still open, for a person: the trademark check on "Prestwick" before any public post, and launching each build on a machine without Godot.
 - [ ] E5-S8 Run 10 playtesters. Close the MVP on outside evidence.
   - Accept: 10 people outside the project complete the checklist, with notes in `docs/playtests/`. At least two swap a course file. Bugs are filed here, pillar-level feel problems go to the icebox, balance goes to `/balance`. Recruiting them is a person's job, not an agent's.
   - Test: 10 session notes. No open crash bugs before the final `/ship-it`.
