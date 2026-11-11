@@ -10,12 +10,16 @@ extends Camera2D
 ## `snap_camera` key (C) snaps back to the ball and tracks it again.
 ##
 ## While the player aims at rest, Main also gives a lead, the aim marker (pillar 2: the
-## player must see where the shot goes). The camera then centres on the midpoint of the ball
-## and the marker, held so the ball stays on screen (CameraTuning aim_frame_margin), and if
-## both do not fit it steps the zoom out, never past CameraTuning aim_farthest_zoom (0.5x),
-## until they do. A
-## flight has no lead, so the camera follows the ball alone. The zoom comes back to the
-## player's own level (their last zoom key) when the next aim is framed with centre_on.
+## player must see where the shot goes). The first lead after a centre_on (or a snap_back)
+## frames the aim: the midpoint of the ball and the marker at the centre of the hold box
+## (hold_box: `safe_area`, the free view Main passes, inset by CameraTuning aim_hold_inset),
+## and if both do not fit it steps the zoom out, never past CameraTuning aim_farthest_zoom
+## (0.5x), until they do. After that the camera holds still (E10-S2): moving the aim, by mouse
+## or keys, or changing club does not move it while the ball and the marker stay inside the
+## hold box; when one would leave it, the camera glides (CameraTuning aim_glide_time) just far
+## enough to bring it back, the ball first when both cannot fit. A flight has no lead, so the
+## camera follows the ball alone. The zoom comes back to the player's own level (their last
+## zoom key) when the next aim is framed with centre_on.
 
 const PAN_LEFT: StringName = &"pan_left"
 const PAN_RIGHT: StringName = &"pan_right"
@@ -47,6 +51,9 @@ var lead: Vector2 = Vector2.ZERO
 var has_lead: bool = false
 ## The visible size in screen pixels. Zero, the default, reads the viewport; tests set it.
 var view_size_override: Vector2 = Vector2.ZERO
+## The part of the view the HUD leaves free, in screen px (Main.free_view_rect, set each Play
+## frame). The hold box is inset from it. Empty means the whole view.
+var safe_area: Rect2 = Rect2()
 
 var _zoom_index: int = 0
 ## The zoom level the player chose with the zoom keys (or the start level).
@@ -54,6 +61,11 @@ var _player_zoom_index: int = 0
 ## True after a zoom key, until the next centre_on: the player's zoom wins over the fit.
 var _player_zoomed: bool = false
 var _dragging: bool = false
+## True once the aim is framed (E10-S2): the camera then holds at `_hold`, moved only as far as
+## keeps the ball and the lead in the hold box. A centre_on, a snap_back or a cleared lead
+## frames the next aim afresh.
+var _held: bool = false
+var _hold: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -107,15 +119,81 @@ func set_focus(p: Vector2) -> void:
 	has_focus = true
 
 
-## Frames `p` with the focus from now on (the aim marker while aiming). A tracking camera
-## steps its zoom out until both fit, unless the player zoomed since the last centre_on.
+## Frames `p` with the focus from now on (the aim marker while aiming). The first lead of an
+## aim frames it: a tracking camera steps its zoom out until both fit the hold box, unless the
+## player zoomed since the last centre_on, and centres their midpoint in it. Every later lead
+## only moves the held point as far as keeps both in the hold box (E10-S2), so the zoom never
+## steps and the camera never jumps while the player aims.
 func set_lead(p: Vector2) -> void:
 	lead = p
 	has_lead = true
-	if tracking and has_focus and not _player_zoomed:
-		var floor_index: int = aim_floor_index()
-		while _zoom_index > floor_index and not fits(focus, lead, tuning.zoom_levels[_zoom_index]):
-			set_zoom_index(_zoom_index - 1)
+	if not (tracking and has_focus):
+		return
+	if not _held:
+		if not _player_zoomed:
+			var floor_index: int = aim_floor_index()
+			while _zoom_index > floor_index and not fits_hold(focus, lead, tuning.zoom_levels[_zoom_index]):
+				set_zoom_index(_zoom_index - 1)
+		_hold = _clamped(held_at(framed_at()))
+		_held = true
+	else:
+		_hold = _clamped(held_at(_hold))
+
+
+## The hold box (E10-S2), in screen px: `safe_area` (or the whole view) inset on each side by
+## CameraTuning aim_hold_inset of its size. While aiming, the camera holds still as long as the
+## ball and the aim marker are inside it.
+func hold_box() -> Rect2:
+	var area: Rect2 = safe_area if safe_area.has_area() else Rect2(Vector2.ZERO, view_size())
+	var inset: Vector2 = area.size * (tuning.aim_hold_inset if tuning != null else 0.0)
+	return area.grow_individual(-inset.x, -inset.y, -inset.x, -inset.y)
+
+
+## True when world points `a` and `b` both fit in the hold box at zoom `z`.
+func fits_hold(a: Vector2, b: Vector2, z: float) -> bool:
+	var d: Vector2 = (b - a).abs() * z
+	var box: Vector2 = hold_box().size
+	return d.x <= box.x and d.y <= box.y
+
+
+## Where the camera centres to frame an aim: the midpoint of the focus and held_lead at the
+## hold box's centre.
+func framed_at() -> Vector2:
+	return (focus + held_lead()) * 0.5 - (hold_box().get_center() - view_size() * 0.5) / zoom.x
+
+
+## The point the camera keeps in the hold box for the lead: the lead itself, or when the ball
+## and the lead do not both fit the box (the player zoomed in), the point along the aim line
+## from the ball that spans CameraTuning aim_hold_reach of the box. So a zoomed-in camera
+## leans toward the marker and still has room for a small turn before it glides.
+func held_lead() -> Vector2:
+	if fits_hold(focus, lead, zoom.x):
+		return lead
+	var d: Vector2 = (lead - focus).abs() * zoom.x
+	var room: Vector2 = hold_box().size * (tuning.aim_hold_reach if tuning != null else 1.0)
+	var s: float = 1.0
+	if d.x > room.x:
+		s = minf(s, room.x / d.x)
+	if d.y > room.y:
+		s = minf(s, room.y / d.y)
+	return focus + (lead - focus) * s
+
+
+## The camera position nearest `at` that shows the focus and held_lead inside the hold box at
+## the current zoom: `at` itself when both already are, the focus (the ball) first.
+func held_at(at: Vector2) -> Vector2:
+	var box: Rect2 = hold_box()
+	var half: Vector2 = view_size() * 0.5
+	var z: float = zoom.x
+	var aim: Vector2 = held_lead()
+	# A world point w shows inside the box when w - (box.end - half) / z <= position <=
+	# w - (box.position - half) / z.
+	var ball_lo: Vector2 = focus - (box.end - half) / z
+	var ball_hi: Vector2 = focus - (box.position - half) / z
+	var lead_lo: Vector2 = aim - (box.end - half) / z
+	var lead_hi: Vector2 = aim - (box.position - half) / z
+	var p: Vector2 = at.clamp(lead_lo.min(lead_hi), lead_hi.max(lead_lo))
+	return p.clamp(ball_lo.min(ball_hi), ball_hi.max(ball_lo))
 
 
 ## The farthest zoom level the aim fit steps out to (CameraTuning aim_farthest_zoom, D45): the
@@ -130,6 +208,7 @@ func aim_floor_index() -> int:
 ## Drops the lead (a flight): the camera follows the focus alone. The zoom stays.
 func clear_lead() -> void:
 	has_lead = false
+	_held = false
 
 
 ## Centres on `p` from now on: the focus moves there and the camera tracks it again, even
@@ -138,6 +217,7 @@ func clear_lead() -> void:
 func centre_on(p: Vector2, restore_zoom: bool = false) -> void:
 	set_focus(p)
 	tracking = true
+	_held = false
 	if restore_zoom:
 		has_lead = false
 		_player_zoomed = false
@@ -159,29 +239,34 @@ func view_size() -> Vector2:
 	return get_viewport_rect().size if is_inside_tree() else Vector2.ZERO
 
 
-## Where the camera wants to centre: the focus, or with a lead the midpoint of the two, held
-## so the focus stays at least aim_frame_margin screen px inside the edge.
+## Where the camera wants to centre: the focus, or with a lead the held point (E10-S2), or
+## before the aim is framed the framing (the midpoint in the hold box, the ball kept inside).
 func goal() -> Vector2:
 	if not has_lead:
 		return focus
-	var mid := (focus + lead) * 0.5
-	var reach := (view_size() * 0.5 - Vector2.ONE * _frame_margin()) / zoom.x
-	reach = reach.max(Vector2.ZERO)
-	return mid.clamp(focus - reach, focus + reach)
+	if _held:
+		return _hold
+	return held_at(framed_at())
 
 
-## Back to the ball after a pan: tracks the focus again. Nothing without one.
+## Back to the ball after a pan (C): tracks the focus again and, while aiming, frames the aim
+## afresh. Nothing without a focus.
 func snap_back() -> void:
 	if has_focus:
 		tracking = true
+		_held = false
+		if has_lead:
+			set_lead(lead)
 
 
 ## Moves the zoom one step in (+1) or out (-1), stopping at the ends. The player's choice:
-## it holds over the aim fit until the next centre_on, and centre_on comes back to it.
+## it holds over the aim fit until the next centre_on, and centre_on comes back to it. While
+## aiming, the aim is framed afresh at the new zoom (one glide, E10-S2).
 func step_zoom(direction: int) -> void:
 	set_zoom_index(_zoom_index + signi(direction))
 	_player_zoom_index = _zoom_index
 	_player_zoomed = true
+	_held = false
 
 
 func set_zoom_index(index: int) -> void:
@@ -228,6 +313,7 @@ func frame_points(a: Vector2, b: Vector2, safe: Rect2 = Rect2(), free: Array[Rec
 	tracking = false
 	has_focus = false
 	has_lead = false
+	_held = false
 	var f: Framing = frame_placement(a, b, safe, free)
 	set_zoom_index(f.zoom_index)
 	position = f.position
@@ -389,9 +475,12 @@ func frame(rect: Rect2) -> void:
 	position = _clamped(rect.get_center())
 
 
+## Eases onto goal(): at CameraTuning centre_time on a ball, at aim_glide_time while aiming.
 func _ease_to_focus(delta: float) -> void:
 	var target := _clamped(goal())
-	var t: float = tuning.centre_time if tuning != null else 0.0
+	var t: float = 0.0
+	if tuning != null:
+		t = tuning.aim_glide_time if has_lead else tuning.centre_time
 	if t <= 0.0:
 		position = target
 	else:

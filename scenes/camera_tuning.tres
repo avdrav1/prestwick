@@ -11,3 +11,6 @@ edge_margin = 128.0
 centre_time = 0.15
 aim_frame_margin = 64.0
 aim_farthest_zoom = 0.5
+aim_hold_inset = 0.12
+aim_glide_time = 0.25
+aim_hold_reach = 0.8

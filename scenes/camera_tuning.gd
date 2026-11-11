@@ -24,6 +24,17 @@ const PATH: String = "res://scenes/camera_tuning.tres"
 ## player's zoom keys still reach every level; the fit stops here so a swing is aimed at a
 ## zoom where the ball and the lie read.
 @export var aim_farthest_zoom: float = 0.5
+## Play, aiming (E10-S2): the hold box is the free view inset by this fraction of its size on
+## each side. While the ball and the aim marker are inside it the camera holds still; small
+## mouse moves turn the aim, they do not pan.
+@export var aim_hold_inset: float = 0.12
+## Play, aiming (E10-S2): when the marker or the ball leaves the hold box the camera glides
+## back, a time constant in seconds like centre_time (about 63% of the way in this time).
+@export var aim_glide_time: float = 0.25
+## Play, aiming (E10-S2): when the ball and the marker do not both fit the hold box (the player
+## zoomed in), the camera keeps the aim line in it only this fraction of the box long, leaning
+## toward the marker with room left for a small turn before it glides.
+@export var aim_hold_reach: float = 0.8
 
 
 static func load_default() -> CameraTuning:

@@ -764,7 +764,9 @@ func _process(_delta: float) -> void:
 	if mode != Mode.PLAY:
 		return
 	# The green view opens, follows the putt and closes (E3-S52), centred in the free view.
-	green_view.follow(free_view_rect())
+	var free: Rect2 = free_view_rect()
+	green_view.follow(free)
+	camera.safe_area = free  # E10-S2: the aim's hold box sits inside the free view
 	update_cup_pointer()
 	if shot_view.playing:
 		camera.clear_lead()
