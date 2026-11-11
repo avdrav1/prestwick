@@ -1263,6 +1263,42 @@ Done when: 10 people outside the project have played a build with final art and 
   - Touches: `course/`, `tests/`, `docs/`
   - Done: measured first (dc8112a, quiet machine): the far zoom held (bare nine Build 0.175x median 8.56 / p95 12.16 ms, one frame of 18.8; Play 0.175x 8.77 / 11.27; doglegs 8.22 / 10.54 and 8.78 / 10.99), but every drag and undo frame missed: bare nine breaking `drag_to` frames 30.6 / 87.9 ms, its undo 28.9 / 31.7, off-line `drag_to` 34.3 / 52.2, its undo 36.0 / 42.1; doglegs breaking `drag_to` 35.2 / 47.0, undo 43.0 / 48.0 (E3-S62: 8 to 13 ms). Cause: `TreeView.refresh_cells` rebuilt every depth row within 2 of each edited tile, and a drag emits one batch per brush step, so a `drag_to` rebuilt a few hundred rows (0.17 ms each). Fix: trees redraw tile by tile (`TreeView` keeps each tile's height and trees bit, and a Row per depth row and height holds its trees by tile), only where a tile turned to or from trees or a trees tile's height moved; a tree's foot is its tile's own height, which is the drawn ground at a land tile's centre (the new test holds it to `TerrainMesh.ground_at`), so no neighbour is read; the decor redraws only when a batch moved a height or water. After (three bare-nine runs, one doglegs; load 0.7 to 2.9 at the start): bare nine Build 0.175x 7.8 to 7.9 / 10.3 to 10.6 (worst 11.6 to 12.7), Play 0.175x 8.2 to 8.6 / 10.7 to 11.4, Play 0.5x 6.4 to 6.5 / 8.6 to 8.9, breaking `drag_to` 7.6 to 7.9 / 9.5 to 10.6, its undo 8.3 to 8.7 / 9.8 to 12.0, off-line `drag_to` 9.9 to 10.3 / 12.6 to 13.4, its undo 13.2 to 15.1 / 15.5 to 18.6 (where it ran before E5: E3-S62 15.4 to 17.2; the 585-tile undo puts back 78 trees, 0.8 ms); doglegs Build 0.175x 8.44 / 11.29, Play 0.175x 9.28 / 11.90, breaking `drag_to` 8.04 / 10.82, undo 13.06 / 14.30. D52 gate: no run fails (one doglegs run under an outside build's load 52 printed the WARNING and was retaken). Screenshots `tests/fixtures/nine_hazards_shot.tscn` (NINE_AT=tee) at 0.175x and 1x before and after are pixel-identical (`magick compare -metric AE` 0). `scripts/run_tests.sh` 1150/1150, `scripts/playtest.sh` PASS.
 
+## E7: Polish while testers play — active
+
+Ships as 0.6.0-rc2 for E5-S8's testers. Runs alongside E5, whose last stories (S7, S8, S14) wait on people (user, 2026-11-11). Agent-doable polish from E5's open notes only; nothing from the "Out of the MVP" list.
+
+Done when: 0.6.0-rc2 is cut with every story below checked.
+
+- [ ] E7-S1 Wave the pin's pennant. The flag reads as alive and shows where the cup is from afar.
+  - Note: (from E5-S3) the pennant's wave frames exist in `art/sprites/hole_markers.png` but are not animated.
+  - Accept: every cup's pennant cycles its wave frames at a tunable rate, in Build and Play, at every zoom; frames stay in step with nothing else (no per-frame cost that grows with the hole count).
+  - Test: `tests/test_sprites.gd`: the pennant's frame advances with time and wraps; screenshot.
+  - Touches: `course/`, `tests/`
+- [ ] E7-S2 Draw the green view's pin and ball from the sprites. The inset matches the course.
+  - Note: (from E5-S3) `scenes/green_view.gd` still draws its own pin and ball in code; it should use the hole marker and ball sprites (D62), turned upright with the view (E3-S71).
+  - Accept: the green view's pin, cup and ball are the sprite art at the inset's scale; the putt line, marker and contours are unchanged.
+  - Test: `tests/test_green_view.gd`; screenshot beside the course view.
+  - Touches: `scenes/`, `tests/`
+- [ ] E7-S3 Redraw the golfer fuller and looser. The figure reads as a person from every side.
+  - Note: (from E5-S3) the generated golfer is clean but stiff, and its profile views are thin. Fix it in `scripts/art_sprites.py` (D62: the script, never the PNG), keeping the 24 px size, 8 directions, three animations and the seven-shirt rows so `scripts/shirt_render_check.gd` still passes.
+  - Accept: the profile views are at least as wide as the front views' body, the swing has a visible backswing and follow-through, the walk has a stride; the shirts read apart in colour and grayscale.
+  - Test: `tests/test_sprites.gd`; the shirt render check; screenshots of the sheets and of guests on a tee at 1x and 0.5x.
+  - Touches: `art/`, `scripts/`
+- [ ] E7-S4 Make skip to morning quick. A busy day skips in a few seconds.
+  - Note: (from E4-S3) a busy day on the playtest nine is about 530,000 units of ball work and skips in 11 to 15 s, with the HUD still moving. It must still end exactly as the day run at any speed (E4-S3), and save/load replays must still match (E4-S7, E4-S11).
+  - Accept: skipping a full 24-guest day on PlaytestNine takes under 3 s of real time on the reference machine, with the screen responsive (a progress line, no frozen window), and the same end state as the played day.
+  - Test: `tests/test_day_clock.gd`; the timing in the commit.
+  - Touches: `guests/`, `scenes/`, `tests/`
+- [ ] E7-S5 Bring the off-line undo frame under budget. The last drag frame over 16.7 ms.
+  - Note: (from E5-S15) on the bare nine the off-line undo frame's p95 was 18.6, 16.0 and 15.5 ms in three quiet runs; the undo puts back about 78 trees. Measure on a quiet machine alone (D52).
+  - Accept: that frame's p95 stays under 16.7 ms in 3 of 3 quiet runs, with the look unchanged.
+  - Test: the perf output in the commit; `tests/test_sprites.gd` if tree redraws change.
+  - Touches: `course/`, `scripts/`
+- [ ] E7-S6 Cut 0.6.0-rc2. Testers get the polish.
+  - Accept: `/ship-it` as for 0.6.0-rc1 (E5-S7's progress note), tag `v0.6.0-rc2`, release note listing what changed since rc1.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
