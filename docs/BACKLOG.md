@@ -1377,7 +1377,7 @@ Done when: on a course with a far tee, laying a cart path between the green and 
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc4 (tag `v0.6.0-rc4`) with E9-S1 to S3 (D65): tests 1230/1230, playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
-## E10: First-hour fixes — active
+## E10: First-hour fixes — done
 
 From the rc4 tester's first impressions (`docs/playtests/2026-11-11-rc-testers.md`): the game must say what to do, aiming must hold still, the swing bar must explain itself, and water must behave like water. Ships as the next release candidate (rc5).
 
@@ -1407,10 +1407,11 @@ Done when: rc5 is cut with every story below checked.
   - Test: `tests/test_water.gd`; screenshots of a filled pond before and after.
   - Touches: `course/`, `tests/`
   - Done 2026-11-11 (D66): `course/water_level.gd` (`WaterLevel.fill`, a depth-first flood over the packed tiles, level by level, bounded to owned land, stopping at the first drain; `blocker`) and `CourseBuilder`: painting water floods its basin flat at one step under the lowest rim, water's price a tile, one undo step; RUNS_OFF, FLOODS (green, tee, a hole's tee or cup, the clubhouse, decor) and KEEPS_LEVEL refusals; raise and lower skip water, and a lower to the level of water beside it spreads it (charged) or drains it to rough in the same step; a drag remembers runoff tiles. Loaded water kept; generated ponds checked over seeds 1 to 200 (none above its rim; 372 of 1,553 touch the map's edge, kept). PlaytestNine and tests that paint water as plain paint set `level_water` false, so courses/playtest_nine.json is unchanged. Tests: `tests/test_water.gd` (27); 1284/1284 (on E10-S1 and S2), playtest smoke and `scripts/e4_playtest.sh --seed 1` pass. Timing (load 14 on 24 cores): a 3,600-tile pond's builder fill 9.2 ms, undo 5.2 ms (best of 5, headless); in the window with the view, its frame median 21.2 ms (over 16.7: a one-off click on a 300 yd lake), its undo frame 13.0 ms; a 400-tile pond's frame 7.2 ms, undo 6.4 ms; a water dab over open ground in a drag 0.17 ms. Screenshots `docs/decisions/e10-s4-water-before.png`, `e10-s4-water-after.png` (`tests/fixtures/water_shot.tscn`).
-- [ ] E10-S5 Cut the next release candidate (rc5).
+- [x] E10-S5 Cut the next release candidate (rc5).
   - Accept: `/ship-it` as for E9-S4; tag, GitHub pre-release, download page.
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`
+  - Done 2026-11-11: `/ship-it` cut 0.6.0-rc5 (tag `v0.6.0-rc5`) with E10-S1 to S4 (D66): tests 1284/1284, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it. Open: a one-click fill of a 3,600-tile lake takes a 21 ms frame (D52 budget 16.7).
 
 ## Icebox
 
