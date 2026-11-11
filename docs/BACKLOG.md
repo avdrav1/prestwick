@@ -1333,6 +1333,31 @@ Done when: the next 0.6.0 release candidate is cut with every story below checke
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`
 
+## E9: Cart paths matter — planned
+
+Ships as the release candidate after E8's (rc4). Today a cart path costs $5 a tile, makes the ball bounce and run, and never helps a guest: guests walk 40 yd a second over any tile, so a path can only lengthen a walk (E3-S4). The user chose (2026-11-11) SimGolf's model: guests walk faster on paths, and long walks without one draw complaints.
+
+Done when: on a course with a far tee, laying a cart path between the green and the next tee measurably cuts the walk, its pace complaints and the "long walk" comments, and the reaction targets still hold.
+
+- [ ] E9-S1 Walk faster on cart paths. A path is the quick way round.
+  - Note: needs a `/decision` (it amends E3-S4's walking rule and D60's clubhouse walks). Guests walk at a base speed over rough, fairway, tee and green, faster on a cart path, and slower through trees, bunkers, water and up steep ground (each a tunable in `data/guests.json`). `GuestWalk.route` keeps its search but chooses the quickest route by time, not the shortest by distance, so a path is taken when it saves time; the detour cap becomes a time cap. Walk time feeds pace as today.
+  - Accept: a guest's walk over a path is faster than the same distance over rough by the tuned factor; a walk that a path makes quicker uses it, one that it makes slower does not; skip, save/load replays and the 24-guest day still finish (`scripts/guest_day.gd`); `/balance reactions` hits every target, retuned if needed.
+  - Test: `tests/test_guest_brain.gd`, `tests/test_guest_walk.gd` (or the existing walk tests).
+  - Touches: `guests/`, `data/`, `tests/`
+- [ ] E9-S2 Comment on long walks. Guests say when a path would have helped.
+  - Note: a new reaction check (pillar 3): a walk between holes or from the clubhouse longer than a tunable time without a cart path draws a complaint naming it ("a long walk from the 4th green to the 5th tee"), and one that a path made quick can draw praise. It joins the reaction checks (`guests/hole_checks.gd` / `guests/guest_reaction.gd`), shows in the feed and map tags like the others, and counts in the rating as any reaction does (D58). Merge it with E5-S11's "a long walk from the clubhouse" so there is one rule.
+  - Accept: on a test course with a far next tee, the walk draws the complaint without a path and not with one; the feed line and the hole panel name the walk; `/balance reactions` targets still hold, with a new target row for the walk comment (rate on a fair layout under a tunable share).
+  - Test: `tests/test_reactions.gd`; the balance output in the commit.
+  - Touches: `guests/`, `data/`, `tests/`
+- [ ] E9-S3 Show paths in the example course and the guide. Testers see what they are for.
+  - Accept: `courses/playtest_nine.json` (via `tests/fixtures/playtest_nine.gd`) gains cart paths where its walks are long; `docs/how-to-play.md` and the download page say what paths do.
+  - Test: `tests/test_playtest_nine.gd`; screenshot.
+  - Touches: `tests/`, `courses/`, `docs/`
+- [ ] E9-S4 Cut the next release candidate (rc4).
+  - Accept: `/ship-it` as for E8-S3; tag, GitHub pre-release, download page.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
