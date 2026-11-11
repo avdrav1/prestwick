@@ -1348,7 +1348,7 @@ Done when: the next 0.6.0 release candidate is cut with every story below checke
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc3 (tag `v0.6.0-rc3`) with E8-S1, S2, S4 and S5: tests 1216/1216 (a first run under load 12 failed one timed test and passed on rerun), playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
-## E9: Cart paths matter — active
+## E9: Cart paths matter — done
 
 Ships as the release candidate after E8's (rc4). Today a cart path costs $5 a tile, makes the ball bounce and run, and never helps a guest: guests walk 40 yd a second over any tile, so a path can only lengthen a walk (E3-S4). The user chose (2026-11-11) SimGolf's model: guests walk faster on paths, and long walks without one draw complaints.
 
@@ -1371,10 +1371,11 @@ Done when: on a course with a far tee, laying a cart path between the green and 
   - Test: `tests/test_playtest_nine.gd`; screenshot.
   - Touches: `tests/`, `courses/`, `docs/`
   - Done 2026-11-11: `PlaytestNine.PATHS` lays three cart paths (painted 1 tile wide over rough and trees only, after the holes): the 2nd green west and south to the 3rd tee, the 4th green up to the raised 5th tee, the 7th green south-east to the 8th tee, the three walks that drew the long walk complaint (0.42, 0.19 and 0.42 of their records, 24 a day, days 1 to 5); `courses/playtest_nine.json` rebuilt (`scripts/play_course.gd -- playtest --save-only`, all nine open). Laying them found that `cart_path_reach_yd` 15 could not be met off a playtest green (its edge stands 15 to 25 yd from the cup, where a walk off it starts), so no path round a green served a walk: 25 now (D65's Update; the route still has to be quicker). Along the paths the walks take 2.30, 2.07 and 2.21 s against 2.71, 2.27 and 2.80 s with no path laid; no walk on the nine fails, and holes 3 and 5's complaint shares fall from 0.43 and 0.19 to 0.02 and 0.01. `docs/how-to-play.md` says what a path does for guests (faster on it, slower through trees, sand, water and up hills; a long walk with no path is a complaint; a ball runs on a path). `/balance reactions` unchanged (no fixture there has a path); skip to morning on the pathed nine 2.68 s, the same day as the brain's. The download page (gh-pages) is left to the user. Tests: `tests/test_playtest_nine.gd` (`test_cart_paths_join_the_long_walks`).
-- [ ] E9-S4 Cut the next release candidate (rc4).
+- [x] E9-S4 Cut the next release candidate (rc4).
   - Accept: `/ship-it` as for E8-S3; tag, GitHub pre-release, download page.
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`
+  - Done 2026-11-11: `/ship-it` cut 0.6.0-rc4 (tag `v0.6.0-rc4`) with E9-S1 to S3 (D65): tests 1230/1230, playtest smoke, the shirt render check and `scripts/e4_playtest.gd --fixed-fps 60` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
 ## Icebox
 
