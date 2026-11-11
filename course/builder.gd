@@ -678,27 +678,39 @@ func can_open(number: int) -> bool:
 ## False when `cell` is off the map or the tee is already there, and false, emitting
 ## `refused`, when `cell` is not owned (place_refusal) or a new hole `number` is not allowed
 ## (new_hole_refusal). `slot` picks one of several holes sharing `number` (slot_of, E3-S11).
-func place_tee(number: int, cell: Vector2i, par: int = 0, slot: int = -1) -> bool:
-	return _place(number, cell, true, par, slot)
+## E8-S5: with `auto_par` (the Build tools), once the hole has both a tee and a cup its par
+## becomes the one its yardage makes (rule 4, CourseValidator.par_for_yardage on hole_yardage),
+## in the same undo step, unless its par was picked by hand (HoleData.par_by_hand). `by_hand`
+## marks a hole this call creates as having its par picked by hand (the par buttons were
+## pressed before its first tee or cup).
+func place_tee(number: int, cell: Vector2i, par: int = 0, slot: int = -1, auto_par: bool = false,
+		by_hand: bool = false) -> bool:
+	return _place(number, cell, true, par, slot, auto_par, by_hand)
 
 
 ## Puts hole `number`'s cup on `cell`, as place_tee does for the tee.
-func place_cup(number: int, cell: Vector2i, par: int = 0, slot: int = -1) -> bool:
-	return _place(number, cell, false, par, slot)
+func place_cup(number: int, cell: Vector2i, par: int = 0, slot: int = -1, auto_par: bool = false,
+		by_hand: bool = false) -> bool:
+	return _place(number, cell, false, par, slot, auto_par, by_hand)
 
 
 ## Sets hole `number`'s par to 3, 4 or 5. False when there is no such hole, the par is not
 ## one of those, or it is already that par. The rerun closes the hole if rule 4 now fails.
 ## `slot` picks one of several holes sharing `number` (slot_of).
-func set_par(number: int, par: int, slot: int = -1) -> bool:
+## E8-S5: `by_hand` (the par buttons) marks the par as picked by hand (HoleData.par_by_hand),
+## so placing a tee or cup no longer sets it from the yardage; pressing the par it already has
+## marks it too.
+func set_par(number: int, par: int, slot: int = -1, by_hand: bool = false) -> bool:
 	if not par in PARS:
 		return false
 	var hs: Array[HoleData] = _holes_copy()
 	var i: int = slot_of(number, slot)
-	if i < 0 or hs[i].par == par:
+	if i < 0 or (hs[i].par == par and (not by_hand or hs[i].par_by_hand)):
 		return false
 	end_stroke()
 	hs[i].par = par
+	if by_hand:
+		hs[i].par_by_hand = true
 	var step := Step.new()
 	_write_holes(step, hs)
 	_finish(step)
@@ -1089,7 +1101,8 @@ func _refuse(reason: String) -> bool:
 	return true
 
 
-func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1) -> bool:
+func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1,
+		auto_par: bool = false, by_hand: bool = false) -> bool:
 	if not _course.in_bounds(cell.x, cell.y):
 		return false
 	if _refuse(place_refusal(cell, number, is_tee, slot)) or _refuse(new_hole_refusal(number)):
@@ -1100,7 +1113,8 @@ func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1)
 		var p: int = par if par in PARS else _tuning.default_par
 		var tee: Vector2i = cell if is_tee else HoleData.UNPLACED
 		var cup: Vector2i = HoleData.UNPLACED if is_tee else cell
-		hs.append(HoleData.new(number, p, tee, cup, false))
+		hs.append(HoleData.new(number, p, tee, cup, false, false, by_hand))
+		i = hs.size() - 1
 	else:
 		var h: HoleData = hs[i]
 		if (h.tee if is_tee else h.cup) == cell:
@@ -1110,6 +1124,10 @@ func _place(number: int, cell: Vector2i, is_tee: bool, par: int, slot: int = -1)
 		else:
 			h.cup = cell
 		h.open = false
+	var placed: HoleData = hs[i]
+	if auto_par and not placed.par_by_hand and _course.in_bounds(placed.tee.x, placed.tee.y) \
+			and _course.in_bounds(placed.cup.x, placed.cup.y):
+		placed.par = _validator.par_for_yardage(_validator.hole_yardage(_course, placed))
 	end_stroke()
 	var step := Step.new()
 	_write_holes(step, hs)

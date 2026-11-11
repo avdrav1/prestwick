@@ -363,6 +363,12 @@ func hole_yardage(course: CourseData, hole: HoleData) -> int:
 	return _play_yards(hole, turn_point(course, hole))
 
 
+## E8-S5: hole_yardage for a placed `hole` whose turn_point is `turn` (null for a straight one),
+## so a reader that already measured the turn (the Build ruler) does not measure it twice.
+static func play_yards(hole: HoleData, turn: Variant) -> int:
+	return _play_yards(hole, turn)
+
+
 ## The rounded line of play of a placed `hole` whose turn_point is `turn`.
 static func _play_yards(hole: HoleData, turn: Variant) -> int:
 	if turn == null:

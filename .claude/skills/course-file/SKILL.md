@@ -39,6 +39,8 @@ Decor (E5-S3): an optional `decor` list of `[x, y, kind]`, one per tile, kind an
 
 Closed by hand (E8-S1, D64): a hole object may carry `"closed_by_hand": true` (true or false; absent means false, and it is written only when true, so files stay version 3). Since D64 a hole opens itself once it passes every rule; a hole the player closed with Close carries the flag and stays closed until opened by hand. A closed hole that passes and has no flag (every older file) is opened when the builder is made.
 
+Par by hand (E8-S5): a hole object may carry `"par_by_hand": true` (true or false; absent means false, written only when true, so files stay version 3): the player picked its par with the par buttons, so placing its tee or cup in Build keeps that par instead of setting the one its yardage makes.
+
 ## Headless entry point
 
 `validate`, `generate` and `inspect` run through `course/course_file.gd` (E2-S2, E2-S18):

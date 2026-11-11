@@ -67,6 +67,24 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export var play_line_turn_radius_px: float = 4.0
 @export var play_line_dash_yd: float = 6.0
 @export var play_line_gap_yd: float = 4.0
+## E8-S5, the Build ruler (scenes/build_ruler.gd): the line from the tee to the Cup tool's cursor
+## with its yardage and par, and the rings round the tee at the driver's carry and total and at
+## rule 4's par lines. Colours (chalk for the ruler and the driver's rings, sun_yellow for the
+## par lines, part clear so the rings stay faint), the ink edge, widths and the label size in
+## screen px at every zoom.
+@export var ruler_color: Color = Color(1.0, 0.98, 0.9, 0.95)
+@export var ruler_halo_color: Color = Color(0.1, 0.11, 0.13, 0.6)
+@export var ruler_width_px: float = 2.0
+@export var ruler_halo_px: float = 1.0
+@export var ring_club_color: Color = Color(1.0, 0.98, 0.9, 0.7)
+@export var ring_par_color: Color = Color(0.94, 0.78, 0.23, 0.75)
+@export var ring_width_px: float = 2.0
+@export var ruler_font_px: int = 16
+@export var ring_font_px: int = 13
+## E8-S5, the first-hole hint: on a course with no cup yet the hole panel suggests a first par 3
+## this long (yards, between tile centres), and the tiles it is at 5 yd a tile.
+@export var first_par3_min_yd: int = 120
+@export var first_par3_max_yd: int = 200
 
 
 static func load_default() -> BuilderTuning:

@@ -17,6 +17,11 @@ const POWER_FOR_STEPS: int = 24
 ## Flat-ground carry in yards of a perfect swing (100% power, accuracy at centre) from a
 ## 1.0 lie, with no drag (Ball). Power and the lie scale this carry, not the speed (D14).
 @export var carry_yd: float = 100.0
+## E8-S5: a perfect swing's total to rest on flat fairway, yards, as `scripts/sim.gd --table
+## clubs` measured it (docs/design.md Clubs). Measured, not tuned: the Build ruler's rings, the
+## F1 help and docs/how-to-play.md read it, and tests/test_clubs.gd remeasures it, so change it
+## only by remeasuring after /balance clubs. 0 for the putter.
+@export var total_yd: float = 0.0
 ## Launch angle above the ground, degrees.
 @export var launch_deg: float = 30.0
 ## Multiplies the ground speed the ball keeps after its first touchdown, after the surface's

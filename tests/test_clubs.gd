@@ -356,3 +356,31 @@ func test_no_club_is_blocked_on_flat_ground_and_a_putt_never_is() -> void:
 				else model.full(field, c, 1.0, at, 0.0)
 		var r := ShotPrediction.run_launch(course, 1, shot, model.params)
 		assert_false(clubs.is_blocked(shot, r), "%s is not blocked on flat fairway" % c.id)
+
+
+## E8-S5: every full club's stored total (Club.total_yd, what the Build ruler's rings, the F1
+## help and docs/how-to-play.md show) is the total a perfect swing measures on flat fairway now,
+## as scripts/sim.gd --table clubs measures it, to within TOTAL_SLACK_YD (the bounce scatter
+## moves a total a little from seed to seed). A /balance clubs that moves the totals fails here
+## until total_yd is remeasured.
+const TOTAL_SLACK_YD: float = 1.5
+const TOTAL_SEEDS: int = 5
+
+
+func test_the_stored_totals_are_the_measured_ones() -> void:
+	var model := ShotModel.new()
+	var course := BalanceStrips.strip(Surface.Type.FAIRWAY)
+	var field := HeightField.new(course, model.params)
+	var at := (Vector2(BalanceStrips.tee_tile()) + Vector2(0.5, 0.5)) * model.params.yards_per_tile
+	for c in clubs.clubs:
+		if c.is_putter():
+			assert_eq(c.total_yd, 0.0, "the putter has no full-swing total")
+			continue
+		var shot := model.full(field, c, 1.0, at, 0.0)
+		var total := 0.0
+		for s: int in TOTAL_SEEDS:
+			var r := ShotPrediction.run_launch(course, 1 + s, shot, model.params)
+			total += Vector2(r.rest.x, r.rest.y).distance_to(at)
+		total /= TOTAL_SEEDS
+		assert_almost_eq(c.total_yd, total, TOTAL_SLACK_YD, "%s's stored total against %.1f yd measured" % [c.id, total])
+		assert_gt(c.total_yd, c.carry_yd, "%s rolls on past its carry" % c.id)

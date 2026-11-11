@@ -39,6 +39,13 @@ extends Node2D
 ## [ and ] through the brush sizes (step_brush), R turns the clubhouse (as the right-click does);
 ## with the Decor tool R takes the hovered decor away (E5-S3).
 ## cursor_moved tells Main, which keeps the cursor in view.
+##
+## E8-S5: `ruler`, a BuildRuler child, shows how long the hole is while it is built: the line
+## from the tee to the Cup tool's cursor with its yardage and par, and rings round the tee
+## (scenes/build_ruler.gd). The tee and cup tools place with auto par (CourseBuilder.place_cup):
+## once the hole has both, its par is the one its yardage makes, unless the par buttons picked
+## it (select_par marks the hole's par as picked by hand; pressed before a new hole's first tee
+## or cup, the hole is created so marked).
 
 enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE, DECOR }
 
@@ -114,6 +121,8 @@ var key_held: bool = false
 ## Presses so far: each starts a stroke (one click or drag). The HUD says a refusal once per
 ## stroke (E6-S17), however many dabs of a drag the builder refuses.
 var stroke_count: int = 0
+## E8-S5: the ruler and the rings round the tee (scenes/build_ruler.gd).
+var ruler: BuildRuler
 ## Tile under the cursor, or TilePicker.NONE.
 var hover: Vector2i:
 	get:
@@ -122,11 +131,17 @@ var hover: Vector2i:
 var _hover: Vector2i = TilePicker.NONE
 var _dragging: bool = false
 var _last_cell: Vector2i = TilePicker.NONE
+## E8-S5: the par buttons were pressed since the picked hole was picked and before it existed,
+## so the hole its first tee or cup creates has its par picked by hand.
+var _new_par_by_hand: bool = false
 
 
 func _ready() -> void:
 	z_index = 1  # over the course layers
 	par = BuilderTuning.load_default().default_par
+	ruler = BuildRuler.new()
+	ruler.tool = self
+	add_child(ruler)
 
 
 func select_surface(s: Surface.Type) -> void:
@@ -141,13 +156,17 @@ func select_tool(t: Tool) -> void:
 	settings_changed.emit()
 
 
-## Picks par 3, 4 or 5: for the next new hole, and for hole `hole_number` when it exists.
+## Picks par 3, 4 or 5: for the next new hole, and for hole `hole_number` when it exists. Either
+## way the par is picked by hand (E8-S5): placing a tee or cup keeps it.
 func select_par(p: int) -> void:
 	if not p in CourseBuilder.PARS:
 		return
 	par = p
 	if builder != null and active:
-		builder.set_par(hole_number, p, hole_slot)
+		if picked_slot() >= 0:
+			builder.set_par(hole_number, p, hole_slot, true)
+		else:
+			_new_par_by_hand = true
 	settings_changed.emit()
 
 
@@ -162,6 +181,7 @@ func open_hole() -> bool:
 func select_hole(number: int, slot: int = -1) -> void:
 	hole_number = number
 	hole_slot = slot
+	_new_par_by_hand = false
 	queue_redraw()
 	settings_changed.emit()
 
@@ -177,6 +197,7 @@ func new_hole() -> int:
 		return 0
 	hole_number = n
 	hole_slot = -1
+	_new_par_by_hand = false
 	select_tool(Tool.TEE)
 	return n
 
@@ -651,9 +672,9 @@ func _apply(cell: Vector2i) -> void:
 		Tool.LOWER:
 			builder.lower(cell, brush_size)
 		Tool.TEE:
-			builder.place_tee(hole_number, cell, par, hole_slot)
+			builder.place_tee(hole_number, cell, par, hole_slot, true, _new_par_by_hand)
 		Tool.CUP:
-			builder.place_cup(hole_number, cell, par, hole_slot)
+			builder.place_cup(hole_number, cell, par, hole_slot, true, _new_par_by_hand)
 		Tool.BUY:
 			buy_requested.emit(builder.course.parcel_of(cell.x, cell.y))
 		Tool.CLUBHOUSE:

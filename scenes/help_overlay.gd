@@ -4,6 +4,8 @@ extends Control
 ## says it is there; F1 (help_toggle) opens a panel over the map listing every key of Build and
 ## Play, and F1 or Esc closes it. The keys are read from the InputMap (key_text), so the panel
 ## says what project.godot binds, never a copy of it; SECTIONS says what each action does.
+## E8-S5: under the keys, how far each club goes (club_text, from golf/clubs.tres), so a player
+## can size a hole.
 
 const TOGGLE_ACTION: StringName = &"help_toggle"
 const CLOSE_ACTION: StringName = &"ui_cancel"
@@ -54,6 +56,8 @@ var panel: PanelContainer
 var hint_label: Label
 ## The panel's rows, [keys, what] as shown, for tests.
 var lines: Array[PackedStringArray] = []
+## E8-S5: the club line as shown (club_text).
+var clubs_label: Label
 
 
 func _ready() -> void:
@@ -117,6 +121,23 @@ func _ready() -> void:
 	mouse.custom_minimum_size = Vector2(640, 0)
 	mouse.add_theme_font_size_override("font_size", 13)
 	box.add_child(mouse)
+	clubs_label = Label.new()
+	clubs_label.text = club_text(ClubSet.load_default())
+	clubs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	clubs_label.custom_minimum_size = Vector2(640, 0)
+	clubs_label.add_theme_font_size_override("font_size", 13)
+	box.add_child(clubs_label)
+
+
+## E8-S5: each full club's carry and total on flat fairway from a perfect swing (Club.carry_yd,
+## Club.total_yd), longest first: "Clubs, carry / total on flat fairway: driver 235 / 282 yd, ...".
+static func club_text(set: ClubSet) -> String:
+	var parts := PackedStringArray()
+	for c: Club in set.clubs:
+		if not c.is_putter():
+			parts.append("%s %d / %d" % [c.id, roundi(c.carry_yd), roundi(c.total_yd)])
+	return "Clubs, carry / total in yd on flat fairway from a perfect swing: " + ", ".join(parts) \
+			+ ". The Cup tool's ruler measures a hole as you place it."
 
 
 ## Opens or closes the key map.

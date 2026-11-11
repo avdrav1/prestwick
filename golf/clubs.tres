@@ -8,6 +8,7 @@ script = ExtResource("1_club")
 id = "driver"
 kind = 1
 carry_yd = 235.0
+total_yd = 282.0
 launch_deg = 14.0
 roll_factor = 1.0
 
@@ -15,6 +16,7 @@ roll_factor = 1.0
 script = ExtResource("1_club")
 id = "3w"
 carry_yd = 220.0
+total_yd = 261.0
 launch_deg = 16.0
 roll_factor = 0.95
 
@@ -22,6 +24,7 @@ roll_factor = 0.95
 script = ExtResource("1_club")
 id = "3i"
 carry_yd = 190.0
+total_yd = 223.0
 launch_deg = 18.0
 roll_factor = 0.9
 
@@ -29,6 +32,7 @@ roll_factor = 0.9
 script = ExtResource("1_club")
 id = "4i"
 carry_yd = 179.0
+total_yd = 208.0
 launch_deg = 20.0
 roll_factor = 0.85
 
@@ -36,6 +40,7 @@ roll_factor = 0.85
 script = ExtResource("1_club")
 id = "5i"
 carry_yd = 168.0
+total_yd = 193.0
 launch_deg = 22.0
 roll_factor = 0.8
 
@@ -43,6 +48,7 @@ roll_factor = 0.8
 script = ExtResource("1_club")
 id = "6i"
 carry_yd = 157.0
+total_yd = 178.0
 launch_deg = 24.0
 roll_factor = 0.75
 
@@ -50,6 +56,7 @@ roll_factor = 0.75
 script = ExtResource("1_club")
 id = "7i"
 carry_yd = 146.0
+total_yd = 164.0
 launch_deg = 27.0
 roll_factor = 0.7
 
@@ -57,6 +64,7 @@ roll_factor = 0.7
 script = ExtResource("1_club")
 id = "8i"
 carry_yd = 135.0
+total_yd = 150.0
 launch_deg = 30.0
 roll_factor = 0.65
 
@@ -64,6 +72,7 @@ roll_factor = 0.65
 script = ExtResource("1_club")
 id = "9i"
 carry_yd = 124.0
+total_yd = 136.0
 launch_deg = 33.0
 roll_factor = 0.6
 
@@ -71,6 +80,7 @@ roll_factor = 0.6
 script = ExtResource("1_club")
 id = "pw"
 carry_yd = 113.0
+total_yd = 123.0
 launch_deg = 37.0
 roll_factor = 0.55
 
@@ -79,6 +89,7 @@ script = ExtResource("1_club")
 id = "sw"
 kind = 2
 carry_yd = 102.0
+total_yd = 110.0
 launch_deg = 40.0
 roll_factor = 0.5
 

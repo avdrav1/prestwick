@@ -11,6 +11,23 @@ Run the game. The menu opens: choose **New course** (or **Import course** to ope
 - You start with **$5,000** and a block of land beside your clubhouse. Painting, raising and lowering ground cost money; undo (Ctrl+Z) gives back what that step charged. **Buy land** adds a neighbouring parcel.
 - Click **New hole**, place a **Tee** and a **Cup**, paint a green round the cup and fairway between. The hole panel (top right) says what is wrong until the hole is legal; the moment it is, the hole opens itself ("Hole 1 is open: guests will play it"). **Close** in the hole list shuts a hole to guests until you press **Open** again.
 - Pick par 3, 4 or 5 to match the hole's length; a hole that bends needs room to land a ball at the corner.
+- With the Cup tool in hand, a ruler runs from the tee to the cursor and says how long the hole would be and its par ("285 yd: par 3"); placing the cup sets that par unless you picked one. Rings round the tee mark a driver's carry and total and where par 4 (320 yd) and par 5 (471 yd) start. A good first hole is a par 3 of 120 to 200 yd: 24 to 40 tiles from the tee (a tile is 5 yd).
+
+How far each club goes with a perfect swing from flat fairway, in yards:
+
+| Club | Carry | Total |
+| --- | --- | --- |
+| driver | 235 | 282 |
+| 3w | 220 | 261 |
+| 3i | 190 | 223 |
+| 4i | 179 | 208 |
+| 5i | 168 | 193 |
+| 6i | 157 | 178 |
+| 7i | 146 | 164 |
+| 8i | 135 | 150 |
+| 9i | 124 | 136 |
+| pw | 113 | 123 |
+| sw | 102 | 110 |
 - **Clubhouse** moves the clubhouse (right-click or R turns its door); guests start and finish there. **Decor** places scenery that never touches the ball.
 - The **fee slider** sets the green fee. Higher fees bring fewer guests; the most you can charge is $25 per star.
 

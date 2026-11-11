@@ -134,6 +134,16 @@ func test_one_hole_built_opened_and_played_out_with_keys_alone() -> void:
 	assert_eq(c.holes[0].tee, TEE)
 	_tool_until(func() -> bool: return t.tool == BuildTool.Tool.CUP)
 	_cursor_to(CUP)
+	# E8-S5: the ruler follows the keyboard cursor from the tee.
+	t.ruler.refresh()
+	assert_true(t.ruler.ruler_shown, "the Cup tool's ruler shows at the keyboard cursor")
+	assert_eq(t.ruler.ruler_line[t.ruler.ruler_line.size() - 1], Vector2(CUP), "it ends on the cursor")
+	assert_eq(t.ruler.ruler_text(), "70 yd: par 3")
+	_tap(KEY_LEFT)
+	t.ruler.refresh()
+	assert_eq(t.ruler.ruler_line[t.ruler.ruler_line.size() - 1], Vector2(CUP - Vector2i(1, 0)), "an arrow moves it")
+	assert_eq(t.ruler.ruler_text(), "65 yd: par 3")
+	_tap(KEY_RIGHT)
 	_tap(KEY_ENTER)
 	assert_eq(c.holes[0].cup, CUP, "Enter placed the cup")
 	# A green round the cup with the 3 brush, and a fairway dragged with Space held.

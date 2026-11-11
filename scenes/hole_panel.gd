@@ -45,6 +45,11 @@ extends PanelContainer
 ## the feed's window, its cup on the map) shows the same counts on a button after its number,
 ## "+2 !1", which picks and frames the hole as a click on the map tag does (tag_requested), so a
 ## tag drawn under this panel is still in reach. A hole with no tag shows none.
+##
+## E8-S5: on a course with no cup yet, a first-hole hint (first_hole_text, from BuilderTuning's
+## first_par3 range and the tile size) says how long to make a first par 3, until the first cup
+## is placed. Under the par buttons, par_note_label says when a par picked by hand and the par
+## the yardage makes (rule 4) disagree (par_note).
 
 ## Emitted when a row's Play is pressed: Main plays hole `number`, slot `slot`.
 ## E8-S1 (D64): the Open and Close buttons' tooltips.
@@ -118,6 +123,10 @@ var issues_label: Label
 ## The picked hole's hints (CourseBuilder.hints_at, E3-S39): advice that never closes it, one
 ## per line expanded, cut to one line collapsed with all of them on hover.
 var hint_label: Label
+## E8-S5: the first-hole hint (first_hole_text), shown until the course has a cup.
+var first_hole_label: Label
+## E8-S5: a hand-picked par that the yardage disagrees with (par_note); hidden otherwise.
+var par_note_label: Label
 ## Picks the next hole in build order (BuildTool.new_hole); disabled when the course is full.
 var new_hole_button: Button
 ## The list's rows, in number order; the first shown_rows().size() hold a hole, and of those
@@ -214,6 +223,8 @@ func _ready() -> void:
 	open_button.focus_mode = Control.FOCUS_NONE
 	open_button.pressed.connect(func() -> void: _tool.open_hole())
 	row.add_child(open_button)
+	par_note_label = _note_label()
+	box.add_child(par_note_label)
 	issues_label = Label.new()
 	issues_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	issues_label.custom_minimum_size = Vector2(text_width, 0)
@@ -227,6 +238,47 @@ func _ready() -> void:
 	hint_label.add_theme_color_override("font_color", hint_color)
 	hint_label.visible = false
 	box.add_child(hint_label)
+	first_hole_label = _note_label()
+	first_hole_label.text = first_hole_text(BuilderTuning.load_default())
+	box.add_child(first_hole_label)
+
+
+## A sand note line (hint_color), wrapped at text_width, hidden until refresh shows it.
+func _note_label() -> Label:
+	var l := Label.new()
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(text_width, 0)
+	l.add_theme_color_override("font_color", hint_color)
+	l.visible = false
+	return l
+
+
+## E8-S5: the first-hole hint, from `bt`'s first_par3 range and the tile size: "A first par 3 is
+## 120 to 200 yd: put the cup 24 to 40 tiles from the tee".
+static func first_hole_text(bt: BuilderTuning) -> String:
+	var ypt: float = CourseValidator.YARDS_PER_TILE
+	return "A first par 3 is %d to %d yd: put the cup %d to %d tiles from the tee" % [
+			bt.first_par3_min_yd, bt.first_par3_max_yd, roundi(bt.first_par3_min_yd / ypt),
+			roundi(bt.first_par3_max_yd / ypt)]
+
+
+## E8-S5: what the panel says when hole `h`, `yards` long, has a par picked by hand that is not
+## `want`, the par its yardage makes; "" when they agree, the par was not picked by hand or the
+## hole is not placed (yards 0).
+static func par_note(h: HoleData, yards: int, want: int) -> String:
+	if h == null or not h.par_by_hand or yards <= 0 or h.par == want:
+		return ""
+	return "You picked par %d by hand; %d yd makes a par %d. Press %d to match." % [h.par, yards, want, want]
+
+
+## E8-S5: true while no hole of `c` has its cup on the map (the first-hole hint shows).
+static func needs_first_hole_hint(c: CourseData) -> bool:
+	if c == null:
+		return false
+	for h: HoleData in c.holes:
+		if c.in_bounds(h.cup.x, h.cup.y):
+			return false
+	return true
 
 
 ## Follows `tool` from now on.
@@ -288,6 +340,13 @@ func refresh() -> void:
 	for i: int in par_buttons.size():
 		par_buttons[i].set_pressed_no_signal(CourseBuilder.PARS[i] == shown)
 	open_button.disabled = b == null or not b.can_open(number)
+	var note: String = ""
+	if b != null and h != null and slot >= 0:
+		var yards: int = b.yardage_at(slot)
+		note = par_note(h, yards, b.validator.par_for_yardage(yards))
+	par_note_label.text = note
+	par_note_label.visible = not note.is_empty()
+	first_hole_label.visible = needs_first_hole_hint(c)
 	var text := PackedStringArray()
 	var own: Array[CourseValidator.Issue] = []
 	if b != null:
