@@ -1,14 +1,19 @@
 class_name GuestWalk
 extends RefCounted
 ## One walk of a guest (E3-S4, docs/design.md Guests and reactions, Walking): a polyline in
-## yards from where it stands to where it is going, walked `walk_yd_per_s` a simulated second.
+## yards from where it stands to where it is going, walked by time (E9-S1, D65): the base
+## `walk_yd_per_s` times each surface's `walk_surface_speed` (a cart path quickest; trees,
+## bunkers and water slower), plus `walk_climb_s_per_step` for each height step climbed from
+## one tile to the next, summed tile by tile along the line (time_pieces).
 ##
-## A straight line, unless a cart path serves the walk: a cart path tile within
+## A straight line, unless a cart path makes the walk quicker: a cart path tile within
 ## `cart_path_reach_yd` of the start and one within that of the end, joined through cart path
-## tiles (8-connected, so a diagonal painted line holds), with the whole route (start, the
-## path's tile centres, end) at most `cart_path_max_detour` times the straight line. Then the
-## guest walks the path. No other pathfinding: a guest walks over any tile, water, trees and
-## unowned land included (E3-S1, unowned land is out of bounds for the ball, not a wall).
+## tiles (8-connected, so a diagonal painted line holds), and the whole route (start, the
+## path's tile centres, end) quicker than the straight walk. Then the guest walks the path.
+## Before E9-S1 every surface was walked at one speed and the path was taken when at most
+## `cart_path_max_detour` 1.5 times the straight line's yards, so it only ever lengthened a
+## walk. No other pathfinding: a guest walks over any tile, water, trees and unowned land
+## included (E3-S1, unowned land is out of bounds for the ball, not a wall), only slower.
 ##
 ## Reads CourseData only. The route is fixed when the walk starts; a path painted mid-walk is
 ## used from the next walk.
@@ -57,50 +62,127 @@ var points: PackedVector2Array = PackedVector2Array()
 var length: float = 0.0
 ## True when the route follows a cart path.
 var on_path: bool = false
-## Yards walked so far.
-var walked: float = 0.0
+## E9-S1: the walk's time, simulated seconds, and what the straight walk would have taken
+## (the same unless it follows a path).
+var duration: float = 0.0
+var straight_s: float = 0.0
+## Simulated seconds walked so far.
+var elapsed: float = 0.0
+## E9-S1: the walk cut where it crosses a tile edge (time_pieces): each piece's end, yards, and
+## the walk's time at that end, so a guest's position is by time.
+var _ends: PackedVector2Array = PackedVector2Array()
+var _times: PackedFloat64Array = PackedFloat64Array()
 
 
 ## The walk from `from` to `to` (yards) on `course`. `cache` shares the cart path search (and
-## the path grid it reads) between walks while the course stands unchanged (Cache.follow).
+## the path grid it reads) between walks while the course's cart path stands unchanged
+## (Cache.follow). E9-S1: the path's route is taken only when quicker than the straight walk.
 static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
 		yards_per_tile: float = 5.0, cache: Cache = null) -> GuestWalk:
 	var w := GuestWalk.new()
-	var straight := from.distance_to(to)
-	var path := _path_route(course, from, to, tuning, yards_per_tile, cache)
-	if path.size() > 2 and _polyline_length(path) <= straight * tuning.cart_path_max_detour:
-		w.points = path
-		w.on_path = true
-	else:
-		w.points = PackedVector2Array([from, to])
+	w.points = PackedVector2Array([from, to])
+	w.straight_s = time_pieces(course, w.points, tuning, yards_per_tile, w._ends, w._times)
+	w.duration = w.straight_s
+	var path := _path_route(course, from, to, tuning, yards_per_tile, w.straight_s, cache)
+	if path.size() > 2:
+		var ends := PackedVector2Array()
+		var times := PackedFloat64Array()
+		var t := time_pieces(course, path, tuning, yards_per_tile, ends, times)
+		if t < w.straight_s:
+			w.points = path
+			w.on_path = true
+			w.duration = t
+			w._ends = ends
+			w._times = times
 	w.length = _polyline_length(w.points)
 	return w
 
 
+## E9-S1 (D65): the time, simulated seconds, to walk the polyline `poly` (yards) on `course`:
+## each piece between tile edges at its tile's walking speed (GuestTuning.walk_speed), and
+## `walk_climb_s_per_step` for each step up from one tile to the next. Appends each piece's end
+## to `ends` and the time there to `times` (a piece shorter than a thousandth of a yard, where
+## the line grazes a tile's corner, is left out, so its tile neither slows nor lifts the walk).
+## Off the map a tile walks as rough at the last height.
+static func time_pieces(course: CourseData, poly: PackedVector2Array, tuning: GuestTuning,
+		ypt: float, ends: PackedVector2Array, times: PackedFloat64Array) -> float:
+	var total := 0.0
+	var prev_h := -1
+	var cuts := PackedFloat64Array()
+	for i: int in range(1, poly.size()):
+		var a := poly[i - 1]
+		var b := poly[i]
+		var d := b - a
+		var seg := d.length()
+		if seg <= 0.0:
+			continue
+		cuts.clear()
+		cuts.append(0.0)
+		cuts.append(1.0)
+		_edge_cuts(a.x / ypt, b.x / ypt, cuts)
+		_edge_cuts(a.y / ypt, b.y / ypt, cuts)
+		cuts.sort()
+		for k: int in range(1, cuts.size()):
+			var piece := (cuts[k] - cuts[k - 1]) * seg
+			if piece < 1e-3:
+				continue
+			var mid := a + d * ((cuts[k] + cuts[k - 1]) * 0.5)
+			var tx := floori(mid.x / ypt)
+			var ty := floori(mid.y / ypt)
+			var surface := Surface.Type.ROUGH
+			var h := prev_h
+			if course.in_bounds(tx, ty):
+				surface = course.get_surface(tx, ty)
+				h = course.get_height(tx, ty)
+			total += piece / tuning.walk_speed(surface)
+			if prev_h >= 0 and h > prev_h:
+				total += (h - prev_h) * tuning.walk_climb_s_per_step
+			prev_h = h
+			ends.append(a + d * cuts[k])
+			times.append(total)
+	return total
+
+
+## The shares along a line from `u0` to `u1` (one axis, in tiles) where it crosses a tile edge.
+static func _edge_cuts(u0: float, u1: float, cuts: PackedFloat64Array) -> void:
+	if u1 == u0:
+		return
+	var lo := mini(floori(u0), floori(u1)) + 1
+	var hi := maxi(floori(u0), floori(u1))
+	for k: int in range(lo, hi + 1):
+		var c := (k - u0) / (u1 - u0)
+		if c > 0.0 and c < 1.0:
+			cuts.append(c)
+
+
 func is_done() -> bool:
-	return walked >= length
+	return elapsed >= duration
 
 
 ## Where the guest stands now, yards.
 func position() -> Vector2:
-	return point_at(walked)
+	return point_at_time(elapsed)
 
 
-## Walks `yards` further (never past the end). Returns where the guest stands.
-func move(yards: float) -> Vector2:
-	walked = minf(walked + maxf(yards, 0.0), length)
+## E9-S1: walks `seconds` further (never past the end). Returns where the guest stands.
+func advance(seconds: float) -> Vector2:
+	elapsed = minf(elapsed + maxf(seconds, 0.0), duration)
 	return position()
 
 
-## The point `d` yards along the route.
-func point_at(d: float) -> Vector2:
-	var left := clampf(d, 0.0, length)
-	for i in range(1, points.size()):
-		var seg := points[i - 1].distance_to(points[i])
-		if left <= seg:
-			return points[i - 1].lerp(points[i], left / seg) if seg > 0.0 else points[i]
-		left -= seg
-	return points[-1]
+## E9-S1: the point the walk reaches `t` seconds after it set off.
+func point_at_time(t: float) -> Vector2:
+	if _ends.is_empty() or t >= duration:
+		return points[-1]
+	if t <= 0.0:
+		return points[0]
+	var i := _times.bsearch(t)
+	if i >= _ends.size():
+		return points[-1]
+	var t0 := 0.0 if i == 0 else _times[i - 1]
+	var p0 := points[0] if i == 0 else _ends[i - 1]
+	var span := _times[i] - t0
+	return p0.lerp(_ends[i], (t - t0) / span) if span > 0.0 else _ends[i]
 
 
 ## The end of the walk, yards.
@@ -116,18 +198,19 @@ static func _polyline_length(p: PackedVector2Array) -> float:
 
 
 ## from, the cart path's tile centres from the one nearest `from` to the one nearest `to`,
-## then to; empty when no path serves both ends within the detour bound.
+## then to; empty when no path serves both ends within the time bound.
 ##
-## E3-S15: the search is bounded by the detour. Every step between tile centres is at least
-## `ypt` yards, so a route of h steps is at least the two legs (from to the first tile, the last
-## tile to `to`) plus h * ypt; past `cart_path_max_detour` times the straight line it would be
-## refused. So the search never goes deeper than that many steps, and never enters a tile from
-## which `b` is further than the steps left (8-neighbour distance). It finds exactly the route
-## the unbounded search finds whenever that route is taken, and none only when that route
-## would have been refused: a disconnected end costs the tiles inside the bound, not its whole
-## component.
+## E3-S15, E9-S1: the search is bounded by `limit_s`, the straight walk's time. Every step
+## between path tile centres is at least `ypt` yards walked on cart path (at its speed, climbs
+## only adding), and the two legs (from to the first tile, the last tile to `to`) take at least
+## their yards at the fastest walking speed, so a route of more steps than the time left allows
+## would be slower than the straight walk and refused. So the search never goes deeper than
+## that many steps, and never enters a tile from which `b` is further than the steps left
+## (8-neighbour distance). It finds exactly the route the unbounded search finds whenever that
+## route is taken, and none only when that route would have been refused: a disconnected end
+## costs the tiles inside the bound, not its whole component.
 static func _path_route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
-		ypt: float, cache: Cache = null) -> PackedVector2Array:
+		ypt: float, limit_s: float, cache: Cache = null) -> PackedVector2Array:
 	var a := _nearest_path_tile(course, from, tuning.cart_path_reach_yd, ypt)
 	if a.x < 0:
 		return PackedVector2Array()
@@ -135,7 +218,8 @@ static func _path_route(course: CourseData, from: Vector2, to: Vector2, tuning: 
 	if b.x < 0 or a == b:
 		return PackedVector2Array()
 	var legs := from.distance_to(_center(a, ypt)) + _center(b, ypt).distance_to(to)
-	var hops := max_hops(from.distance_to(to) * tuning.cart_path_max_detour - legs, ypt)
+	var path_speed := tuning.walk_speed(Surface.Type.CART_PATH)
+	var hops := max_hops((limit_s - legs / tuning.walk_top_yd_per_s()) * path_speed, ypt)
 	if hops < 1:
 		return PackedVector2Array()
 	var tiles := cached_search(course, a, b, hops, cache)

@@ -512,7 +512,7 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 						legs[[o.id, t]] = [o.position, o.position, 0.0, 1.0, null, 0.0]
 						continue
 					home[o.id] = true
-					var walked: float = o.walk.walked if o.walk != null else 0.0
+					var walked: float = o.walk.elapsed if o.walk != null else 0.0
 					legs[[o.id, t]] = [stood[o.id][0] if stood.has(o.id) else o.position,
 							o.position, o.leg_start, o.leg_end, o.walk, walked]
 				for g: Guest in brain.guests:
@@ -554,7 +554,7 @@ func test_no_stroke_onto_a_green_while_a_guest_still_stands_at_its_cup() -> void
 							if leg.is_empty():
 								continue  # gone home by then
 							home_checked += 1
-							var w := _leg_point(leg, when - floorf(when), tuning.walk_yd_per_s)
+							var w := _leg_point(leg, when - floorf(when))
 							if w.distance_to(p[1]) < 30.0 \
 									and field.surface_at(w.x, w.y) == Surface.Type.GREEN \
 									and field.surface_at(land.x, land.y) == Surface.Type.GREEN:
@@ -575,14 +575,14 @@ func _touchdown(path: PackedVector3Array, field: HeightField) -> int:
 
 
 ## Where a guest stood at share `s` of a second it walked home ([from, to, leg_start, leg_end,
-## walk or null, walked at the second's end]).
-func _leg_point(leg: Array, s: float, speed: float) -> Vector2:
+## walk or null, seconds walked at the second's end]; E9-S1: by time along the walk).
+func _leg_point(leg: Array, s: float) -> Vector2:
 	var walk: GuestWalk = leg[4]
 	if walk == null or s >= float(leg[3]):
 		return leg[1]
 	if s <= float(leg[2]):
 		return leg[0]
-	return walk.point_at(float(leg[5]) - (float(leg[3]) - s) * speed)
+	return walk.point_at_time(float(leg[5]) - (float(leg[3]) - s))
 
 
 func _guest_by_id(brain: GuestBrain, id: int) -> Guest:
@@ -781,16 +781,19 @@ func test_a_walk_follows_a_cart_path_when_one_serves_it() -> void:
 	for i in range(1, w.points.size() - 1):
 		var t := Vector2i(floori(w.points[i].x / 5.0), floori(w.points[i].y / 5.0))
 		assert_eq(b.course.get_surface(t.x, t.y), Surface.Type.CART_PATH, "every corner on the path")
-	assert_lte(w.length, straight.length * tuning.cart_path_max_detour)
-	# Walking it: 40 yd a second, along the path, to the end.
+	# E9-S1: quicker than the straight walk over rough, though a little longer.
+	assert_gt(w.length, straight.length)
+	assert_lt(w.duration, straight.duration)
+	assert_almost_eq(w.straight_s, straight.duration, 1e-9)
+	# Walking it: one second at a time, along the path, to the end.
 	var seconds := 0
 	while not w.is_done():
-		var p := w.move(tuning.walk_yd_per_s)
+		var p := w.advance(1.0)
 		seconds += 1
 		assert_lte(p.distance_to(Vector2(p.x, 17.5)), 5.0, "on or beside the path row")
-	assert_eq(seconds, ceili(w.length / tuning.walk_yd_per_s))
+	assert_eq(seconds, ceili(w.duration))
 	assert_eq(w.position(), to)
-	# A path that would double the walk is not taken.
+	# A path that would double the walk is not taken: slower than the straight walk.
 	var far := CourseBuilder.new(CourseData.create(40, 40, Surface.Type.ROUGH, 2))
 	far.begin_stroke()
 	for cell: Vector2i in BuildTool.grid_line(Vector2i(2, 3), Vector2i(2, 30)) \
@@ -904,7 +907,8 @@ func test_a_cached_walk_equals_a_fresh_one_after_a_path_edit() -> void:
 	assert_eq(brain.route(from, to).points, first.points, "the old path, searched afresh")
 
 
-## GuestWalk.route as it was before E3-S15: an unbounded search, then the detour check.
+## GuestWalk.route as it was before E3-S15 (E9-S1: by time): an unbounded search, then the
+## path's route taken only when quicker than the straight walk.
 func _unbounded_route(c: CourseData, from: Vector2, to: Vector2) -> PackedVector2Array:
 	var straight := PackedVector2Array([from, to])
 	var a := GuestWalk._nearest_path_tile(c, from, tuning.cart_path_reach_yd, 5.0)
@@ -918,7 +922,11 @@ func _unbounded_route(c: CourseData, from: Vector2, to: Vector2) -> PackedVector
 	for t: Vector2i in tiles:
 		out.append((Vector2(t) + Vector2(0.5, 0.5)) * 5.0)
 	out.append(to)
-	if GuestWalk._polyline_length(out) <= from.distance_to(to) * tuning.cart_path_max_detour:
+	var unused := PackedVector2Array()
+	var times := PackedFloat64Array()
+	var path_s := GuestWalk.time_pieces(c, out, tuning, 5.0, unused, times)
+	var straight_s := GuestWalk.time_pieces(c, straight, tuning, 5.0, unused, times)
+	if path_s < straight_s:
 		return out
 	return straight
 
@@ -1290,7 +1298,9 @@ func _walled_day(t: GuestTuning, speed: float) -> Array:
 	return [out, brain.checks.parted, most]
 
 
-## Seconds any guest stood on a cart path tile during a pair's day.
+## Seconds any guest walked a cart path during a pair's day: stood on a path tile at a step's
+## end, or (E9-S1: a quick path walk may cross its path within one second) walked a route that
+## follows one.
 func _path_steps(c: CourseData) -> int:
 	var brain := GuestBrain.new(c, 4, tuning, model, [
 		GuestSpawner.group(0, 0.0, [[10, 10, Guest.Taste.CASUAL, 61], [10, 10, Guest.Taste.CASUAL, 62]]),
@@ -1300,7 +1310,8 @@ func _path_steps(c: CourseData) -> int:
 		brain.step()
 		for g: Guest in brain.guests:
 			var t := Vector2i(floori(g.position.x / 5.0), floori(g.position.y / 5.0))
-			if g.is_walking() and c.get_surface(t.x, t.y) == Surface.Type.CART_PATH:
+			if g.is_walking() and (c.get_surface(t.x, t.y) == Surface.Type.CART_PATH
+					or g.walk.on_path):
 				n += 1
 	return n
 
@@ -1399,9 +1410,9 @@ func test_a_far_clubhouse_costs_the_first_hole_its_pace_and_the_day_its_time() -
 	var r_near: Guest.HoleRecord = near.guests[0].records[0]
 	var r_far: Guest.HoleRecord = far.guests[0].records[0]
 	assert_true(r_near.walk_from_clubhouse and r_far.walk_from_clubhouse)
-	assert_lte(r_near.walk_yd, GuestReaction.walk_limit(1, tuning), "beside the first tee: a short walk")
+	assert_lte(r_near.walk_s, GuestReaction.walk_limit(1, tuning), "beside the first tee: a short walk")
 	assert_true(r_near.reaction.passed[GuestReaction.Check.PACE])
-	assert_gt(r_far.walk_yd, GuestReaction.walk_limit(1, tuning))
+	assert_gt(r_far.walk_s, GuestReaction.walk_limit(1, tuning))
 	assert_false(r_far.reaction.passed[GuestReaction.Check.PACE], "a far clubhouse fails pace")
 	assert_string_contains(r_far.reaction.text, "a long walk from the clubhouse")
 	assert_gt(r_far.start_s, r_near.start_s, "and the round starts later")
@@ -1410,6 +1421,48 @@ func test_a_far_clubhouse_costs_the_first_hole_its_pace_and_the_day_its_time() -
 	var errors: Array[String] = []
 	var back := GuestReaction.from_save(r_far.reaction.to_save(), errors)
 	assert_true(back != null and back.from_clubhouse, "and read back: %s" % [errors])
+
+
+## E9-S1 (D65): a cart path from a far clubhouse to the first tee makes the walk out quicker by
+## the path's speed, and pace judges the walk's time, so the same guest that failed pace on
+## the long walk over rough passes it on the path.
+func test_a_cart_path_from_a_far_clubhouse_cuts_the_walk_out_and_its_pace() -> void:
+	var spec := [[10, 10, Guest.Taste.CASUAL, 21]]
+	var b := GuestCourse.build()
+	assert_true(b.move_clubhouse(Vector2i(44, 20), 2), "an allowed spot across the strip")
+	var rough := GuestBrain.new(b.course, 4, tuning, model, [GuestSpawner.group(0, 0.0, spec)])
+	rough.run_day()
+	var door := b.course.clubhouse_door()
+	var tee: Vector2i = GuestCourse.HOLES[0][1]
+	b.begin_stroke()
+	for cell: Vector2i in BuildTool.grid_line(door + Vector2i(-1, 0), tee + Vector2i(1, 1)):
+		b.paint(cell, Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+	for spec_hole: Array in GuestCourse.HOLES:
+		b.open_hole(spec_hole[0])  # the path crosses their footprints, which closed them
+	assert_true(b.course.holes.all(func(h: HoleData) -> bool: return h.open), "every hole open again")
+	var path := GuestBrain.new(b.course, 4, tuning, model, [GuestSpawner.group(0, 0.0, spec)])
+	path.run_day()
+	var r_rough: Guest.HoleRecord = rough.guests[0].records[0]
+	var r_path: Guest.HoleRecord = path.guests[0].records[0]
+	assert_true(path.route(path.door(), field_tee(path)).on_path, "the walk out follows the path")
+	assert_lt(r_path.walk_s, r_rough.walk_s, "quicker on the path")
+	assert_lt(r_path.walk_s * tuning.walk_surface_speed[Surface.Type.CART_PATH], r_rough.walk_s * 1.25,
+			"by about the path's factor (the legs to and from it are on rough)")
+	var limit := GuestReaction.walk_limit(10, tuning)
+	assert_gt(r_rough.walk_s, limit, "over rough the walk is long")
+	assert_false(r_rough.reaction.passed[GuestReaction.Check.PACE])
+	assert_lte(r_path.walk_s, limit, "on the path it is not")
+	assert_true(r_path.reaction.passed[GuestReaction.Check.PACE] or r_path.wait_s > 0,
+			"so pace passes, unless the guest waited")
+	assert_lt(r_path.start_s, r_rough.start_s, "and the round starts sooner")
+	gut.p("walk out: %.0f yd, %.2f s over rough; %.0f yd, %.2f s on the path; limit %.2f s" % [
+			r_rough.walk_yd, r_rough.walk_s, r_path.walk_yd, r_path.walk_s, limit])
+
+
+## Hole 1's tee, yards.
+func field_tee(brain: GuestBrain) -> Vector2:
+	return brain.field.tile_center(brain.hole_numbered(1).tee)
 
 
 func test_no_clubhouse_no_arrivals() -> void:

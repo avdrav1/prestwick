@@ -56,13 +56,16 @@ func _guest(skill: int, patience: int, taste: Guest.Taste) -> Guest:
 	return g
 
 
-func _record(number: int, par: int, score: int, wait_s: int = 0, walk_yd: float = -1.0) -> Guest.HoleRecord:
+## `walk_s`: the walk to the tee, simulated seconds (E9-S1; -1 for none), at the base speed's
+## yards.
+func _record(number: int, par: int, score: int, wait_s: int = 0, walk_s: float = -1.0) -> Guest.HoleRecord:
 	var r := Guest.HoleRecord.new()
 	r.number = number
 	r.par = par
 	r.score = score
 	r.wait_s = wait_s
-	r.walk_yd = walk_yd
+	r.walk_s = walk_s
+	r.walk_yd = walk_s * tuning.walk_yd_per_s if walk_s >= 0.0 else -1.0
 	return r
 
 
@@ -242,10 +245,11 @@ func test_pace_passes_within_the_wait_limit_and_fails_over_it() -> void:
 
 
 func test_pace_fails_on_a_long_walk_from_the_last_green() -> void:
+	# E9-S1 (D65): the walk is judged by its time, not its yards.
 	var patience := 3
-	var limit := tuning.walk_base_yd + tuning.walk_per_patience_yd * patience
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * patience
 	assert_true(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit), patience, tuning))
-	assert_false(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit + 1.0), patience, tuning))
+	assert_false(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit + 0.1), patience, tuning))
 	assert_true(GuestReaction.pace_passes(_record(1, 4, 4, 0, -1.0), patience, tuning),
 			"a first hole has no walk")
 
@@ -401,13 +405,13 @@ func test_the_risk_reward_par_5() -> void:
 	assert_true(s.safe_route)
 	for taste: Guest.Taste in [Guest.Taste.PURIST, Guest.Taste.ADVENTURER, Guest.Taste.CASUAL]:
 		var g := _guest(7, 5, taste)
-		var r := GuestReaction.judge(g, _record(8, 5, roundi(tuning.expected_score(5, 7)), 2, 80.0), s, tuning)
+		var r := GuestReaction.judge(g, _record(8, 5, roundi(tuning.expected_score(5, 7)), 2, 2.0), s, tuning)
 		assert_eq(r.kind, GuestReaction.Kind.PRAISE, Guest.TASTE_NAMES[taste])
 	_rect(c, Rect2i(88, 10, 8, 11), Surface.Type.FAIRWAY, 1)
 	var dull := checks.statics(c, h)
 	assert_false(dull.interesting())
 	var adv := GuestReaction.judge(_guest(7, 5, Guest.Taste.ADVENTURER),
-			_record(8, 5, 6, 2, 80.0), dull, tuning)
+			_record(8, 5, 6, 2, 2.0), dull, tuning)
 	assert_eq(adv.kind, GuestReaction.Kind.COMPLAINT)
 	assert_string_starts_with(adv.text, "Hole 8:")
 

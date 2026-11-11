@@ -11,7 +11,8 @@ extends Node2D
 ## hides it, the ground behind does not, and it sorts with the ball and the hole markers by the
 ## same rule.
 ##
-## Walks: the brain moves a guest once per simulated second (up to `walk_yd_per_s` 40 yd), so
+## Walks: the brain moves a guest once per simulated second (up to `walk_yd_per_s` 40 yd, times
+## the ground's `walk_surface_speed`, E9-S1: 60 yd on a cart path), so
 ## the view slides each figure from where it stood at the last step to where it stands now,
 ## over the share of the second its leg takes (E3-S20: Guest.leg_start to leg_end, at walk
 ## speed; a whole leg over the whole second) by the share gone by (GuestBrain.step_fraction):
@@ -387,7 +388,7 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 	# and the step back fades in, so a walker that stops beside the striker (or swings next) is
 	# where a standing figure would be when it stops. Either step moves no faster than a walk.
 	var walker := g.state != Guest.State.PLAYING and f.from.distance_squared_to(f.to) > 1e-6
-	var step := guest_tuning.walk_yd_per_s * speed * delta
+	var step := guest_tuning.walk_top_yd_per_s() * speed * delta
 	var walk_share := 0.0
 	if walker:
 		var end: Vector2 = g.walk.end() if g.walk != null else f.to

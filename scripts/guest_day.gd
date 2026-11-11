@@ -292,13 +292,14 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 
 
 ## One reaction as `--lines` prints it: "day 1 s 41 guest 3 (skill 4, patience 2, purist)
-## complaint, wait 9 s of 4, walk 66 yd of 80: Hole 1: slow, waited 9 s. Also ...".
+## complaint, wait 9 s of 4, walk 66 yd, 1.7 s of 2.0: Hole 1: slow, waited 9 s. Also ...".
 static func reaction_line(day_seed: int, second: int, g: Guest, r: GuestReaction) -> String:
 	return "day %d s %d guest %d (skill %d, patience %d, %s) %s, wait %d s of %d, walk %s: %s" % [
 			day_seed, second, g.id, g.skill, g.patience,
 			String(Guest.Taste.keys()[g.taste]).to_lower(), r.kind_name(), r.wait_s,
 			roundi(r.wait_limit_s),
-			"none" if r.walk_yd < 0.0 else "%d yd of %d" % [roundi(r.walk_yd), roundi(r.walk_limit_yd)],
+			"none" if r.walk_yd < 0.0 else "%d yd, %.1f s of %.1f" % [roundi(r.walk_yd), r.walk_s,
+					r.walk_limit_s],
 			r.text]
 
 

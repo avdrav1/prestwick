@@ -9,8 +9,9 @@ func test_each_new_bound_fails_a_bad_value_with_its_key_named() -> void:
 	var cases: Array = [
 		["wait_base_s", -1.0, 0.0],
 		["wait_per_patience_s", -0.5, 0.0],
-		["walk_base_yd", -10.0, 0.0],
-		["walk_per_patience_yd", -1.0, 0.0],
+		["walk_base_s", -10.0, 0.0],
+		["walk_per_patience_s", -1.0, 0.0],
+		["walk_climb_s_per_step", -0.5, 0.0],
 		["challenge_within", -1.0, 0.0],
 		["eye_height_yd", 0.0, 0.25],
 		["eye_height_yd", -1.75, 0.25],
@@ -57,7 +58,7 @@ func test_the_casual_band_must_be_at_least_the_challenge_band() -> void:
 func test_every_check_names_its_key_and_the_bad_value() -> void:
 	var cases: Array = [
 		["sim_ticks_per_s", 100], ["play_clear_yd", -1.0], ["play_clear_share", -0.1],
-		["cross_clear_yd", -1.0], ["cross_hold_max_s", 0], ["cart_path_max_detour", 0.5],
+		["cross_clear_yd", -1.0], ["cross_hold_max_s", 0], 
 		["max_steps_per_frame", 0], ["frame_ticks_max", 0], ["frame_guest_ms_max", 0.0],
 		["putt_tick_weight", 0.5], ["frame_ticks_per_real_s", 0], ["skip_frame_ms", 0.0],
 		["skip_steps_per_frame", 0],

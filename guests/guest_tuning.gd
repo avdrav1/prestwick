@@ -15,11 +15,18 @@ var group_size_max: int = 0
 ## share of `day_s`, so a longer day keeps the morning rush the pace check was tuned on).
 var arrival_window_s: float = 0.0
 
+## E9-S1 (D65): the base walking speed, yards a simulated second, over fairway, rough, green,
+## tee and painted out of bounds; `walk_surface_speed` times it on each surface (by
+## Surface.Type, read from {surface name: factor}; a cart path is the fastest), and
+## `walk_climb_s_per_step` seconds more for each height step climbed from one tile to the next
+## (downhill is free). GuestWalk sums a walk's time tile by tile.
 var walk_yd_per_s: float = 0.0
-## E3-S4: a walk follows a cart path when one has a tile within cart_path_reach_yd of both
-## ends and the route along it is at most cart_path_max_detour times the straight line.
+var walk_surface_speed: PackedFloat64Array = PackedFloat64Array()
+var walk_climb_s_per_step: float = 0.0
+## E3-S4: a walk may follow a cart path with a tile within cart_path_reach_yd of both ends.
+## E9-S1 (D65): it does when that route is quicker than the straight walk (E3-S4's
+## cart_path_max_detour, a cap on its length, is retired).
 var cart_path_reach_yd: float = 0.0
-var cart_path_max_detour: float = 0.0
 var stroke_s: float = 0.0
 ## E3-S8 review, E3-S22: a guest holds its stroke while a guest, or an unfinished ball, of a
 ## group ahead on its hole or of a group on another hole lies nearer its cup and within this
@@ -117,8 +124,11 @@ var patience_min: int = 1
 var patience_max: int = 10
 var wait_base_s: float = 0.0
 var wait_per_patience_s: float = 0.0
-var walk_base_yd: float = 0.0
-var walk_per_patience_yd: float = 0.0
+## E9-S1 (D65): the walk to a tee (from the previous cup, or the clubhouse door) is long
+## when it takes over walk_base_s + walk_per_patience_s x patience simulated seconds (was
+## walk_base_yd 60 + walk_per_patience_yd 10 yards, the same at the base speed).
+var walk_base_s: float = 0.0
+var walk_per_patience_s: float = 0.0
 
 var challenge_within: float = 0.0
 var casual_challenge_within: float = 0.0
@@ -166,8 +176,19 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
 	t.arrival_window_s = _float(d, "arrival_window_s", errors)
 	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
+	t.walk_surface_speed.resize(Surface.COUNT)
+	var speeds: Variant = d.get("walk_surface_speed")
+	if typeof(speeds) == TYPE_DICTIONARY:
+		for s: int in Surface.COUNT:
+			var v: Variant = (speeds as Dictionary).get(Surface.NAMES[s])
+			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+				t.walk_surface_speed[s] = float(v)
+			else:
+				errors.append("walk_surface_speed.%s is missing or not a number" % Surface.NAMES[s])
+	else:
+		errors.append("walk_surface_speed must be an object of surface names")
+	t.walk_climb_s_per_step = _float(d, "walk_climb_s_per_step", errors)
 	t.cart_path_reach_yd = _float(d, "cart_path_reach_yd", errors)
-	t.cart_path_max_detour = _float(d, "cart_path_max_detour", errors)
 	t.stroke_s = _float(d, "stroke_s", errors)
 	t.play_clear_yd = _float(d, "play_clear_yd", errors)
 	t.play_clear_share = _float(d, "play_clear_share", errors)
@@ -216,8 +237,8 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.patience_max = CourseData.read_int(d, "patience_max", errors)
 	t.wait_base_s = _float(d, "wait_base_s", errors)
 	t.wait_per_patience_s = _float(d, "wait_per_patience_s", errors)
-	t.walk_base_yd = _float(d, "walk_base_yd", errors)
-	t.walk_per_patience_yd = _float(d, "walk_per_patience_yd", errors)
+	t.walk_base_s = _float(d, "walk_base_s", errors)
+	t.walk_per_patience_s = _float(d, "walk_per_patience_s", errors)
 	t.challenge_within = _float(d, "challenge_within", errors)
 	t.casual_challenge_within = _float(d, "casual_challenge_within", errors)
 	var weights: Variant = d.get("taste_weights")
@@ -296,6 +317,9 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	if t.arrivals_per_day < 0:
 		errors.append("arrivals_per_day (%s) must be 0 or more" % t.arrivals_per_day)
 	_positive(errors, "walk_yd_per_s", t.walk_yd_per_s)
+	for s: int in mini(t.walk_surface_speed.size(), Surface.COUNT):
+		_positive(errors, "walk_surface_speed.%s" % Surface.NAMES[s], t.walk_surface_speed[s])
+	_at_least(errors, "walk_climb_s_per_step", t.walk_climb_s_per_step, 0.0)
 	_positive(errors, "guest_ticks_per_s", t.guest_ticks_per_s)
 	_positive(errors, "sim_ticks_per_s", t.sim_ticks_per_s)
 	_positive(errors, "flight_draw_speed", t.flight_draw_speed)
@@ -321,7 +345,6 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "cross_clear_yd", t.cross_clear_yd, 0.0)
 	_at_least(errors, "cross_hold_max_s", t.cross_hold_max_s, 1)
 	_at_least(errors, "next_tee_queue_max", t.next_tee_queue_max, 0, " (0 turns it off)")
-	_at_least(errors, "cart_path_max_detour", t.cart_path_max_detour, 1.0, " (the straight line)")
 	_at_least(errors, "max_steps_per_frame", t.max_steps_per_frame, 1)
 	_at_least(errors, "frame_ticks_max", t.frame_ticks_max, 1)
 	_at_least(errors, "frame_ticks_per_real_s", t.frame_ticks_per_real_s, 1)
@@ -335,14 +358,14 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_least(errors, "complaint_fails", t.complaint_fails, 1)
 	_positive(errors, "sight_step_yd", t.sight_step_yd)
 	_at_least(errors, "guest_putt_max_runs", t.guest_putt_max_runs, 2, " (Swing.validate)")
-	# E3-S36: the pace limits (GuestReaction.wait_limit_s, walk_limit_yd), the challenge bands
+	# E3-S36: the pace limits (GuestReaction.wait_limit_s, walk_limit_s), the challenge bands
 	# and the expected score (D40) take no negatives; a Casual guest's band is the wider (D42);
 	# the sight line's eye stands above the tee (D43), its mark at or above the target; the rating
 	# averages at least one reaction.
 	_at_least(errors, "wait_base_s", t.wait_base_s, 0.0)
 	_at_least(errors, "wait_per_patience_s", t.wait_per_patience_s, 0.0)
-	_at_least(errors, "walk_base_yd", t.walk_base_yd, 0.0)
-	_at_least(errors, "walk_per_patience_yd", t.walk_per_patience_yd, 0.0)
+	_at_least(errors, "walk_base_s", t.walk_base_s, 0.0)
+	_at_least(errors, "walk_per_patience_s", t.walk_per_patience_s, 0.0)
 	_at_least(errors, "challenge_within", t.challenge_within, 0.0)
 	if t.casual_challenge_within < 0.0:
 		_at_least(errors, "casual_challenge_within", t.casual_challenge_within, 0.0)
@@ -353,6 +376,20 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_positive(errors, "eye_height_yd", t.eye_height_yd)
 	_at_least(errors, "mark_height_yd", t.mark_height_yd, 0.0)
 	_at_least(errors, "rating_window", t.rating_window, 1)
+
+
+## E9-S1 (D65): a guest's walking speed on `surface`, yards a simulated second.
+func walk_speed(surface: int) -> float:
+	return walk_yd_per_s * walk_surface_speed[surface]
+
+
+## E9-S1: the fastest a guest walks on any surface, yards a simulated second (what GuestView
+## lets a figure's sidestep move at, as a walk).
+func walk_top_yd_per_s() -> float:
+	var top := 0.0
+	for f: float in walk_surface_speed:
+		top = maxf(top, f)
+	return walk_yd_per_s * top
 
 
 ## E3-S20: simulated seconds from a strike to the club meeting the ball.

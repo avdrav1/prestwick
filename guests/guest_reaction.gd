@@ -8,7 +8,9 @@ extends RefCounted
 ##   Fair: the tee shot is not blind (HoleChecks, D43). Purist: counts double.
 ##   Interesting: a hazard on the line and a safe way round it (HoleChecks). Adventurer: double.
 ##   Pace: the counted wait at most wait_base_s + wait_per_patience_s x patience, and the walk
-##     from the previous cup at most walk_base_yd + walk_per_patience_yd x patience.
+##     from the previous cup at most walk_base_s + walk_per_patience_s x patience seconds
+##     (E9-S1, D65: by time, so a quicker walk along a cart path passes where its yards would
+##     not; walk_base_yd and walk_per_patience_yd yards before).
 ##   Challenge: the score within challenge_within of the expected score (D40), over or under;
 ##     Casual: casual_challenge_within.
 ##
@@ -46,7 +48,9 @@ var expected: float = 0.0
 var wait_s: int = 0
 var wait_limit_s: float = 0.0
 var walk_yd: float = -1.0
-var walk_limit_yd: float = 0.0
+## E9-S1: the walk's time and its limit, simulated seconds (walk_limit_yd before).
+var walk_s: float = -1.0
+var walk_limit_s: float = 0.0
 ## E5-S11: the walk was from the clubhouse door (the round's first hole), not a previous cup.
 var from_clubhouse: bool = false
 ## The hole's statics as the checks read them.
@@ -75,8 +79,9 @@ static func judge(guest: Guest, record: Guest.HoleRecord, statics: HoleChecks.St
 	r.wait_s = record.wait_s
 	r.wait_limit_s = wait_limit(guest.patience, tuning)
 	r.walk_yd = record.walk_yd
+	r.walk_s = record.walk_s
 	r.from_clubhouse = record.walk_from_clubhouse
-	r.walk_limit_yd = walk_limit(guest.patience, tuning)
+	r.walk_limit_s = walk_limit(guest.patience, tuning)
 	r.passed[Check.FAIR] = statics.fair()
 	r.passed[Check.INTERESTING] = statics.interesting()
 	r.passed[Check.PACE] = pace_passes(record, guest.patience, tuning)
@@ -106,18 +111,18 @@ static func wait_limit(patience: int, tuning: GuestTuning) -> float:
 	return tuning.wait_base_s + tuning.wait_per_patience_s * patience
 
 
-## Pace's walk limit for `patience`, yards.
+## Pace's walk limit for `patience`, simulated seconds (E9-S1; yards before).
 static func walk_limit(patience: int, tuning: GuestTuning) -> float:
-	return tuning.walk_base_yd + tuning.walk_per_patience_yd * patience
+	return tuning.walk_base_s + tuning.walk_per_patience_s * patience
 
 
 ## Pace: the counted wait and the walk to the tee (from the previous cup, or on the round's first
-## hole from the clubhouse door since E5-S11; -1 for none) are each within the guest's limit
-## (over it fails).
+## hole from the clubhouse door since E5-S11; -1 for none; by its time since E9-S1) are each
+## within the guest's limit (over it fails).
 static func pace_passes(record: Guest.HoleRecord, patience: int, tuning: GuestTuning) -> bool:
 	if record.wait_s > wait_limit(patience, tuning):
 		return false
-	return record.walk_yd < 0.0 or record.walk_yd <= walk_limit(patience, tuning)
+	return record.walk_s < 0.0 or record.walk_s <= walk_limit(patience, tuning) + EPS
 
 
 ## Challenge: the score is within the band of the expected score, both ends included.
@@ -283,7 +288,8 @@ func to_save() -> Dictionary:
 		"hole": hole_number, "guest": guest_id, "taste": int(taste), "kind": int(kind),
 		"passed": passed.duplicate(), "weights": weights.duplicate(), "fail_weight": fail_weight,
 		"score": score, "par": par, "expected": expected, "wait_s": wait_s,
-		"wait_limit_s": wait_limit_s, "walk_yd": walk_yd, "walk_limit_yd": walk_limit_yd,
+		"wait_limit_s": wait_limit_s, "walk_yd": walk_yd, "walk_s": walk_s,
+		"walk_limit_s": walk_limit_s,
 		"from_clubhouse": from_clubhouse, "text": text, "lead": _lead, "rest": _rest,
 	}
 
@@ -322,7 +328,8 @@ static func from_save(d: Variant, errors: Array[String], context: String = "reac
 	r.expected = float(data.get("expected", 0.0))
 	r.wait_limit_s = float(data.get("wait_limit_s", 0.0))
 	r.walk_yd = float(data.get("walk_yd", -1.0))
-	r.walk_limit_yd = float(data.get("walk_limit_yd", 0.0))
+	r.walk_s = float(data.get("walk_s", -1.0))  # E9-S1; -1 in older saves
+	r.walk_limit_s = float(data.get("walk_limit_s", 0.0))
 	r.from_clubhouse = bool(data.get("from_clubhouse", false))  # E5-S11; false in older saves
 	r.text = str(data.get("text", ""))
 	r._lead = str(data.get("lead", ""))

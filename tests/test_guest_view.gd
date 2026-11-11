@@ -288,9 +288,9 @@ func test_no_two_figures_of_one_group_on_one_spot_while_one_strikes() -> void:
 	_run(sim, view, check, 60 * 150)
 	assert_gt(seen.tee, 30, "many frames of a tee shot with partners on the tee")
 	assert_gt(seen.walkers, 10, "frames of a partner walking off the tee past a striker")
-	assert_lt(seen.pass_jump, view.guest_tuning.walk_yd_per_s * FRAME + 0.01,
+	assert_lt(seen.pass_jump, view.guest_tuning.walk_top_yd_per_s() * FRAME + 0.01,
 			"a walker sidesteps no faster than a walk")
-	var walk_step := view.guest_tuning.walk_yd_per_s * FRAME + 0.01
+	var walk_step := view.guest_tuning.walk_top_yd_per_s() * FRAME + 0.01
 	assert_lt(seen.jump, walk_step, "a standing partner steps aside no faster than a walk")
 	gut.p("%d frames with a striker in a group, %d on the tee; closest partner to the striker %.2f yd; a standing partner moved at most %.2f yd a frame; %d walker frames, closest %.2f yd, sidestep at most %.2f yd a frame"
 			% [seen.frames, seen.tee, seen.closest, seen.jump, seen.walkers, seen.walk_closest, seen.pass_jump])
@@ -382,7 +382,7 @@ func test_no_figure_jumps_at_the_start_of_a_swing() -> void:
 			var sim := _sim_drawing(arrivals, 7)
 			sim.set_speed(speed)
 			var view := _view(sim, Rect2(-1e5, -1e5, 2e5, 2e5))
-			var step_yd := view.guest_tuning.walk_yd_per_s * speed * FRAME + 0.01
+			var step_yd := view.guest_tuning.walk_top_yd_per_s() * speed * FRAME + 0.01
 			var seen := {"starts": 0, "worst": 0.0, "prev": {}, "anim": {}}
 			var check := func() -> bool:
 				var prev: Dictionary = seen.prev

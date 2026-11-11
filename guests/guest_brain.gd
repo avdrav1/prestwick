@@ -637,6 +637,7 @@ func _head_for(g: GuestGroup, n: int, t: int, update: bool = true) -> void:
 		guest.tee_wait_s = 0
 		guest.cross_wait_s = 0
 		guest.walk_yd = -1.0
+		guest.walk_s = -1.0
 	g.cross_held_s = 0
 	if update:
 		_update_to_tee(g, t)
@@ -692,9 +693,10 @@ func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	g.start_s = t
 	g.struck = false
 	var tee := field.tile_center(h.tee)
-	var walk_yd := route(g.prev_cup, tee).length if g.has_prev_cup else -1.0
+	var walk := route(g.prev_cup, tee) if g.has_prev_cup else null
 	for guest: Guest in g.guests:
-		guest.walk_yd = walk_yd
+		guest.walk_yd = walk.length if walk != null else -1.0
+		guest.walk_s = walk.duration if walk != null else -1.0
 		guest.walk_from_clubhouse = g.from_clubhouse and g.has_prev_cup
 	g.from_clubhouse = false
 	_update_on_hole(g, t)
@@ -953,13 +955,14 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 
 
 ## E5-S12: where `guest` stands when a stroke struck this second meets the ball (impact_s into
-## the second): along the leg it walked this second (leg_start to leg_end at walk speed,
-## E3-S20) if its group has stepped already, else where it stands (where it began the second).
+## the second): along the leg it walked this second (leg_start to leg_end, E3-S20; E9-S1: by
+## time along its walk) if its group has stepped already, else where it stands (where it
+## began the second).
 func stands_at_impact(guest: Guest) -> Vector2:
 	if guest.walk == null or guest.last_walk_s != second:
 		return guest.position
 	var s := clampf(tuning.impact_s(), guest.leg_start, guest.leg_end)
-	return guest.walk.point_at(guest.walk.walked - (guest.leg_end - s) * tuning.walk_yd_per_s)
+	return guest.walk.point_at_time(guest.walk.elapsed - (guest.leg_end - s))
 
 
 ## True when a guest of group `other` stands waiting on its tee, not yet struck there (E3-S39:
@@ -1047,6 +1050,7 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.tee_wait_s = guest.tee_wait_s
 	r.cross_wait_s = guest.cross_wait_s
 	r.walk_yd = guest.walk_yd
+	r.walk_s = guest.walk_s
 	r.walk_from_clubhouse = guest.walk_from_clubhouse
 	r.start_s = g.start_s
 	r.end_s = t
@@ -1144,19 +1148,20 @@ func _start_walk(guest: Guest, to: Vector2, start_share: float = 0.0) -> void:
 	guest.waiting_for = Guest.Wait.NONE
 
 
-## One second's walk (at most one a second): `walk_yd_per_s` yards, less the share of the
-## second before the walk's first leg sets off. Its leg runs from `leg_start` to `leg_end`
-## (shares of the second, at walk speed), which GuestView draws it over (E3-S20).
+## One second's walk (at most one a second): the rest of the second after the walk's first
+## leg sets off, at the speed of the ground under it (E9-S1: GuestWalk walks by time). Its leg
+## runs from `leg_start` to `leg_end` (shares of the second), which GuestView draws it over
+## (E3-S20).
 func _walk(guest: Guest, t: int) -> void:
 	if guest.last_walk_s == t or guest.walk == null:
 		return
 	guest.last_walk_s = t
 	var s0 := guest.next_leg_start
 	guest.next_leg_start = 0.0
-	var was := guest.walk.walked
-	guest.position = guest.walk.move(tuning.walk_yd_per_s * (1.0 - s0))
+	var was := guest.walk.elapsed
+	guest.position = guest.walk.advance(1.0 - s0)
 	guest.leg_start = s0
-	guest.leg_end = minf(s0 + (guest.walk.walked - was) / tuning.walk_yd_per_s, 1.0)
+	guest.leg_end = minf(s0 + (guest.walk.elapsed - was), 1.0)
 	if guest.walk.is_done():
 		guest.position = guest.walk.end()
 		guest.walk = null

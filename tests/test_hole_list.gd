@@ -1059,6 +1059,7 @@ func _worst_verdict(number: int, par: int) -> GuestReaction:
 	rec.score = par + 9
 	rec.wait_s = 99
 	rec.walk_yd = 400.0
+	rec.walk_s = 10.0
 	var s := HoleChecks.Statics.new()
 	s.blind = true
 	s.target_is_zone = true

@@ -88,6 +88,8 @@ var wait_s: int = 0
 var tee_wait_s: int = 0
 var cross_wait_s: int = 0
 var walk_yd: float = -1.0
+## E9-S1: that walk's time, simulated seconds (-1 for none).
+var walk_s: float = -1.0
 ## E5-S11: `walk_yd` is the walk from the clubhouse door (the first hole of its round).
 var walk_from_clubhouse: bool = false
 ## E5-S11: true once it has stood on the first tee of its round (GuestBrain.reached_first_tee).
@@ -119,6 +121,8 @@ class HoleRecord:
 	var cross_wait_s: int = 0
 	## The walk from the previous hole's cup to this tee, yards; -1 on the first hole played.
 	var walk_yd: float = -1.0
+	## E9-S1 (D65): that walk's time, simulated seconds (-1 for none): what pace judges.
+	var walk_s: float = -1.0
 	## E5-S11: `walk_yd` was the walk from the clubhouse door.
 	var walk_from_clubhouse: bool = false
 	## Simulated seconds of the day it teed off and holed out.
