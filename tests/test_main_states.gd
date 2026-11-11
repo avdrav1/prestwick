@@ -41,6 +41,11 @@ func test_toggle_action_switches_mode() -> void:
 	var event := InputEventAction.new()
 	event.action = "toggle_mode"
 	event.pressed = true
+	# E10-S1: with no hole to play, Tab stays in Build (tests/test_goals.gd); with one it plays.
+	_main._unhandled_input(event)
+	assert_eq(_main.mode, Main.Mode.BUILD, "no hole with a tee and a cup yet")
+	_main.build_tool.builder.place_tee(1, Vector2i(3, 10), 3)
+	_main.build_tool.builder.place_cup(1, Vector2i(15, 10))
 	_main._unhandled_input(event)
 	assert_eq(_main.mode, Main.Mode.PLAY)
 

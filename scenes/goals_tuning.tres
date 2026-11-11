@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="GoalsTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/goals_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+target_stars = 3.0
+font_size = 13
+bottom_gap = 8.0

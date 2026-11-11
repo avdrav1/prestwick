@@ -308,6 +308,9 @@ func test_f6_shows_a_focus_ring_and_a_click_takes_it_away() -> void:
 
 
 func test_tab_from_the_hud_still_switches_build_and_play() -> void:
+	# E10-S1: Tab plays only a hole with a tee and a cup.
+	_m.build_tool.builder.place_tee(1, Vector2i(3, 10), 3)
+	_m.build_tool.builder.place_cup(1, Vector2i(15, 10))
 	_tap(KEY_F6)
 	assert_not_null(_focus())
 	_tap(KEY_TAB)

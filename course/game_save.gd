@@ -5,7 +5,8 @@ extends RefCounted
 ## budget come with it), the guests' seed, the day to resume at the morning of, the money, the
 ## rating history, the green fee (E4-S6), the guest feed, and (E4-S11) what the saved day's
 ## morning drew and its guests paid so far, and (E8-S2) when the first hole's opening sent out the
-## groups a closed course had turned away, so its replay is the day the player saved. Only course/ save code writes CourseData on load
+## groups a closed course had turned away, so its replay is the day the player saved, and (E10-S1)
+## the New course goal checklist's done goals and fold. Only course/ save code writes CourseData on load
 ## (CLAUDE.md): the course is read by CourseSave.from_dict and nothing here writes it.
 ##
 ## Guests out on the course are not saved (D38: none stays overnight), so a load resumes at the
@@ -68,6 +69,12 @@ class State:
 	## E8-S4: an autosave's number within its game, from 1, one up on each autosave (the newest
 	## is the highest); 0 in a manual save.
 	var autosave: int = 0
+	## E10-S1: the game has the New course goal checklist (Main.goals): false for a sandbox, an
+	## import, or a save from before it. In the file, the optional "goals" object.
+	var goals_on: bool = false
+	## E10-S1: the done goals' ids (GoalList.ORDER) and whether the panel is folded to one line.
+	var goals_done: PackedStringArray = []
+	var goals_collapsed: bool = false
 
 
 ## Writes `state` to `path` as JSON, replacing any save there only once the new one is written
@@ -113,6 +120,8 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		for ls: Vector3i in state.late_starts:
 			late.append([ls.x, ls.y, ls.z])
 		data["late_starts"] = late
+	if state.goals_on:
+		data["goals"] = {"done": Array(state.goals_done), "collapsed": state.goals_collapsed}
 	return JSON.stringify(data, "  ", false)
 
 
@@ -212,6 +221,9 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 		s.saved_at = CourseData.read_int(data, "saved_at", errors)
 	if data.has("autosave"):
 		s.autosave = CourseData.read_int(data, "autosave", errors)
+	# E10-S1: a new field with a default, as `fee`: {"done": [ids], "collapsed": bool}.
+	if data.has("goals"):
+		_read_goals(data["goals"], s, errors)
 	# E4-S13: an E4-S11 save's "second" held the fee over the morning's ceiling; the ceiling no
 	# longer moves within a day (D59), so it is ignored.
 	s.feed = ReactionFeed.from_save(data.get("feed"), feed_window, feed_lines, errors)
@@ -226,6 +238,30 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 		return null
 	s.feed_data = data["feed"]
 	return s
+
+
+## E10-S1: reads the "goals" object into `s`: "done", a list of goal ids (texts), and "collapsed",
+## true or false.
+static func _read_goals(v: Variant, s: State, errors: Array[String]) -> void:
+	if typeof(v) != TYPE_DICTIONARY:
+		errors.append("goals must be an object")
+		return
+	var g: Dictionary = v
+	var done: Variant = g.get("done", [])
+	if typeof(done) != TYPE_ARRAY:
+		errors.append("goals.done must be a list")
+		return
+	for id: Variant in done:
+		if typeof(id) != TYPE_STRING:
+			errors.append("goals.done must hold goal names")
+			return
+		s.goals_done.append(id)
+	var folded: Variant = g.get("collapsed", false)
+	if typeof(folded) != TYPE_BOOL:
+		errors.append("goals.collapsed must be true or false")
+		return
+	s.goals_collapsed = folded
+	s.goals_on = true
 
 
 static func _is_late_start(v: Variant) -> bool:

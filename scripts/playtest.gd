@@ -197,6 +197,8 @@ func _start_hole() -> void:
 		_finish()
 		return
 	_e2_hash = course.content_hash()
+	# E10-S1: Play hole is enabled once a hole has a tee and a cup.
+	_check(not _main.mode_button.disabled, "E2: Play hole is enabled on a course with a hole")
 	_main.mode_button.pressed.emit()
 	var sc := _main.swing_control
 	_check(_main.mode == Main.Mode.PLAY, "one click from Build to Play")

@@ -17,7 +17,7 @@ const SECTIONS: Array = [
 		[[&"toggle_mode"], "Switch Build and Play"],
 		[[&"hud_focus_next", &"hud_focus_prev"], "Keys to the next / previous panel of buttons. There: arrows move, Space or Enter presses, Left / Right move a slider, Esc goes back to the map"],
 		[[&"help_toggle"], "This help (Esc closes it)"],
-		[[&"menu"], "Main menu: new course, load, save, import, export, sound, quit (Esc again closes it; a key map, notice or parcel asked about takes Esc first)"],
+		[[&"menu"], "Main menu: new course, load, save, import, export, sound, goals, quit (Esc again closes it; a key map, notice or parcel asked about takes Esc first)"],
 		[[&"audio_settings"], "Sound volumes (Esc closes them)"],
 		[[&"save_game", &"load_game"], "Save / load the game (each asks first; Esc closes the notice)"],
 		[[&"sim_pause", &"sim_speed_1", &"sim_speed_3"], "Pause / run the guests' day at 1x / 3x"],
@@ -116,7 +116,7 @@ func _ready() -> void:
 			grid.add_child(what)
 			lines.append(PackedStringArray([k.text, what.text]))
 	var mouse := Label.new()
-	mouse.text = "The hole list, its par, Open, Play and tag buttons, the fee slider, the speed buttons and the feed's lines are all reached with F6."
+	mouse.text = "The hole list, its par, Open, Play and tag buttons, the fee slider, the speed buttons, the goals and the feed's lines are all reached with F6."
 	mouse.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mouse.custom_minimum_size = Vector2(640, 0)
 	mouse.add_theme_font_size_override("font_size", 13)

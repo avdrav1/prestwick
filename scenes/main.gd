@@ -113,6 +113,15 @@ var _sound_from_menu: bool = false
 ## E5-S6: the HUD in the keyboard's reach (F6) and the key map (F1).
 @onready var hud_focus: HudFocus = $HudFocus
 @onready var help_overlay: HelpOverlay = $HUD/HelpOverlay
+## E10-S1: the New course goal checklist, in Build's left column under the fee.
+@onready var goals_panel: GoalsPanel = $HUD/GoalsPanel
+
+## E10-S1: the goals of a New course (and of a save that has them); null in a sandbox or an import.
+var goals: GoalList
+## E10-S1: what the Play button's tooltip says while no hole has a tee and a cup, and the notice Tab
+## gives then.
+const NO_HOLE_TIP: String = "No hole to play yet: pick Tee and click your land, then Cup"
+const PLAY_TIP: String = "Switch between building the hole and playing it"
 
 ## E5-S6: the Build cursor keeps this many px inside the free view before the camera follows it.
 const CURSOR_MARGIN: float = 48.0
@@ -172,9 +181,11 @@ func _ready() -> void:
 	mode_changed.connect(func(_m: Mode) -> void: game_audio.set_music(_music_track()))
 	audio_panel.bind(game_audio)
 	main_menu.sound_requested.connect(open_sound_from_menu)
+	main_menu.goals_requested.connect(open_goals)
 	# E5-S6: F6's stops, in order, and the camera following the Build cursor.
 	hud_focus.bind([build_palette, swing_panel, hole_panel, land_panel, feed_panel, mode_button,
-			new_course_button, new_sandbox_button, sim_speed_panel, fee_panel, save_notice] as Array[Control],
+			new_course_button, new_sandbox_button, sim_speed_panel, fee_panel, goals_panel,
+			save_notice] as Array[Control],
 			[main_menu, audio_panel, confirm_dialog] as Array[Control])
 	build_tool.cursor_moved.connect(_on_cursor_moved)
 	autosaves = get_tree().current_scene == self
@@ -204,6 +215,8 @@ func show_course(c: CourseData) -> void:
 	rating_history.clear()
 	_replay_fees.clear()
 	shot_view.clear()
+	# E10-S1: only a New course (and a load that has them) brings goals.
+	set_goals(null)
 	# The guests' day of this course (E3-S5): day 1 starts when Play first runs it.
 	guest_sim.start(c, maxi(land_seed, 0))
 	reaction_tags.show_course(c)
@@ -218,6 +231,7 @@ func show_course(c: CourseData) -> void:
 	builder.holes_opened.connect(hole_open_notice.show_holes)
 	builder.checked.connect(_on_checked)
 	builder.land_changed.connect(course_view.refresh_parcel)
+	builder.land_changed.connect(_on_land_changed)
 	builder.clubhouse_changed.connect(course_view.refresh_clubhouse)
 	builder.decor_changed.connect(course_view.refresh_decor)
 	# An edit clears the verdicts guests gave the hole it changed (E3-S17).
@@ -248,6 +262,52 @@ func new_sandbox() -> void:
 func new_course(seed_value: int = -1) -> void:
 	land_seed = seed_value if seed_value >= 0 else randi() % 1000000
 	show_course(CourseBuilder.new_course(land_seed))
+	# E10-S1: a New course starts its goal checklist, open.
+	set_goals(GoalList.new())
+
+
+## E10-S1: gives the game goal list `list` (null: none), shown in Build's left column, ticked from
+## the course as it stands, and the menu's Goals with it.
+func set_goals(list: GoalList) -> void:
+	if goals != null and goals.changed.is_connected(_on_goals_changed):
+		goals.changed.disconnect(_on_goals_changed)
+	goals = list
+	if goals != null:
+		goals.changed.connect(_on_goals_changed)
+		goals.refresh(course)
+	goals_panel.bind(goals)
+	main_menu.set_goals(goals != null)
+	_apply_mode()
+
+
+## E10-S1: the menu's Goals: Build, with the checklist open.
+func open_goals() -> void:
+	if goals == null:
+		return
+	set_mode(Mode.BUILD)
+	goals_panel.set_collapsed(false)
+
+
+func _on_goals_changed() -> void:
+	_place_speed_panel()
+
+
+## E10-S1: a parcel bought (or its buy undone) ticks Buy a parcel.
+func _on_land_changed(_parcel: Vector2i) -> void:
+	if goals != null:
+		goals.mark(GoalList.PARCEL)
+
+
+## E10-S1: true when a hole has both its tee and its cup, so Play hole (and Tab) can start Play.
+func has_playable_hole() -> bool:
+	return GoalList.has_playable_hole(course)
+
+
+## E10-S1: Play hole is disabled in Build while no hole has a tee and a cup, its tooltip saying why.
+func _refresh_play_button() -> void:
+	var blocked: bool = mode == Mode.BUILD and not has_playable_hole()
+	mode_button.disabled = blocked
+	mode_button.tooltip_text = NO_HOLE_TIP if blocked else PLAY_TIP
 
 
 ## Plays hole `number` (a hole list row's Play, E3-S2): picks it in the list and starts Play
@@ -376,7 +436,7 @@ func hud_controls() -> Array[Control]:
 func _hud_groups() -> Array:
 	return [
 		[mode_label, rating_row, mode_button, new_course_button, new_sandbox_button, land_panel, money_panel, fee_panel,
-				sim_speed_panel, feed_panel],
+				sim_speed_panel, feed_panel, goals_panel],
 		[hole_panel, score_card],
 		[build_palette, swing_panel],
 	]
@@ -493,7 +553,11 @@ func tile_world(cell: Vector2i) -> Vector2:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(TOGGLE_ACTION):
-		toggle_mode()
+		# E10-S1: as the Play hole button, Tab waits for a hole with a tee and a cup, and says so.
+		if mode == Mode.BUILD and not has_playable_hole():
+			save_notice.show_lines(PackedStringArray([NO_HOLE_TIP + "."]))
+		else:
+			toggle_mode()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed(SAVE_ACTION):
 		request_save()
@@ -535,6 +599,11 @@ func save_state() -> GameSave.State:
 	economy_to_save(s)
 	s.save_id = save_id
 	s.saved_at = int(Time.get_unix_time_from_system())
+	# E10-S1: the goal checklist's ticks and fold.
+	if goals != null:
+		s.goals_on = true
+		s.goals_done = goals.done_ids()
+		s.goals_collapsed = goals.collapsed
 	return s
 
 
@@ -607,6 +676,11 @@ func load_game(path: String = "") -> bool:
 	guest_sim.resume_at(s.day, s.arrivals, s.late_starts)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
+	# E10-S1: the goals as saved (done ones stay done); a save without them has none.
+	if s.goals_on:
+		var list := GoalList.new()
+		list.restore(s.goals_done, s.goals_collapsed)
+		set_goals(list)
 	save_notice.show_lines(SaveNotice.load_lines([], s.day, build_tool.builder.load_notes()))
 	return true
 
@@ -724,6 +798,8 @@ func _on_guest_arrived(_guest: Guest) -> void:
 	var fee: int = green_fee() if _replay_fees.is_empty() else _replay_fees.pop_front()
 	build_tool.builder.credit(fee)
 	ledger.add_fee(fee)
+	if goals != null:
+		goals.mark(GoalList.GUESTS)
 
 
 ## The day's end (E4-S4, GuestSim.day_ended): upkeep for each hole open at dusk, and the day's
@@ -738,6 +814,10 @@ func _on_day_ended(_day: int, _finished: GuestBrain) -> void:
 	# E4-S5: the closing rating goes on the history (E4-S13: the stars shown from tonight on are
 	# its, GuestSim._end_day, so a load reads them back from here).
 	rating_history.append(guest_sim.rating())
+	# E10-S1: a day with guests out that ends at the target stars ticks the last goal.
+	if goals != null and not ledger.paid.is_empty() \
+			and EconomyTuning.stars_of(guest_sim.rating()) >= goals.tuning.target_stars:
+		goals.mark(GoalList.STARS)
 	ledger.close(b.balance(), upkeep)
 	_replay_fees.clear()
 	b.debit(upkeep)
@@ -895,6 +975,9 @@ func _apply_mode() -> void:
 	money_panel.visible = true
 	# E4-S6: the fee is set in Build, the management mode; Play's column keeps its height.
 	fee_panel.visible = building
+	# E10-S1: the goals are Build's, under the fee.
+	goals_panel.visible = building and goals != null
+	_refresh_play_button()
 	_place_speed_panel()
 	# The feed panel is read in Play (its lines link to Build): it shows from the start of Play,
 	# so the free view never shifts at its first line (E3-S67). In Build the feed still takes every
@@ -935,6 +1018,12 @@ func _place_speed_panel() -> void:
 	top = _stack(sim_speed_panel, top)
 	if fee_panel.visible:
 		top = _stack(fee_panel, top)
+	if goals_panel.visible:
+		# E10-S1: under the fee, down to the bottom bar; with less room it shows its one line.
+		var floor_y: float = _hud_rect(build_palette).position.y if build_palette.visible \
+				else get_viewport().get_visible_rect().size.y
+		goals_panel.set_room(floor_y - goals_panel.tuning.bottom_gap - top)
+		_stack(goals_panel, top)
 	if mode == Mode.PLAY:
 		_stack(feed_panel, maxf(top, _feed_panel_top))
 
@@ -964,6 +1053,10 @@ func _on_checked(issues: Dictionary) -> void:
 	if build_tool.builder != null:
 		course_view.show_play_lines(build_tool.builder.slot_lines())
 	hole_panel.refresh()
+	# E10-S1: the goals tick as the holes come together; Play hole waits for a tee and a cup.
+	if goals != null:
+		goals.refresh(course)
+	_refresh_play_button()
 	# A tag stands on its hole's cup, which an edit can move.
 	reaction_tags.queue_redraw()
 

@@ -378,7 +378,8 @@ func test_the_menu_lists_its_actions_and_takes_keyboard_focus() -> void:
 		texts.append(btn.text)
 		assert_eq(btn.focus_mode, Control.FOCUS_ALL, "%s takes focus" % btn.text)
 	assert_eq(texts, ["Back to the course", "New course", "Load game", "Save game",
-			"Import course", "Export course", "Sound settings", "Quit"] as Array[String])
+			"Import course", "Export course", "Sound settings", "Goals", "Quit"] as Array[String])
+	assert_false(m.main_menu.goals_button.visible, "E10-S1: Goals only with a New course's goals")
 	assert_same(m.get_viewport().gui_get_focus_owner(), m.main_menu.main_buttons()[0])
 	# The focused button draws a clear outline of its own.
 	var focus := m.main_menu.main_buttons()[0].get_theme_stylebox("focus") as StyleBoxFlat

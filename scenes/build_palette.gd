@@ -35,6 +35,10 @@ const MIN_GUTTER: int = 16
 ## E5-S13: the bar's height, px, as it was with 64 px icons, kept so the free view the camera
 ## frames holes in (Main.free_view_rects) does not change with the smaller icons.
 const BAR_HEIGHT: int = 90
+## E10-S1: the Clubhouse tool's tooltip says what the clubhouse does (the rc4 tester did not know).
+const CLUBHOUSE_TIP: String = "The clubhouse is where guests arrive, before they walk to the first " + \
+		"tee and pay the green fee, and where they leave after their round. Click to move it " + \
+		"(free); right-click or R to turn its door"
 
 ## Selected buttons get this border so the current tool and brush read at a glance.
 @export var selected_border: Color = Color(1.0, 0.97, 0.8)
@@ -78,10 +82,10 @@ func _ready() -> void:
 	lower_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.LOWER))
 	row.add_child(VSeparator.new())
 	tee_button = _toggle(row, "Tee", _tools_group)
-	tee_button.tooltip_text = "Place the hole's tee"
+	tee_button.tooltip_text = "Place the hole's tee: click on your land"
 	tee_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.TEE))
 	cup_button = _toggle(row, "Cup", _tools_group)
-	cup_button.tooltip_text = "Place the hole's cup"
+	cup_button.tooltip_text = "Place the hole's cup: the ruler shows its length; paint green round it"
 	cup_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CUP))
 	row.add_child(VSeparator.new())
 	buy_button = _toggle(row, "Buy land", _tools_group)
@@ -89,7 +93,7 @@ func _ready() -> void:
 	buy_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.BUY))
 	row.add_child(VSeparator.new())
 	clubhouse_button = _toggle(row, "Clubhouse", _tools_group)
-	clubhouse_button.tooltip_text = "Click to move the clubhouse, where guests arrive and leave (free); right-click or R to turn its door"
+	clubhouse_button.tooltip_text = CLUBHOUSE_TIP
 	clubhouse_button.pressed.connect(func() -> void: _tool.select_tool(BuildTool.Tool.CLUBHOUSE))
 	decor_button = _toggle(row, "Decor", _tools_group)
 	decor_button.tooltip_text = "Click to place a bench, flag or sign (free; a click on one changes it); right-click or R to take it away"

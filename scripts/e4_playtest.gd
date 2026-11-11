@@ -162,6 +162,12 @@ func _build() -> bool:
 	var cup := block.position + CUP_IN
 	var yd := CourseValidator.yardage(tee, cup)
 	print("  hole 1: tee %s, cup %s, %d yd, in the starting block %s" % [tee, cup, yd, block])
+	# E10-S1: a New course opens on its goals, and Play hole waits for a tee and a cup.
+	_check(_main.goals != null and _main.goals_panel.visible
+			and _main.goals_panel.line_text() == "Next: Place a tee",
+			"the goal checklist shows, \"%s\"" % _main.goals_panel.line_text())
+	_check(_main.mode_button.disabled and _main.mode_button.tooltip_text == Main.NO_HOLE_TIP,
+			"Play hole is disabled with no hole: \"%s\"" % _main.mode_button.tooltip_text)
 	_main.hole_panel.par_buttons[0].pressed.emit()
 	_pick_surface(Surface.Type.TEE, 3)
 	_click(tee)
@@ -169,8 +175,11 @@ func _build() -> bool:
 	_click(tee)
 	_print_issues(b, "tee placed, no cup")
 	_check(not b.issues_for(1).is_empty(), "with the tee alone the validator names what is missing")
+	_check(_main.mode_button.disabled and _main.goals.is_done(GoalList.TEE),
+			"the tee ticks its goal; Play hole still waits for the cup")
 	_main.build_palette.cup_button.pressed.emit()
 	_click(cup)
+	_check(not _main.mode_button.disabled, "with the cup placed, Play hole is enabled")
 	_print_issues(b, "cup placed on rough")
 	var on_rough := b.issues_for(1)
 	_check(on_rough.size() == 1 and on_rough[0].rule == 2,
@@ -184,6 +193,8 @@ func _build() -> bool:
 	_check(b.issues_for(1).is_empty(), "then it passes every rule")
 	# E8-S1 (D64): no Open press: a legal hole opens itself and says so.
 	_check(b.hole(1) != null and b.hole(1).open, "and it opens itself")
+	_check(_main.goals.done_count() == 4 and _main.goals_panel.line_text() == "Next: Guests arrive and pay",
+			"the goals tick tee, cup, green and open: \"%s\"" % _main.goals_panel.line_text())
 	_check(_main.hole_open_notice.visible
 			and _main.hole_open_notice.label.text == "Hole 1 is open: guests will play it",
 			"with the notice \"%s\"" % _main.hole_open_notice.label.text)

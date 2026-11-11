@@ -2,7 +2,7 @@ class_name MainMenu
 extends Control
 ## The main menu (E5-S5): Back to the course, New course, Load game, Save game, Import course,
 ## Export course, Sound settings (E5-S4: Main opens the AudioPanel and comes back here when it
-## closes), Quit, over a dimmed course. Main opens it at start when it is the running
+## closes), Goals (E10-S1, on a game with the goal checklist), Quit, over a dimmed course. Main opens it at start when it is the running
 ## scene and on Esc (`menu`); Esc on a page goes back to the menu, on the menu closes it. Every
 ## control takes keyboard focus (arrows or Tab move it, Enter or Space presses) and the focused
 ## one draws a thick outline. The menu only asks: Main does each action (its signals) and the
@@ -29,6 +29,8 @@ signal export_requested(course_name: String, author: String)
 signal quit_requested
 ## E5-S4: Sound settings.
 signal sound_requested
+## E10-S1: Goals, shown while the game has the New course goal checklist (set_goals).
+signal goals_requested
 
 ## The same key as LandPanel's buy_cancel (Esc): a pending buy takes it first.
 const MENU_ACTION: StringName = &"menu"
@@ -70,6 +72,8 @@ var load_page: VBoxContainer
 var load_list: VBoxContainer
 var load_back_button: Button
 var load_empty_label: Label
+## E10-S1: Goals, hidden unless the game has the goal checklist.
+var goals_button: Button
 
 var _course: CourseData
 var _main_buttons: Array[Button] = []
@@ -130,6 +134,9 @@ func _build_main(parent: Control) -> void:
 	_button(main_page, "Sound settings", func() -> void:
 		sound_requested.emit()
 		close())
+	goals_button = _button(main_page, "Goals", func() -> void: _do(goals_requested))
+	goals_button.tooltip_text = "Open the goal checklist: what to do next and how"
+	goals_button.visible = false
 	_button(main_page, "Quit", func() -> void: _do(quit_requested))
 	for c: Node in main_page.get_children():
 		_main_buttons.append(c as Button)
@@ -243,7 +250,12 @@ func _field(parent: Control, label_text: String) -> LineEdit:
 	return e
 
 
-## The menu's own buttons, top to bottom.
+## E10-S1: shows Goals while the game has the goal checklist.
+func set_goals(on: bool) -> void:
+	goals_button.visible = on
+
+
+## The menu's own buttons, top to bottom (Goals among them, shown or not).
 func main_buttons() -> Array[Button]:
 	return _main_buttons.duplicate()
 
