@@ -36,6 +36,14 @@ extends Node2D
 ## the strike calls clear_aim, which drops the dots and marker but keeps the line, so the
 ## player sees the boundary the ball crossed. clear (Build, a finished hole) hides it all.
 ##
+## E10-S3, the live landing marker: while the swing's power is being set (and after click 2,
+## at the locked power), SwingControl predicts a full club's shot at that power with the same
+## ShotModel, Ball step and seed the strike will use and shows it here (show_preview): the dots
+## and the marker go to its landing, and the perfect swing's marker stays drawn faded
+## (reference_alpha) as the 100% reference. `marker_point` and `marker_screen` stay the perfect
+## swing's, so the camera's lead on the marker does not move during the swing. The strike's
+## clear_aim drops it.
+##
 ## A shot that ends in water or OB (prediction.penalty_strokes, E6-S7 review): the marker
 ## shows the hazard cue the struck ball shows there (ShotView, HazardCue): a flag_red circle
 ## struck through by a slash running past it for OB, chalk splash rings for water, on an ink
@@ -64,6 +72,8 @@ extends Node2D
 @export var land_line_hidden_alpha: float = 0.3
 ## chalk: the water cue's splash rings (ShotView's hazard cue) and the blocked marker's bar.
 @export var splash_color: Color = Color8(240, 236, 224)
+## E10-S3: the perfect swing's marker is drawn at this alpha while the live marker shows.
+@export var reference_alpha: float = 0.4
 
 ## The prediction drawn, or null.
 var prediction: ShotPrediction
@@ -85,6 +95,17 @@ var land_line: PackedVector2Array = PackedVector2Array()
 ## into unowned land), and whether terrain in front hides it.
 var land_ticks: PackedVector2Array = PackedVector2Array()
 var land_hidden: Array[bool] = []
+## E10-S3: the live landing marker's prediction (a shot at the swing's power), or null; its
+## marker point in yards (as `marker_point` is for the aim's) and screen point, dots, blocked
+## flag, hazard cue and whether it draws its ring.
+var preview: ShotPrediction
+var preview_point: Vector3 = Vector3.ZERO
+var preview_screen: Vector2 = Vector2.ZERO
+var preview_dots: PackedVector2Array = PackedVector2Array()
+var preview_blocked: bool = false
+var preview_hazard: Ball.Hazard = Ball.Hazard.NONE
+var preview_hazard_screen: Vector2 = Vector2.ZERO
+var preview_show_ring: bool = true
 ## The hazard the shot ends in (Ball.Hazard.NONE when none, or the club is blocked), and
 ## the screen point of its cue (prediction.hazard_position, on the drawn ground).
 var hazard_cue: Ball.Hazard = Ball.Hazard.NONE
@@ -143,6 +164,38 @@ func show_prediction(field: HeightField, p_prediction: ShotPrediction, putt: boo
 	queue_redraw()
 
 
+## E10-S3: shows the live landing marker for `p_prediction`, a full club's shot from `start`
+## (yards) at the swing's power; `p_blocked` is ClubSet.is_blocked for it. Over the aim shown.
+func show_preview(field: HeightField, p_prediction: ShotPrediction, start: Vector3,
+		p_blocked: bool = false) -> void:
+	_field = field
+	preview = p_prediction
+	preview_blocked = p_blocked
+	preview_hazard = Ball.Hazard.NONE
+	preview_show_ring = not p_blocked
+	if preview.penalty_strokes > 0 and not p_blocked:
+		preview_hazard = preview.hazard
+		preview_hazard_screen = ground_screen(preview.hazard_position)
+		var landing := Vector2(preview.landing.x, preview.landing.y)
+		preview_show_ring = landing.distance_to(Vector2(preview.hazard_position.x,
+				preview.hazard_position.y)) > HAZARD_AT_LANDING_YD
+	preview_point = preview.stop_point if p_blocked else preview.landing
+	preview_screen = ground_screen(preview_point)
+	preview_dots = PackedVector2Array()
+	if not p_blocked:
+		preview_dots = _chord_dots(start, preview_point, preview_screen)
+	queue_redraw()
+
+
+## Drops the live landing marker; the aim's own marker draws as before.
+func clear_preview() -> void:
+	if preview == null:
+		return
+	preview = null
+	preview_dots = PackedVector2Array()
+	queue_redraw()
+
+
 func _process(_delta: float) -> void:
 	if not visible or not is_inside_tree():
 		return
@@ -155,6 +208,7 @@ func _process(_delta: float) -> void:
 ## Drops the aim (its dots, marker and cue) at the strike but keeps the land line drawn
 ## through the flight and the hazard hold (E6-S16). Visible only while there is a line.
 func clear_aim() -> void:
+	clear_preview()
 	prediction = null
 	blocked = false
 	dots = PackedVector2Array()
@@ -165,6 +219,7 @@ func clear_aim() -> void:
 
 ## Hides the aim and the land line.
 func clear() -> void:
+	clear_preview()
 	prediction = null
 	blocked = false
 	dots = PackedVector2Array()
@@ -210,15 +265,22 @@ func ground_screen(p: Vector3) -> Vector2:
 ## the drawn ball (the ground under `start`) to the marker, the chord the ball's straight
 ## heading takes between them.
 func _dots_along_chord(start: Vector3, end: Vector3) -> void:
+	dots = _chord_dots(start, end, marker_screen)
+
+
+## The dots of a flight's chord from the drawn ball under `start` to `to` (the screen point of
+## `end`), every `dot_spacing_yd` measured on the ground.
+func _chord_dots(start: Vector3, end: Vector3, to: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
 	var from := ground_screen(start)
-	var to := marker_screen
 	var length := Vector2(start.x, start.y).distance_to(Vector2(end.x, end.y))
 	if length <= 0.0:
-		return
+		return out
 	var d := dot_spacing_yd
 	while d <= length:
-		dots.append(from.lerp(to, d / length))
+		out.append(from.lerp(to, d / length))
 		d += dot_spacing_yd
+	return out
 
 
 ## A putt: dots every `dot_spacing_yd` along the predicted roll `points`, each at the roll's
@@ -259,36 +321,57 @@ func _draw() -> void:
 	_draw_land_line(k)
 	if prediction == null:
 		return
-	for d in dots:
-		draw_circle(d, (dot_radius + 1.0) * k, outline_color)
-		draw_circle(d, dot_radius * k, line_color)
-	var at := marker_screen
 	var r := marker_radius * k
-	if blocked:
-		HazardCue.draw_blocked(self, at, r, k, blocked_color, outline_color, splash_color)
+	if preview == null:
+		_draw_dots(dots, k, 1.0)
+		_draw_marker(marker_screen, blocked, hazard_cue, hazard_screen, show_ring, r, k, 1.0)
 		return
-	if hazard_cue != Ball.Hazard.NONE:
-		_draw_hazard(hazard_screen, r, k)
-	if not show_ring:
+	# E10-S3: the live marker over the faded 100% reference.
+	_draw_marker(marker_screen, blocked, hazard_cue, hazard_screen, show_ring, r, k, reference_alpha)
+	_draw_dots(preview_dots, k, 1.0)
+	_draw_marker(preview_screen, preview_blocked, preview_hazard, preview_hazard_screen,
+			preview_show_ring, r, k, 1.0)
+
+
+func _draw_dots(points: PackedVector2Array, k: float, alpha: float) -> void:
+	for d in points:
+		draw_circle(d, (dot_radius + 1.0) * k, Color(outline_color, alpha))
+		draw_circle(d, dot_radius * k, Color(line_color, alpha))
+
+
+## One marker at `at`: the blocked octagon, or the hazard cue at `cue_at` and (when `ring`)
+## the landing ring with its ticks, at `alpha`.
+func _draw_marker(at: Vector2, is_blocked: bool, cue: Ball.Hazard, cue_at: Vector2, ring: bool,
+		r: float, k: float, alpha: float) -> void:
+	var ink := Color(outline_color, alpha)
+	var line := Color(line_color, alpha)
+	if is_blocked:
+		HazardCue.draw_blocked(self, at, r, k, Color(blocked_color, alpha), ink,
+				Color(splash_color, alpha))
+		return
+	if cue != Ball.Hazard.NONE:
+		_draw_hazard(cue, cue_at, r, k, alpha)
+	if not ring:
 		return
 	draw_set_transform(at, 0.0, Vector2(1.0, 0.5))
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, outline_color, 4.0 * k)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, line_color, 2.0 * k)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, ink, 4.0 * k)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, line, 2.0 * k)
 	draw_set_transform(Vector2.ZERO)
 	for dir: Vector2 in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 0.5), Vector2(0, -0.5)]:
-		draw_line(at + dir * (r - 3.0 * k), at + dir * (r + 4.0 * k), outline_color, 3.0 * k)
-		draw_line(at + dir * (r - 3.0 * k), at + dir * (r + 4.0 * k), line_color, 1.5 * k)
-	draw_circle(at, 2.5 * k, outline_color)
-	draw_circle(at, 1.5 * k, line_color)
+		draw_line(at + dir * (r - 3.0 * k), at + dir * (r + 4.0 * k), ink, 3.0 * k)
+		draw_line(at + dir * (r - 3.0 * k), at + dir * (r + 4.0 * k), line, 1.5 * k)
+	draw_circle(at, 2.5 * k, ink)
+	draw_circle(at, 1.5 * k, line)
 
 
 ## The hazard cue at the end of the shot, as ShotView draws it (HazardCue): OB a flag_red
 ## circle struck through by a slash running past it, water two chalk splash rings.
-func _draw_hazard(at: Vector2, r: float, k: float) -> void:
-	if hazard_cue == Ball.Hazard.OB:
-		HazardCue.draw_ob(self, at, r, k, _cue_tuning.ob_slash_reach, blocked_color, outline_color)
+func _draw_hazard(cue: Ball.Hazard, at: Vector2, r: float, k: float, alpha: float = 1.0) -> void:
+	if cue == Ball.Hazard.OB:
+		HazardCue.draw_ob(self, at, r, k, _cue_tuning.ob_slash_reach, Color(blocked_color, alpha),
+				Color(outline_color, alpha))
 	else:
-		HazardCue.draw_water(self, at, r, k, splash_color, outline_color)
+		HazardCue.draw_water(self, at, r, k, Color(splash_color, alpha), Color(outline_color, alpha))
 
 
 ## The land line: a solid ink line under chalk dashes along every owned-to-unowned edge,

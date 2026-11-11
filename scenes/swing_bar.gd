@@ -13,9 +13,21 @@ extends Control
 ## E3-S73: with the putter, the marker's pace (the power PuttAim solved, the putt the marker
 ## shows) is a sun_yellow tick through the bar with a small ring under it, echoing the marker
 ## ring; `pace` is NAN (no tick) for a full club. SwingPanel sets it.
+##
+## E10-S3: the bar explains itself. Under it, a full club's yards at 50% and 100% (a short
+## chalk tick and the 100% line) and, past the bar's right end, at max ("161 max"): `marks`,
+## from ShotModel through SwingControl.carry_at, so the club and the lie both count. The putter
+## has none (its readout is the distance to the cup). The accuracy zone is labelled
+## `zone_text` under its middle.
 
-@export var bar_width: float = 420.0
+@export var bar_width: float = 440.0
 @export var bar_height: float = 18.0
+## E10-S3: room right of the bar for the max label, and under it for the label row, px.
+@export var label_room: float = 58.0
+@export var label_row: float = 20.0
+@export var label_font_size: int = 13
+## The accuracy zone's label.
+@export var zone_text: String = "accuracy"
 @export var back_color: Color = Color8(58, 60, 70)
 @export var fill_color: Color = Color8(106, 108, 118)
 @export var zone_color: Color = Color8(124, 192, 78)
@@ -27,13 +39,16 @@ extends Control
 var swing: Swing
 ## E3-S73: the bar position (1.0 = 100%) of the marker's pace, or NAN for none.
 var pace: float = NAN
+## E10-S3: the labelled bar positions, each {power, yards}, lowest first; the last is max.
+## Empty for the putter. SwingPanel sets them.
+var marks: Array[Dictionary] = []
 
 ## Room above and below the bar for the pointers, px.
 const PAD: float = 10.0
 
 
 func _init() -> void:
-	custom_minimum_size = Vector2(bar_width, bar_height + 2.0 * PAD)
+	custom_minimum_size = Vector2(bar_width + label_room, bar_height + 2.0 * PAD + label_row)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -53,6 +68,21 @@ func _notification(what: int) -> void:
 func x_of(v: float) -> float:
 	var t := swing.tuning
 	return (v - t.bar_min) / (t.max_power - t.bar_min) * bar_width
+
+
+## E10-S3: the text of mark `i`: "N yd" at 100%, "N max" for the last, else just N.
+func mark_text(i: int) -> String:
+	var yards := roundi(float(marks[i].yards))
+	if i == marks.size() - 1:
+		return "%d max" % yards
+	if is_equal_approx(float(marks[i].power), 1.0):
+		return "%d yd" % yards
+	return "%d" % yards
+
+
+## E10-S3: where the zone's label is centred: the accuracy centre.
+func zone_label_x() -> float:
+	return x_of(0.0)
 
 
 ## Screen x of the pace tick (x_of(pace)); NAN when there is none.
@@ -115,6 +145,34 @@ func _draw() -> void:
 	# The bar's position: a triangle above the bar.
 	if swing.in_progress():
 		_triangle(Vector2(x_of(swing.bar), top), 7.0, true, cursor_color)
+	_draw_labels(bottom)
+
+
+## E10-S3: the yards under the bar (the last, max, right of its end) and the zone's label.
+func _draw_labels(bottom: float) -> void:
+	var font := get_theme_default_font()
+	var fs := label_font_size
+	var base := bottom + 11.0 + font.get_ascent(fs)
+	_text(font, zone_text, zone_label_x(), base, fs, zone_color, HORIZONTAL_ALIGNMENT_CENTER)
+	for i in marks.size():
+		var x := x_of(float(marks[i].power))
+		if i == marks.size() - 1:
+			# Max: right of the bar's end, on the bar's middle line.
+			var mid := PAD + bar_height * 0.5 + font.get_ascent(fs) * 0.5 - 1.0
+			_text(font, mark_text(i), bar_width + 6.0, mid, fs, mark_color, HORIZONTAL_ALIGNMENT_LEFT)
+			continue
+		if not is_equal_approx(float(marks[i].power), 1.0):
+			draw_line(Vector2(x, bottom), Vector2(x, bottom + 4.0), mark_color, 2.0)
+		_text(font, mark_text(i), x, base, fs, mark_color, HORIZONTAL_ALIGNMENT_CENTER)
+
+
+## Draws `text` with its baseline at `y`: centred on `x`, or starting at it, on an ink outline.
+func _text(font: Font, text: String, x: float, y: float, fs: int, color: Color,
+		align: HorizontalAlignment) -> void:
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var at := Vector2(x - w * 0.5 if align == HORIZONTAL_ALIGNMENT_CENTER else x, y)
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, ink_color)
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 
 ## A triangle with its tip at `tip`, pointing down onto the bar when `down`, else up.

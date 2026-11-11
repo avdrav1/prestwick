@@ -38,6 +38,8 @@ const CLUB_NEXT: StringName = &"club_next"
 
 ## golf/swing_tuning.tres.
 var tuning: SwingTuning
+## E10-S3: scenes/swing_readout_tuning.tres (the live landing marker's step).
+var readout_tuning: SwingReadoutTuning
 
 var swing: Swing
 var model: ShotModel
@@ -94,10 +96,15 @@ var _aim_dirty: bool = false
 var _own_shot: bool = false
 ## Viewport mouse position when an aim key last turned the aim, or null when the mouse aims.
 var _key_aim_mouse: Variant = null
+## E10-S3: the live landing marker's power (NAN: none shown yet this swing), and whether it
+## was predicted at the locked power.
+var _preview_power: float = NAN
+var _preview_locked: bool = false
 
 
 func _init() -> void:
 	tuning = SwingTuning.load_default()
+	readout_tuning = SwingReadoutTuning.load_default()
 	swing = Swing.new(tuning)
 	model = ShotModel.new()
 
@@ -219,9 +226,14 @@ func is_ball_moving() -> bool:
 func press() -> void:
 	if not active or club == null or is_ball_moving() or is_finished():
 		return
+	if swing.phase == Swing.Phase.IDLE:
+		_preview_power = NAN
+		_preview_locked = false
 	swing.click()
 	if swing.is_done():
 		_strike()
+	else:
+		refresh_preview()
 	changed.emit()
 
 
@@ -233,8 +245,62 @@ func advance(delta: float) -> void:
 	swing.tick(delta)
 	if swing.is_done():
 		_strike()
+	else:
+		refresh_preview()
 	if swing.phase != before:
 		changed.emit()
+
+
+## E10-S3: the power the swing shows now: the bar's while it is being set, the locked power
+## after click 2; NAN before click 1.
+func live_power() -> float:
+	match swing.phase:
+		Swing.Phase.POWER:
+			return swing.bar
+		Swing.Phase.ACCURACY, Swing.Phase.DONE:
+			return swing.power
+	return NAN
+
+
+## E10-S3: the carry, yards, the selected full club gives at `power` from where the ball lies,
+## aimed as it is: ShotModel's target carry (club carry × power × lie), the number the aim
+## marker's launch is built from. NAN for the putter or with no ball in play.
+func carry_at(power: float) -> float:
+	if club == null or club.is_putter() or field == null:
+		return NAN
+	return model.full(field, club, power, ball_at, aim_deg).target_carry
+
+
+## E10-S3: yards from the ball to the played hole's cup, or NAN with no cup on the map.
+func cup_distance_yd() -> float:
+	var cup := cup_tile()
+	if cup == Ball.NO_CUP or field == null:
+		return NAN
+	return ball_at.distance_to(field.tile_center(cup))
+
+
+## E10-S3: moves the live landing marker to the swing's power (live_power): a full club's shot
+## at that power, accuracy at the centre, predicted with the same ShotModel, Ball step and seed
+## the strike uses. Predicted again only once the bar has moved
+## SwingReadoutTuning.preview_power_step from the shown power, and once at the locked power.
+func refresh_preview() -> void:
+	if _aim_view == null or course == null or club == null or club.is_putter() \
+			or not swing.in_progress():
+		return
+	var p := live_power()
+	if is_nan(p) or p <= 0.0:
+		return
+	var locked := swing.phase == Swing.Phase.ACCURACY
+	if not is_nan(_preview_power):
+		if locked and _preview_locked:
+			return
+		if not locked and absf(p - _preview_power) < readout_tuning.preview_power_step:
+			return
+	_preview_power = p
+	_preview_locked = locked
+	var shot := model.full(field, club, p, ball_at, aim_deg)
+	var prediction := ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
+	_aim_view.show_preview(field, prediction, shot.start, model.clubs.is_blocked(shot, prediction))
 
 
 ## The stroke a perfect swing would make now (100% power, accuracy at the centre). The

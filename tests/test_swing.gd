@@ -770,3 +770,190 @@ func test_the_putters_bar_marks_the_markers_pace() -> void:
 	sc._strike()
 	panel.follow_pace()
 	assert_true(is_nan(bar.pace), "none while the ball moves")
+
+
+# --- E10-S3: the bar explains itself (yards on the bar, a live readout, a one-time hint) ---
+
+## The carry ShotModel gives `sc`'s club at `power` from where the ball lies, aimed as it is.
+func _carry(sc: SwingControl, power: float) -> float:
+	return sc.model.full(sc.field, sc.club, power, sc.ball_at, sc.aim_deg).target_carry
+
+
+func test_the_bar_labels_the_clubs_yards_at_50_100_and_max() -> void:
+	var main := _main_on(_par3())
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	sc.select_club(sc.model.clubs.club("7i"))
+	panel.refresh()
+	var marks := panel.bar.marks
+	assert_eq(marks.size(), 3, "three marks: 50%, 100% and max")
+	var powers: Array[float] = [0.5, 1.0, _t.max_power]
+	for i in 3:
+		assert_almost_eq(float(marks[i].power), powers[i], EPS, "mark %d's power" % i)
+		assert_almost_eq(float(marks[i].yards), _carry(sc, powers[i]), 0.01,
+				"mark %d reads ShotModel's carry, not a retyped table" % i)
+	# From the tee (a 1.0 lie, flat) the 100% mark is the 7-iron's carry in golf/clubs.tres.
+	assert_almost_eq(float(marks[1].yards), sc.club.carry_yd, 0.01, "100%: the club's carry")
+	assert_eq(panel.bar.mark_text(1), "%d yd" % roundi(sc.club.carry_yd))
+	assert_eq(panel.bar.mark_text(2), "%d max" % roundi(sc.club.carry_yd * _t.max_power))
+	# Another club: the marks follow it.
+	sc.select_club(sc.model.clubs.club("pw"))
+	assert_almost_eq(float(panel.bar.marks[1].yards), sc.club.carry_yd, 0.01, "follows the club")
+
+
+func test_the_bar_marks_follow_the_lie() -> void:
+	var main := _main_on(CourseData.create(60, 20, Surface.Type.ROUGH, 0))
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	panel.refresh()
+	var rough := LieTable.load_default().multiplier_for(Surface.Type.ROUGH)
+	assert_almost_eq(float(panel.bar.marks[1].yards), sc.club.carry_yd * rough, 0.01,
+			"from rough the 100% mark is the carry times the rough lie")
+
+
+func test_the_accuracy_zone_is_labelled() -> void:
+	var main := _main_on(_par3())
+	var bar := main.swing_panel.bar
+	assert_eq(bar.zone_text, "accuracy", "the green zone says what it is for")
+	assert_almost_eq(bar.zone_label_x(), bar.x_of(0.0), EPS, "centred on the zone")
+
+
+func test_the_readout_shows_the_yards_the_power_gives_and_the_marker_moves() -> void:
+	var main := _main_on(_par3())
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	var aim := main.aim_view
+	sc.select_club(sc.model.clubs.club("7i"))
+	sc._refresh_aim()
+	panel.refresh()
+	var full_marker := aim.marker_point
+	assert_eq(panel.readout_label.text, "Carry %d yd at 100%%" % roundi(sc.club.carry_yd),
+			"before the swing: a full swing's carry")
+	assert_null(aim.preview, "no live marker before the swing")
+	sc.press()
+	sc.advance(0.5 / sc.swing.rate())
+	panel.refresh_readout()
+	assert_almost_eq(sc.swing.bar, 0.5, EPS)
+	assert_eq(panel.readout_label.text, "Carry %d yd at 50%%" % roundi(_carry(sc, 0.5)),
+			"mid-power: the yards that power gives")
+	assert_not_null(aim.preview, "the landing marker follows the power")
+	var half := aim.preview_point
+	var half_carry := Vector2(half.x, half.y).distance_to(sc.ball_at)
+	assert_almost_eq(half_carry, _carry(sc, 0.5), 2.5, "it lands about where the readout says")
+	assert_eq(aim.marker_point, full_marker, "the 100% marker stays as the reference")
+	# The same seed and launch the strike will use: the live marker is the struck ball's.
+	var want := ShotPrediction.run_launch(sc.course, sc.next_seed(),
+			sc.model.full(sc.field, sc.club, 0.5, sc.ball_at, sc.aim_deg), null, null, sc.cup_tile())
+	assert_almost_eq(half.distance_to(want.landing), 0.0, 1e-4, "the same Ball step as the strike")
+	sc.advance(0.3 / sc.swing.rate())
+	panel.refresh_readout()
+	var later := aim.preview_point
+	assert_gt(Vector2(later.x, later.y).distance_to(sc.ball_at), half_carry + 20.0,
+			"more power: the marker moves out")
+	assert_eq(panel.readout_label.text, "Carry %d yd at 80%%" % roundi(_carry(sc, 0.8)))
+	# Click 2 locks it: the readout and marker hold at the locked power on the way back.
+	sc.press()
+	sc.advance(0.4 / sc.swing.rate())
+	panel.refresh_readout()
+	assert_eq(panel.readout_label.text, "Carry %d yd at 80%%" % roundi(_carry(sc, 0.8)),
+			"locked: the readout holds")
+	assert_eq(aim.preview_point, later, "and the marker holds")
+	# The strike drops the live marker with the aim.
+	sc.press()
+	assert_null(aim.preview, "gone at the strike")
+
+
+func test_the_live_marker_is_not_redrawn_for_tiny_moves() -> void:
+	var main := _main_on(_par3())
+	var sc := main.swing_control
+	var step := SwingReadoutTuning.load_default().preview_power_step
+	assert_gt(step, 0.0)
+	sc.press()
+	sc.advance(0.5 / sc.swing.rate())
+	var first := main.aim_view.preview
+	sc.advance(step * 0.4 / sc.swing.rate())
+	assert_eq(main.aim_view.preview, first, "under a step: the same prediction")
+	sc.advance(step / sc.swing.rate())
+	assert_ne(main.aim_view.preview, first, "past a step: predicted again")
+
+
+func test_a_putt_reads_the_distance_to_the_cup() -> void:
+	var made := GreenViewShot.course("contoured")
+	var main := _main_on(made.course)
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	var feet_below := SwingReadoutTuning.load_default().putt_feet_below_yd
+	sc.place_ball(made.ball)
+	assert_true(sc.club.is_putter())
+	panel.refresh()
+	assert_eq(panel.bar.marks.size(), 0, "no yard marks on the putter's bar")
+	var d: float = (made.ball as Vector2).distance_to(sc.field.tile_center(made.cup))
+	var want := ("%d ft to the cup" % roundi(d * 3.0)) if d < feet_below \
+			else ("%d yd to the cup" % roundi(d))
+	assert_eq(panel.readout_label.text, want, "feet or yards to the cup")
+	assert_eq(SwingPanel.cup_text(2.0, 10.0), "6 ft to the cup")
+	assert_eq(SwingPanel.cup_text(14.4, 10.0), "14 yd to the cup")
+	sc.press()
+	sc.advance(0.5 / sc.swing.rate())
+	panel.refresh_readout()
+	assert_null(main.aim_view.preview, "a putt keeps its pace marker, no live landing")
+	assert_eq(panel.readout_label.text, want, "and reads the same while the bar runs")
+
+
+# --- the one-time practice hint (user settings, not the save) ---
+
+const HINT_PATH := "user://test_swing_hint_settings.cfg"
+
+
+func _fresh_hint_path() -> String:
+	if FileAccess.file_exists(HINT_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(HINT_PATH))
+	return HINT_PATH
+
+
+func test_hint_settings_default_unseen_and_round_trip() -> void:
+	var path := _fresh_hint_path()
+	assert_false(HintSettings.load_from(path).swing_seen, "no file: not seen")
+	var s := HintSettings.new()
+	s.swing_seen = true
+	assert_eq(s.save_to(path), OK)
+	assert_true(HintSettings.load_from(path).swing_seen, "saved and read back")
+	assert_true(HintSettings.PATH.begins_with("user://"), "kept in user settings")
+	assert_ne(HintSettings.PATH, GameSave.PATH, "not the save")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("not a config [[[")
+	f.close()
+	assert_false(HintSettings.load_from(path).swing_seen, "an unreadable file: not seen")
+	_fresh_hint_path()
+
+
+func test_the_first_swing_shows_the_hint_once() -> void:
+	var path := _fresh_hint_path()
+	var main := _main_on(_par3())
+	var sc := main.swing_control
+	var panel := main.swing_panel
+	panel.load_hint(path)
+	assert_true(panel.hint_panel.visible, "a first swing: the hint shows")
+	for word: String in ["Click 1", "Click 2", "Click 3", "green zone"]:
+		assert_true(panel.hint_text_label.text.contains(word), "it says '%s'" % word)
+	assert_eq(panel.hint_panel.mouse_filter, Control.MOUSE_FILTER_IGNORE, "it never takes a click")
+	assert_true(panel.get_global_rect().encloses(panel.hint_panel.get_global_rect()),
+			"inside the swing panel, so hole framing keeps the map clear of it")
+	sc.press()
+	assert_true(panel.hint_panel.visible, "still there while the bar runs")
+	_perfect_swing_from_power(sc)
+	assert_false(panel.hint_panel.visible, "swinging dismisses it")
+	assert_true(HintSettings.load_from(path).swing_seen, "and it is saved in settings")
+	# A new game (a new main) on the same settings: never shown again.
+	var again := _main_on(_par3())
+	again.swing_panel.load_hint(path)
+	assert_false(again.swing_panel.hint_panel.visible, "never shown again")
+	_fresh_hint_path()
+
+
+## Finishes a swing started with press(): 100% power, accuracy at the centre.
+func _perfect_swing_from_power(sc: SwingControl) -> void:
+	sc.advance(1.0 / sc.swing.rate())
+	sc.press()
+	sc.advance(1.0 / sc.swing.rate())
+	sc.press()

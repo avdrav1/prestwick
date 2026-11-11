@@ -44,6 +44,7 @@ How far each club goes with a perfect swing from flat fairway, in yards:
 - **Tab** switches between Build and Play.
 - Aim with the mouse or Left/Right, change club with Up/Down.
 - Swing with Space or a click: press once to start, again to set power, again to set accuracy (hit the mark).
+- The bar shows how far your club carries from this lie at 50%, 100% and max, and while you set the power the readout says the yards and the landing marker moves with it. Stop the bar on its way back inside the green accuracy zone to hit it straight; outside it, the shot shanks.
 - On the green, the green view shows the slope (G hides it for this green), and the tick on the bar is the power the aim marker's putt needs. **T** shows contour lines.
 
 ## Saving
