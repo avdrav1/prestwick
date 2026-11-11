@@ -26,7 +26,7 @@ description: Cut a milestone build of Prestwick. Verifies the epic is complete, 
 5. Write `docs/releases/<version>.md`: three to eight lines. What a player can now do, what is known broken, what the next milestone adds. No internal story ids.
 6. Copy the newest example course into `build/courses/` so the build ships with something to play.
 7. Commit `release: <version>` and tag `v<version>`.
-8. Do not push. Say the tag, the build paths and the release note path in three lines.
+8. Push only when the user asks (`git push origin main --tags`). Say the tag, the build paths and the release note path in three lines.
 
 ## Rules
 

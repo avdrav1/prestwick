@@ -1241,6 +1241,7 @@ Done when: 10 people outside the project have played a build with final art and 
   - Test: launch each build on a machine without Godot.
   - Touches: `docs/`, `courses/`
   - Progress 2026-11-11: `/ship-it` cut the playtest build 0.6.0-rc1 (tag `v0.6.0-rc1`): Linux and Windows builds with `courses/playtest_nine.json` and the one-page `docs/how-to-play.md` copied beside them; tests 1150/1150, playtest smoke and the shirt render check pass, `check_build.sh` boots the Linux build. Still open, for a person: the trademark check on "Prestwick" before any public post, and launching each build on a machine without Godot.
+  - Progress 2026-11-11: the user did the trademark check on "Prestwick": no conflicts found. The repo is public at github.com/avdrav1/prestwick. Still open: launching each build on a machine without Godot.
 - [ ] E5-S8 Run 10 playtesters. Close the MVP on outside evidence.
   - Accept: 10 people outside the project complete the checklist, with notes in `docs/playtests/`. At least two swap a course file. Bugs are filed here, pillar-level feel problems go to the icebox, balance goes to `/balance`. Recruiting them is a person's job, not an agent's.
   - Test: 10 session notes. No open crash bugs before the final `/ship-it`.
