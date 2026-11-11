@@ -3,7 +3,8 @@ extends GutTest
 ## (docs/design.md Guests and reactions, D39 to D43): a pass and a fail for each, the tastes,
 ## the verdict (pass 4 praise, fail 2 complaint naming the hole), the blind tee shot and the
 ## risk-reward par 5, the static checks kept per hole until the hole or its terrain changes,
-## and a guest day giving one reaction per finished hole.
+## and a guest day giving one reaction per finished hole. E9-S2 (D65): the fifth check, walk,
+## the walk to the tee, which pace held until then (pass 5 praise).
 
 const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
@@ -57,7 +58,7 @@ func _guest(skill: int, patience: int, taste: Guest.Taste) -> Guest:
 
 
 ## `walk_s`: the walk to the tee, simulated seconds (E9-S1; -1 for none), at the base speed's
-## yards.
+## yards, straight and with no cart path, from the previous hole's green.
 func _record(number: int, par: int, score: int, wait_s: int = 0, walk_s: float = -1.0) -> Guest.HoleRecord:
 	var r := Guest.HoleRecord.new()
 	r.number = number
@@ -65,7 +66,9 @@ func _record(number: int, par: int, score: int, wait_s: int = 0, walk_s: float =
 	r.score = score
 	r.wait_s = wait_s
 	r.walk_s = walk_s
+	r.walk_bare_s = walk_s
 	r.walk_yd = walk_s * tuning.walk_yd_per_s if walk_s >= 0.0 else -1.0
+	r.walk_from_hole = number - 1
 	return r
 
 
@@ -244,14 +247,144 @@ func test_pace_passes_within_the_wait_limit_and_fails_over_it() -> void:
 		assert_false(GuestReaction.pace_passes(_record(1, 4, 4, int(limit) + 1), patience, tuning))
 
 
-func test_pace_fails_on_a_long_walk_from_the_last_green() -> void:
-	# E9-S1 (D65): the walk is judged by its time, not its yards.
+## E9-S2 (D65): pace is the waits alone; a long walk is the Walk check's.
+func test_pace_is_the_waits_alone() -> void:
 	var patience := 3
-	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * patience
-	assert_true(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit), patience, tuning))
-	assert_false(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit + 0.1), patience, tuning))
-	assert_true(GuestReaction.pace_passes(_record(1, 4, 4, 0, -1.0), patience, tuning),
-			"a first hole has no walk")
+	var limit := GuestReaction.walk_limit(patience, tuning)
+	assert_true(GuestReaction.pace_passes(_record(2, 4, 4, 0, limit * 3.0), patience, tuning),
+			"a long walk no longer fails pace")
+
+
+# --- walk (E9-S2, D65) ---
+
+func test_the_walk_fails_over_its_limit_without_a_cart_path() -> void:
+	for patience: int in [1, 3, 10]:
+		var limit := tuning.walk_base_s + tuning.walk_per_patience_s * patience
+		assert_almost_eq(GuestReaction.walk_limit(patience, tuning), limit, 1e-9)
+		assert_true(GuestReaction.walk_passes(_record(2, 4, 4, 0, limit), patience, tuning))
+		assert_false(GuestReaction.walk_passes(_record(2, 4, 4, 0, limit + 0.1), patience, tuning),
+				"patience %d: over %.2f s" % [patience, limit])
+		assert_true(GuestReaction.walk_passes(_record(1, 4, 4, 0, -1.0), patience, tuning),
+				"no walk (a hole changed under the group): nothing to judge")
+	# The same long walk along a cart path passes.
+	var on_path := _record(2, 4, 4, 0, 9.0)
+	on_path.walk_path_share = tuning.walk_path_share
+	assert_true(GuestReaction.walk_passes(on_path, 1, tuning), "it followed a path")
+	on_path.walk_path_share = tuning.walk_path_share - 0.01
+	assert_false(GuestReaction.walk_passes(on_path, 1, tuning), "a little path is no path")
+
+
+func test_a_long_walk_alone_is_a_complaint_naming_it() -> void:
+	var rec := _record(5, 4, 4, 0, 9.0)
+	rec.walk_yd = 240.0
+	rec.walk_from_hole = 4
+	for taste: Guest.Taste in [Guest.Taste.PURIST, Guest.Taste.ADVENTURER, Guest.Taste.CASUAL]:
+		var r := GuestReaction.judge(_guest(10, 5, taste), rec, _statics(), tuning)
+		assert_eq(r.kind, GuestReaction.Kind.COMPLAINT, Guest.TASTE_NAMES[taste])
+		assert_eq(r.failed(), PackedStringArray(["walk"]))
+		assert_true(r.passed[GuestReaction.Check.PACE], "pace is the waits")
+		assert_eq(r.fail_weight, tuning.walk_check_weight)
+		assert_eq(r.lead_check(), GuestReaction.Check.WALK)
+		assert_eq(r.text, "Hole 5: a long walk from the 4th green to the 5th tee, 240 yd and no cart path.")
+		assert_eq(r.lead_line(), "a long walk from the 4th green to the 5th tee, 240 yd and no cart path.")
+		assert_eq(r.failed_line(), "Failed: walk.")
+	# From the clubhouse, on the round's first hole.
+	var out := _record(1, 4, 4, 0, 9.0)
+	out.walk_yd = 300.0
+	out.walk_from_clubhouse = true
+	out.walk_from_hole = 0
+	var first := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), out, _statics(), tuning)
+	assert_eq(first.text, "Hole 1: a long walk from the clubhouse to the 1st tee, 300 yd and no cart path.")
+	assert_true(first.from_clubhouse)
+	# After another fail it is the short form.
+	var slow := _record(3, 4, 4, 60, 9.0)
+	slow.walk_yd = 200.0
+	var both := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), slow, _statics(), tuning)
+	assert_eq(both.text, "Hole 3: a long walk from the 2nd green to the 3rd tee, 200 yd and no cart path. Also slow (60 s wait).")
+	# A purist's blind tee shot weighs the same and comes first in Check order.
+	var blind := GuestReaction.judge(_guest(10, 5, Guest.Taste.PURIST), slow, _statics(false, true), tuning)
+	assert_eq(blind.lead_check(), GuestReaction.Check.FAIR)
+	assert_string_ends_with(blind.text, "Also slow (60 s wait) and a long walk from the 2nd green (200 yd, no cart path).")
+
+
+func test_a_path_that_made_a_long_walk_quick_is_named_in_the_praise() -> void:
+	var rec := _record(5, 4, 4, 0, 2.0)
+	rec.walk_bare_s = 9.0
+	rec.walk_path_share = 0.9
+	rec.walk_from_hole = 4
+	var r := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), rec, _statics(), tuning)
+	assert_eq(r.kind, GuestReaction.Kind.PRAISE)
+	assert_true(r.path_made_quick)
+	assert_eq(r.text, "Hole 5: loved it, 4 on a par 4, and the cart path from the 4th green made the walk quick.")
+	# A short walk that would have been short anyway: plain praise.
+	var near := _record(5, 4, 4, 0, 1.0)
+	near.walk_path_share = 1.0
+	var plain := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), near, _statics(), tuning)
+	assert_false(plain.path_made_quick)
+	assert_eq(plain.text, "Hole 5: loved it, 4 on a par 4.")
+	# Kept in a save and read back.
+	var errors: Array[String] = []
+	var back := GuestReaction.from_save(r.to_save(), errors)
+	assert_eq(errors, [] as Array[String])
+	assert_true(back.path_made_quick and back.walk_on_path)
+	assert_eq(back.walk_from_hole, 4)
+	assert_eq(back.text, r.text)
+	# A save from before the Walk check (four checks listed) still loads, its walk passed.
+	var old := r.to_save()
+	old["passed"] = [true, true, false, true]
+	old["weights"] = [1, 1, 1, 1]
+	old.erase("walk_from_hole")
+	var read := GuestReaction.from_save(old, errors)
+	assert_eq(errors, [] as Array[String])
+	assert_true(read.passed[GuestReaction.Check.WALK])
+	assert_false(read.passed[GuestReaction.Check.PACE])
+
+
+func test_ordinals() -> void:
+	var want := {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 9: "9th", 11: "11th", 12: "12th",
+		13: "13th", 21: "21st", 22: "22nd", 101: "101st", 111: "111th"}
+	for n: int in want:
+		assert_eq(GuestReaction.ordinal(n), want[n])
+
+
+## A course with a far next tee: without a cart path the walk to hole 2's tee draws the
+## complaint naming it from every guest; with a path along it, none, and the walk is quicker.
+func test_a_far_next_tee_draws_the_walk_complaint_without_a_path_and_not_with_one() -> void:
+	var results := {}
+	for path: bool in [false, true]:
+		var c: CourseData = GuestCourse.far_next_tee(path)
+		var brain := GuestBrain.new(c, 5, tuning)
+		var lines: Array[String] = []
+		brain.reacted.connect(func(_g: Guest, r: GuestReaction) -> void: lines.append(r.text))
+		brain.run_day()
+		var walks := 0
+		var fails := 0
+		var walk_s := 0.0
+		for g: Guest in brain.guests:
+			for r: Guest.HoleRecord in g.records:
+				if r.number != 2:
+					continue
+				walks += 1
+				walk_s += r.walk_s
+				assert_eq(r.walk_from_hole, 1)
+				if not r.reaction.passed[GuestReaction.Check.WALK]:
+					fails += 1
+					assert_eq(r.reaction.kind, GuestReaction.Kind.COMPLAINT)
+					# The lead (an Adventurer's dull hole weighs as much and comes first) or after it.
+					assert_string_contains(r.reaction.text, "a long walk from the 1st green")
+		assert_gt(walks, 5, "guests played hole 2 (%s)" % ("path" if path else "no path"))
+		results[path] = [walks, fails, walk_s / maxi(walks, 1), lines]
+	assert_eq(int(results[false][1]), int(results[false][0]), "without a path every walk is long")
+	assert_eq(int(results[true][1]), 0, "with a path none is")
+	assert_lt(float(results[true][2]), float(results[false][2]), "and the walk is quicker")
+	assert_true((results[false][3] as Array).any(func(t: String) -> bool:
+			return t.begins_with("Hole 2: a long walk from the 1st green to the 2nd tee")),
+			"the feed line names the walk")
+	assert_false((results[true][3] as Array).any(func(t: String) -> bool:
+			return t.contains("long walk")), "with the path no line does")
+	gut.p("far next tee: %d walks %.2f s each, %d long; with a path %d walks %.2f s each, %d long" % [
+			results[false][0], results[false][2], results[false][1], results[true][0],
+			results[true][2], results[true][1]])
 
 
 # --- challenge (D40) ---

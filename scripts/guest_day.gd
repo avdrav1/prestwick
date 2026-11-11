@@ -240,7 +240,7 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 		mean_cpu, cpu[cpu.size() / 2], cpu[int(cpu.size() * 0.95)], cpu[-1],
 		moves[moves.size() / 2], moves[-1]])
 	var kinds := [0, 0, 0]
-	var fails := [0, 0, 0, 0]
+	var fails := [0, 0, 0, 0, 0]
 	for g: Guest in brain.guests:
 		for r: Guest.HoleRecord in g.records:
 			kinds[r.reaction.kind] += 1
@@ -257,9 +257,10 @@ func _day(course: CourseData, day_seed: int, tuning: GuestTuning, model: ShotMod
 	print("day %d holes reached (teed off): %d of 9, finished by someone: %d of 9 (records a hole %s)" % [
 			day_seed, brain.teed_off.size(), reached.size(), " ".join(per_hole)])
 	var n := maxi(holes, 1)
-	print("day %d reactions: praise %d, neutral %d, complaint %d of %d; fails fair %d%%, interesting %d%%, pace %d%%, challenge %d%%; statics measured %d times" % [
+	print("day %d reactions: praise %d, neutral %d, complaint %d of %d; fails fair %d%%, interesting %d%%, pace %d%%, challenge %d%%, walk %d%%; statics measured %d times" % [
 		day_seed, kinds[0], kinds[1], kinds[2], holes, roundi(100.0 * fails[0] / n),
 		roundi(100.0 * fails[1] / n), roundi(100.0 * fails[2] / n), roundi(100.0 * fails[3] / n),
+		roundi(100.0 * fails[4] / n),
 		brain.checks.measured])
 	# E3-S22: pace fails by hole, and where the counted waits were.
 	var pace := {}

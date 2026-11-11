@@ -62,7 +62,7 @@ func test_every_check_names_its_key_and_the_bad_value() -> void:
 		["max_steps_per_frame", 0], ["frame_ticks_max", 0], ["frame_guest_ms_max", 0.0],
 		["putt_tick_weight", 0.5], ["frame_ticks_per_real_s", 0], ["skip_frame_ms", 0.0],
 		["skip_steps_per_frame", 0],
-		["praise_passes", 5], ["complaint_fails", 0], ["sight_step_yd", 0.0],
+		["praise_passes", 6], ["complaint_fails", 0], ["sight_step_yd", 0.0],
 		["guest_putt_max_runs", 1], ["group_size_min", 0], ["day_s", 0.0], ["stroke_s", -1.0],
 		["arrival_window_s", -1.0], ["arrivals_per_day", -1], ["guest_min_power", 2.0],
 		["swing_impact_share", 1.0], ["swing_address_share", 0.9], ["walk_yd_per_s", 0.0],

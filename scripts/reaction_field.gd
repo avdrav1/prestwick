@@ -49,6 +49,15 @@ const PACE_FIXTURE: String = "bare"
 const NINE_FILES := {"bare": "nine_holes.gd", "hazards": "nine_holes_hazards.gd"}
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
+## E9-S2 (D65): the walk check. On the bare nine (PACE_FIXTURE, its PACE_DAYS days), a fair
+## layout whose walks between holes run 5 to 86 yd, at most WALK_FAIL_MAX of the hole records
+## fail the walk (each is a complaint naming the walk, walk_check_weight). On the far next tee
+## (tests/fixtures/guest_course.gd far_next_tee, a 277 yd walk from hole 1's green to hole 2's
+## tee), a cart path along the walk leaves at most WALK_PATH_SHARE_MAX of the walk fails it
+## draws without one.
+const WALK_FAIL_MAX: float = 0.10
+const WALK_PATH_SHARE_MAX: float = 0.5
+const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 ## E3-S48: the script a parallel job runs in (run_jobs), and how often run_jobs looks for the
 ## jobs it started to finish.
 const JOB_SCRIPT: String = "res://scripts/reaction_job.gd"
@@ -178,6 +187,16 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 			Vector2(-DOGLEG_PACE_SPREAD, DOGLEG_PACE_SPREAD),
 			"%.2f against %.2f; %d hole records; waits a hole mean %.1f s" % [dog_pace.pace, base, pf,
 				dog_pace.wait_mean]))
+	# E9-S2: the walk check on a fair layout, and what a cart path does for a far next tee.
+	rows.append(_row("walk fails: nine holes (share of records)", pace_nine.walk,
+			Vector2(0.0, WALK_FAIL_MAX), "each a complaint naming the walk; by hole: %s; fair par 4 %.2f, dogleg %.2f" % [
+				pace_nine.walk_by_hole_text, fair_pace.walk, dog_pace.walk]))
+	var far := _tally_of(by, "far_tee", n)
+	var far_path := _tally_of(by, "far_tee_path", n)
+	rows.append(_row("far next tee: walk fails with a cart path (share of those without)",
+			far_path.walk / maxf(far.walk, EPS), Vector2(0.0, WALK_PATH_SHARE_MAX),
+			"%.2f of %d records with the path, %.2f without (hole 2 of 2, 277 yd from hole 1's green); complaints %.2f against %.2f" % [
+				far_path.walk, n, far.walk, far_path.complaints, far.complaints]))
 	var crossing := _tally_of(by, "crossing", n)
 	rows.append(_row("crossing holes: records held for a group on the other hole (share)",
 			crossing.cross_held, Vector2(-INF, INF),
@@ -209,7 +228,7 @@ func jobs_for(n: int, rng_seed: int, nine_days: int, pace_days: int, edges: bool
 	for course_name: String in ["dogleg", "fair"]:
 		jobs.append({"kind": "field", "course": course_name, "n": maxi(n, pf), "seed": rng_seed,
 				"cuts": [n, pf]})
-	for course_name: String in ["blind", "corridor", "crossing"]:
+	for course_name: String in ["blind", "corridor", "crossing", "far_tee", "far_tee_path"]:
 		jobs.append({"kind": "field", "course": course_name, "n": n, "seed": rng_seed, "cuts": [n]})
 	if edges:
 		jobs.append_array(ScoringEdges.new(model).jobs(n, rng_seed))
@@ -244,7 +263,9 @@ static func tally(field: Array[Dictionary]) -> Dictionary:
 	var tuning := GuestTuning.load_default()
 	var n := maxi(field.size(), 1)
 	var kinds := [0, 0, 0]
-	var fails := [0, 0, 0, 0]
+	var fails := []
+	fails.resize(GuestReaction.Check.size())
+	fails.fill(0)
 	var over := 0.0
 	var tee_ob := 0
 	var ob := 0
@@ -297,6 +318,7 @@ static func tally(field: Array[Dictionary]) -> Dictionary:
 		"complaints": kinds[GuestReaction.Kind.COMPLAINT] / float(n),
 		"fails": ", ".join(fail_text),
 		"pace": fails[GuestReaction.Check.PACE] / float(n),
+		"walk": fails[GuestReaction.Check.WALK] / float(n),
 		"wait_mean": wait_sum / float(n),
 		"tee_wait_mean": tee_wait_sum / float(n),
 		"cross_wait_mean": cross_wait_sum / float(n),
@@ -395,6 +417,10 @@ static func course_named(course_name: String, rng_seed: int) -> CourseData:
 			return ReactionHoles.crossing_holes()
 		"corridor":
 			return ReactionHoles.corridor_par4(rng_seed)
+		"far_tee":
+			return GuestCourse.far_next_tee(false)
+		"far_tee_path":
+			return GuestCourse.far_next_tee(true)
 	push_error("no fixture hole named %s" % course_name)
 	return null
 
@@ -442,6 +468,7 @@ func nine_day(fixture: String, d: int) -> Dictionary:
 	var praise := 0
 	var nine := 0
 	var pace := {}
+	var walk := {}
 	for g: Guest in brain.guests:
 		records += g.records.size()
 		if g.records.size() == opened.size():
@@ -455,8 +482,10 @@ func nine_day(fixture: String, d: int) -> Dictionary:
 			pace[key] = [int(acc[0]) + 1,
 					int(acc[1]) + (0 if r.reaction.passed[GuestReaction.Check.PACE] else 1),
 					int(acc[2]) + r.tee_wait_s, int(acc[3]) + r.cross_wait_s]
+			if not r.reaction.passed[GuestReaction.Check.WALK]:
+				walk[key] = int(walk.get(key, 0)) + 1
 	return {"reached": brain.teed_off.size() == opened.size(), "finished": done.size() == opened.size(),
-		"records": records, "praise": praise, "pace": pace,
+		"records": records, "praise": praise, "pace": pace, "walk": walk,
 		"part": "day %d: %d teed off, %d finished, %d guests played all %d, %d records" % [
 				d, brain.teed_off.size(), done.size(), nine, opened.size(), records]}
 
@@ -477,12 +506,17 @@ static func combine_days(days: Array[Dictionary], fixture: String) -> Dictionary
 	# {hole number: [records, pace fails, tee, crossing]} over every day (E3-S8 review: par 3s
 	# and short holes hold the group behind longest).
 	var pace := {}
+	var walk := {}
+	var walk_fails := 0
 	for day: Dictionary in days:
 		reached += 1 if bool(day.reached) else 0
 		finished += 1 if bool(day.finished) else 0
 		records += int(day.records)
 		praise += int(day.praise)
 		parts.append(String(day.part))
+		for key: String in day.get("walk", {}):
+			walk[int(key)] = int(walk.get(int(key), 0)) + int(day.walk[key])
+			walk_fails += int(day.walk[key])
 		for key: String in day.pace:
 			var a: Array = day.pace[key]
 			var acc: Array = pace.get(int(key), [0, 0, 0, 0])
@@ -495,6 +529,7 @@ static func combine_days(days: Array[Dictionary], fixture: String) -> Dictionary
 	var par_by_hole := {}
 	var tee_wait_by_hole := {}
 	var cross_wait_by_hole := {}
+	var walk_by_hole := PackedStringArray()
 	for h: HoleData in course.holes:
 		if not opened.has(h.number):
 			continue
@@ -505,12 +540,14 @@ static func combine_days(days: Array[Dictionary], fixture: String) -> Dictionary
 		tee_wait_by_hole[h.number] = int(acc[2]) / recs
 		cross_wait_by_hole[h.number] = int(acc[3]) / recs
 		by_hole.append("%d (par %d) %.2f" % [h.number, h.par, pace_by_hole[h.number]])
+		walk_by_hole.append("%d %.2f" % [h.number, int(walk.get(h.number, 0)) / recs])
 	parts.append("pace fails by hole: " + ", ".join(by_hole))
 	var n := float(maxi(days.size(), 1))
 	return {"reached": reached / n, "finished": finished / n,
 		"records": records, "praise": praise / float(maxi(records, 1)),
 		"pace_by_hole": pace_by_hole, "par_by_hole": par_by_hole,
 		"tee_wait_by_hole": tee_wait_by_hole, "cross_wait_by_hole": cross_wait_by_hole,
+		"walk": walk_fails / float(maxi(records, 1)), "walk_by_hole_text": ", ".join(walk_by_hole),
 		"note": "%s: %s" % [NINE_FILES[fixture], "; ".join(parts)]}
 
 

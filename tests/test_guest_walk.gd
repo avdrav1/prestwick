@@ -60,6 +60,11 @@ func test_a_walk_over_a_path_is_quicker_than_over_rough_by_the_tuned_factor() ->
 	assert_almost_eq(rough.duration / path.duration,
 			tuning.walk_surface_speed[Surface.Type.CART_PATH], 1e-6, "by the tuned factor")
 	assert_almost_eq(path.straight_s, path.duration, 1e-6, "the straight line is on the path")
+	# E9-S2: what the walk takes with no path laid, and how much of it is on path.
+	assert_almost_eq(path.bare_s, rough.duration, 1e-6, "with no path, the base speed")
+	assert_almost_eq(rough.bare_s, rough.duration, 1e-6)
+	assert_almost_eq(path.path_share(), 1.0, 1e-6, "every yard on the path")
+	assert_eq(rough.path_share(), 0.0)
 	# Walked a second at a time, the path covers the factor's yards a second.
 	var at := path.advance(1.0)
 	assert_almost_eq(at.distance_to(from), tuning.walk_speed(Surface.Type.CART_PATH), 1e-4)

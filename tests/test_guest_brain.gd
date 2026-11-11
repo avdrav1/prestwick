@@ -1411,10 +1411,13 @@ func test_a_far_clubhouse_costs_the_first_hole_its_pace_and_the_day_its_time() -
 	var r_far: Guest.HoleRecord = far.guests[0].records[0]
 	assert_true(r_near.walk_from_clubhouse and r_far.walk_from_clubhouse)
 	assert_lte(r_near.walk_s, GuestReaction.walk_limit(1, tuning), "beside the first tee: a short walk")
-	assert_true(r_near.reaction.passed[GuestReaction.Check.PACE])
+	# E9-S2 (D65): the walk out is the Walk check's (pace's until then), one rule with the walk
+	# between holes.
+	assert_true(r_near.reaction.passed[GuestReaction.Check.WALK])
 	assert_gt(r_far.walk_s, GuestReaction.walk_limit(1, tuning))
-	assert_false(r_far.reaction.passed[GuestReaction.Check.PACE], "a far clubhouse fails pace")
-	assert_string_contains(r_far.reaction.text, "a long walk from the clubhouse")
+	assert_false(r_far.reaction.passed[GuestReaction.Check.WALK], "a far clubhouse fails the walk")
+	assert_eq(r_far.walk_from_hole, 0)
+	assert_string_contains(r_far.reaction.text, "a long walk from the clubhouse to the 1st tee")
 	assert_gt(r_far.start_s, r_near.start_s, "and the round starts later")
 	assert_gt(far.guests[0].left_s, near.guests[0].left_s, "and ends later")
 	assert_eq(r_far.reaction.to_save()["from_clubhouse"], true, "kept in the save")
@@ -1424,8 +1427,9 @@ func test_a_far_clubhouse_costs_the_first_hole_its_pace_and_the_day_its_time() -
 
 
 ## E9-S1 (D65): a cart path from a far clubhouse to the first tee makes the walk out quicker by
-## the path's speed, and pace judges the walk's time, so the same guest that failed pace on
-## the long walk over rough passes it on the path.
+## the path's speed, and the walk is judged by its time (pace in E9-S1, the Walk check since
+## E9-S2), so the same guest whose walk over rough was long passes on the path, and since the
+## path made it quick the hole's praise names it.
 func test_a_cart_path_from_a_far_clubhouse_cuts_the_walk_out_and_its_pace() -> void:
 	var spec := [[10, 10, Guest.Taste.CASUAL, 21]]
 	var b := GuestCourse.build()
@@ -1451,13 +1455,15 @@ func test_a_cart_path_from_a_far_clubhouse_cuts_the_walk_out_and_its_pace() -> v
 			"by about the path's factor (the legs to and from it are on rough)")
 	var limit := GuestReaction.walk_limit(10, tuning)
 	assert_gt(r_rough.walk_s, limit, "over rough the walk is long")
-	assert_false(r_rough.reaction.passed[GuestReaction.Check.PACE])
+	assert_false(r_rough.reaction.passed[GuestReaction.Check.WALK])
+	assert_string_contains(r_rough.reaction.text, "a long walk from the clubhouse to the 1st tee")
 	assert_lte(r_path.walk_s, limit, "on the path it is not")
-	assert_true(r_path.reaction.passed[GuestReaction.Check.PACE] or r_path.wait_s > 0,
-			"so pace passes, unless the guest waited")
+	assert_true(r_path.reaction.passed[GuestReaction.Check.WALK], "so the walk passes")
+	assert_true(r_path.reaction.path_made_quick, "and the path made it quick")
 	assert_lt(r_path.start_s, r_rough.start_s, "and the round starts sooner")
-	gut.p("walk out: %.0f yd, %.2f s over rough; %.0f yd, %.2f s on the path; limit %.2f s" % [
-			r_rough.walk_yd, r_rough.walk_s, r_path.walk_yd, r_path.walk_s, limit])
+	gut.p("walk out: %.0f yd, %.2f s over rough; %.0f yd, %.2f s on the path (%.2f of it on path tiles, %.2f s with no path laid); limit %.2f s" % [
+			r_rough.walk_yd, r_rough.walk_s, r_path.walk_yd, r_path.walk_s, r_path.walk_path_share,
+			r_path.walk_bare_s, limit])
 
 
 ## Hole 1's tee, yards.

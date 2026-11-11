@@ -329,7 +329,7 @@ func median_parcel(seeds: int, lp: LandPrices = null) -> int:
 
 ## Real guest days on PlaytestNine with holes 1 to k open, for k = 1 to 9, `days` day seeds
 ## from `rng_seed` each, at data/guests.json's arrivals: per k {k, guests, reactions, praise,
-## neutral, complaint, fails: [fair, interesting, pace, challenge]}.
+## neutral, complaint, fails: [fair, interesting, pace, challenge, walk]}.
 func measure_mix(days: int, rng_seed: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var model := ShotModel.new()
@@ -381,7 +381,7 @@ func _nine_open(k: int) -> CourseData:
 
 static func _tally() -> Dictionary:
 	return {"k": 0, "guests": 0, "reactions": 0, "praise": 0, "neutral": 0, "complaint": 0,
-			"fails": [0, 0, 0, 0]}
+			"fails": [0, 0, 0, 0, 0]}
 
 
 static func _count(_g: Guest, r: GuestReaction, tally: Dictionary) -> void:
@@ -392,7 +392,7 @@ static func _count(_g: Guest, r: GuestReaction, tally: Dictionary) -> void:
 		tally.complaint += 1
 	else:
 		tally.neutral += 1
-	for i in 4:
+	for i in GuestReaction.Check.size():
 		if not r.passed[i]:
 			tally.fails[i] += 1
 
@@ -637,8 +637,9 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 	for m: Dictionary in mix:
 		var sh := shares(m)
 		rows.append(row("guests: PlaytestNine holes 1 to %d open, complaint share" % m.k, sh[2], any,
-				"%d days, %d guests, %d reactions: praise %.2f, neutral %.2f; fails fair %d, interesting %d, pace %d, challenge %d" % [
-					runs, m.guests, m.reactions, sh[0], sh[1], m.fails[0], m.fails[1], m.fails[2], m.fails[3]]))
+				"%d days, %d guests, %d reactions: praise %.2f, neutral %.2f; fails fair %d, interesting %d, pace %d, challenge %d, walk %d" % [
+					runs, m.guests, m.reactions, sh[0], sh[1], m.fails[0], m.fails[1], m.fails[2], m.fails[3],
+					m.fails[4]]))
 	for a: int in CAPACITY_ARRIVALS:
 		var cap := measure_capacity(a, maxi(runs, 1), rng_seed)
 		var sh := shares(cap)

@@ -288,7 +288,7 @@ func test_a_feed_line_keeps_its_lead_and_names_checks_in_the_panels_words() -> v
 				"feed and panel both say \"%s\" for %s" % [word, GuestReaction.CHECK_NAMES[c]])
 	assert_eq(m.feed_panel.rows[0].tooltip_text, "Show hole 2 in Build", "a praise names no check")
 	assert_eq(GuestReaction.CHECK_WORDS, PackedStringArray(["sight line", "risk and reward", "pace",
-			"difficulty"]), "the words docs/design.md lists")
+			"difficulty", "walk"]), "the words docs/design.md lists (E9-S2: walk)")
 
 
 # --- map tags ---

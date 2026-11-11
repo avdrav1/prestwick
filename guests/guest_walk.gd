@@ -66,6 +66,11 @@ var on_path: bool = false
 ## (the same unless it follows a path).
 var duration: float = 0.0
 var straight_s: float = 0.0
+## E9-S2: the yards of the walk on cart path tiles (the Walk check asks whether it followed a
+## path: GuestTuning.walk_path_share of its length), and the straight walk's time were no cart
+## path laid (its path tiles walked at the base speed): whether a path made the walk quick.
+var path_yd: float = 0.0
+var bare_s: float = 0.0
 ## Simulated seconds walked so far.
 var elapsed: float = 0.0
 ## E9-S1: the walk cut where it crosses a tile edge (time_pieces): each piece's end, yards, and
@@ -81,19 +86,24 @@ static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestT
 		yards_per_tile: float = 5.0, cache: Cache = null) -> GuestWalk:
 	var w := GuestWalk.new()
 	w.points = PackedVector2Array([from, to])
-	w.straight_s = time_pieces(course, w.points, tuning, yards_per_tile, w._ends, w._times)
+	var on := PackedFloat64Array([0.0, 0.0])
+	w.straight_s = time_pieces(course, w.points, tuning, yards_per_tile, w._ends, w._times, on)
 	w.duration = w.straight_s
+	w.path_yd = on[0]
+	w.bare_s = w.straight_s - on[1] + on[0] / tuning.walk_yd_per_s
 	var path := _path_route(course, from, to, tuning, yards_per_tile, w.straight_s, cache)
 	if path.size() > 2:
 		var ends := PackedVector2Array()
 		var times := PackedFloat64Array()
-		var t := time_pieces(course, path, tuning, yards_per_tile, ends, times)
+		var path_on := PackedFloat64Array([0.0, 0.0])
+		var t := time_pieces(course, path, tuning, yards_per_tile, ends, times, path_on)
 		if t < w.straight_s:
 			w.points = path
 			w.on_path = true
 			w.duration = t
 			w._ends = ends
 			w._times = times
+			w.path_yd = path_on[0]
 	w.length = _polyline_length(w.points)
 	return w
 
@@ -103,9 +113,12 @@ static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestT
 ## `walk_climb_s_per_step` for each step up from one tile to the next. Appends each piece's end
 ## to `ends` and the time there to `times` (a piece shorter than a thousandth of a yard, where
 ## the line grazes a tile's corner, is left out, so its tile neither slows nor lifts the walk).
-## Off the map a tile walks as rough at the last height.
+## Off the map a tile walks as rough at the last height. E9-S2: `path_yd`, when given, gets the
+## yards walked on cart path tiles added to its first value and, when it has a second, their
+## time (climbs left out) to that.
 static func time_pieces(course: CourseData, poly: PackedVector2Array, tuning: GuestTuning,
-		ypt: float, ends: PackedVector2Array, times: PackedFloat64Array) -> float:
+		ypt: float, ends: PackedVector2Array, times: PackedFloat64Array,
+		path_yd: PackedFloat64Array = PackedFloat64Array()) -> float:
 	var total := 0.0
 	var prev_h := -1
 	var cuts := PackedFloat64Array()
@@ -135,6 +148,10 @@ static func time_pieces(course: CourseData, poly: PackedVector2Array, tuning: Gu
 				surface = course.get_surface(tx, ty)
 				h = course.get_height(tx, ty)
 			total += piece / tuning.walk_speed(surface)
+			if surface == Surface.Type.CART_PATH and not path_yd.is_empty():
+				path_yd[0] += piece
+				if path_yd.size() > 1:
+					path_yd[1] += piece / tuning.walk_speed(surface)
 			if prev_h >= 0 and h > prev_h:
 				total += (h - prev_h) * tuning.walk_climb_s_per_step
 			prev_h = h
@@ -162,6 +179,11 @@ func is_done() -> bool:
 ## Where the guest stands now, yards.
 func position() -> Vector2:
 	return point_at_time(elapsed)
+
+
+## E9-S2: the share of the walk's yards on cart path tiles (0 for a walk of no length).
+func path_share() -> float:
+	return path_yd / length if length > 0.0 else 0.0
 
 
 ## E9-S1: walks `seconds` further (never past the end). Returns where the guest stands.

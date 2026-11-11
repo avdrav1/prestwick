@@ -638,6 +638,9 @@ func _head_for(g: GuestGroup, n: int, t: int, update: bool = true) -> void:
 		guest.cross_wait_s = 0
 		guest.walk_yd = -1.0
 		guest.walk_s = -1.0
+		guest.walk_bare_s = -1.0
+		guest.walk_path_share = 0.0
+		guest.walk_from_hole = 0
 	g.cross_held_s = 0
 	if update:
 		_update_to_tee(g, t)
@@ -697,7 +700,10 @@ func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	for guest: Guest in g.guests:
 		guest.walk_yd = walk.length if walk != null else -1.0
 		guest.walk_s = walk.duration if walk != null else -1.0
+		guest.walk_bare_s = walk.bare_s if walk != null else -1.0
+		guest.walk_path_share = walk.path_share() if walk != null else 0.0
 		guest.walk_from_clubhouse = g.from_clubhouse and g.has_prev_cup
+		guest.walk_from_hole = 0 if g.from_clubhouse else g.left_hole
 	g.from_clubhouse = false
 	_update_on_hole(g, t)
 
@@ -1051,6 +1057,9 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.cross_wait_s = guest.cross_wait_s
 	r.walk_yd = guest.walk_yd
 	r.walk_s = guest.walk_s
+	r.walk_bare_s = guest.walk_bare_s
+	r.walk_path_share = guest.walk_path_share
+	r.walk_from_hole = guest.walk_from_hole
 	r.walk_from_clubhouse = guest.walk_from_clubhouse
 	r.start_s = g.start_s
 	r.end_s = t

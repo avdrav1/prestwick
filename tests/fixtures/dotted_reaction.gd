@@ -17,7 +17,7 @@ static func make(hole: int, pace_leads: bool) -> GuestReaction:
 	r.statics = HoleChecks.Statics.new()
 	r.statics.hazard_on_line = true
 	r.statics.safe_route = true
-	var passed: Array[bool] = [pace_leads, true, false, false]
+	var passed: Array[bool] = [pace_leads, true, false, false, true]
 	r.passed = passed
 	if not pace_leads:
 		r.taste = Guest.Taste.PURIST

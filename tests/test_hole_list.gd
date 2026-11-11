@@ -1045,7 +1045,7 @@ func _verdict(number: int, par: int, praise: bool = false) -> GuestReaction:
 	return GuestReaction.judge(g, rec, s, t)
 
 
-## The longest complaint a hole can draw: an adventurer failing all four checks, its doubled
+## The longest complaint a hole can draw: an adventurer failing every check (E9-S2: five), its doubled
 ## interesting check leading with its taste's sentence.
 func _worst_verdict(number: int, par: int) -> GuestReaction:
 	var t := GuestTuning.load_default()
@@ -1129,6 +1129,36 @@ func test_a_picked_hole_with_a_complaint_shows_its_lead_check() -> void:
 	assert_false(panel.reaction_label.tooltip_text.contains("Failed"), "a praise failed nothing")
 
 
+## E9-S2 (D65): a long walk without a cart path is a complaint on the hole it leads to, and the
+## hole panel names the walk, with "walk" among the failed checks on hover.
+func test_a_walk_complaint_names_the_walk_in_the_hole_panel() -> void:
+	var m := _nine_main()
+	var panel: HolePanel = m.hole_panel
+	var g := Guest.new()
+	g.skill = 10
+	g.patience = 5
+	g.taste = Guest.Taste.CASUAL
+	var rec := Guest.HoleRecord.new()
+	rec.number = 5
+	rec.par = 4
+	rec.score = 4
+	rec.walk_s = 9.0
+	rec.walk_bare_s = 9.0
+	rec.walk_yd = 260.0
+	rec.walk_from_hole = 4
+	var s := HoleChecks.Statics.new()
+	s.hazard_on_line = true
+	s.safe_route = true
+	var r := GuestReaction.judge(g, rec, s, GuestTuning.load_default())
+	assert_true(r.is_complaint(), "a long walk alone is a complaint")
+	m.build_tool.select_hole(5)
+	_give(m, r, 20)
+	assert_true(panel.reaction_label.visible)
+	assert_string_contains(panel.reaction_label.text,
+			"a long walk from the 4th green to the 5th tee, 260 yd and no cart path.")
+	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: walk.")
+
+
 func test_a_collapsed_panel_with_a_complaint_stays_under_its_limit() -> void:
 	var m := _main_with(_nine_failing_worst())
 	m.camera.view_size_override = Vector2(1280, 720)
@@ -1144,7 +1174,7 @@ func test_a_collapsed_panel_with_a_complaint_stays_under_its_limit() -> void:
 		var h: HoleData = m.build_tool.picked_hole()
 		var r: GuestReaction = HolePanel.latest_reaction(m.guest_sim.feed, m.course, m.build_tool.picked_slot())
 		assert_not_null(r, "hole %d has its complaint" % n)
-		assert_eq(r.failed().size(), 4, "hole %d: all four checks failed" % n)
+		assert_eq(r.failed().size(), GuestReaction.Check.size(), "hole %d: every check failed" % n)
 		assert_true(panel.reaction_label.visible)
 		assert_string_starts_with(panel.reaction_label.text, "Complaint: no way round the trouble.",
 				"hole %d: led by the adventurer's doubled check" % n)

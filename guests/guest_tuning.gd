@@ -135,6 +135,12 @@ var casual_challenge_within: float = 0.0
 var taste_weights: Dictionary = {}
 var doubled_check_weight: int = 0
 
+## E9-S2 (D65): the Walk check weighs walk_check_weight when it fails (2: a long walk alone
+## makes a complaint), and a walk followed a cart path when at least walk_path_share of its
+## yards were on path tiles.
+var walk_check_weight: int = 0
+var walk_path_share: float = 0.0
+
 var praise_passes: int = 0
 var complaint_fails: int = 0
 var rating_window: int = 0
@@ -247,6 +253,8 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	else:
 		errors.append("taste_weights must be an object")
 	t.doubled_check_weight = CourseData.read_int(d, "doubled_check_weight", errors)
+	t.walk_check_weight = CourseData.read_int(d, "walk_check_weight", errors)
+	t.walk_path_share = _float(d, "walk_path_share", errors)
 	t.praise_passes = CourseData.read_int(d, "praise_passes", errors)
 	t.complaint_fails = CourseData.read_int(d, "complaint_fails", errors)
 	t.rating_window = CourseData.read_int(d, "rating_window", errors)
@@ -353,8 +361,12 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	# E4-S3, E7-S4: a skip frame runs at least one second, so a skip always ends.
 	_positive(errors, "skip_frame_ms", t.skip_frame_ms)
 	_at_least(errors, "skip_steps_per_frame", t.skip_steps_per_frame, 1)
-	if t.praise_passes < 1 or t.praise_passes > 4:
-		errors.append("praise_passes (%s) must be 1 to 4 (the four checks)" % t.praise_passes)
+	if t.praise_passes < 1 or t.praise_passes > GuestReaction.Check.size():
+		errors.append("praise_passes (%s) must be 1 to %d (the checks)" % [t.praise_passes,
+				GuestReaction.Check.size()])
+	_at_least(errors, "walk_check_weight", t.walk_check_weight, 1)
+	if t.walk_path_share < 0.0 or t.walk_path_share > 1.0:
+		errors.append("walk_path_share (%s) must be 0 to 1" % t.walk_path_share)
 	_at_least(errors, "complaint_fails", t.complaint_fails, 1)
 	_positive(errors, "sight_step_yd", t.sight_step_yd)
 	_at_least(errors, "guest_putt_max_runs", t.guest_putt_max_runs, 2, " (Swing.validate)")

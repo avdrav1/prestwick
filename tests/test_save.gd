@@ -41,7 +41,7 @@ func _reaction(hole: int, kind: GuestReaction.Kind, text: String) -> GuestReacti
 	r.text = text
 	r.score = 4
 	r.par = 3
-	r.passed = [true, false, true, false]
+	r.passed = [true, false, true, false, true]
 	return r
 
 
