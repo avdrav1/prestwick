@@ -1413,6 +1413,22 @@ Done when: rc5 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-11: `/ship-it` cut 0.6.0-rc5 (tag `v0.6.0-rc5`) with E10-S1 to S4 (D66): tests 1284/1284, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it. Open: a one-click fill of a 3,600-tile lake takes a 21 ms frame (D52 budget 16.7).
 
+## E11: Room to build — active
+
+From the user's rc5 play (2026-11-12): "I can't really build a nice long par 3 or 4 or 5 without buying more parcels." The free 2 x 2 parcel starting block (D26: 160 yd a side, 226 yd corner to corner) is shorter than a driver's carry (235 yd). The user chose a 4 x 4 starting block (320 yd a side, about 450 yd corner to corner). Ships as the next release candidate (rc6).
+
+Done when: rc6 is cut with every story below checked.
+
+- [ ] E11-S1 Start a new course on a 4 x 4 parcel block. A first hole can be a real par 3 or par 4.
+  - Note: needs a `/decision` amending D26 (and D34's "the second hole comes with the second purchase", D57's land prices if they move). Everything that assumes 2 x 2 follows: `LandGenerator.start_block` and the generator's start-block rules (`start_block_min_rough`, no water, the flat margin), the clubhouse rule (D60), the goal checklist's buy-a-parcel step and first-hole hint (E10-S1, E8-S5), the economy's pacing (D56, D59: money paces the builder, 9 holes and 3 stars in 25 to 35 days for a 3-star course) and `/balance land`'s targets.
+  - Accept: a New course owns the 4 x 4 parcels at the map's centre (on 128 x 128, parcels 2 to 5 on each axis, tiles 32 to 95), all rough, no water, with the clubhouse placed by its rule; old saves and course files keep the land they own; `/balance land` and `/balance economy` are rerun and either still meet their targets or the targets and prices are retuned and recorded (state which: the first-purchase reason moves from hole 2 to the third or fourth hole); the first-hole hint and the goal list read right for the bigger block (a first hole can be a par 3 up to ~300 yd or a par 4).
+  - Test: `tests/test_new_course.gd`, `tests/test_land_ownership.gd`, `tests/test_land_generator.gd` (or the existing ones), the balance outputs in the commit; screenshot of a New course at its opening view and at 0.175x.
+  - Touches: `course/`, `data/`, `scripts/`, `tests/`, `docs/`
+- [ ] E11-S2 Cut the next release candidate (rc6).
+  - Accept: `/ship-it` as for E10-S5; tag, GitHub pre-release, download page.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
