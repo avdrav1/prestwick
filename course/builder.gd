@@ -316,28 +316,32 @@ static func new_sandbox(p_tuning: BuilderTuning = null) -> CourseData:
 
 
 ## A New course (E6-S6, D19, D26, D28): the generated land of `land_seed` (LandGenerator),
-## owning only the starting block (LandGenerator.start_block, free) with the land budget
+## owning only the starting block (LandGenerator.start_block, free: 4 x 4 parcels since D67,
+## 2 x 2 under D26) with the land budget
 ## from data/land.json (LandPrices.land_budget). No holes. A fresh course, as new_sandbox
 ## makes one; hand it to a new builder. The same seed gives the same course.
 static func new_course(land_seed: int, p_prices: LandPrices = null,
 		p_land: LandTuning = null) -> CourseData:
 	var lp: LandPrices = p_prices if p_prices != null else LandPrices.load_default()
-	var c: CourseData = LandGenerator.generate(land_seed, p_land)
-	var block: Rect2i = LandGenerator.start_block(c.width, c.height)
+	var lt: LandTuning = p_land if p_land != null else LandTuning.load_default()
+	var c: CourseData = LandGenerator.generate(land_seed, lt)
+	var block: Rect2i = LandGenerator.start_block(c.width, c.height, lt.start_block_parcels)
 	for q: int in c.parcels_high:
 		for p: int in c.parcels_wide:
 			var parcel := Vector2i(p, q)
 			c.set_parcel_owned(parcel, block.encloses(c.parcel_rect(parcel)))
 	c.set_land_budget(maxi(lp.land_budget, 0))
-	place_clubhouse_by_rule(c)
+	place_clubhouse_by_rule(c, null, lt.start_block_parcels)
 	return c
 
 
 ## Puts `course`'s clubhouse where the rule puts one (ClubhouseRule.default_spot, D60): a New
 ## course's and a New sandbox's, in the starting block. Not an undo step. False, changing
-## nothing, when there is no room.
-static func place_clubhouse_by_rule(course: CourseData, p_tuning: BuilderTuning = null) -> bool:
-	var spot: Array = ClubhouseRule.default_spot(course, [] as Array[PackedVector2Array], p_tuning)
+## nothing, when there is no room. `block_parcels` as ClubhouseRule.default_spot's.
+static func place_clubhouse_by_rule(course: CourseData, p_tuning: BuilderTuning = null,
+		block_parcels: int = 0) -> bool:
+	var spot: Array = ClubhouseRule.default_spot(course, [] as Array[PackedVector2Array], p_tuning,
+			block_parcels)
 	if spot[0] == CourseData.NO_CLUBHOUSE:
 		return false
 	course.set_clubhouse(spot[0], spot[1])

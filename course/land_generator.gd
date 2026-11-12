@@ -18,7 +18,8 @@ extends RefCounted
 ##   is a union of 2 x 2 squares (every row and column of it at least 2 tiles), dug into ground
 ##   that is flat for POND_MARGIN tiles all round, so its risers keep the slope rule too.
 ## - Floors: every parcel keeps parcel_min_rough of its tiles rough (so it is never all water),
-##   and the starting block (D26) start_block_min_rough, with no water at all.
+##   and the starting block (D26; start_block_parcels on a side, 4 since D67)
+##   start_block_min_rough, with no water at all.
 ## - Land: every parcel owned and no land budget (CourseData.all_owned_rows). Parcels are
 ##   CourseData.PARCEL_TILES square, the format's one parcel size.
 
@@ -64,14 +65,20 @@ static func generate(land_seed: int, tuning: LandTuning = null, errors: Array[St
 	return CourseData.from_dict(data, errors)
 
 
-## The starting block (D26): 2 x 2 parcels at the centre of a `w` x `h` map, clipped to it.
+## The starting block (D26, D67): `parcels` x `parcels` parcels at the centre of a `w` x `h`
+## map, clipped to it; `parcels` 0 reads LandTuning.start_block_parcels (4 since D67, 2 before).
 ## The builder's New course (CourseBuilder.new_course) owns exactly this block.
-## On the 128 x 128 map, parcels 3 and 4 on each axis: tiles 48 to 79.
-static func start_block(w: int, h: int) -> Rect2i:
+## On the 128 x 128 map, parcels 2 to 5 on each axis: tiles 32 to 95 (D26's 2 x 2: parcels 3
+## and 4, tiles 48 to 79).
+static func start_block(w: int, h: int, parcels: int = 0) -> Rect2i:
+	if parcels <= 0:
+		parcels = LandTuning.load_default().start_block_parcels
 	var pw: int = ceili(w / float(CourseData.PARCEL_TILES))
 	var ph: int = ceili(h / float(CourseData.PARCEL_TILES))
 	var side: int = CourseData.PARCEL_TILES
-	var block := Rect2i((pw / 2 - 1) * side, (ph / 2 - 1) * side, 2 * side, 2 * side)
+	@warning_ignore("integer_division")
+	var block := Rect2i((pw / 2 - parcels / 2) * side, (ph / 2 - parcels / 2) * side,
+			parcels * side, parcels * side)
 	return block.intersection(Rect2i(0, 0, w, h))
 
 
@@ -114,7 +121,7 @@ class _Run:
 				var tiles: int = (mini(w, (p + 1) * side) - p * side) \
 						* (mini(h, (q + 1) * side) - q * side)
 				_parcel_cap[q * _pw + p] = floori((1.0 - tuning.parcel_min_rough) * tiles + 1e-6)
-		_block = LandGenerator.start_block(w, h)
+		_block = LandGenerator.start_block(w, h, tuning.start_block_parcels)
 		_block_cap = floori((1.0 - tuning.start_block_min_rough) * _block.get_area() + 1e-6)
 
 	func build() -> void:

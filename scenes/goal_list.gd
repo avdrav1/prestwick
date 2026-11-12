@@ -19,8 +19,9 @@ const GUESTS: String = "guests"
 const PARCEL: String = "parcel"
 const HOLE2: String = "hole2"
 const STARS: String = "stars"
-## Every goal's id, in the checklist's order.
-const ORDER: PackedStringArray = [TEE, CUP, GREEN, OPEN, GUESTS, PARCEL, HOLE2, STARS]
+## Every goal's id, in the checklist's order. D67: hole 2 before the parcel, since the 4 x 4
+## starting block holds several holes and a par 5 is what first needs more land.
+const ORDER: PackedStringArray = [TEE, CUP, GREEN, OPEN, GUESTS, HOLE2, PARCEL, STARS]
 
 
 ## One goal: its id, what to do and how.
@@ -60,10 +61,11 @@ func _init(p_tuning: GoalsTuning = null) -> void:
 		Goal.new(GUESTS, "Guests arrive and pay",
 				"Guests walk out of the clubhouse and pay the green fee (Fee) at the first tee: " +
 				"that is your income. Each open hole costs upkeep at dusk."),
-		Goal.new(PARCEL, "Buy a parcel",
-				"Pick Buy land, click a parcel touching your land, then Buy (Enter)."),
 		Goal.new(HOLE2, "Build hole 2",
 				"Press New hole in the hole list, then place its tee and cup and paint its green."),
+		Goal.new(PARCEL, "Buy a parcel",
+				"When your land is full (a par 5 needs more), pick Buy land, click a parcel " +
+				"touching your land, then Buy (Enter)."),
 		Goal.new(STARS, "Reach %d stars" % stars,
 				"Guests rate each hole they play: end a day at %d stars or more (top left)." % stars),
 	]

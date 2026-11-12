@@ -11,7 +11,8 @@ extends RefCounted
 ##
 ## Version 2 to 3 (E5-S9, D60): a version 2 file predates the clubhouse, so it loads with one
 ## placed by the rule a New course's follows (ClubhouseRule.default_spot: in the starting block,
-## else beside the first tee), or none when neither has room.
+## else beside the first tee), or none when neither has room. The block is D26's 2 x 2 one, the
+## block such a file was made with (D67 made a New course's 4 x 4), so it keeps its clubhouse.
 
 
 ## Writes `course` as format v3 JSON. Returns OK or the FileAccess error.
@@ -140,7 +141,10 @@ static func migrate(data: Dictionary) -> Dictionary:
 static func place_clubhouse(course: CourseData) -> bool:
 	if course.has_clubhouse():
 		return false
-	var spot: Array = ClubhouseRule.default_spot(course)
+	# D67: a file from before version 3 predates the 4 x 4 block, so the rule reads D26's
+	# 2 x 2 one and the file gets the clubhouse it always loaded with.
+	var spot: Array = ClubhouseRule.default_spot(course, [] as Array[PackedVector2Array], null,
+			LandTuning.D26_BLOCK_PARCELS)
 	if spot[0] == CourseData.NO_CLUBHOUSE:
 		return false
 	course.set_clubhouse(spot[0], spot[1])

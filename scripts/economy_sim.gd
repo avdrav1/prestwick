@@ -27,7 +27,7 @@ extends RefCounted
 ##
 ## The run's nine (PLAN) is a frugal one: three basic par 3s, four par 4s and two par 5s from
 ## the fixtures, its land the Land hand calculation's footprints (BalanceSim.footprint_parcels)
-## less the free block's 4 parcels, at the median generated parcel price.
+## less the free block's parcels (16 since D67, 4 before), at the median generated parcel price.
 
 const ReactionHolesFx := preload("res://tests/fixtures/reaction_holes.gd")
 const PlaytestNineFx := preload("res://tests/fixtures/playtest_nine.gd")
@@ -78,8 +78,11 @@ const RUN_TABLE: String = "fit-green"
 ## Fixture names, in fixtures() order, and the run's nine as [fixture index, yards].
 const PLAN: Array = [[0, 160.0], [4, 380.0], [0, 160.0], [1, 380.0], [2, 520.0], [0, 160.0],
 		[5, 450.0], [4, 380.0], [2, 520.0]]
-## Parcels the free starting block gives (D26).
-const BLOCK_PARCELS: float = 4.0
+## Parcels the free starting block gives (D26: 4; D67: 16, LandTuning.start_block_parcels
+## squared).
+static func block_parcels() -> float:
+	var n: int = LandTuning.load_default().start_block_parcels
+	return float(n * n)
 
 ## Arrivals curve under the ceiling (Settles): the share of the full day's arrivals at fee
 ## share f of the ceiling. Every curve is 1 when free and 2/3 at the ceiling (design doc: a fee
@@ -478,7 +481,7 @@ func plan_costs(fx: Array[Dictionary], table: Dictionary, parcel: int, scale: fl
 	for p: Array in PLAN:
 		var f: Dictionary = fx[int(p[0])]
 		parcels += BalanceSim.footprint_parcels(float(p[1]))
-		var need := maxi(ceili(parcels - BLOCK_PARCELS - 1e-6), 0) - bought
+		var need := maxi(ceili(parcels - block_parcels() - 1e-6), 0) - bought
 		bought += need
 		out.append({"name": f.name, "yd": p[1], "build": price(f.diff, table, scale),
 				"land": roundi(need * parcel * scale), "parcels": need})
@@ -625,7 +628,7 @@ func measure(runs: int, rng_seed: int) -> Array[Dictionary]:
 			lnd += int(h.land)
 		rows.append(row("cost %s: frugal nine, holes ($)" % t, build, any,
 				"3 par 3, 4 par 4, 2 par 5 from the fixtures; land %s more (%d parcels at the median %s)" % [
-					LandPrices.money(lnd), ceili(_plan_parcels() - BLOCK_PARCELS), LandPrices.money(parcel)]))
+					LandPrices.money(lnd), ceili(_plan_parcels() - block_parcels()), LandPrices.money(parcel)]))
 	# Height: what shaping costs at each step price, on PlaytestNine.
 	for step: int in [0, 5, 10, 20]:
 		var per: PackedStringArray = []
@@ -746,7 +749,7 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 		lnd += int(h.land)
 	rows.append(row("chosen: frugal nine, holes ($)", build, any,
 			"land %s more (%d parcels at the median %s)" % [LandPrices.money(lnd),
-				ceili(_plan_parcels() - BLOCK_PARCELS), LandPrices.money(parcel)]))
+				ceili(_plan_parcels() - block_parcels()), LandPrices.money(parcel)]))
 	var e := chosen_income()
 	for stars: float in [1.0, 3.0, 5.0]:
 		var fp := chosen_fee(e, stars)

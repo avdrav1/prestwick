@@ -92,7 +92,8 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 	var bare := CourseData.from_dict(data, errors)
 	if bare == null:
 		return null
-	var spot: Array = ClubhouseRule.default_spot(bare)
+	var spot: Array = ClubhouseRule.default_spot(bare, [] as Array[PackedVector2Array], null,
+			LandTuning.D26_BLOCK_PARCELS)
 	if spot[0] != CourseData.NO_CLUBHOUSE:
 		data["clubhouse"] = {"x": (spot[0] as Vector2i).x, "y": (spot[0] as Vector2i).y,
 				"facing": CourseData.FACING_NAMES[spot[1]]}
@@ -116,7 +117,8 @@ static func generate(par: int, hilly: bool, water: bool, errors: Array[String] =
 ## the filled ponds, so 0 to 7 holds.
 static func hilly_heights(w: int, h: int, tee: Vector2i, cup: Vector2i, pond_x: int,
 		water: bool) -> PackedByteArray:
-	var land := LandGenerator.generate(HILLY_LAND_SEED)
+	# D26's land (LandTuning.load_d26): the hilly holes keep the ground they had before D67.
+	var land := LandGenerator.generate(HILLY_LAND_SEED, LandTuning.load_d26())
 	var t: int = LandGenerator.TERRACE
 	var x0: int = clampi((land.width - w) / 2, 0, maxi(0, land.width - w))
 	var y0: int = clampi((land.height - h) / 2, 0, maxi(0, land.height - h))

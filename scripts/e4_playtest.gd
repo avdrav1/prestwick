@@ -36,11 +36,17 @@ const START_MONEY: int = 5000
 const MAX_FRAMES: int = 4000
 ## Double par on a par 5.
 const MAX_STROKES: int = 10
+## Item 4 (D67): parcels a 520 yd par 5 needs beyond the 4 x 4 starting block, whose longest
+## line is 445 yd: two in a line off it give 570 yd.
+const PAR5_MIN_PARCELS: int = 2
 ## Item 1: the design doc's basic par 3 budget, the checklist's "under $1,500".
 const PAR3_BUDGET: int = 1500
 ## Item 1: the par 3's tee and cup, tiles in from the starting block's corner, and its brushes.
-const TEE_IN := Vector2i(3, 3)
-const CUP_IN := Vector2i(24, 24)
+## D67: on the 4 x 4 block the tee sits near the clubhouse (door at block tile (32, 63)), the cup
+## 148 yd up the diagonal, as on D26's block (tee (3, 3), cup (24, 24) there); from the block's
+## far corner the walk from the clubhouse is 333 yd and every guest complains of it.
+const TEE_IN := Vector2i(24, 54)
+const CUP_IN := Vector2i(3, 33)
 ## Item 6: 3x, and the feed's busiest stretch read over this many real seconds.
 const FAST: float = 3.0
 const READ_WINDOW_REAL_S: float = 10.0
@@ -362,7 +368,11 @@ func _item4() -> void:
 	var build := EconomySim.price(par5.diff, table)
 	var lp := LandPrices.load_default()
 	var parcel := econ.median_parcel(10, lp)
-	var parcels := ceili(BalanceSim.footprint_parcels(520.0) - EconomySim.BLOCK_PARCELS)
+	# D67: the 4 x 4 block's 16 parcels hold a 520 yd footprint by area, but its longest line is
+	# 445 yd, so a 520 yd hole takes two parcels in a line off the block (570 yd): at least
+	# PAR5_MIN_PARCELS.
+	var parcels := maxi(ceili(BalanceSim.footprint_parcels(520.0) - EconomySim.block_parcels()),
+			PAR5_MIN_PARCELS)
 	var bal := _main.build_tool.builder.balance()
 	print("  %s: %s to build (%s), and about %d parcels of land at the median %s, %s; balance now %s" % [
 			par5.name, LandPrices.money(build), EconomySim._tiles_note(par5.diff), parcels,

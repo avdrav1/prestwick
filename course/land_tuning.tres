@@ -33,3 +33,4 @@ pond_min_tiles = 15
 pond_max_tiles = 120
 parcel_min_rough = 0.6
 start_block_min_rough = 0.85
+start_block_parcels = 4

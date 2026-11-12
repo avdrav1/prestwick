@@ -243,13 +243,28 @@ func test_every_parcel_keeps_its_rough_floor_and_is_never_all_water() -> void:
 
 func test_the_starting_block_is_mostly_rough_and_dry() -> void:
 	var block := LandGenerator.start_block(128, 128)
-	assert_eq(block, Rect2i(48, 48, 32, 32), "D26: parcels 3 and 4 on each axis")
+	assert_eq(block, Rect2i(32, 32, 64, 64), "D67: parcels 2 to 5 on each axis")
+	assert_eq(LandGenerator.start_block(128, 128, LandTuning.D26_BLOCK_PARCELS), Rect2i(48, 48, 32, 32),
+			"D26's 2 x 2: parcels 3 and 4")
 	for s: int in SEEDS:
 		var c := _maps[s]
 		var rough: int = _count(c, Surface.Type.ROUGH, block)
 		assert_true(rough >= _t.start_block_min_rough * block.get_area(),
 				"seed %d block: %d of %d rough" % [s + 1, rough, block.get_area()])
 		assert_eq(_count(c, Surface.Type.WATER, block), 0, "seed %d block has no water" % (s + 1))
+
+
+## D67: D26's tuning (LandTuning.load_d26) keeps the pre-D67 land, whose starting block is
+## the 2 x 2 one, dry.
+func test_d26_tuning_keeps_the_old_block_dry() -> void:
+	var d26 := LandTuning.load_d26()
+	assert_eq(d26.start_block_parcels, 2)
+	assert_eq(LandTuning.load_default().start_block_parcels, 4, "the default is unchanged by the copy")
+	var old_block := LandGenerator.start_block(128, 128, 2)
+	for land_seed: int in [1, 7]:
+		var c := LandGenerator.generate(land_seed, d26)
+		assert_eq(_count(c, Surface.Type.WATER, old_block), 0, "seed %d: D26's block dry" % land_seed)
+		assert_eq(LandGenerator.generate(land_seed, d26).content_hash(), c.content_hash(), "deterministic")
 
 
 ## E6-S15: generated land comes back with every parcel owned and no land budget (D26, D19:

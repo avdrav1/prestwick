@@ -8,10 +8,10 @@ extends GutTest
 ## a save carries it, and /course-file inspect prints the build cost.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
-## The starting block of the 8 x 8 parcel map (D26).
-const BLOCK: Array[Vector2i] = [Vector2i(3, 3), Vector2i(4, 3), Vector2i(3, 4), Vector2i(4, 4)]
+## The starting block of the 8 x 8 parcel map (D67: 4 x 4, parcels 2 to 5).
+const BLOCK: Rect2i = Rect2i(2, 2, 4, 4)
 ## A parcel next to the block, and a tile inside the block.
-const NEXT_PARCEL := Vector2i(2, 3)
+const NEXT_PARCEL := Vector2i(1, 3)
 const AT := Vector2i(60, 60)
 const SAVE_PATH: String = "user://test_economy_build_save.json"
 
@@ -32,7 +32,7 @@ func _land_course(money: int = 5000) -> CourseData:
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	for q: int in c.parcels_high:
 		for p: int in c.parcels_wide:
-			c.set_parcel_owned(Vector2i(p, q), Vector2i(p, q) in BLOCK)
+			c.set_parcel_owned(Vector2i(p, q), BLOCK.has_point(Vector2i(p, q)))
 	c.set_land_budget(money)
 	return c
 
@@ -46,9 +46,9 @@ func _builder(c: CourseData) -> CourseBuilder:
 # --- the rates ---
 
 func test_the_rates_are_d56s_from_data() -> void:
-	assert_eq(_econ.price_of(Surface.Type.FAIRWAY), 3)
-	assert_eq(_econ.price_of(Surface.Type.GREEN), 16, "D56 at the money scale 0.63 (E4-S8)")
-	assert_eq(_econ.height_step_price, 6)
+	assert_eq(_econ.price_of(Surface.Type.FAIRWAY), 4)
+	assert_eq(_econ.price_of(Surface.Type.GREEN), 20, "D56 at the money scale 0.78 (D67; 0.63 at E4-S8)")
+	assert_eq(_econ.height_step_price, 8)
 	assert_eq(LandPrices.load_default().land_budget, 5000, "the one starting balance (D57)")
 
 
@@ -349,5 +349,5 @@ func test_inspect_prints_the_build_cost() -> void:
 	var text := "\n".join(out)
 	assert_string_contains(text, "build cost: %s to paint every tile not rough" % LandPrices.money(expected))
 	assert_string_contains(text, "  green: ")
-	assert_between(expected, 600, 1300, "a basic par 3 in the design doc's band times the money scale 0.63 (D56, E4-S8)")
+	assert_between(expected, 800, 1600, "a basic par 3 in the design doc's band times the money scale 0.78 (D56, D67)")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

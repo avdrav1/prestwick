@@ -4,8 +4,11 @@ extends GutTest
 ## unlimited budget, and buying hidden. The main scene starts on a New course.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
-## The starting block of the 8 x 8 parcel map (D26): parcels 3 and 4 on each axis.
-const BLOCK: Rect2i = Rect2i(3, 3, 2, 2)
+## The starting block of the 8 x 8 parcel map (D67, 4 x 4; D26's was 2 x 2): parcels 2 to 5 on
+## each axis.
+const BLOCK: Rect2i = Rect2i(2, 2, 4, 4)
+## Its tiles: 32 to 95 on each axis.
+const BLOCK_TILES: Rect2i = Rect2i(32, 32, 64, 64)
 
 
 func _owned(c: CourseData) -> Array[Vector2i]:
@@ -37,11 +40,49 @@ func _main(seed_value: int = 7) -> Main:
 func test_new_course_owns_only_the_starting_block_with_the_full_budget() -> void:
 	var c := CourseBuilder.new_course(7)
 	assert_eq(Vector2i(c.width, c.height), Vector2i(128, 128))
-	assert_eq(_owned(c), _block_parcels(), "only the 2 x 2 block at the centre (D26)")
+	assert_eq(_owned(c), _block_parcels(), "only the 4 x 4 block at the centre (D67)")
 	assert_false(c.has_unlimited_budget())
 	assert_eq(c.land_budget, LandPrices.load_default().land_budget, "the full budget (D28)")
 	assert_eq(c.land_budget, 5000)
 	assert_eq(c.holes.size(), 0, "no holes yet")
+
+
+func test_new_course_block_is_rough_and_dry_with_the_clubhouse_by_its_rule() -> void:
+	# D67: tiles 32 to 95 each way, no water, at least start_block_min_rough rough (the rest tree
+	# stands), on every seed; the clubhouse against the middle of its +y edge (D60).
+	var t := LandTuning.load_default()
+	assert_eq(LandGenerator.start_block(128, 128), BLOCK_TILES)
+	for land_seed: int in [1, 7, 42]:
+		var c := CourseBuilder.new_course(land_seed)
+		var rough := 0
+		var water := 0
+		for y: int in range(BLOCK_TILES.position.y, BLOCK_TILES.end.y):
+			for x: int in range(BLOCK_TILES.position.x, BLOCK_TILES.end.x):
+				assert_true(c.is_owned(x, y))
+				match c.get_surface(x, y):
+					Surface.Type.ROUGH:
+						rough += 1
+					Surface.Type.WATER:
+						water += 1
+		assert_eq(water, 0, "seed %d: no water in the block" % land_seed)
+		assert_gte(rough, ceili(t.start_block_min_rough * BLOCK_TILES.get_area()),
+				"seed %d: the block is mostly rough" % land_seed)
+		assert_false(c.is_owned(31, 64), "seed %d: one tile west of the block is not owned" % land_seed)
+		assert_false(c.is_owned(64, 96), "seed %d: one tile south of it" % land_seed)
+		assert_eq(c.clubhouse, Vector2i(64, 93), "seed %d: the clubhouse by its rule" % land_seed)
+		assert_eq(c.clubhouse_door(), Vector2i(64, 95), "its door on the block's last row")
+
+
+func test_new_course_block_holds_a_long_par_3_and_a_par_4_but_no_par_5() -> void:
+	# D67: 64 tiles a side, so 315 yd along an edge and 445 yd corner to corner: a par 3 up to
+	# 300 yd and a par 4 fit with no purchase; the shortest par 5 (471 yd) does not.
+	var c := CourseBuilder.new_course(7)
+	var vt := ValidatorTuning.load_default()
+	var span := BalanceSim.owned_span_yd(c)
+	assert_almost_eq(span, 445.5, 0.1, "corner to corner of the 4 x 4 block")
+	assert_gt(span, float(vt.par4_min_yd), "a par 4 fits")
+	assert_lt(span, float(vt.par5_min_yd), "a par 5 needs land")
+	assert_eq(CourseValidator.yardage(Vector2i(32, 40), Vector2i(92, 40)), 300, "a 300 yd par 3 along an edge")
 
 
 func test_new_course_is_the_generated_land_of_its_seed() -> void:
@@ -73,7 +114,7 @@ func test_new_course_is_not_flat() -> void:
 
 func test_new_course_buys_next_to_the_block() -> void:
 	var b := CourseBuilder.new(CourseBuilder.new_course(7))
-	assert_eq(b.buy_refusal(Vector2i(2, 3)), "", "a parcel beside the block is for sale")
+	assert_eq(b.buy_refusal(Vector2i(1, 3)), "", "a parcel beside the block is for sale")
 	assert_eq(b.buy_refusal(Vector2i(0, 0)), "not next to your land")
 	assert_false(b.can_undo(), "a fresh course has nothing to undo")
 
@@ -116,7 +157,7 @@ func test_main_start_seed_picks_one_when_unset() -> void:
 func test_new_course_button_starts_fresh_land() -> void:
 	var m := _main(7)
 	assert_true(m.new_course_button.visible, "New course is on the Build HUD")
-	assert_true(m.build_tool.builder.buy_parcel(Vector2i(2, 3)))
+	assert_true(m.build_tool.builder.buy_parcel(Vector2i(1, 3)))
 	m.new_course(11)
 	assert_eq(m.land_seed, 11)
 	assert_eq(m.course.content_hash(), CourseBuilder.new_course(11).content_hash())

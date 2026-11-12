@@ -60,6 +60,26 @@ const PATH: String = "res://course/land_tuning.tres"
 ## The starting block (D26) keeps at least this share rough, and has no water.
 @export var start_block_min_rough: float = 0.85
 
+@export_group("Starting block")
+## The starting block's side in parcels (D26: 2; D67: 4), at the centre of the map: the land a
+## New course owns for free (CourseBuilder.new_course, LandGenerator.start_block) and the land
+## the generator keeps dry and start_block_min_rough rough. Fixtures laid on the land before
+## D67 generate with D26_BLOCK_PARCELS (load_d26) so their land stays as it was.
+@export_range(1, 8) var start_block_parcels: int = 4
+
 
 static func load_default() -> LandTuning:
 	return load(PATH) as LandTuning
+
+
+## D67: the starting block before D67 (D26), 2 x 2 parcels.
+const D26_BLOCK_PARCELS: int = 2
+
+
+## The default tuning with D26's 2 x 2 starting block (a copy): the land every seed generated
+## before D67, which the fixtures laid on it (PlaytestNine, NineHoles, ReactionHoles,
+## CourseGenerator's hilly land) keep, so their holes and every balance table stay as they are.
+static func load_d26() -> LandTuning:
+	var t := load_default().duplicate() as LandTuning
+	t.start_block_parcels = D26_BLOCK_PARCELS
+	return t

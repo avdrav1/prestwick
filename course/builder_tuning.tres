@@ -37,4 +37,5 @@ ring_width_px = 2.0
 ruler_font_px = 16
 ring_font_px = 13
 first_par3_min_yd = 120
-first_par3_max_yd = 200
+first_par3_max_yd = 300
+first_par4_max_yd = 380

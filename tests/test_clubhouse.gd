@@ -5,10 +5,16 @@ extends GutTest
 ## to any allowed spot, refusing water, tees, greens, holes' lines and unowned land with a
 ## one-line reason; undo moves it back; save and load keep it.
 
-## The starting block of the 128 x 128 map (D26): tiles 48 to 79 on both axes.
+## D26's 2 x 2 starting block of the 128 x 128 map: tiles 48 to 79 on both axes. A file from
+## before format version 3 gets its clubhouse by the rule on this block (D67), and _land_course
+## owns it, so the tool's tests keep their ground.
 const BLOCK := Rect2i(48, 48, 32, 32)
 ## The rule's spot in that block: the middle of its +y edge, the door on its last row.
 const BLOCK_SPOT := Vector2i(64, 77)
+## A New course's and New sandbox's starting block since D67, 4 x 4: tiles 32 to 95.
+const START_BLOCK := Rect2i(32, 32, 64, 64)
+## The rule's spot in it, the door at (64, 95).
+const START_SPOT := Vector2i(64, 93)
 const PLUS_Y: int = 1
 const TMP_PATH := "user://test_clubhouse_%d.json"
 const V1_SAVE := "res://tests/fixtures/save_v1_short_par4.json"
@@ -29,15 +35,15 @@ func _builder(c: CourseData) -> CourseBuilder:
 	return b
 
 
-## The 128 x 128 map, flat rough at height 2, owning only the starting block, as a New
-## course's land would be with no trees or ponds, with its clubhouse by rule.
+## The 128 x 128 map, flat rough at height 2, owning only D26's 2 x 2 starting block, as a New
+## course's land was before D67 with no trees or ponds, with its clubhouse by rule on that block.
 func _land_course() -> CourseData:
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	for q: int in c.parcels_high:
 		for p: int in c.parcels_wide:
 			c.set_parcel_owned(Vector2i(p, q), BLOCK.encloses(c.parcel_rect(Vector2i(p, q))))
 	c.set_land_budget(5000)
-	CourseBuilder.place_clubhouse_by_rule(c)
+	CourseBuilder.place_clubhouse_by_rule(c, null, LandTuning.D26_BLOCK_PARCELS)
 	return c
 
 
@@ -62,9 +68,9 @@ func test_the_format_is_version_3_and_saves_the_clubhouse() -> void:
 func test_a_new_sandbox_gets_one_at_the_middle_of_the_blocks_near_edge() -> void:
 	var c := CourseBuilder.new_sandbox()
 	assert_true(c.has_clubhouse())
-	assert_eq(c.clubhouse, BLOCK_SPOT)
+	assert_eq(c.clubhouse, START_SPOT, "D67: the 4 x 4 block's")
 	assert_eq(c.clubhouse_facing, PLUS_Y)
-	assert_eq(c.clubhouse_door(), Vector2i(64, 79), "the door on the block's last row")
+	assert_eq(c.clubhouse_door(), Vector2i(64, 95), "the door on the block's last row")
 	assert_eq(c.clubhouse_cells().size(), 9)
 
 
@@ -73,19 +79,19 @@ func test_a_new_course_gets_one_in_its_starting_block_on_allowed_ground() -> voi
 		var c := CourseBuilder.new_course(land_seed)
 		assert_true(c.has_clubhouse(), "seed %d has a clubhouse" % land_seed)
 		for cell: Vector2i in c.clubhouse_cells():
-			assert_true(BLOCK.has_point(cell), "seed %d: %s in the starting block" % [land_seed, cell])
+			assert_true(START_BLOCK.has_point(cell), "seed %d: %s in the starting block" % [land_seed, cell])
 			assert_true(c.is_owned(cell.x, cell.y))
-		assert_true(BLOCK.has_point(c.clubhouse_door()), "its door too")
+		assert_true(START_BLOCK.has_point(c.clubhouse_door()), "its door too")
 		assert_eq(ClubhouseRule.refusal(c, c.clubhouse, c.clubhouse_facing, []), "")
 
 
 func test_a_spot_in_the_block_nearest_the_middle_when_the_middle_is_water() -> void:
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
-	c.set_tile(BLOCK_SPOT.x, BLOCK_SPOT.y, 2, Surface.Type.WATER)
+	c.set_tile(START_SPOT.x, START_SPOT.y, 2, Surface.Type.WATER)
 	var spot: Array = ClubhouseRule.default_spot(c)
-	assert_ne(spot[0], BLOCK_SPOT)
-	assert_true(BLOCK.has_point(spot[0]))
-	assert_eq((spot[0] as Vector2i).distance_to(BLOCK_SPOT), 2.0, "two tiles over, clear of the water")
+	assert_ne(spot[0], START_SPOT)
+	assert_true(START_BLOCK.has_point(spot[0]))
+	assert_eq((spot[0] as Vector2i).distance_to(START_SPOT), 2.0, "two tiles over, clear of the water")
 
 
 func test_an_old_file_gets_one_by_the_same_rule() -> void:
@@ -95,7 +101,7 @@ func test_an_old_file_gets_one_by_the_same_rule() -> void:
 	assert_not_null(loaded, "loads: %s" % [errors])
 	if loaded == null:
 		return
-	assert_eq(loaded.clubhouse, BLOCK_SPOT)
+	assert_eq(loaded.clubhouse, BLOCK_SPOT, "D67: by the rule on D26's block, as it always loaded")
 	assert_eq(loaded.clubhouse_facing, PLUS_Y)
 	assert_eq(loaded.to_dict()["version"], 3, "and saves as version 3")
 

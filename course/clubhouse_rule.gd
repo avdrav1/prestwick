@@ -95,13 +95,16 @@ static func lines_of_play(course: CourseData, validator: CourseValidator = null)
 
 ## Where the rule puts a clubhouse on `course` (above): [centre, facing], or
 ## [CourseData.NO_CLUBHOUSE, BLOCK_FACING] when there is no room. Ignores any clubhouse the
-## course has.
+## course has. `block_parcels` is the starting block's side (LandGenerator.start_block; 0, the
+## default, is a New course's, 4 since D67); a file from before format version 3 and
+## CourseGenerator's courses pass D26's 2 (LandTuning.D26_BLOCK_PARCELS), so they keep the
+## clubhouse they had.
 static func default_spot(course: CourseData, lines: Array[PackedVector2Array] = [],
-		tuning: BuilderTuning = null) -> Array:
+		tuning: BuilderTuning = null, block_parcels: int = 0) -> Array:
 	var t: BuilderTuning = tuning if tuning != null else BuilderTuning.load_default()
 	if lines.is_empty() and not course.holes.is_empty():
 		lines = lines_of_play(course)
-	var block: Rect2i = LandGenerator.start_block(course.width, course.height)
+	var block: Rect2i = LandGenerator.start_block(course.width, course.height, block_parcels)
 	var reach: int = CourseData.CLUBHOUSE_REACH
 	# The middle of the block's +y edge, its door on the block's last row.
 	var anchor := Vector2i(block.position.x + floori(block.size.x / 2.0), block.end.y - 2 - reach)

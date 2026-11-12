@@ -76,7 +76,8 @@ static func blind_par4() -> CourseData:
 ## Generated land of `land_seed`, owning only parcel row CORRIDOR_ROW; null when the hole
 ## does not open there.
 static func corridor_par4(land_seed: int) -> CourseData:
-	var c := LandGenerator.generate(land_seed)
+	# D26's land (LandTuning.load_d26): the corridor was measured on it before D67.
+	var c := LandGenerator.generate(land_seed, LandTuning.load_d26())
 	for q: int in c.parcels_high:
 		for p: int in c.parcels_wide:
 			c.set_parcel_owned(Vector2i(p, q), q == CORRIDOR_ROW)

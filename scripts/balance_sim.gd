@@ -149,7 +149,8 @@ func drives_on_land(from_seed: int, seeds: int) -> Dictionary:
 	var drives: Array[Dictionary] = []
 	var n := maxi(seeds, 1)
 	for i in n:
-		var land := LandGenerator.generate(from_seed + i)
+		# D26's land and block (LandTuning.load_d26): D33's sample, kept as measured before D67.
+		var land := LandGenerator.generate(from_seed + i, LandTuning.load_d26())
 		for lane: Dictionary in lane_tees(land):
 			var tee: Vector2i = lane.tee
 			var dir: Vector2i = lane.dir
@@ -168,7 +169,7 @@ func drives_on_land(from_seed: int, seeds: int) -> Dictionary:
 ## The sample's lanes on `c`: {tee, dir} for each side of the starting block and each of
 ## LANE_OFFSETS, the tee LANE_TEE_IN tiles in from the block's edge opposite `dir`.
 static func lane_tees(c: CourseData) -> Array[Dictionary]:
-	var block := LandGenerator.start_block(c.width, c.height)
+	var block := LandGenerator.start_block(c.width, c.height, LandTuning.D26_BLOCK_PARCELS)
 	var out: Array[Dictionary] = []
 	for dir: Vector2i in LANE_SIDES:
 		for off: int in LANE_OFFSETS:
@@ -347,11 +348,18 @@ func _green_rows(rng_seed: int) -> Array[Dictionary]:
 ## and a par 4 fit when the owned parcels hold both footprints (footprint_parcels) and two
 ## owned tiles are a shortest par 4 apart (owned_span_yd); nine holes fit when they hold the
 ## nine footprints. Also the price spread, what trees and water take off, and the clamp.
-## Prices and the budget come from `land`.
+## Prices and the budget come from `land`. D67: before any purchase, the starting block alone
+## (4 x 4 parcels) is checked the same way for the par 3 and par 4, and for a shortest par 5
+## (rule 4's `par5_min_yd`), which it must not hold, so the first purchase still has a reason.
 func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var lp: LandPrices = land
 	var vt := ValidatorTuning.load_default()
 	var par4_yd := float(vt.par4_min_yd)
+	var par5_yd := float(vt.par5_min_yd)
+	var block_two := 0
+	var block_par5 := 0
+	var block_owned := 0
+	var block_span := 0.0
 	var two := footprint_parcels(LAND_PAR3_YD, vt) + footprint_parcels(par4_yd, vt)
 	var nine := 0.0
 	for yd: float in NINE_HOLES_YD:
@@ -373,6 +381,14 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 	for i in n:
 		var c := CourseBuilder.new_course(rng_seed + i, lp)
 		var b := CourseBuilder.new(c, null, null, lp)
+		var start_owned := owned_parcels(c)
+		var start_span := owned_span_yd(c)
+		block_owned = start_owned
+		block_span += start_span
+		if start_owned >= two and start_span >= par4_yd:
+			block_two += 1
+		if start_owned >= footprint_parcels(par5_yd, vt) and start_span >= par5_yd:
+			block_par5 += 1
 		var lo := 1 << 30
 		var hi := 0
 		for q: int in c.parcels_high:
@@ -403,11 +419,7 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 		bought_min = mini(bought_min, got)
 		bought_max = maxi(bought_max, got)
 		left += int(spent.left)
-		var owned := 0
-		for q: int in c.parcels_high:
-			for p: int in c.parcels_wide:
-				if c.is_parcel_owned(Vector2i(p, q)):
-					owned += 1
+		var owned := owned_parcels(c)
 		var s := owned_span_yd(c)
 		span += s
 		if owned >= two and s >= par4_yd:
@@ -416,11 +428,17 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 			fit_nine += 1
 	prices.sort()
 	var rows: Array[Dictionary] = []
+	rows.append(row("land: starting block alone, seeds with room for a par 3 and a par 4",
+			block_two / float(n), LAND_EVERY_SEED,
+			"D67: %d parcels, mean span %.1f yd, before any purchase" % [block_owned, block_span / n]))
+	rows.append(row("land: starting block alone, seeds with room for a par 5", block_par5 / float(n),
+			LAND_NO_SEED, "a %.0f yd par 5 needs %.2f parcels and %.0f yd of span: the first purchase's reason" % [
+				par5_yd, footprint_parcels(par5_yd, vt), par5_yd]))
 	rows.append(row("land: seeds with room for a par 3 and a par 4", fit_two / float(n), LAND_EVERY_SEED,
 			"%.0f + %.0f yd need %.2f parcels and %.0f yd of owned span; mean span %.1f yd" % [
 				LAND_PAR3_YD, par4_yd, two, par4_yd, span / n]))
 	rows.append(row("land: seeds with room for nine holes", fit_nine / float(n), LAND_NO_SEED,
-			"nine holes need %.1f parcels; the block is 4" % nine))
+			"nine holes need %.1f parcels; the block is %d" % [nine, block_owned]))
 	rows.append(row("land: parcels the budget buys, cheapest first", bought / float(n), Vector2(-INF, INF),
 			"%d to %d; %s left on average, of %s" % [bought_min, bought_max,
 				LandPrices.money(roundi(left / float(n))), LandPrices.money(lp.land_budget)]))
@@ -486,6 +504,16 @@ static func footprint_parcels(yd: float, vt: ValidatorTuning = null) -> float:
 	var w: float = t.footprint_half_width_yd
 	var parcel_yd: float = CourseData.PARCEL_TILES * CourseValidator.YARDS_PER_TILE
 	return (yd + 2.0 * w) * 2.0 * w / (parcel_yd * parcel_yd)
+
+
+## How many of `c`'s parcels are owned.
+static func owned_parcels(c: CourseData) -> int:
+	var owned := 0
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			if c.is_parcel_owned(Vector2i(p, q)):
+				owned += 1
+	return owned
 
 
 ## The longest tee-to-cup line between two owned tile centres of `c`, in yards (5 yd a tile,

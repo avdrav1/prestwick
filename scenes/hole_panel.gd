@@ -253,13 +253,17 @@ func _note_label() -> Label:
 	return l
 
 
-## E8-S5: the first-hole hint, from `bt`'s first_par3 range and the tile size: "A first par 3 is
-## 120 to 200 yd: put the cup 24 to 40 tiles from the tee".
-static func first_hole_text(bt: BuilderTuning) -> String:
+## E8-S5: the first-hole hint, from `bt`'s first_par3 range, its first_par4_max_yd, rule 4's
+## shortest par 4 (`vt`) and the tile size (D67): "A first par 3 is 120 to 300 yd (the cup 24 to
+## 60 tiles from the tee); a par 4 of 320 to 380 yd fits corner to corner (64 to 76 tiles)".
+static func first_hole_text(bt: BuilderTuning, vt: ValidatorTuning = null) -> String:
+	var v: ValidatorTuning = vt if vt != null else ValidatorTuning.load_default()
 	var ypt: float = CourseValidator.YARDS_PER_TILE
-	return "A first par 3 is %d to %d yd: put the cup %d to %d tiles from the tee" % [
+	return ("A first par 3 is %d to %d yd (the cup %d to %d tiles from the tee); " +
+			"a par 4 of %d to %d yd fits corner to corner (%d to %d tiles)") % [
 			bt.first_par3_min_yd, bt.first_par3_max_yd, roundi(bt.first_par3_min_yd / ypt),
-			roundi(bt.first_par3_max_yd / ypt)]
+			roundi(bt.first_par3_max_yd / ypt), v.par4_min_yd, bt.first_par4_max_yd,
+			roundi(v.par4_min_yd / ypt), roundi(bt.first_par4_max_yd / ypt)]
 
 
 ## E8-S5: what the panel says when hole `h`, `yards` long, has a par picked by hand that is not

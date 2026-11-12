@@ -21,9 +21,10 @@ const HOLES: Array = [
 ]
 
 
-## The generated land of `land_seed` with every parcel owned.
+## The generated land of `land_seed` with every parcel owned: D26's land (LandTuning.load_d26,
+## the 2 x 2 starting block the holes were laid on before D67).
 static func land(land_seed: int = 7) -> CourseData:
-	return LandGenerator.generate(land_seed)
+	return LandGenerator.generate(land_seed, LandTuning.load_d26())
 
 
 ## Builds the nine holes on `b`'s course. Returns the numbers that opened.

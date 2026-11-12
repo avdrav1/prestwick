@@ -7,7 +7,7 @@ extends GutTest
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const SAVE_PATH := "user://test_goals_save.json"
-## A par 3 on seed 7's starting block (D26: tiles 48 to 79 each way), as test_economy_build's.
+## A par 3 on seed 7's starting block (D67: tiles 32 to 95 each way), as test_economy_build's.
 const TEE := Vector2i(51, 60)
 const CUP := Vector2i(76, 60)
 const ROW2 := 10
@@ -50,7 +50,7 @@ func _names(list: GoalList) -> PackedStringArray:
 
 func test_the_list_names_each_step_with_a_how_that_teaches_the_controls() -> void:
 	var list := GoalList.new()
-	assert_eq(_names(list), GoalList.ORDER, "tee, cup, green, open, guests, parcel, hole 2, stars")
+	assert_eq(_names(list), GoalList.ORDER, "tee, cup, green, open, guests, hole 2, parcel, stars (D67)")
 	assert_eq(list.done_count(), 0)
 	assert_eq(list.next_goal().id, GoalList.TEE, "a new course starts at its tee")
 	for g: GoalList.Goal in list.goals():
@@ -202,7 +202,7 @@ func test_the_goals_tick_from_the_game() -> void:
 	m.guest_sim.guest_arrived.emit(null)
 	assert_true(m.goals.is_done(GoalList.GUESTS), "a guest arrives and pays")
 	assert_gt(m.ledger.fees, 0, "the green fee")
-	assert_true(b.buy_parcel(Vector2i(5, 3)), "a parcel next to the block")
+	assert_true(b.buy_parcel(Vector2i(6, 3)), "a parcel next to the block")
 	assert_true(m.goals.is_done(GoalList.PARCEL))
 	m.guest_sim.day_ended.emit(1, null)
 	assert_true(m.goals.is_done(GoalList.STARS), "a day with guests at %s stars" % m.goals.tuning.target_stars)

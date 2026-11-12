@@ -31,7 +31,8 @@ func _ready() -> void:
 	# only for it to be replaced (E6-S22).
 	_main.course_path = "res://tests/fixtures/flat_20x20.json"
 	add_child(_main)
-	var c := LandGenerator.generate(land_seed)
+	# D26's land and 2 x 2 block (BLOCK), as E6-S5's screenshots show it.
+	var c := LandGenerator.generate(land_seed, LandTuning.load_d26())
 	for q: int in c.parcels_high:
 		for p: int in c.parcels_wide:
 			c.set_parcel_owned(Vector2i(p, q), BLOCK.has_point(Vector2i(p, q)))

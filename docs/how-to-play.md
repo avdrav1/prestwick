@@ -8,10 +8,10 @@ Run the game. The menu opens: choose **New course** (or **Import course** to ope
 
 ## Build (the starting mode)
 
-- You start with **$5,000** and a block of land beside your clubhouse. Painting, raising and lowering ground cost money; undo (Ctrl+Z) gives back what that step charged. **Buy land** adds a neighbouring parcel.
+- You start with **$5,000** and a 4 x 4 parcel block of land round your clubhouse. Painting, raising and lowering ground cost money; undo (Ctrl+Z) gives back what that step charged. **Buy land** adds a neighbouring parcel.
 - Click **New hole**, place a **Tee** and a **Cup**, paint a green round the cup and fairway between. The hole panel (top right) says what is wrong until the hole is legal; the moment it is, the hole opens itself ("Hole 1 is open: guests will play it"). **Close** in the hole list shuts a hole to guests until you press **Open** again.
 - Pick par 3, 4 or 5 to match the hole's length; a hole that bends needs room to land a ball at the corner.
-- With the Cup tool in hand, a ruler runs from the tee to the cursor and says how long the hole would be and its par ("285 yd: par 3"); placing the cup sets that par unless you picked one. Rings round the tee mark a driver's carry and total and where par 4 (320 yd) and par 5 (471 yd) start. A good first hole is a par 3 of 120 to 200 yd: 24 to 40 tiles from the tee (a tile is 5 yd).
+- With the Cup tool in hand, a ruler runs from the tee to the cursor and says how long the hole would be and its par ("285 yd: par 3"); placing the cup sets that par unless you picked one. Rings round the tee mark a driver's carry and total and where par 4 (320 yd) and par 5 (471 yd) start. Your free starting land is 4 x 4 parcels, 320 yd a side: a good first hole is a par 3 of 120 to 300 yd (24 to 60 tiles from the tee; a tile is 5 yd) or a par 4 of 320 to 380 yd from corner to corner. A par 5 needs more land. Guests walk from the clubhouse to the first tee, so start near it.
 
 How far each club goes with a perfect swing from flat fairway, in yards:
 

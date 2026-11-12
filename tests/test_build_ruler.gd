@@ -321,7 +321,9 @@ func test_a_course_with_no_cup_shows_the_first_hole_hint() -> void:
 	add_child_autofree(panel)
 	panel.bind(_t)
 	assert_eq(HolePanel.first_hole_text(BuilderTuning.load_default()),
-			"A first par 3 is 120 to 200 yd: put the cup 24 to 40 tiles from the tee")
+			"A first par 3 is 120 to 300 yd (the cup 24 to 60 tiles from the tee); " +
+			"a par 4 of 320 to 380 yd fits corner to corner (64 to 76 tiles)",
+			"D67: the 4 x 4 block holds a par 3 up to 300 yd or a par 4")
 	assert_true(panel.first_hole_label.visible, "no hole yet: the hint shows")
 	_t.select_hole(1)
 	_t.select_tool(BuildTool.Tool.TEE)

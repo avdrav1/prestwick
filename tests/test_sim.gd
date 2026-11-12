@@ -111,6 +111,11 @@ func test_land_rows_hit_their_targets() -> void:
 	assert_false(nine.is_empty(), "a row for nine holes")
 	assert_eq(float(nine.measured), 0.0, "on no seed")
 	assert_false(_named(rows, "land: parcels at the price clamp").is_empty())
+	# D67: the 4 x 4 block alone holds the par 3 and the par 4, and no par 5.
+	assert_eq(float(_named(rows, "land: starting block alone, seeds with room for a par 3 and a par 4").measured),
+			1.0, "with no purchase")
+	assert_eq(float(_named(rows, "land: starting block alone, seeds with room for a par 5").measured),
+			0.0, "a par 5 is the first purchase's reason")
 
 
 func test_land_budget_buys_land_cheapest_first() -> void:
@@ -135,13 +140,16 @@ func test_land_hole_room_reads_the_design_footprint() -> void:
 	assert_almost_eq(nine, 33.56, 0.01, "nine holes need about 34 parcels")
 
 
-func test_land_span_of_the_starting_block_is_219_yd() -> void:
+func test_land_span_of_the_starting_block_is_445_yd() -> void:
 	var c := CourseBuilder.new_course(SEED)
-	assert_almost_eq(BalanceSim.owned_span_yd(c), 219.2, 0.1, "corner to corner of the 2 x 2 block")
+	assert_almost_eq(BalanceSim.owned_span_yd(c), 445.5, 0.1, "corner to corner of the 4 x 4 block (D67)")
+	assert_eq(BalanceSim.owned_parcels(c), 16)
 
 
 func test_a_missed_land_target_is_reported() -> void:
-	sim.land.land_budget = 500
+	# D67: the block holds the par 4 whatever the budget, so the miss to read is nine holes: a
+	# budget that buys the map leaves room for them.
+	sim.land.land_budget = 1000000
 	var missed := BalanceSim.misses(sim.measure_land(RUNS, SEED))
-	assert_eq(missed.size(), 1, "$500 buys no parcel, so no par 4 fits")
-	assert_string_contains(String(missed[0].name), "par 4")
+	assert_eq(missed.size(), 1, "a budget that buys the map fits nine holes")
+	assert_string_contains(String(missed[0].name), "nine holes")

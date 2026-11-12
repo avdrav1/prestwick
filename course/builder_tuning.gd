@@ -82,9 +82,13 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export var ruler_font_px: int = 16
 @export var ring_font_px: int = 13
 ## E8-S5, the first-hole hint: on a course with no cup yet the hole panel suggests a first par 3
-## this long (yards, between tile centres), and the tiles it is at 5 yd a tile.
+## this long (yards, between tile centres), and the tiles it is at 5 yd a tile. D67: the 4 x 4
+## starting block is 315 yd along an edge and 445 yd corner to corner, so the hint offers a par 3
+## up to 300 yd, or a par 4 from rule 4's shortest (ValidatorTuning.par4_min_yd) to
+## first_par4_max_yd across the block (200 yd and no par 4 on D26's 2 x 2 block).
 @export var first_par3_min_yd: int = 120
-@export var first_par3_max_yd: int = 200
+@export var first_par3_max_yd: int = 300
+@export var first_par4_max_yd: int = 380
 
 
 static func load_default() -> BuilderTuning:
