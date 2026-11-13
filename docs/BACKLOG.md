@@ -1494,6 +1494,32 @@ Done when: four example courses ship with the build and on itch, the balance and
   - Touches: `docs/`
   - Done 2026-11-13: `/ship-it` cut 0.6.0-rc8 (tag `v0.6.0-rc8`) with E13-S1 to S5: tests 1314/1314, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the five course files and how-to-play; itch channels linux and windows; the download page.
 
+## E14: Bridges — active
+
+From the user (2026-11-13): "currently it looks like players can walk on water; can we have bridge paths instead?" Today guests walk over any tile, water included (E3-S4, D65 slows them to 0.75 there). The user chose: guests walk round water by the quickest dry route; cart path painted over water builds a bridge (a wooden footbridge, priced higher); a tee, green or ball that can't be reached on foot closes the hole with a reason ("no way to walk to the 9th green: add a bridge"); a ball on a bridge is still in the water. Ships as the next release candidate (rc9).
+
+Done when: rc9 is cut with every story below checked.
+
+- [ ] E14-S1 Build bridges over water. Cart path painted on water makes a footbridge.
+  - Note: needs a `/decision` amending D65 and D66 and D56's prices. The bridge is data (a flag or a surface value on water tiles; choose one that keeps the format readable and the ball's water rule intact), written only by builder.gd and save.gd; painting cart path on water makes it (one undo step, charged at a new `bridge_tile_price`); painting water or anything else over a bridge removes it; water levelling (D66) keeps bridges on re-levelled water and drops them where the water drains. Art: a generated footbridge sprite (D62, scripts/art_sprites.py) drawn over the water, sorted with guests. The ball treats a bridge tile as water (penalty and drop, as today).
+  - Accept: a bridge can be painted, undone, saved, loaded and exported; a ball landing on it is in the water; the bridge draws at every zoom; the Cart path tool's hover says when it would build a bridge and its price.
+  - Test: `tests/test_bridges.gd`; screenshots at 0.5x and 1x.
+  - Touches: `course/`, `art/`, `scripts/`, `tests/`
+- [ ] E14-S2 Walk round water. Guests never wade.
+  - Note: `GuestWalk.route` becomes a time-weighted path search over the tile grid (A* or Dijkstra with the D65 surface speeds and climb cost; water impassable unless bridged; bridges walk at path speed), deterministic (fixed neighbour order and tie-breaks, as E3-S15), bounded, and cached per (start, end) until the terrain the route crosses changes (E5-S15 and E7-S5 keep drag and undo frames under 16.7 ms; skip to morning stays under 3 s, E7-S4). Every walk uses it: to the ball, to the cup, to the next tee, from and to the clubhouse. The walk check (D65, D68) and the walk overlay (E12-S1) follow the new routes.
+  - Accept: a guest whose straight walk crosses a pond walks round it or over a bridge; no guest stands on an unbridged water tile at any frame of a seeded day; skip and save/load replays still match; `/balance reactions` targets hold (retune walk times if needed and record it); the 24-guest day still finishes (`scripts/guest_day.gd`, every example course row included); perf rows hold.
+  - Test: `tests/test_guest_walk.gd`, `tests/test_guest_brain.gd`, `tests/test_day_clock.gd`; balance and guest-day outputs in the commit.
+  - Touches: `guests/`, `scenes/`, `tests/`
+- [ ] E14-S3 Close a hole guests cannot walk to. And give the example courses their bridges.
+  - Note: a new validator rule (numbered after the existing ones): every open hole's tee and green must be reachable on foot from the clubhouse door and from the previous hole's green (bridges allowed), else the hole closes with a one-line reason naming the place ("no way to walk to the 9th green: add a bridge"). The builder's issue boxes and the hole panel show it like other rules. Then rebuild the example courses with bridges where they need them (Harbor Links' island green and creek crossings, Old Grey Links' burns, Pine Ridge's creek, Cliffside's coves) through their fixtures and save scripts, and the playtest nine if it needs any.
+  - Accept: an island green with no bridge closes its hole with the reason; adding a bridge opens it; all five shipped courses load with every hole open; their balance and guest-day rows stay inside their recorded ranges or the change is explained.
+  - Test: `tests/test_validator.gd`, `tests/test_example_courses.gd`; screenshots of each course's bridges.
+  - Touches: `course/`, `tests/`, `courses/`, `docs/`
+- [ ] E14-S4 Cut the next release candidate (rc9).
+  - Accept: `/ship-it` with the itch push; tag, GitHub pre-release, itch, download page. Clear `build/courses/` of old test files first (only the five shipped courses).
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
