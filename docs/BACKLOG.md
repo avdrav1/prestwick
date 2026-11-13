@@ -1450,6 +1450,41 @@ Done when: rc7 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-12: `/ship-it` cut 0.6.0-rc7 (tag `v0.6.0-rc7`) with E12-S1 (D68): tests 1303/1303, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release, itch.io channels linux and windows, and the download page.
 
+## E13: Famous holes — active
+
+Example courses modelled on famous real holes, renamed (user, 2026-11-13): shipped for players and testers, and used as balance and stress fixtures. Ships in the next release candidate (rc8).
+
+Done when: four example courses ship with the build and on itch, the balance and stress checks run on them, and rc8 is cut.
+
+- [ ] E13-S1 Build "Harbor Links": nine holes over water.
+  - Note: (user, 2026-11-13) example courses built from famous real holes, renamed. Each hole is modelled on a named real hole at its real yardage and par, with its signature feature (water, bunkers, dogleg, elevation), scaled only where the 128 x 128 map (640 yd) forces it; course and hole names are original (no trademarked course names or logos in the game or the file; the real hole each is modelled on may be credited in `docs/courses.md`, which is not shipped). Built like `tests/fixtures/playtest_nine.gd`: a fixture script that lays the course through `CourseBuilder` on generated or flat land, all land owned, the clubhouse placed, cart paths on long walks (D65, D68), every hole legal and open; saved to `courses/<name>.json` by a save-only script.
+  - Accept: the file loads with all nine holes open and no validator issue; every hole plays (a scripted stroke from each tee comes to rest); a guest day on it finishes before dusk at 24 arrivals; its measured reaction mix rates at least 2.5 stars (or the note says which holes are deliberately hard and why); screenshots at 0.175x and of the signature holes at 0.5x, looked at.
+  - Test: `tests/test_example_courses.gd` (one test per course: loads, all open, each hole's par and yardage within 10 yd of its fixture spec).
+  - Touches: `tests/`, `courses/`, `docs/`
+- [ ] E13-S2 Build "Old Grey Links": nine holes of seaside links.
+  - Note: (user, 2026-11-13) example courses built from famous real holes, renamed. Each hole is modelled on a named real hole at its real yardage and par, with its signature feature (water, bunkers, dogleg, elevation), scaled only where the 128 x 128 map (640 yd) forces it; course and hole names are original (no trademarked course names or logos in the game or the file; the real hole each is modelled on may be credited in `docs/courses.md`, which is not shipped). Built like `tests/fixtures/playtest_nine.gd`: a fixture script that lays the course through `CourseBuilder` on generated or flat land, all land owned, the clubhouse placed, cart paths on long walks (D65, D68), every hole legal and open; saved to `courses/<name>.json` by a save-only script.
+  - Accept: the file loads with all nine holes open and no validator issue; every hole plays (a scripted stroke from each tee comes to rest); a guest day on it finishes before dusk at 24 arrivals; its measured reaction mix rates at least 2.5 stars (or the note says which holes are deliberately hard and why); screenshots at 0.175x and of the signature holes at 0.5x, looked at.
+  - Test: `tests/test_example_courses.gd` (one test per course: loads, all open, each hole's par and yardage within 10 yd of its fixture spec).
+  - Touches: `tests/`, `courses/`, `docs/`
+- [ ] E13-S3 Build "Pine Ridge": nine holes of tree-lined parkland.
+  - Note: (user, 2026-11-13) example courses built from famous real holes, renamed. Each hole is modelled on a named real hole at its real yardage and par, with its signature feature (water, bunkers, dogleg, elevation), scaled only where the 128 x 128 map (640 yd) forces it; course and hole names are original (no trademarked course names or logos in the game or the file; the real hole each is modelled on may be credited in `docs/courses.md`, which is not shipped). Built like `tests/fixtures/playtest_nine.gd`: a fixture script that lays the course through `CourseBuilder` on generated or flat land, all land owned, the clubhouse placed, cart paths on long walks (D65, D68), every hole legal and open; saved to `courses/<name>.json` by a save-only script.
+  - Accept: the file loads with all nine holes open and no validator issue; every hole plays (a scripted stroke from each tee comes to rest); a guest day on it finishes before dusk at 24 arrivals; its measured reaction mix rates at least 2.5 stars (or the note says which holes are deliberately hard and why); screenshots at 0.175x and of the signature holes at 0.5x, looked at.
+  - Test: `tests/test_example_courses.gd` (one test per course: loads, all open, each hole's par and yardage within 10 yd of its fixture spec).
+  - Touches: `tests/`, `courses/`, `docs/`
+- [ ] E13-S4 Build "Cliffside": nine holes along the cliffs.
+  - Note: (user, 2026-11-13) example courses built from famous real holes, renamed. Each hole is modelled on a named real hole at its real yardage and par, with its signature feature (water, bunkers, dogleg, elevation), scaled only where the 128 x 128 map (640 yd) forces it; course and hole names are original (no trademarked course names or logos in the game or the file; the real hole each is modelled on may be credited in `docs/courses.md`, which is not shipped). Built like `tests/fixtures/playtest_nine.gd`: a fixture script that lays the course through `CourseBuilder` on generated or flat land, all land owned, the clubhouse placed, cart paths on long walks (D65, D68), every hole legal and open; saved to `courses/<name>.json` by a save-only script.
+  - Accept: the file loads with all nine holes open and no validator issue; every hole plays (a scripted stroke from each tee comes to rest); a guest day on it finishes before dusk at 24 arrivals; its measured reaction mix rates at least 2.5 stars (or the note says which holes are deliberately hard and why); screenshots at 0.175x and of the signature holes at 0.5x, looked at.
+  - Test: `tests/test_example_courses.gd` (one test per course: loads, all open, each hole's par and yardage within 10 yd of its fixture spec).
+  - Touches: `tests/`, `courses/`, `docs/`
+- [ ] E13-S5 Ship the example courses and test on them. They reach players and guard the tuning.
+  - Accept: the four files ship in `build/courses/` and in each itch channel's `courses/`, and the Import page lists them with name, author ("Prestwick"), par and yardage; the download page and `docs/itch-page.md` mention them; `/balance reactions` and `scripts/guest_day.gd` gain a row per course (reaction mix and latest finish at 24 arrivals), reported but not yet targets unless the user picks targets.
+  - Test: `tests/test_example_courses.gd`; the balance output in the commit.
+  - Touches: `scripts/`, `tests/`, `docs/`, `.claude/skills/ship-it/`
+- [ ] E13-S6 Cut the next release candidate (rc8).
+  - Accept: `/ship-it` with the itch push; tag, GitHub pre-release, itch, download page.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
