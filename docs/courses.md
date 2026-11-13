@@ -1,6 +1,6 @@
 # Example courses
 
-The example courses of E13 (Famous holes): each hole is modelled on a famous real hole at its
+The example courses of E13 (Famous holes) and E16's Dogleg Hollow: each hole is modelled on a famous real hole at its
 real par and yardage, with its signature feature, scaled only where the 128 x 128 map (640 yd)
 forces it. The names in the game and in the course files are our own; this file, which does not
 ship, credits the real holes. A number marked "approximate" is from memory and may be off by a
@@ -155,3 +155,53 @@ on two thirds of its reactions, the groups backing up behind the slow 3rd. At 24
 seeds 1 to 10) every group finishes nine, the latest at 524 s (dusk 540). Not modelled: Cypress
 Point's cypresses in the 17th fairway and Pebble Beach 18th's tree, the 7th's ring of bunkers,
 and the real holes' beaches and sea walls.
+
+## Dogleg Hollow (E16-S1)
+
+`courses/dogleg_hollow.json`, built by `tests/fixtures/dogleg_hollow.gd` (DoglegHollow) and saved
+by `scripts/save_dogleg_hollow.gd`. Nine famous doglegs, par 37, 3,545 yd, every hole turning (the
+user, 2026-11-13: "it seems like none of the famous courses have doglegs"). Tree-lined parkland on
+flat ground: every hole plays down its own corridor of rough walled by a belt of trees, so each
+bend reads on the map as a green lane turning through the woods, and each corner holds trees,
+water or sand, so the bold line over it is a gamble. The clubhouse stands on the east edge by the
+1st tee. There is no par 3: a hole under 240 yd on the straight line never turns (D47), so the
+nine is eight par 4s and a par 5.
+
+| Hole | Name | Par | Yards | Turn | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Bite Off | 4 | 434 | 75 left | Mid Ocean Club 5th, "Cape", par 4, about 433 yd (approximate), dogleg left over a lake | A lake fills the inside of the bend along the first leg; the more of it the tee shot bites off, the shorter the approach. |
+| 2 | Willow Pond | 4 | 408 | 81 right | Oakland Hills (South) 16th, par 4, about 405 yd (approximate), dogleg right round a pond | Sharp right round a pond in the corner, trees (the willows) on its inside. |
+| 3 | Sand Sea | 4 | 324 | 70 left | Royal Melbourne (West) 10th, par 4, about 305 yd (approximate), short dogleg left round a great bunker | Short and left round one big bunker that a long drive carries toward the green. |
+| 4 | Shoulder | 4 | 429 | 73 right | Royal Melbourne (West) 6th, par 4, about 428 yd (approximate), dogleg right | Right round bunkers on the shoulder of the corner to a contoured green. |
+| 5 | Chalk Bend | 4 | 373 | 71 right | Royal Portrush (Dunluce) 5th, "White Rocks", par 4, about 374 yd (approximate), dogleg right | Right round bunkers on the corner to a green set out on its own between two more. |
+| 6 | Plank Bunker | 4 | 372 | 69 left | Harbour Town 13th, par 4, about 373 yd (approximate), dogleg left | Left round tall trees to a small green held in a horseshoe of sand. |
+| 7 | Brave Line | 4 | 324 | 71 left | The Belfry (Brabazon) 10th, par 4, about 311 yd (approximate), short dogleg left, drivable over trees and water | Left round a stand of trees; the straight line at the green crosses them and a pond short of the green. |
+| 8 | Twin Elbows | 5 | 519 | 35 right, then left | TPC Sawgrass (Stadium) 11th, par 5, about 558 yd (approximate; its shape too), double dogleg | Right round a waste bunker at the tee shot's bend, then back left past a pond to the green. |
+| 9 | Dune Elbow | 4 | 362 | 51 right | Cypress Point 8th, par 4, about 363 yd (approximate), dogleg right over sand dunes | Right over sand on the corner to a green between two bunkers. |
+
+Yards are the line of play the validator measures (rule 4, D47: tee to the turn 240 yd out, then
+to the cup), each within 3 yd of the real hole's but three: the 3rd and the 7th are set up to 324
+yd, since rule 4 calls anything under 320 yd a par 3; the 8th is scaled to 519 yd (the map's
+north holds about 530 yd of fairway round both bends, and rule 4 measures only the first; its
+straight line from the bend to the cup is 35 degrees off the tee shot's, so the bend reads as a
+turn). Turn is the angle between tee to turn and turn to cup (`DoglegHollow.turn_angle`), at
+least 30 degrees on every hole (`tests/test_example_courses.gd`). The bends were placed so rule 4's
+disc on the straight line holds no fairway and the ring 240 yd out meets each first leg just
+short of its bend, so every hole is measured round its turn and guests aim at the corner (D54).
+
+Walks: five are longer than the least patient guest walks and follow cart paths (2-3, 3-4, 6-7,
+7-8, 8-9); three of those cross another hole's fairway on a 45 degree diagonal, which leaves that
+fairway joined through its corners, so the validator still follows it round its bend.
+`scripts/bridge_audit.gd` flags nothing (no walk or ball detour, no bridge needed;
+`docs/decisions/e16-s1-bridge-audit.txt`). At 24 arrivals, five days (`scripts/guest_day.gd --
+examples`, `/balance reactions`; `docs/decisions/e16-s1-guest-day-examples.txt`,
+`e16-s1-balance-reactions.txt`): praise 0.75, neutral 0.23, complaint 0.01 of 1,080 reactions, a
+rating of 4.49 (4.5 stars), fair, interesting and walk never fail, every group finishes nine, the
+latest at 441 s of the 540 s day.
+
+Not modelled: the real holes' elevation (the course is flat, so every tee shot is seen), the
+Cape's tee shot across the lake from the tee (here the lake lies inside the bend), the sea and the
+cliff behind the Portrush green, Harbour Town's boards (sand only), Royal Melbourne's sand-belt
+bunkering at its scale, Cypress Point's dunes (bunkers), Oakland Hills' willows as willows, and the
+water across the whole front of the Belfry green (here front-left, on the bold line, so the
+fairway runs to the green).

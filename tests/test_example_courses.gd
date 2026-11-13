@@ -3,7 +3,7 @@ extends GutTest
 ## holes open and no validator issue, each hole's par and yardage within 10 yd of its fixture
 ## spec, a scripted stroke from each tee comes to rest, and the file is the fixture rebuilt.
 ## E13-S5: the four ship (packed by the export presets, beside the build and in each itch
-## channel by /ship-it). E15-S1 (D70): they are the famous courses, played from res://courses/
+## channel by /ship-it). E16-S1: Dogleg Hollow, the fifth. E15-S1 (D70): they are the famous courses, played from res://courses/
 ## and never copied; each file carries its id and version, and a changed file must bump it.
 
 const YARD_SLACK: int = 10
@@ -252,11 +252,60 @@ func test_cliffside() -> void:
 			"courses/cliffside.json is out of date: rerun scripts/save_cliffside.gd")
 
 
+## E16-S1: Dogleg Hollow (DoglegHollow), nine famous doglegs. Beyond _check_holes: every hole
+## is measured round its bend (D47) and turns at least MIN_TURN_DEG there, to the side its spec
+## names; every tee shot is seen and every hole has a hazard on its line and a dry way round it
+## (the corner); contoured greens; no walk a guest would complain of (D65, D68); the file is the
+## fixture rebuilt.
+const MIN_TURN_DEG: float = 30.0
+
+
+func test_dogleg_hollow() -> void:
+	var c := _load(DoglegHollow.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, DoglegHollow.COURSE_NAME)
+	assert_eq(c.author, DoglegHollow.COURSE_AUTHOR)
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, DoglegHollow.HOLES)
+	var v := CourseValidator.new()
+	var checks := HoleChecks.new()
+	var par := 0
+	for h: HoleData in c.holes:
+		par += h.par
+		var spec := DoglegHollow.spec_of(h.number)
+		assert_not_null(v.turn_point(c, h), "hole %d is measured round its dogleg" % h.number)
+		var angle := DoglegHollow.turn_angle(c, h, v)
+		assert_gte(absf(angle), MIN_TURN_DEG, "hole %d turns %.0f degrees" % [h.number, angle])
+		assert_eq("right" if angle > 0.0 else "left", spec["turn"], "hole %d turns %s" % [h.number, spec["turn"]])
+		var st := checks.measure(c, h)
+		assert_true(st.fair(), "hole %d tee shot seen (blind at %s)" % [h.number, st.blind_at])
+		assert_true(st.interesting(), "hole %d: a hazard on the line and a dry way round" % h.number)
+		_assert_contoured(c, h)
+	assert_eq(par, DoglegHollow.PAR, "par of the nine")
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+		for p: Array in DoglegHollow.PATHS:
+			if int(p[1]) == int(wk["to_hole"]):
+				assert_true(r.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
+	assert_eq(c.content_hash(), DoglegHollow.course().content_hash(),
+			"courses/dogleg_hollow.json is out of date: rerun scripts/save_dogleg_hollow.gd")
+
+
 # --- E13-S5: the examples ship; E15-S1 (D70): as the famous courses, versioned ---
 
 ## Each example's famous course page line (CourseExport.summary): holes, par, yardage.
 const SUMMARIES := {
 	"cliffside": "9 holes, par 36, 3,353 yd",
+	"dogleg_hollow": "9 holes, par 37, 3,545 yd",
 	"harbor_links": "9 holes, par 35, 3,200 yd",
 	"old_grey_links": "9 holes, par 34, 3,023 yd",
 	"pine_ridge": "9 holes, par 34, 2,935 yd",
@@ -268,15 +317,16 @@ func _fixture_ids() -> Dictionary:
 		"old_grey_links": [OldGreyLinks.COURSE_ID, OldGreyLinks.COURSE_VERSION],
 		"pine_ridge": [PineRidge.COURSE_ID, PineRidge.COURSE_VERSION],
 		"cliffside": [Cliffside.COURSE_ID, Cliffside.COURSE_VERSION],
+		"dogleg_hollow": [DoglegHollow.COURSE_ID, DoglegHollow.COURSE_VERSION],
 	}
 
 
-func test_the_four_examples_are_the_shipped_files() -> void:
+func test_the_famous_courses_are_the_shipped_files() -> void:
 	var ids := Array(FamousCourses.ids())
 	ids.sort()
 	var want := SUMMARIES.keys()
 	want.sort()
-	assert_eq(ids, want, "FamousCourses names the four example courses")
+	assert_eq(ids, want, "FamousCourses names the five famous courses")
 	for id: String in FamousCourses.ids():
 		assert_eq(FamousCourses.spec(id)["file"], "%s.json" % id)
 		assert_true(FileAccess.file_exists(FamousCourses.path(id)), FamousCourses.path(id))
@@ -360,6 +410,8 @@ func test_the_example_courses_have_their_bridges() -> void:
 		["res://courses/pine_ridge.json", 4, [[Vector2i(58, 94), Vector2i(73, 94)]]],
 		["res://courses/cliffside.json", 33, [[Vector2i(52, 108), Vector2i(90, 111)],
 				[Vector2i(9, 87), Vector2i(9, 97)], [Vector2i(32, 86), Vector2i(40, 86)]]],
+		# E16-S1: Dogleg Hollow needs none (scripts/bridge_audit.gd: no walk or ball detour).
+		["res://courses/dogleg_hollow.json", 0, []],
 	]
 	var v := CourseValidator.new()
 	for k: Array in cases:

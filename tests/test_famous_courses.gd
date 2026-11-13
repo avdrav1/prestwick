@@ -1,5 +1,5 @@
 extends GutTest
-## E15-S1 (D70): the famous courses. The four built-in courses carry their id and version, the
+## E15-S1 (D70): the famous courses. The built-in courses (four, and E16-S1's Dogleg Hollow) carry their id and version, the
 ## main menu's Famous courses page lists them and starts a new game on the shipped version (the
 ## starting balance, Day 1, no goals; it asks first over a game under way), E13-S5's copies in the
 ## course folder are tidied away once (unchanged ones removed by their bytes against every
@@ -76,9 +76,9 @@ func _cliffside_at(version: int) -> CourseData:
 
 # --- the courses ---
 
-func test_the_four_ship_with_their_id_and_latest_version() -> void:
+func test_the_five_ship_with_their_id_and_latest_version() -> void:
 	assert_eq(FamousCourses.ids(), PackedStringArray(["harbor_links", "old_grey_links",
-			"pine_ridge", "cliffside"]))
+			"pine_ridge", "cliffside", "dogleg_hollow"]))
 	for id: String in FamousCourses.ids():
 		var errors: Array[String] = []
 		var c := FamousCourses.load_course(id, errors)
@@ -290,8 +290,10 @@ func test_the_menu_lists_the_famous_courses_and_esc_comes_back_to_the_button() -
 		assert_eq(b.focus_mode, Control.FOCUS_ALL)
 	assert_eq(texts, ["Harbor Links: 9 holes, par 35, 3,200 yd",
 			"Old Grey Links: 9 holes, par 34, 3,023 yd", "Pine Ridge: 9 holes, par 34, 2,935 yd",
-			"Cliffside: 9 holes, par 36, 3,353 yd"] as Array[String])
+			"Cliffside: 9 holes, par 36, 3,353 yd",
+			"Dogleg Hollow: 9 holes, par 37, 3,545 yd"] as Array[String])
 	assert_eq(picks[3].text.get_slice("\n", 1), FamousCourses.spec("cliffside")["style"])
+	assert_eq(picks[4].text.get_slice("\n", 1), FamousCourses.spec("dogleg_hollow")["style"])
 	assert_same(m.get_viewport().gui_get_focus_owner(), picks[0], "focus on the first")
 	assert_eq(m.main_menu.famous_notes(), {}, "no save, no note")
 	var ev := InputEventKey.new()
@@ -311,6 +313,22 @@ func test_picking_a_course_on_the_page_starts_it() -> void:
 	m.main_menu.famous_buttons()[1].pressed.emit()
 	assert_false(m.main_menu.visible, "the menu closes")
 	assert_eq(m.course.course_id, "old_grey_links")
+
+
+## E16-S1: Dogleg Hollow, the fifth, is on the page and starts a game on the shipped file with
+## all nine open.
+func test_dogleg_hollow_starts_from_the_page() -> void:
+	var m := _main()
+	m.open_menu()
+	m.main_menu.show_famous()
+	m.main_menu.famous_buttons()[4].pressed.emit()
+	assert_false(m.main_menu.visible, "the menu closes")
+	assert_eq(m.course.course_id, "dogleg_hollow")
+	assert_eq(m.course.course_version, FamousCourses.latest_version("dogleg_hollow"))
+	assert_eq(m.course.content_hash(), _shipped_with_start_balance("dogleg_hollow").content_hash())
+	assert_eq(m.course.holes.size(), 9)
+	for h: HoleData in m.course.holes:
+		assert_true(h.open, "hole %d open" % h.number)
 
 
 func test_a_save_on_an_older_version_loads_as_saved_and_both_pages_say_a_newer_one_ships() -> void:

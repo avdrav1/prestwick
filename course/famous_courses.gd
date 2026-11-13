@@ -1,7 +1,7 @@
 class_name FamousCourses
 extends RefCounted
-## The famous courses (E15-S1, D70): the four example courses of E13 (docs/courses.md), built
-## into the game in res://courses/ (the export presets' include_filter packs courses/*.json)
+## The famous courses (E15-S1, D70): the four example courses of E13 and E16-S1's Dogleg Hollow
+## (docs/courses.md), built into the game in res://courses/ (the export presets' include_filter packs courses/*.json)
 ## and played from there, so each update brings their latest version. The main menu's Famous
 ## courses page lists them and starts a new game on one (Main.start_famous).
 ##
@@ -72,6 +72,16 @@ const COURSES: Array[Dictionary] = [
 			"59b84ddd79f781450ce72423a98b9c1f7fa247ddb52972e09a052dba063c304f",  # 2: rc9
 			"edc064fdc93d4746da5574d1212a400f6cc12eceb24456d14d61e81588a801cb",  # 3: rc10
 			"ee21cf769e659ad7291a6c31764de7703f5db1d696773a0526cf95ab6f4c1b34",  # 4: rc11, id
+		],
+	},
+	{
+		# E16-S1: first shipped in rc12, so its version 1 is that file (never copied by E13-S5).
+		"id": "dogleg_hollow",
+		"file": "dogleg_hollow.json",
+		"name": "Dogleg Hollow",
+		"style": "Nine famous doglegs: every hole bends round a lake, woods or sand.",
+		"versions": [
+			"80d73c51fd0bdd969988a12a50c2e1156df83692217a72ac9a0b9e4d17f91cdf",  # 1: rc12
 		],
 	},
 ]
