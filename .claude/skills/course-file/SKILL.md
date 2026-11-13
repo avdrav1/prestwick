@@ -37,6 +37,8 @@ Clubhouse (version 3, E5-S9, D60): `clubhouse` is the 3x3 clubhouse's centre til
 
 Decor (E5-S3): an optional `decor` list of `[x, y, kind]`, one per tile, kind an index into `CourseData.DECOR_KINDS` (`bench_x`, `bench_y`, `flag`, `sign`). Absent when the course has none, so files without decor are unchanged and stay version 3. Scenery only: nothing that plays reads it.
 
+Bridges (E14-S1, D69): an optional `bridges` list of `[x, y]`, each on a water tile, one per tile (a load refuses one off the map, off water or twice on a tile). Absent when the course has none, so files without bridges are unchanged and stay version 3. The tile stays water: a ball on it is in the water; guests walk it at cart path's speed.
+
 Closed by hand (E8-S1, D64): a hole object may carry `"closed_by_hand": true` (true or false; absent means false, and it is written only when true, so files stay version 3). Since D64 a hole opens itself once it passes every rule; a hole the player closed with Close carries the flag and stays closed until opened by hand. A closed hole that passes and has no flag (every older file) is opened when the builder is made.
 
 Par by hand (E8-S5): a hole object may carry `"par_by_hand": true` (true or false; absent means false, written only when true, so files stay version 3): the player picked its par with the par buttons, so placing its tee or cup in Build keeps that par instead of setting the one its yardage makes.

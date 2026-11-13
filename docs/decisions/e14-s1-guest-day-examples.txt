@@ -1,0 +1,27 @@
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+example courses: 24 guests a day, dusk at 540 s, day seeds 1,2,3,4,5
+Harbor Links day 1: 11 of 11 groups finished nine, latest finish 438 s; praise 155, neutral 57, complaint 4 of 216
+Harbor Links day 2: 10 of 10 groups finished nine, latest finish 452 s; praise 136, neutral 74, complaint 6 of 216
+Harbor Links day 3: 9 of 9 groups finished nine, latest finish 423 s; praise 147, neutral 59, complaint 10 of 216
+Harbor Links day 4: 8 of 8 groups finished nine, latest finish 412 s; praise 157, neutral 51, complaint 8 of 216
+Harbor Links day 5: 10 of 10 groups finished nine, latest finish 474 s; praise 152, neutral 60, complaint 4 of 216
+Old Grey Links day 1: 11 of 11 groups finished nine, latest finish 422 s; praise 161, neutral 51, complaint 4 of 216
+Old Grey Links day 2: 10 of 10 groups finished nine, latest finish 435 s; praise 145, neutral 65, complaint 6 of 216
+Old Grey Links day 3: 9 of 9 groups finished nine, latest finish 409 s; praise 153, neutral 54, complaint 9 of 216
+Old Grey Links day 4: 8 of 8 groups finished nine, latest finish 401 s; praise 171, neutral 41, complaint 4 of 216
+Old Grey Links day 5: 10 of 10 groups finished nine, latest finish 412 s; praise 185, neutral 30, complaint 1 of 216
+Pine Ridge day 1: 11 of 11 groups finished nine, latest finish 421 s; praise 161, neutral 53, complaint 2 of 216
+Pine Ridge day 2: 10 of 10 groups finished nine, latest finish 417 s; praise 150, neutral 57, complaint 9 of 216
+Pine Ridge day 3: 9 of 9 groups finished nine, latest finish 415 s; praise 153, neutral 57, complaint 6 of 216
+Pine Ridge day 4: 8 of 8 groups finished nine, latest finish 413 s; praise 164, neutral 49, complaint 3 of 216
+Pine Ridge day 5: 10 of 10 groups finished nine, latest finish 421 s; praise 170, neutral 44, complaint 2 of 216
+Cliffside day 1: 11 of 11 groups finished nine, latest finish 524 s; praise 143, neutral 69, complaint 4 of 216
+Cliffside day 2: 10 of 10 groups finished nine, latest finish 488 s; praise 141, neutral 67, complaint 8 of 216
+Cliffside day 3: 9 of 9 groups finished nine, latest finish 493 s; praise 126, neutral 78, complaint 12 of 216
+Cliffside day 4: 8 of 8 groups finished nine, latest finish 451 s; praise 163, neutral 48, complaint 5 of 216
+Cliffside day 5: 10 of 10 groups finished nine, latest finish 523 s; praise 132, neutral 81, complaint 3 of 216
+example course Harbor Links: rating of its reaction mix (24 arrivals; reported): 4.32; praise 0.69, neutral 0.28, complaint 0.03 of 1080 reactions, 4.5 stars; fails: fair 0.00, interesting 0.00, pace 0.25, challenge 0.09, walk 0.00; every group finished nine on 5 of 5 days, latest finish 474 s of 540 (days 1 to 5: 438/452/423/412/474)
+example course Old Grey Links: rating of its reaction mix (24 arrivals; reported): 4.46; praise 0.75, neutral 0.22, complaint 0.02 of 1080 reactions, 4.5 stars; fails: fair 0.00, interesting 0.00, pace 0.18, challenge 0.08, walk 0.00; every group finished nine on 5 of 5 days, latest finish 435 s of 540 (days 1 to 5: 422/435/409/401/412)
+example course Pine Ridge: rating of its reaction mix (24 arrivals; reported): 4.44; praise 0.74, neutral 0.24, complaint 0.02 of 1080 reactions, 4.5 stars; fails: fair 0.00, interesting 0.00, pace 0.20, challenge 0.08, walk 0.00; every group finished nine on 5 of 5 days, latest finish 421 s of 540 (days 1 to 5: 421/417/415/413/421)
+example course Cliffside: rating of its reaction mix (24 arrivals; reported): 4.25; praise 0.65, neutral 0.32, complaint 0.03 of 1080 reactions, 4.0 stars; fails: fair 0.00, interesting 0.00, pace 0.26, challenge 0.12, walk 0.00; every group finished nine on 5 of 5 days, latest finish 524 s of 540 (days 1 to 5: 524/488/493/451/523)

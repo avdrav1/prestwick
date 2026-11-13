@@ -4,7 +4,8 @@ rerun after any palette or rule change. Never edit the PNGs: change the rule her
 
 Usage:
   python3 scripts/art_sprites.py            -> every sheet below
-  python3 scripts/art_sprites.py golfer     -> one of: golfer, trees, decor, ball, markers, clubhouse
+  python3 scripts/art_sprites.py golfer     -> one of: golfer, trees, decor, ball, markers, clubhouse,
+                                                bridge
 
 Sheets (each spec in art/specs/ is the contract: frame size, order, anchor):
   golfer     art/sprites/golfer_{idle,walk,swing}.png and golfer_shirts.png (preview)
@@ -13,6 +14,7 @@ Sheets (each spec in art/specs/ is the contract: frame size, order, anchor):
   ball       art/sprites/ball.png         4 x 8x8,  anchor (4, 7)
   markers    art/sprites/hole_markers.png tee_block 8x8, cup 12x6, pin_0..2 16x36
   clubhouse  art/sprites/clubhouse.png    4 x 192x138, anchor (96, 88)
+  bridge     art/sprites/bridge.png       32 x 64x48, anchor (32, 28)
 
 Every sheet is one row, no padding, a 1 px transparent gutter, palette colours only and fully
 opaque or fully clear pixels (the art-spec constants).
@@ -600,8 +602,73 @@ def build_clubhouse(p: dict[str, Color]) -> None:
     save(OUT / "clubhouse.png", ph.sheet([clubhouse_frame(f, p) for f, _ in ph.CLUB_FACINGS]), p)
 
 
+# --- bridge (art/specs/bridge.md) ---------------------------------------------------------------
+
+BW, BH = 64, 48
+BA = (32, 28)
+# The deck stands this many px over the water's surface; its rails this many px over the deck.
+BRIDGE_DECK_Z = 3
+BRIDGE_RAIL_Z = 7
+# A railed side's deck edge, tiles from the centre (an open side runs to the tile's edge, 0.5).
+BRIDGE_INSET = 0.36
+# Sides by bit, as course/bridge_view.gd names them: the neighbour at +x, -x, +y, -y.
+BRIDGE_SIDES = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
+
+def biso(dx: float, dy: float, z: float) -> tuple[float, float]:
+    return (BA[0] + (dx - dy) * 32, BA[1] + (dx + dy) * 16 - z)
+
+
+def bridge_frame(axis: str, rails: int, p: dict[str, Color]) -> Image:
+    """A footbridge deck over one water tile: planks across `axis` ("x": the deck runs along x),
+    a rail on each side whose bit is set in `rails` (that neighbour is open water)."""
+    img = Image(BW, BH)
+    lo_x = -BRIDGE_INSET if rails & 2 else -0.5
+    hi_x = BRIDGE_INSET if rails & 1 else 0.5
+    lo_y = -BRIDGE_INSET if rails & 8 else -0.5
+    hi_y = BRIDGE_INSET if rails & 4 else 0.5
+    z = BRIDGE_DECK_Z
+    deck = [biso(lo_x, lo_y, z), biso(hi_x, lo_y, z), biso(hi_x, hi_y, z), biso(lo_x, hi_y, z)]
+    # The deck's front faces (its +x and +y edges, toward the camera) in earth, the top earth_light.
+    ph.fill_poly(img, [biso(hi_x, lo_y, z), biso(hi_x, hi_y, z), biso(hi_x, hi_y, 0), biso(hi_x, lo_y, 0)],
+                 p["earth"])
+    ph.fill_poly(img, [biso(lo_x, hi_y, z), biso(hi_x, hi_y, z), biso(hi_x, hi_y, 0), biso(lo_x, hi_y, 0)],
+                 p["earth_dark"])
+    ph.fill_poly(img, deck, p["earth_light"])
+    # Planks: seams across the deck every eighth of a tile.
+    k = -0.5 + 0.125
+    while k < 0.5 - 1e-6:
+        if axis == "x" and lo_x < k < hi_x:
+            ph.line(img, biso(k, lo_y, z), biso(k, hi_y, z), p["earth"])
+        if axis == "y" and lo_y < k < hi_y:
+            ph.line(img, biso(lo_x, k, z), biso(hi_x, k, z), p["earth"])
+        k += 0.125
+    ph.outline(img, deck, p["ink"])
+    # Rails: a top bar on posts along each railed side.
+    for bit, (sx, sy) in enumerate(BRIDGE_SIDES):
+        if not rails & (1 << bit):
+            continue
+        if sx != 0:
+            x = hi_x if sx > 0 else lo_x
+            a, b = (x, lo_y), (x, hi_y)
+        else:
+            y = hi_y if sy > 0 else lo_y
+            a, b = (lo_x, y), (hi_x, y)
+        for t in (0.0, 0.5, 1.0):
+            px, py = a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+            ph.line(img, biso(px, py, z), biso(px, py, z + BRIDGE_RAIL_Z), p["earth_dark"])
+        ph.line(img, biso(a[0], a[1], z + BRIDGE_RAIL_Z), biso(b[0], b[1], z + BRIDGE_RAIL_Z), p["earth"])
+        ph.line(img, biso(a[0], a[1], z + BRIDGE_RAIL_Z + 1), biso(b[0], b[1], z + BRIDGE_RAIL_Z + 1), p["ink"])
+    return img
+
+
+def build_bridge(p: dict[str, Color]) -> None:
+    frames = [bridge_frame(axis, rails, p) for axis in ("x", "y") for rails in range(16)]
+    save(OUT / "bridge.png", ph.sheet(frames), p)
+
+
 BUILDERS = {"golfer": build_golfer, "trees": build_trees, "decor": build_decor, "ball": build_ball,
-            "markers": build_markers, "clubhouse": build_clubhouse}
+            "markers": build_markers, "clubhouse": build_clubhouse, "bridge": build_bridge}
 
 
 def main(argv: list[str]) -> int:

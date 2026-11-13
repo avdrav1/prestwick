@@ -54,6 +54,8 @@ var messages_shown: int = 0
 
 ## Color of a hint or a refusal.
 @export var refuse_font_color: Color = Color8(240, 160, 150)
+## E14-S1: the hint line's colour when it is a note, not a refusal (the bridge's price): chalk.
+@export var note_font_color: Color = Color8(240, 236, 224)
 ## Pixels between the confirm and the clicked tile on screen.
 @export var confirm_gap: float = 12.0
 ## Pixels the confirm keeps from the viewport's edge when the corner is near or past it.
@@ -291,6 +293,10 @@ func refresh() -> void:
 	parcel_label.text = _parcel_line(b)
 	parcel_label.visible = not parcel_label.text.is_empty()
 	var hint: String = "" if _tool.tool == BuildTool.Tool.BUY else _tool.hover_hint()
+	var note: bool = hint.is_empty()
+	if note:
+		hint = _tool.hover_note()  # E14-S1: the Cart path brush over water builds a bridge
+	hint_label.add_theme_color_override("font_color", note_font_color if note else refuse_font_color)
 	hint_label.text = "" if hint.is_empty() else "%s: %s" % [TOOL_NAMES[_tool.tool], hint]
 	hint_label.visible = not hint.is_empty()
 	message_label.visible = _message_left > 0.0

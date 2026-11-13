@@ -91,6 +91,14 @@ extends RefCounted
 ## in its own step: spreads it over its basin, charged as a paint, or drains it to rough when it
 ## now reaches a drain. Loaded water is kept as it is. `level_water` false paints water as before
 ## D66 (fixtures that lay water on flat ground); the game never sets it.
+##
+## Bridges (E14-S1, D69): painting cart path on an owned water tile builds a footbridge there
+## (CourseData.set_bridge; the tile stays water at its level) at EconomyTuning.bridge_tile_price,
+## in the same step as the rest of the dab; painting any other surface on a bridge removes it
+## with the tile's change, and painting water on one removes it at water's price (the flood
+## spreads round it as round any water). Re-levelled water keeps its bridges and drained water
+## loses them (CourseData.set_tile drops a bridge off water). An undo step records each tile's
+## bridge with its old value (BRIDGE_BIT), so undo puts every bridge back as the step found it.
 
 ## Emitted after tiles are written (by an edit or an undo), with every tile that changed.
 signal tiles_changed(cells: Array[Vector2i])
@@ -140,6 +148,9 @@ const RUNS_OFF: String = "water would run off: dig a hollow first"
 const FLOODS: String = "water would flood %s: raise the ground round it first"
 ## D66: the reason a raise or lower with only water under the brush is refused.
 const KEEPS_LEVEL: String = "water keeps its level: paint it first"
+## E14-S1: in an undo step's tile record (height << 4 | surface), set when the tile held a
+## bridge. Above the packed byte, so it never reads as a height or a surface.
+const BRIDGE_BIT: int = 1 << 8
 
 
 ## One undo step: each tile's packed (height << 4 | surface) before the step, the holes
@@ -407,6 +418,8 @@ func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 		return false
 	if surface == Surface.Type.WATER and level_water:
 		return _paint_water(center, size)
+	if surface == Surface.Type.CART_PATH:
+		return _paint_path(center, size)
 	var cells: Array[Vector2i] = _paint_cells(center, surface, size)
 	var cost: int = cells.size() * _economy.price_of(surface)
 	if _refuse(money_refusal(cost)):
@@ -414,7 +427,50 @@ func paint(center: Vector2i, surface: Surface.Type, size: int) -> bool:
 	var tiles := {}
 	for c: Vector2i in cells:
 		_write(tiles, c, _course.get_height(c.x, c.y), surface)
+		if surface == Surface.Type.WATER:
+			_course.set_bridge(c, false)  # water on a bridge takes it away (D69)
 	return _commit(tiles, cost)
+
+
+## E14-S1 (D69): paints cart path, building a bridge on each owned water tile under the brush
+## that has none (bridge_tile_price) and path on the rest that is not path (path's price).
+func _paint_path(center: Vector2i, size: int) -> bool:
+	var split: Array = _path_cells(center, size)
+	var path: Array[Vector2i] = split[0]
+	var bridges: Array[Vector2i] = split[1]
+	var cost: int = path.size() * _economy.price_of(Surface.Type.CART_PATH) \
+			+ bridges.size() * _economy.bridge_tile_price
+	if _refuse(money_refusal(cost)):
+		return false
+	var tiles := {}
+	for c: Vector2i in path:
+		_write(tiles, c, _course.get_height(c.x, c.y), Surface.Type.CART_PATH)
+	for c: Vector2i in bridges:
+		_write(tiles, c, _course.get_height(c.x, c.y), Surface.Type.WATER)
+		_course.set_bridge(c, true)
+	return _commit(tiles, cost)
+
+
+## E14-S1: the owned tiles under the brush that cart path would change, [path, bridges]: the
+## tiles that are neither path nor water (they become path) and the water tiles with no bridge
+## (each gets one).
+func _path_cells(center: Vector2i, size: int) -> Array:
+	var path: Array[Vector2i] = []
+	var bridges: Array[Vector2i] = []
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
+		var s: Surface.Type = _course.get_surface(c.x, c.y)
+		if s == Surface.Type.WATER:
+			if not _course.is_bridge(c.x, c.y):
+				bridges.append(c)
+		elif s != Surface.Type.CART_PATH:
+			path.append(c)
+	return [path, bridges]
+
+
+## E14-S1: how many water tiles under a brush of `size` on `center` painting cart path would
+## build a bridge on (the Cart path tool's hover says so).
+func bridge_count(center: Vector2i, size: int) -> int:
+	return (_path_cells(center, size)[1] as Array).size()
 
 
 ## What painting `surface` with a brush of `size` on `center` would cost now (E4-S2): its price
@@ -424,7 +480,14 @@ func paint_cost(center: Vector2i, surface: Surface.Type, size: int) -> int:
 		return 0
 	if surface == Surface.Type.WATER and level_water:
 		var plan: Array = _plan_water(center, size)
-		return 0 if not (plan[1] as String).is_empty() else (plan[0] as Dictionary).size() * _economy.price_of(surface)
+		var gone: int = _bridged_cells(center, size).size()
+		if not (plan[1] as String).is_empty() and (gone == 0 or (plan[1] as String) != RUNS_OFF):
+			return 0
+		return ((plan[0] as Dictionary).size() + gone) * _economy.price_of(surface)
+	if surface == Surface.Type.CART_PATH:
+		var split: Array = _path_cells(center, size)
+		return (split[0] as Array).size() * _economy.price_of(surface) \
+				+ (split[1] as Array).size() * _economy.bridge_tile_price
 	return _paint_cells(center, surface, size).size() * _economy.price_of(surface)
 
 
@@ -488,7 +551,7 @@ func stroke_start_heights() -> Dictionary:
 		return out
 	for c: Vector2i in _stroke.tiles:
 		var packed: int = _stroke.tiles[c]
-		out[c] = packed >> 4
+		out[c] = (packed >> 4) & 0x0F
 	return out
 
 
@@ -957,9 +1020,13 @@ func undo() -> bool:
 	for c: Vector2i in step.tiles:
 		var packed: int = step.tiles[c]
 		if lines_back:
-			_write_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
+			_write_tile(c, (packed >> 4) & 0x0F, (packed & 0x0F) as Surface.Type)
 		else:
-			_set_tile(c, packed >> 4, (packed & 0x0F) as Surface.Type)
+			_set_tile(c, (packed >> 4) & 0x0F, (packed & 0x0F) as Surface.Type)
+		# E14-S1: the bridge as the step found it (a write off water already dropped one).
+		var bridged: bool = (packed & BRIDGE_BIT) != 0
+		if bridged != _course.is_bridge(c.x, c.y):
+			_course.set_bridge(c, bridged)
 		cells.append(c)
 	if not cells.is_empty():
 		tiles_changed.emit(cells)
@@ -1031,20 +1098,42 @@ func _lift(center: Vector2i, size: int, delta: int) -> bool:
 ## D66: paints water as a flood (_plan_water), charged water's price per tile it changes.
 func _paint_water(center: Vector2i, size: int) -> bool:
 	var plan: Array = _plan_water(center, size)
-	if _refuse(plan[1]):
+	if plan[1] != RUNS_OFF and _refuse(plan[1]):
 		return false
 	var writes: Dictionary = plan[0]
-	var cost: int = writes.size() * _economy.price_of(Surface.Type.WATER)
+	# E14-S1 (D69): water painted on a bridge takes it away, at water's price.
+	var gone: Array[Vector2i] = _bridged_cells(center, size)
+	if not gone.is_empty() and plan[1] == RUNS_OFF:
+		plan[1] = ""
+	if _refuse(plan[1]):
+		return false
+	var cost: int = (writes.size() + gone.size()) * _economy.price_of(Surface.Type.WATER)
 	if _refuse(money_refusal(cost)):
 		return false
 	# A flood may write thousands of tiles: read each old value from the packed tiles once.
 	var tiles := {}
 	var packed: PackedByteArray = _course.packed_tiles()
 	var w: int = _course.width
+	var any_bridge: bool = _course.has_bridges()
 	for c: Vector2i in writes:
-		tiles[c] = packed[c.y * w + c.x]
+		tiles[c] = packed[c.y * w + c.x] | (BRIDGE_BIT if any_bridge and _course.is_bridge(c.x, c.y) else 0)
 		_set_tile(c, writes[c], Surface.Type.WATER)
+	for c: Vector2i in gone:
+		if not tiles.has(c):
+			tiles[c] = packed[c.y * w + c.x] | BRIDGE_BIT
+		_course.set_bridge(c, false)
 	return _commit(tiles, cost)
+
+
+## E14-S1: the owned bridge tiles under a brush of `size` on `center`.
+func _bridged_cells(center: Vector2i, size: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not _course.has_bridges():
+		return out
+	for c: Vector2i in _owned_cells(brush_cells(center, size)):
+		if _course.is_bridge(c.x, c.y):
+			out.append(c)
+	return out
 
 
 ## D66: what painting water with a brush of `size` on `center` would write, [writes, refusal]:
@@ -1156,7 +1245,8 @@ func _plan_relevel(cells: Array[Vector2i], delta: int) -> Array:
 func _paint_cells(center: Vector2i, surface: Surface.Type, size: int) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c: Vector2i in _owned_cells(brush_cells(center, size)):
-		if _course.get_surface(c.x, c.y) != surface:
+		if _course.get_surface(c.x, c.y) != surface \
+				or (surface == Surface.Type.WATER and _course.is_bridge(c.x, c.y)):
 			out.append(c)
 	return out
 
@@ -1179,7 +1269,8 @@ func _lift_cells(center: Vector2i, size: int, delta: int) -> Array[Vector2i]:
 ## Records the tile's old value in `tiles` (first write wins) and writes the new one.
 func _write(tiles: Dictionary, c: Vector2i, h: int, s: Surface.Type) -> void:
 	if not tiles.has(c):
-		tiles[c] = (_course.get_height(c.x, c.y) << 4) | _course.get_surface(c.x, c.y)
+		tiles[c] = (_course.get_height(c.x, c.y) << 4) | _course.get_surface(c.x, c.y) \
+				| (BRIDGE_BIT if _course.is_bridge(c.x, c.y) else 0)
 	_set_tile(c, h, s)
 
 

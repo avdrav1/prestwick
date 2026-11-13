@@ -18,7 +18,16 @@ extends Resource
 ##   is_parcel_owned(p), is_owned(x, y) (off-map tiles are never owned), land_budget,
 ##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s),
 ##   has_clubhouse(), clubhouse, clubhouse_facing, clubhouse_cells(), is_clubhouse(x, y),
-##   clubhouse_door(), clubhouse_revision, decor_at(x, y), decor_cells(), decor_revision.
+##   clubhouse_door(), clubhouse_revision, decor_at(x, y), decor_cells(), decor_revision,
+##   is_bridge(x, y), bridge_cells(), has_bridges(), bridge_revision.
+##
+## Bridges (E14-S1, D69): a footbridge stands on a water tile, one per tile, built by painting
+## cart path on water. The tile stays water at its level, so the ball and every reader of water
+## treat it as water (a ball that lands on a bridge is in the water); guests walk it at cart
+## path's speed (guests/guest_walk.gd). A bridge stands only on water: set_tile turning the tile
+## to anything else drops it. It is an optional field of version 3 ("bridges", a list of [x, y];
+## absent when there is none), so a course without bridges writes the same file as before and
+## an older game reading one with bridges only drops them.
 ##
 ## Decor (E5-S3, art/specs/decor.md): benches, flags and signs placed on tiles, one per tile, by
 ## kind (an index into DECOR_KINDS, the decor sheet's frame order). Decor is scenery only: the
@@ -32,7 +41,7 @@ extends Resource
 ## room was found for it): then no guests come.
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
-## set_info, set_parcel_owned, set_land_budget, set_clubhouse and set_decor (CLAUDE.md Architecture). Tests may call
+## set_info, set_parcel_owned, set_land_budget, set_clubhouse, set_decor and set_bridge (CLAUDE.md Architecture). Tests may call
 ## them to build fixtures.
 ##
 ## Serialised as course format version 3 (.claude/skills/course-file/SKILL.md):
@@ -148,6 +157,9 @@ var _clubhouse_revision: int = 0
 ## E5-S3: tile -> decor kind.
 var _decor: Dictionary = {}
 var _decor_revision: int = 0
+## E14-S1: bridge tiles (Vector2i -> true), each on a water tile.
+var _bridges: Dictionary = {}
+var _bridge_revision: int = 0
 ## One counter per Surface.Type (surface_revision).
 var _surface_revisions := PackedInt32Array()
 
@@ -286,6 +298,32 @@ func decor_cells() -> Array[Vector2i]:
 	return out
 
 
+## E14-S1: counts bridge writes (set_bridge, and set_tile dropping one). Not saved, not part of
+## the content.
+var bridge_revision: int:
+	get:
+		return _bridge_revision
+
+
+## E14-S1 (D69): true when a footbridge stands on tile (x, y) (always a water tile).
+func is_bridge(x: int, y: int) -> bool:
+	return not _bridges.is_empty() and _bridges.has(Vector2i(x, y))
+
+
+## E14-S1: true when the course has any bridge.
+func has_bridges() -> bool:
+	return not _bridges.is_empty()
+
+
+## E14-S1: every bridge tile, sorted by y then x.
+func bridge_cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell: Vector2i in _bridges:
+		out.append(cell)
+	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y < b.y or (a.y == b.y and a.x < b.x))
+	return out
+
+
 ## True when the course has a clubhouse (D60).
 func has_clubhouse() -> bool:
 	return _clubhouse != NO_CLUBHOUSE
@@ -379,6 +417,7 @@ func copy() -> CourseData:
 	c._clubhouse = _clubhouse
 	c._clubhouse_facing = _clubhouse_facing
 	c._decor = _decor.duplicate()
+	c._bridges = _bridges.duplicate()
 	c._replace_holes(_holes)
 	return c
 
@@ -408,6 +447,11 @@ func to_dict() -> Dictionary:
 		for cell: Vector2i in decor_cells():
 			items.append([cell.x, cell.y, _decor[cell]])
 		out["decor"] = items
+	if not _bridges.is_empty():
+		var cells: Array = []
+		for cell: Vector2i in bridge_cells():
+			cells.append([cell.x, cell.y])
+		out["bridges"] = cells
 	return out
 
 
@@ -424,6 +468,9 @@ func set_tile(x: int, y: int, tile_height: int, surface: Surface.Type) -> void:
 	if (was & 0x0F) != surface:
 		_surface_revisions[was & 0x0F] += 1
 		_surface_revisions[surface] += 1
+		# E14-S1: a bridge stands only on water.
+		if surface != Surface.Type.WATER and not _bridges.is_empty() and _bridges.erase(Vector2i(x, y)):
+			_bridge_revision += 1
 	_tiles[i] = _pack(tile_height, surface)
 	_revision += 1
 
@@ -479,6 +526,20 @@ func set_decor(cell: Vector2i, kind: int) -> void:
 	else:
 		_decor[cell] = kind
 	_decor_revision += 1
+
+
+## E14-S1 (D69): builds (`on`) or removes a footbridge on `cell`, which must be water to build
+## one. Where one may stand is the builder's rule (CourseBuilder.paint with cart path on water).
+func set_bridge(cell: Vector2i, on: bool) -> void:
+	assert(in_bounds(cell.x, cell.y), "bridge off the map")
+	assert(not on or get_surface(cell.x, cell.y) == Surface.Type.WATER, "a bridge stands on water")
+	if on == _bridges.has(cell):
+		return
+	if on:
+		_bridges[cell] = true
+	else:
+		_bridges.erase(cell)
+	_bridge_revision += 1
 
 
 # --- load ---
@@ -545,6 +606,7 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 		return null
 	var house := _read_clubhouse(data, w, h, errors)
 	var decor := _read_decor(data, w, h, errors)
+	var bridges := _read_bridges(data, w, h, tiles, errors)
 	if errors.size() > start:
 		return null
 
@@ -580,8 +642,44 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	c._clubhouse = house[0]
 	c._clubhouse_facing = house[1]
 	c._decor = decor
+	c._bridges = bridges
 	c._replace_holes(parsed_holes)
 	return c
+
+
+## Reads the optional "bridges" field (E14-S1): a list of [x, y], each on a water tile of the
+## map, one per tile.
+static func _read_bridges(data: Dictionary, w: int, h: int, tiles: PackedByteArray,
+		errors: Array[String]) -> Dictionary:
+	var out := {}
+	if not data.has("bridges"):
+		return out
+	var v: Variant = data["bridges"]
+	if typeof(v) != TYPE_ARRAY:
+		errors.append("bridges must be a list of [x, y]")
+		return out
+	for item: Variant in v:
+		if typeof(item) != TYPE_ARRAY or (item as Array).size() != 2:
+			errors.append("bridges: each item must be [x, y]")
+			continue
+		var a: Array = item
+		var nums: Array[int] = []
+		for k: int in 2:
+			if typeof(a[k]) == TYPE_INT or (typeof(a[k]) == TYPE_FLOAT and float(a[k]) == floorf(a[k])):
+				nums.append(int(a[k]))
+		if nums.size() != 2:
+			errors.append("bridges: %s must be two whole numbers" % [a])
+			continue
+		var cell := Vector2i(nums[0], nums[1])
+		if cell.x < 0 or cell.y < 0 or cell.x >= w or cell.y >= h:
+			errors.append("bridges: (%d, %d) off the %dx%d map" % [cell.x, cell.y, w, h])
+		elif (tiles[cell.y * w + cell.x] & 0x0F) != Surface.Type.WATER:
+			errors.append("bridges: (%d, %d) is not water" % [cell.x, cell.y])
+		elif out.has(cell):
+			errors.append("bridges: two on (%d, %d)" % [cell.x, cell.y])
+		else:
+			out[cell] = true
+	return out
 
 
 ## Reads the optional "decor" field (E5-S3): a list of [x, y, kind] on the map, one per tile.

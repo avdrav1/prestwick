@@ -184,6 +184,8 @@ var clubhouse: ClubhouseView
 var trees: TreeView
 ## Benches, flags and signs (E5-S3).
 var decor: DecorView
+## Footbridges over water (E14-S1).
+var bridges: BridgeView
 ## The line of play (E3-S46): Main enables it in Build.
 var play_lines: LineOfPlay
 
@@ -217,6 +219,8 @@ func _init() -> void:
 	add_child(trees)
 	decor = DecorView.new()
 	add_child(decor)
+	bridges = BridgeView.new()
+	add_child(bridges)
 	topo = TopoOverlay.new()
 	add_child(topo)
 	play_lines = LineOfPlay.new()
@@ -268,6 +272,7 @@ func show_course(c: CourseData) -> void:
 	refresh_clubhouse()
 	trees.show_course(c)
 	decor.show_course(c)
+	bridges.show_course(c)
 	show_issues({})
 
 
@@ -749,6 +754,10 @@ func refresh_cells(cells: Array[Vector2i]) -> void:
 		# E5-S15: the decor stands on the drawn ground, which only a height or water moves.
 		if _course.decor_cells().size() > 0:
 			decor.refresh()
+		# E14-S1: a bridge stands on the water's level, and its rails read the water beside it.
+		if _course.has_bridges():
+			bridges.refresh()
+	bridges.refresh(false)  # E14-S1: only when a bridge was built or taken away
 	_drain(terrain.tuning.refresh_tiles_per_frame)
 
 

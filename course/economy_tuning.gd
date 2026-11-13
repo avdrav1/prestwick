@@ -19,6 +19,8 @@ const STARS_MAX: float = 5.0
 var tile_price: PackedInt32Array = PackedInt32Array()
 ## Dollars for one step of height raised or lowered on one tile.
 var height_step_price: int = 0
+## E14-S1 (D69): dollars to build a footbridge on one water tile (cart path painted on water).
+var bridge_tile_price: int = 0
 var tee_marker_price: int = 0
 var cup_price: int = 0
 var upkeep_per_open_hole: int = 0
@@ -60,6 +62,7 @@ static func from_dict(data: Dictionary) -> EconomyTuning:
 		for i in Surface.COUNT:
 			t.tile_price[i] = CourseData.read_int(tiles, Surface.NAMES[i], e, "tile_price")
 	t.height_step_price = CourseData.read_int(data, "height_step_price", e)
+	t.bridge_tile_price = CourseData.read_int(data, "bridge_tile_price", e)
 	t.tee_marker_price = CourseData.read_int(data, "tee_marker_price", e)
 	t.cup_price = CourseData.read_int(data, "cup_price", e)
 	t.upkeep_per_open_hole = CourseData.read_int(data, "upkeep_per_open_hole", e)
@@ -80,7 +83,7 @@ static func from_dict(data: Dictionary) -> EconomyTuning:
 	for i in Surface.COUNT:
 		if t.tile_price[i] < 0:
 			e.append("tile_price: %s must be 0 or more" % Surface.NAMES[i])
-	for key: String in ["height_step_price", "tee_marker_price", "cup_price", "upkeep_per_open_hole",
+	for key: String in ["height_step_price", "bridge_tile_price", "tee_marker_price", "cup_price", "upkeep_per_open_hole",
 			"fee_ceiling_per_star", "start_fee", "arrivals_base", "arrivals_per_star"]:
 		if int(t.get(key)) < 0:
 			e.append("%s must be 0 or more" % key)

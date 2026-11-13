@@ -297,6 +297,18 @@ func hover_hint() -> String:
 	return builder.edit_refusal(_hover, brush_size)
 
 
+## E14-S1 (D69): what a click with the current tool on the hovered tile would do that the
+## player should know first, or "": with the Paint tool on cart path over water, "builds a
+## bridge, $31 a tile" (EconomyTuning.bridge_tile_price; no price in New sandbox).
+func hover_note() -> String:
+	if builder == null or _hover == TilePicker.NONE or tool != Tool.PAINT \
+			or surface != Surface.Type.CART_PATH or builder.bridge_count(_hover, brush_size) == 0:
+		return ""
+	if builder.has_unlimited_money():
+		return "builds a bridge"
+	return "builds a bridge, %s a tile" % LandPrices.money(builder.economy.bridge_tile_price)
+
+
 ## The facing the Clubhouse tool moves the clubhouse with: the one it has (CourseData.FACINGS
 ## index), or the rule's +y when the course has none.
 func clubhouse_facing() -> int:

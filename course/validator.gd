@@ -7,7 +7,8 @@ extends RefCounted
 ##   1. Exactly one tee and one cup.
 ##   2. Cup sits on a green tile.
 ##   3. A path of non-water, non-OB tiles connects tee to cup (4 neighbours, heights ignored).
-##      A tile on an unowned parcel counts as OB (D30, E6-S4).
+##      A tile on an unowned parcel counts as OB (D30, E6-S4). A bridge crosses its water
+##      (E14-S1, D69).
 ##   4. Yardage matches par (par 3 < 320, par 5 > 470), on the rounded line of play (D47): the
 ##      straight tee-to-cup line, or for a dogleg tee -> turn_point -> cup.
 ##   5. No tee inside another hole's landing zone (a disc on the line of play of each hole of
@@ -98,6 +99,9 @@ class Reach:
 		for i in grid.size():
 			var s: int = grid[i]
 			_passable[i] = 0 if s == Surface.Type.WATER or s == Surface.Type.OOB else 1
+		# E14-S1 (D69): a bridge crosses its water.
+		for b: Vector2i in course.bridge_cells():
+			_passable[b.y * _w + b.x] = 1
 		# Unowned land is OB for the path (D30): clear each unowned parcel's tiles.
 		for q: int in course.parcels_high:
 			for p: int in course.parcels_wide:
@@ -121,9 +125,7 @@ class Reach:
 			var i: int = _index(c)
 			if i < 0:
 				continue
-			var s: Surface.Type = course.get_surface(c.x, c.y)
-			var p: int = 1 if course.is_owned(c.x, c.y) and s != Surface.Type.WATER \
-					and s != Surface.Type.OOB else 0
+			var p: int = 1 if CourseValidator._crossable(course, c) else 0
 			if p != _passable[i]:
 				_passable[i] = p
 				changed = true
@@ -680,7 +682,9 @@ static func _crossable(course: CourseData, tile: Vector2i) -> bool:
 	if not course.is_owned(tile.x, tile.y):
 		return false
 	var s: Surface.Type = course.get_surface(tile.x, tile.y)
-	return s != Surface.Type.WATER and s != Surface.Type.OOB
+	if s == Surface.Type.WATER:
+		return course.is_bridge(tile.x, tile.y)  # E14-S1 (D69): a bridge crosses its water
+	return s != Surface.Type.OOB
 
 
 ## The first water, OB or unowned tile on a 4-connected walk along the tee-to-cup line. A walk with
