@@ -22,9 +22,18 @@ line): Harbor Links over the 1st's, 2nd's and 6th's creeks and from the 9th tee'
 west lake to the island green (the walkway at its back stays); Old Grey Links over the 1st's burn
 and both of the 3rd's (beside the 9th's, which it had); Pine Ridge over the 5th's creek before its
 green and the 7th's, the Footbridge; Cliffside straight over the cove on the 7th, The Crossing.
-Every hole passes rule 7. At 24 arrivals, five days: Harbor Links 4.37, Old Grey Links 4.47, Pine
-Ridge 4.42, Cliffside 4.26 (4.5 stars), every group finishing nine, the latest at 468, 431, 437 and
-530 s (`docs/decisions/e14-s3-balance-reactions.txt`).
+E14-S5 audited them (`scripts/bridge_audit.gd`: every walk of a round and where three days of
+guests' balls came to rest, against the straight line with no water) and gave them the bridges it
+asked for, where a golfer would cross: Old Grey Links' home burn bridge, off the 9th tee on the
+line to the fairway, now reaches both banks (its west end stood on the water, so nobody crossed);
+Cliffside gained one over the 3rd's chasm from the fairway's end to the green's front (22% of the
+hole's balls were walked up to 139 yd round its head) and one over the inlet where the 5th's slices
+come down on the far bank (a 175 yd walk round while the groups behind waited). Harbor Links and
+Pine Ridge needed none: no walk of a round goes more than 1.3 times its straight line, and no hole
+sends over 5% of its balls round water. The Crossing stays the one long bridge (115 yd): the walk
+round the bay is 300 yd. Every hole passes rule 7. At 24 arrivals, five days: Harbor Links 4.37,
+Old Grey Links 4.46, Pine Ridge 4.42, Cliffside 4.25 (4.5 stars), every group finishing nine, the
+latest at 468, 432, 437 and 522 s (`docs/decisions/e14-s5-balance-reactions.txt`).
 
 ## Old Grey Links (E13-S2)
 

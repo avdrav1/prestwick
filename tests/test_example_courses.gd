@@ -366,15 +366,20 @@ func test_main_added_by_a_test_installs_nothing() -> void:
 ## E14-S3 (D69): each example course carries its footbridges where its lines cross water (Harbor
 ## Links' island green and creeks, Old Grey Links' burns, Pine Ridge's creeks, Cliffside's cove),
 ## every one on a water tile; every hole passes rule 7, on foot; and a walk across each bridged
-## water goes over its bridge, dry, near the straight line.
+## water goes over its bridge, dry, near the straight line. E14-S5: the bridges the audit
+## (scripts/bridge_audit.gd) asked for: Old Grey Links' home burn bridge laid bank to bank,
+## Cliffside's over the 3rd's chasm and the inlet beside the 5th; and every bridge crosses (its
+## banks lie farther apart than it is long, so none ends on the water).
 func test_the_example_courses_have_their_bridges() -> void:
 	var tuning := GuestTuning.load_default()
-	# [path, bridge tiles at least, a walk across bridged water: from tile, to tile].
+	# [path, bridge tiles at least, walks across bridged water: [from tile, to tile], ...].
 	var cases: Array = [
-		["res://courses/harbor_links.json", 20, Vector2i(30, 50), Vector2i(28, 73)],
-		["res://courses/old_grey_links.json", 8, Vector2i(118, 50), Vector2i(118, 70)],
-		["res://courses/pine_ridge.json", 4, Vector2i(58, 94), Vector2i(73, 94)],
-		["res://courses/cliffside.json", 20, Vector2i(52, 108), Vector2i(90, 111)],
+		["res://courses/harbor_links.json", 23, [[Vector2i(30, 50), Vector2i(28, 73)]]],
+		["res://courses/old_grey_links.json", 11, [[Vector2i(118, 50), Vector2i(118, 70)],
+				[Vector2i(70, 56), Vector2i(74, 56)]]],
+		["res://courses/pine_ridge.json", 4, [[Vector2i(58, 94), Vector2i(73, 94)]]],
+		["res://courses/cliffside.json", 33, [[Vector2i(52, 108), Vector2i(90, 111)],
+				[Vector2i(9, 87), Vector2i(9, 97)], [Vector2i(32, 86), Vector2i(40, 86)]]],
 	]
 	var v := CourseValidator.new()
 	for k: Array in cases:
@@ -382,17 +387,54 @@ func test_the_example_courses_have_their_bridges() -> void:
 		assert_gte(c.bridge_cells().size(), k[1], "%s: its bridges" % c.course_name)
 		for t: Vector2i in c.bridge_cells():
 			assert_eq(c.get_surface(t.x, t.y), Surface.Type.WATER)
+		_assert_bridges_cross(c)
 		for h: HoleData in c.holes:
 			for i: CourseValidator.Issue in v.check_hole(c, h):
 				assert_ne(i.rule, 7, "%s hole %d: %s" % [c.course_name, h.number, i.reason])
 			assert_true(h.open)
-		var from := (Vector2(k[2]) + Vector2(0.5, 0.5)) * 5.0
-		var to := (Vector2(k[3]) + Vector2(0.5, 0.5)) * 5.0
-		var w := GuestWalk.route(c, from, to, tuning)
-		assert_gt(w.path_yd, 0.0, "%s: the walk crosses a bridge" % c.course_name)
-		assert_lt(w.length, from.distance_to(to) * 1.3, "%s: near the straight line, %.0f yd" % [c.course_name, w.length])
-		var t := 0.0
-		while t < w.duration:
-			var p := w.point_at_time(t)
-			assert_true(GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)), "dry at %s" % p)
-			t += 0.05
+		for ends: Array in k[2]:
+			var from := (Vector2(ends[0]) + Vector2(0.5, 0.5)) * 5.0
+			var to := (Vector2(ends[1]) + Vector2(0.5, 0.5)) * 5.0
+			var w := GuestWalk.route(c, from, to, tuning)
+			assert_gt(w.path_yd, 0.0, "%s: the walk %s crosses a bridge" % [c.course_name, ends])
+			assert_lt(w.length, from.distance_to(to) * 1.3, "%s: %s near the straight line, %.0f yd" % [
+					c.course_name, ends, w.length])
+			var t := 0.0
+			while t < w.duration:
+				var p := w.point_at_time(t)
+				assert_true(GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)), "dry at %s" % p)
+				t += 0.05
+
+
+## E14-S5: every 4-connected run of bridge tiles on `c` reaches land at both ends: the land tiles
+## beside it lie farther apart than the run is long (as scripts/bridge_audit.gd checks).
+func _assert_bridges_cross(c: CourseData) -> void:
+	var left := {}
+	for t: Vector2i in c.bridge_cells():
+		left[t] = true
+	var sides: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	for t0: Vector2i in c.bridge_cells():
+		if not left.has(t0):
+			continue
+		left.erase(t0)
+		var todo: Array[Vector2i] = [t0]
+		var lo := t0
+		var hi := t0
+		var banks: Array[Vector2i] = []
+		while not todo.is_empty():
+			var p: Vector2i = todo.pop_back()
+			lo = Vector2i(mini(lo.x, p.x), mini(lo.y, p.y))
+			hi = Vector2i(maxi(hi.x, p.x), maxi(hi.y, p.y))
+			for d: Vector2i in sides:
+				var q: Vector2i = p + d
+				if left.has(q):
+					left.erase(q)
+					todo.append(q)
+				elif c.in_bounds(q.x, q.y) and c.get_surface(q.x, q.y) != Surface.Type.WATER:
+					banks.append(q)
+		var span := 0.0
+		for a: Vector2i in banks:
+			for b: Vector2i in banks:
+				span = maxf(span, Vector2(a).distance_to(Vector2(b)))
+		assert_gt(span, float(maxi(hi.x - lo.x, hi.y - lo.y) + 1),
+				"%s: the bridge %s..%s reaches land at both ends" % [c.course_name, lo, hi])

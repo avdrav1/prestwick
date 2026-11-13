@@ -1,0 +1,149 @@
+
+
+=== Harbor Links: 23 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1        5 yd straight, walked    5 yd (1.00x, +0 yd),    0 s against    0 s
+  green 1 to tee 2         53 yd straight, walked   53 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3         64 yd straight, walked   64 yd (1.00x, +0 yd),    2 s against    2 s
+  green 3 to tee 4         56 yd straight, walked   56 yd (1.00x, +0 yd),    2 s against    2 s
+  green 4 to tee 5        142 yd straight, walked  170 yd (1.19x, +27 yd),    4 s against    4 s
+  green 5 to tee 6         58 yd straight, walked   58 yd (1.00x, +0 yd),    2 s against    2 s
+  green 6 to tee 7         57 yd straight, walked   57 yd (1.00x, +0 yd),    2 s against    2 s
+  green 7 to tee 8         54 yd straight, walked   54 yd (1.00x, +0 yd),    2 s against    2 s
+  green 8 to tee 9         58 yd straight, walked   58 yd (1.00x, +0 yd),    2 s against    2 s
+  green 9 to clubhouse    168 yd straight, walked  184 yd (1.09x, +16 yd),    5 s against    5 s searched
+  0 of 10 walks with a detour
+day 1: latest finish 431 s
+  last home: arrived 82 s; 1: 147-168 (21 s, wait 70), 2: 210-230 (20 s, wait 37), 3: 233-261 (28 s, wait 7), 4: 283-290 (7 s, wait 14), 5: 300-325 (25 s, wait 5), 6: 336-347 (11 s, wait 9), 7: 358-378 (20 s, wait 12), 8: 395-408 (13 s, wait 9), 9: 413-426 (13 s, wait 0)
+day 2: latest finish 448 s
+  last home: arrived 81 s; 1: 137-158 (21 s, wait 56), 2: 185-209 (24 s, wait 24), 3: 262-289 (27 s, wait 51), 4: 300-315 (15 s, wait 9), 5: 320-340 (20 s, wait 0), 6: 350-359 (9 s, wait 8), 7: 368-395 (27 s, wait 8), 8: 409-425 (16 s, wait 12), 9: 431-443 (12 s, wait 0)
+day 3: latest finish 414 s
+  last home: arrived 80 s; 1: 126-146 (20 s, wait 47), 2: 170-199 (29 s, wait 22), 3: 217-248 (31 s, wait 23), 4: 268-281 (13 s, wait 15), 5: 285-307 (22 s, wait 3), 6: 317-330 (13 s, wait 7), 7: 339-369 (30 s, wait 15), 8: 383-397 (14 s, wait 12), 9: 399-409 (10 s, wait 0)
+ball spots (2198 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 269 balls, 0 with a detour
+  hole 2: 299 balls, 0 with a detour
+  hole 3: 295 balls, 0 with a detour
+  hole 4: 202 balls, 0 with a detour
+  hole 5: 269 balls, 0 with a detour
+  hole 6: 193 balls, 0 with a detour
+  hole 7: 281 balls, 1 with a detour (0.4%), worst +55 yd
+    tiles (64..67, 112..115): 1 balls; extra yd walk to it 55, from tee 26, to cup 0; wet 6 tiles (65, 109)..(66, 113)
+  hole 8: 209 balls, 0 with a detour
+  hole 9: 181 balls, 6 with a detour (3.3%), worst +47 yd
+    tiles (24..27, 56..59): 3 balls; extra yd walk to it 0, from tee 0, to cup 34; wet 11 tiles (25, 60)..(27, 68)
+    tiles (24..27, 68..71): 1 balls; extra yd walk to it 47, from tee 13, to cup 0; wet 11 tiles (25, 60)..(27, 68)
+    tiles (28..31, 72..75): 1 balls; extra yd walk to it 40, from tee 3, to cup 0; wet 12 tiles (25, 60)..(28, 68)
+    tiles (28..31, 68..71): 1 balls; extra yd walk to it 30, from tee 5, to cup 0; wet 11 tiles (25, 60)..(27, 68)
+bridges:
+  bridge 1: 3 tiles (15 yd), tiles (107, 12)..(109, 12), banks FAIRWAY,ROUGH, beside -, on the line of holes [2]; walks over it 54 { "on 2": 54 }
+  bridge 2: 3 tiles (15 yd), tiles (64, 23)..(66, 23), banks ROUGH, beside -, on the line of holes [6]; walks over it 65 { "on 2": 3, "on 6": 62 }
+  bridge 3: 3 tiles (15 yd), tiles (12, 25)..(12, 27), banks ROUGH,FAIRWAY, beside -, on the line of holes [1]; walks over it 64 { "on 1": 64 }
+  bridge 4: 14 tiles (70 yd), tiles (30, 56)..(30, 69), banks ROUGH, beside -, on the line of holes [9]; walks over it 70 { "on 9": 70 }
+
+=== Old Grey Links: 10 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1        5 yd straight, walked    5 yd (1.00x, +0 yd),    0 s against    0 s
+  green 1 to tee 2         54 yd straight, walked   54 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3         64 yd straight, walked   64 yd (1.00x, +0 yd),    2 s against    2 s
+  green 3 to tee 4         51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 4 to tee 5         81 yd straight, walked   92 yd (1.13x, +10 yd),    2 s against    2 s
+  green 5 to tee 6         35 yd straight, walked   35 yd (1.00x, +0 yd),    1 s against    1 s
+  green 6 to tee 7         35 yd straight, walked   35 yd (1.00x, +0 yd),    1 s against    1 s
+  green 7 to tee 8         39 yd straight, walked   39 yd (1.00x, +0 yd),    2 s against    2 s
+  green 8 to tee 9         71 yd straight, walked   77 yd (1.09x, +7 yd),    2 s against    2 s
+  green 9 to clubhouse     78 yd straight, walked   78 yd (1.00x, +0 yd),    2 s against    2 s
+  0 of 10 walks with a detour
+day 1: latest finish 418 s
+  last home: arrived 82 s; 1: 150-168 (18 s, wait 68), 2: 197-223 (26 s, wait 31), 3: 234-268 (34 s, wait 16), 4: 275-300 (25 s, wait 9), 5: 305-322 (17 s, wait 4), 6: 339-355 (16 s, wait 14), 7: 358-368 (10 s, wait 2), 8: 375-386 (11 s, wait 5), 9: 398-415 (17 s, wait 10)
+day 2: latest finish 431 s
+  last home: arrived 81 s; 1: 140-162 (22 s, wait 60), 2: 176-204 (28 s, wait 10), 3: 210-244 (34 s, wait 10), 4: 253-276 (23 s, wait 4), 5: 279-298 (19 s, wait 1), 6: 306-331 (25 s, wait 17), 7: 343-354 (11 s, wait 11), 8: 364-373 (9 s, wait 7), 9: 406-428 (22 s, wait 31)
+day 3: latest finish 408 s
+  last home: arrived 80 s; 1: 128-146 (18 s, wait 48), 2: 171-207 (36 s, wait 23), 3: 212-234 (22 s, wait 4), 4: 259-289 (30 s, wait 27), 5: 293-310 (17 s, wait 2), 6: 325-338 (13 s, wait 10), 7: 342-353 (11 s, wait 1), 8: 361-371 (10 s, wait 6), 9: 389-405 (16 s, wait 16)
+ball spots (2060 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 253 balls, 0 with a detour
+  hole 2: 269 balls, 0 with a detour
+  hole 3: 280 balls, 0 with a detour
+  hole 4: 264 balls, 0 with a detour
+  hole 5: 240 balls, 0 with a detour
+  hole 6: 210 balls, 0 with a detour
+  hole 7: 186 balls, 0 with a detour
+  hole 8: 157 balls, 0 with a detour
+  hole 9: 201 balls, 0 with a detour
+bridges:
+  bridge 1: 2 tiles (10 yd), tiles (10, 36)..(10, 37), banks FAIRWAY, beside -, on the line of holes [1]; walks over it 70 { "on 1": 70 }
+  bridge 2: 2 tiles (10 yd), tiles (72, 56)..(73, 56), banks ROUGH,FAIRWAY, beside -, on the line of holes [9]; walks over it 0 {  }  <-- UNUSED; DEAD END: banks on one side only
+  bridge 3: 3 tiles (15 yd), tiles (118, 59)..(118, 61), banks FAIRWAY, beside -, on the line of holes [3]; walks over it 45 { "on 3": 42, "on 6": 3 }
+  bridge 4: 3 tiles (15 yd), tiles (117, 79)..(117, 81), banks FAIRWAY, beside -, on the line of holes [3]; walks over it 42 { "on 3": 42 }
+
+=== Pine Ridge: 4 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1        5 yd straight, walked    5 yd (1.00x, +0 yd),    0 s against    0 s
+  green 1 to tee 2         50 yd straight, walked   50 yd (1.00x, +0 yd),    1 s against    1 s
+  green 2 to tee 3         47 yd straight, walked   47 yd (1.00x, +0 yd),    1 s against    1 s
+  green 3 to tee 4         43 yd straight, walked   43 yd (1.00x, +0 yd),    1 s against    1 s
+  green 4 to tee 5         47 yd straight, walked   47 yd (1.00x, +0 yd),    1 s against    1 s
+  green 5 to tee 6         53 yd straight, walked   53 yd (1.00x, +0 yd),    2 s against    2 s
+  green 6 to tee 7         67 yd straight, walked   67 yd (1.00x, +0 yd),    2 s against    2 s
+  green 7 to tee 8        102 yd straight, walked  109 yd (1.07x, +7 yd),    2 s against    3 s
+  green 8 to tee 9         61 yd straight, walked   61 yd (1.00x, +0 yd),    2 s against    2 s
+  green 9 to clubhouse     43 yd straight, walked   43 yd (1.00x, +0 yd),    1 s against    1 s
+  0 of 10 walks with a detour
+day 1: latest finish 415 s
+  last home: arrived 82 s; 1: 141-160 (19 s, wait 60), 2: 212-227 (15 s, wait 50), 3: 230-239 (9 s, wait 0), 4: 249-266 (17 s, wait 8), 5: 270-301 (31 s, wait 2), 6: 312-339 (27 s, wait 11), 7: 349-360 (11 s, wait 6), 8: 369-384 (15 s, wait 6), 9: 386-410 (24 s, wait 0)
+day 2: latest finish 413 s
+  last home: arrived 81 s; 1: 144-166 (22 s, wait 63), 2: 200-222 (22 s, wait 32), 3: 224-235 (11 s, wait 0), 4: 245-266 (21 s, wait 8), 5: 285-313 (28 s, wait 22), 6: 320-344 (24 s, wait 1), 7: 350-363 (13 s, wait 1), 8: 367-381 (14 s, wait 0), 9: 386-411 (25 s, wait 1)
+day 3: latest finish 418 s
+  last home: arrived 80 s; 1: 121-137 (16 s, wait 42), 2: 192-215 (23 s, wait 51), 3: 221-230 (9 s, wait 4), 4: 241-270 (29 s, wait 11), 5: 275-303 (28 s, wait 6), 6: 307-335 (28 s, wait 8), 7: 347-361 (14 s, wait 10), 8: 369-385 (16 s, wait 5), 9: 392-416 (24 s, wait 10)
+ball spots (2339 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 259 balls, 0 with a detour
+  hole 2: 234 balls, 0 with a detour
+  hole 3: 172 balls, 0 with a detour
+  hole 4: 251 balls, 0 with a detour
+  hole 5: 354 balls, 1 with a detour (0.3%), worst +48 yd
+    tiles (68..71, 36..39): 1 balls; extra yd walk to it 48, from tee 0, to cup 0; wet 3 tiles (72, 37)..(70, 37)
+  hole 6: 300 balls, 0 with a detour
+  hole 7: 229 balls, 0 with a detour
+  hole 8: 209 balls, 0 with a detour
+  hole 9: 331 balls, 0 with a detour
+bridges:
+  bridge 1: 2 tiles (10 yd), tiles (69, 31)..(70, 31), banks GREEN,ROUGH, beside -, on the line of holes []; walks over it 49 { "on 5": 49 }
+  bridge 2: 2 tiles (10 yd), tiles (66, 94)..(67, 94), banks ROUGH, beside -, on the line of holes [7]; walks over it 63 { "on 7": 63 }
+
+=== Cliffside: 23 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1        5 yd straight, walked    5 yd (1.00x, +0 yd),    0 s against    0 s
+  green 1 to tee 2         54 yd straight, walked   56 yd (1.04x, +2 yd),    2 s against    2 s
+  green 2 to tee 3         56 yd straight, walked   56 yd (1.00x, +0 yd),    2 s against    2 s
+  green 3 to tee 4         64 yd straight, walked   65 yd (1.03x, +2 yd),    2 s against    2 s
+  green 4 to tee 5         58 yd straight, walked   66 yd (1.14x, +8 yd),    2 s against    2 s
+  green 5 to tee 6         61 yd straight, walked   75 yd (1.22x, +14 yd),    2 s against    2 s
+  green 6 to tee 7         63 yd straight, walked   63 yd (1.00x, +0 yd),    2 s against    2 s
+  green 7 to tee 8         40 yd straight, walked   40 yd (1.00x, +0 yd),    1 s against    1 s
+  green 8 to tee 9         62 yd straight, walked   68 yd (1.10x, +6 yd),    2 s against    2 s
+  green 9 to clubhouse    141 yd straight, walked  141 yd (1.00x, +0 yd),    4 s against    4 s
+  0 of 10 walks with a detour
+day 1: latest finish 530 s
+  last home: arrived 82 s; 1: 180-196 (16 s, wait 98), 2: 232-247 (15 s, wait 31), 3: 259-283 (24 s, wait 13), 4: 294-300 (6 s, wait 0), 5: 374-402 (28 s, wait 76), 6: 420-441 (21 s, wait 16), 7: 444-452 (8 s, wait 1), 8: 464-487 (23 s, wait 3), 9: 492-526 (34 s, wait 12)
+day 2: latest finish 485 s
+  last home: arrived 81 s; 1: 175-208 (33 s, wait 94), 2: 222-245 (23 s, wait 4), 3: 248-271 (23 s, wait 0), 4: 275-287 (12 s, wait 0), 5: 291-347 (56 s, wait 34), 6: 358-386 (28 s, wait 16), 7: 398-410 (12 s, wait 9), 8: 418-440 (22 s, wait 5), 9: 451-481 (30 s, wait 6)
+day 3: latest finish 498 s
+  last home: arrived 80 s; 1: 167-195 (28 s, wait 91), 2: 215-238 (23 s, wait 16), 3: 255-280 (25 s, wait 13), 4: 284-294 (10 s, wait 0), 5: 317-336 (19 s, wait 17), 6: 369-388 (19 s, wait 31), 7: 394-410 (16 s, wait 4), 8: 423-458 (35 s, wait 25), 9: 466-494 (28 s, wait 11)
+ball spots (2486 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 296 balls, 0 with a detour
+  hole 2: 253 balls, 0 with a detour
+  hole 3: 306 balls, 69 with a detour (22.5%), worst +139 yd  <-- FLAGGED (share)
+    tiles (8..11, 88..91): 19 balls; extra yd walk to it 0, from tee 0, to cup 62; wet 3 tiles (11, 91)..(11, 93)
+    tiles (8..11, 108..111): 9 balls; extra yd walk to it 69, from tee 37, to cup 0; wet 5 tiles (9, 90)..(9, 94)
+    tiles (8..11, 104..107): 7 balls; extra yd walk to it 81, from tee 32, to cup 0; wet 6 tiles (5, 90)..(6, 94)
+    tiles (8..11, 100..103): 7 balls; extra yd walk to it 90, from tee 34, to cup 0; wet 5 tiles (5, 90)..(6, 94)
+    tiles (8..11, 84..87): 4 balls; extra yd walk to it 0, from tee 0, to cup 51; wet 5 tiles (9, 90)..(9, 94)
+    tiles (12..15, 104..107): 3 balls; extra yd walk to it 71, from tee 22, to cup 0; wet 3 tiles (11, 91)..(11, 93)
+  hole 4: 201 balls, 0 with a detour
+  hole 5: 301 balls, 5 with a detour (1.7%), worst +175 yd  <-- FLAGGED (3+ balls in one cell over 100 yd)
+    tiles (36..39, 84..87): 5 balls; extra yd walk to it 175, from tee 175, to cup 3; wet 18 tiles (34, 99)..(38, 86)
+  hole 6: 276 balls, 0 with a detour
+  hole 7: 211 balls, 0 with a detour
+  hole 8: 319 balls, 0 with a detour
+  hole 9: 323 balls, 0 with a detour
+bridges:
+  bridge 1: 23 tiles (115 yd), tiles (57, 110)..(79, 110), banks ROUGH, beside -, on the line of holes [7]; walks over it 72 { "on 7": 71, "to tee 8": 1 }  <-- LONG

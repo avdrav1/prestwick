@@ -106,6 +106,10 @@ const HOLES: Array = [
 		"green": [Vector2(9, 110), 4.5, 3.5, 90.0, 0, Vector2(0.3, -1), 1, 2, 0.0],
 		"bunkers": [[Vector2(14, 70), 1.7, 2.8, 0.0], [Vector2(14, 108), 1.7, 1.8, 0.0]],
 		"trees": [[Vector2(18, 48), 2.5, 9.0, 0.0]],
+		# E14-S5 (D69): a footbridge over the chasm on the line, from the fairway's end to the
+		# green's front, so a ball short of the chasm or over it is walked to across it, not
+		# round its head (the audit's 22% of the hole's balls, up to 139 yd further).
+		"bridge": [Vector2(9, 88), Vector2(9, 96)],
 	},
 	{
 		"n": 4, "name": "Little Point", "par": 3, "yd": 107,
@@ -124,6 +128,10 @@ const HOLES: Array = [
 		"green": [Vector2(28, 23), 4.0, 3.0, 90.0, 0, Vector2(-0.3, -1), 1, 2, 0.0],
 		"bunkers": [[Vector2(28, 64), 1.5, 1.2, 0.0], [Vector2(32, 26), 1.7, 1.8, 0.0]],
 		"trees": [[Vector2(19, 80), 2.5, 7.0, 0.0]],
+		# E14-S5 (D69): a footbridge over the inlet where the 5th's slices come down on its far
+		# bank (the audit: few balls, but each walked 175 yd round the inlet's head while the
+		# groups behind waited on the tee).
+		"bridge": [Vector2(33, 86), Vector2(39, 86)],
 	},
 	{
 		"n": 6, "name": "Cliff Edge", "par": 4, "yd": 332,

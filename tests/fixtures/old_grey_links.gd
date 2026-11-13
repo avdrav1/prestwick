@@ -223,8 +223,10 @@ static func build(b: CourseBuilder) -> Array[int]:
 		_paint_hole(b, course, s)
 	for p: Array in PATHS:
 		_paint(b, course, PlaytestNine.path_tiles(course, p[2]), Surface.Type.CART_PATH)
-	# The bridge over the home hole's burn, on its line.
-	_paint(b, course, [Vector2i(72, 56), Vector2i(73, 56)] as Array[Vector2i], Surface.Type.CART_PATH)
+	# The bridge over the home hole's burn, on the line from the tee to the fairway. E14-S5: laid
+	# bank to bank (FixtureBridges.lay); before, two tiles of path whose west end stood on water,
+	# so no guest could cross it.
+	FixtureBridges.lay(b, [Vector2(74, 56), Vector2(70, 56)])
 	# E14-S3 (D69): footbridges where the 1st's and the 3rd's lines cross their burns
 	# (FixtureBridges.lay: the water tiles of the line), so guests walk to their balls over them.
 	for s: Dictionary in HOLES:
