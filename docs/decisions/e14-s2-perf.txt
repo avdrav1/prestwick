@@ -1,0 +1,96 @@
+E14-S2 perf (D52, D69): scripts/nine_holes_perf.gd with a display (RTX 3080, 24 logical cores) and scripts/skip_perf.gd -- --runs 3 (window and headless), one run at a time, the only agent running, uptime before each. before: 4d8af3f (D69 recorded, no E14 code). s2: the first search (A* at the course's top speed, read through CourseData calls) failed the gate (18 guest frames past 10 ms, worst 18.25) and skipped in 3.04 s windowed. s2c: after the DryGrid and DRY_GUIDE_WEIGHT 1.3 (D69 Update), as committed.
+
+== before
+ 03:19:35 up 1 day, 10:05,  1 user,  load average: 0.68, 0.99, 1.95
+load average at the start: 0.95, 1.04, 1.96 (1, 5, 15 minutes; 24 logical cores)
+E3-S15 cart path lattice, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.06 ms, mean 0.24, p95 0.72, worst 8.01 (n 10815); frames that ran a step median 0.99 ms, mean 1.30, p95 3.86, worst 8.01 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.02 ms, mean 2.46, p95 5.62, worst 5.62 (n 9); 144 reactions; 320 path searches kept at dusk
+E3-S15 cart path lattice, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.10 ms, mean 0.24, p95 0.71, worst 8.77 (n 10815); frames that ran a step median 1.01 ms, mean 1.24, p95 3.65, worst 8.77 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.42 ms, mean 2.49, p95 3.74, worst 3.74 (n 9); 144 reactions; 324 path searches kept at dusk
+E3-S15 flooded map, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.19 ms, mean 0.29, p95 0.86, worst 3.93 (n 10813); frames that ran a step median 0.76 ms, mean 0.84, p95 1.98, worst 3.93 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.71 ms, mean 1.89, p95 3.77, worst 3.77 (n 9); 144 reactions; 0 path searches kept at dusk
+E3-S15 flooded map, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.21 ms, mean 0.27, p95 0.78, worst 3.90 (n 10801); frames that ran a step median 0.69 ms, mean 0.79, p95 1.71, worst 3.90 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.56 ms, mean 1.93, p95 3.90, worst 3.90 (n 9); 141 reactions; 0 path searches kept at dusk
+idle frames in Build at 1.0x: median 1.37 ms, mean 1.42, p95 2.07, worst 3.35 (n 298); no frame over 16.7 ms
+idle frames in Build at 0.5x: median 1.97 ms, mean 2.02, p95 2.85, worst 4.23 (n 298); no frame over 16.7 ms
+Build frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 5.93 ms, mean 6.12, p95 7.76, worst 8.47 (n 298); no frame over 16.7 ms
+Play frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 6.69 ms, mean 6.84, p95 8.46, worst 9.92 (n 298); no frame over 16.7 ms
+Play frames at 0.5x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 3.66 ms, mean 3.72, p95 4.83, worst 6.17 (n 298); no frame over 16.7 ms
+frame holding a click edit, 1x: median 6.22 ms, mean 6.31, p95 7.71, worst 9.51 (n 40)
+drag breaking every hole: frames holding a drag_to (about 60 tiles each), 1x: median 6.67 ms, mean 7.05, p95 9.34, worst 16.43 (n 320)
+drag breaking every hole: frame holding the release, 1x: median 8.46 ms, mean 8.70, p95 11.03, worst 12.41 (n 40); 14 to 16 guests on the course at release
+drag breaking every hole: frame holding its undo, 1x: median 7.97 ms, mean 8.29, p95 10.63, worst 13.78 (n 40); 9 holes open after
+drag off every line: frames holding a drag_to (brush 5, about 70 tiles each), 1x: median 8.08 ms, mean 8.14, p95 9.76, worst 11.58 (n 320)
+drag off every line: frame holding its undo, 1x: median 9.48 ms, mean 9.52, p95 10.97, worst 11.69 (n 40); 16 to 16 guests on the course at undo, 9 holes open after
+Play at 3x, 1.0x zoom, all guests drawn: frame median 3.22 ms, mean 3.37, p95 4.77, worst 6.79 (n 598); guest work a frame (GuestSim.advance) median 0.47 ms, mean 0.47, p95 1.16, worst 2.53 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.52 ms, mean 1.60, p95 2.50, worst 2.53 (n 30); day 1 at 122 s, 18 on the course, 18 drawn, 4 on screen
+Play at 3x, 0.5x zoom, all guests drawn: frame median 3.61 ms, mean 3.75, p95 4.82, worst 30.25 (n 600); guest work a frame (GuestSim.advance) median 0.42 ms, mean 0.43, p95 0.99, worst 2.60 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.31 ms, mean 1.37, p95 2.52, worst 2.60 (n 29); day 1 at 151 s, 18 on the course, 18 drawn, 5 on screen
+load average at the end: 2.12, 1.29, 2.00 (1, 5, 15 minutes; 24 logical cores)
+gate (D52): 0 gated guest frames past 10.0 ms, worst 0.00; it fails at 3 or at one past 12.5 ms
+skip:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, window, load 2.12
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.79 s (target under 3.0 s); load 2.35
+skip-headless:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, headless, load 2.35
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.66 s (target under 3.0 s); load 2.13
+
+== s2
+ 03:45:03 up 1 day, 10:30,  1 user,  load average: 2.73, 4.97, 4.72
+load average at the start: 2.73, 4.97, 4.72 (1, 5, 15 minutes; 24 logical cores)
+E3-S15 cart path lattice, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.05 ms, mean 0.24, p95 0.72, worst 18.25 (n 10815); frames that ran a step median 0.85 ms, mean 1.35, p95 3.87, worst 18.25 (n 541); 1 frames over 16.7 ms, 1 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.25 ms, mean 2.40, p95 3.04, worst 3.04 (n 9); 144 reactions; 319 path searches kept at dusk
+E3-S15 cart path lattice, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.09 ms, mean 0.24, p95 0.72, worst 9.48 (n 10813); frames that ran a step median 0.97 ms, mean 1.27, p95 3.71, worst 9.48 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.67 ms, mean 2.53, p95 3.48, worst 3.48 (n 9); 144 reactions; 321 path searches kept at dusk
+E3-S15 flooded map, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.19 ms, mean 0.31, p95 0.87, worst 14.25 (n 10813); frames that ran a step median 0.75 ms, mean 1.09, p95 2.24, worst 14.25 (n 541); 0 frames over 16.7 ms, 10 over frame_guest_ms_max 10.0 ms (1 of them measuring a hole); 9 holes' statics measured, in frames median 1.82 ms, mean 3.16, p95 13.34, worst 13.34 (n 9); 144 reactions; 0 path searches kept at dusk
+E3-S15 flooded map, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.21 ms, mean 0.28, p95 0.78, worst 14.55 (n 10803); frames that ran a step median 0.70 ms, mean 0.99, p95 1.95, worst 14.55 (n 541); 0 frames over 16.7 ms, 7 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.57 ms, mean 1.99, p95 4.01, worst 4.01 (n 9); 142 reactions; 0 path searches kept at dusk
+idle frames in Build at 1.0x: median 1.35 ms, mean 1.54, p95 2.32, worst 6.77 (n 298); no frame over 16.7 ms
+idle frames in Build at 0.5x: median 1.87 ms, mean 1.91, p95 2.49, worst 3.19 (n 298); no frame over 16.7 ms
+Build frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 5.45 ms, mean 5.59, p95 6.86, worst 10.39 (n 298); no frame over 16.7 ms
+Play frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 5.81 ms, mean 5.88, p95 6.84, worst 11.23 (n 298); no frame over 16.7 ms
+Play frames at 0.5x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 3.49 ms, mean 3.54, p95 4.16, worst 5.50 (n 298); no frame over 16.7 ms
+frame holding a click edit, 1x: median 5.60 ms, mean 5.70, p95 7.36, worst 7.47 (n 40)
+drag breaking every hole: frames holding a drag_to (about 60 tiles each), 1x: median 6.34 ms, mean 6.59, p95 8.10, worst 11.70 (n 320)
+drag breaking every hole: frame holding the release, 1x: median 7.92 ms, mean 8.12, p95 10.07, worst 10.90 (n 40); 14 to 16 guests on the course at release
+drag breaking every hole: frame holding its undo, 1x: median 7.49 ms, mean 7.57, p95 8.35, worst 8.47 (n 40); 9 holes open after
+drag off every line: frames holding a drag_to (brush 5, about 70 tiles each), 1x: median 7.71 ms, mean 7.78, p95 9.05, worst 11.62 (n 320)
+drag off every line: frame holding its undo, 1x: median 9.14 ms, mean 9.17, p95 10.44, worst 11.25 (n 40); 16 to 16 guests on the course at undo, 9 holes open after
+Play at 3x, 1.0x zoom, all guests drawn: frame median 3.14 ms, mean 3.20, p95 4.11, worst 8.69 (n 598); guest work a frame (GuestSim.advance) median 0.46 ms, mean 0.46, p95 1.01, worst 6.04 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.48 ms, mean 1.69, p95 2.55, worst 6.04 (n 30); day 1 at 122 s, 18 on the course, 18 drawn, 4 on screen
+Play at 3x, 0.5x zoom, all guests drawn: frame median 3.43 ms, mean 3.51, p95 4.16, worst 27.66 (n 600); guest work a frame (GuestSim.advance) median 0.40 ms, mean 0.40, p95 0.82, worst 2.54 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.26 ms, mean 1.31, p95 2.31, worst 2.54 (n 29); day 1 at 151 s, 18 on the course, 18 drawn, 5 on screen
+load average at the end: 1.91, 4.41, 4.55 (1, 5, 15 minutes; 24 logical cores)
+gate (D52): 18 gated guest frames past 10.0 ms, worst 18.25; it fails at 3 or at one past 12.5 ms
+skip:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, window, load 1.91
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 3.04 s (target under 3.0 s); load 1.93
+  FAIL: a full day skipped in under 3.0 s
+skip-headless:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, headless, load 1.93
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.86 s (target under 3.0 s); load 1.79
+
+== s2c
+ 03:58:06 up 1 day, 10:43,  1 user,  load average: 3.44, 3.87, 3.72
+load average at the start: 3.25, 3.82, 3.70 (1, 5, 15 minutes; 24 logical cores)
+E3-S15 cart path lattice, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.05 ms, mean 0.25, p95 0.74, worst 8.90 (n 10815); frames that ran a step median 0.82 ms, mean 1.29, p95 3.84, worst 8.90 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.13 ms, mean 2.27, p95 3.06, worst 3.06 (n 9); 144 reactions; 319 path searches kept at dusk
+E3-S15 cart path lattice, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.09 ms, mean 0.24, p95 0.73, worst 9.64 (n 10813); frames that ran a step median 0.96 ms, mean 1.24, p95 3.67, worst 9.64 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 2.70 ms, mean 2.52, p95 3.50, worst 3.50 (n 9); 144 reactions; 321 path searches kept at dusk
+E3-S15 flooded map, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.19 ms, mean 0.31, p95 0.90, worst 5.95 (n 10813); frames that ran a step median 0.72 ms, mean 0.90, p95 2.19, worst 5.95 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.82 ms, mean 2.24, p95 5.48, worst 5.48 (n 9); 144 reactions; 0 path searches kept at dusk
+E3-S15 flooded map, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.22 ms, mean 0.28, p95 0.80, worst 7.01 (n 10803); frames that ran a step median 0.70 ms, mean 0.87, p95 1.92, worst 7.01 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.63 ms, mean 1.97, p95 3.97, worst 3.97 (n 9); 142 reactions; 0 path searches kept at dusk
+idle frames in Build at 1.0x: median 1.40 ms, mean 1.62, p95 2.22, worst 9.00 (n 298); no frame over 16.7 ms
+idle frames in Build at 0.5x: median 1.87 ms, mean 1.90, p95 2.38, worst 3.29 (n 298); no frame over 16.7 ms
+Build frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 5.44 ms, mean 5.48, p95 6.18, worst 7.69 (n 298); no frame over 16.7 ms
+Play frames at 0.17499999701977x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 5.80 ms, mean 5.83, p95 6.85, worst 8.12 (n 298); no frame over 16.7 ms
+Play frames at 0.5x, guests at 3x, 18 to 18 figures shown, 18 on the course: median 3.55 ms, mean 3.60, p95 4.33, worst 6.18 (n 298); no frame over 16.7 ms
+frame holding a click edit, 1x: median 5.92 ms, mean 5.98, p95 7.61, worst 7.79 (n 40)
+drag breaking every hole: frames holding a drag_to (about 60 tiles each), 1x: median 6.51 ms, mean 6.70, p95 8.27, worst 11.31 (n 320)
+drag breaking every hole: frame holding the release, 1x: median 7.70 ms, mean 7.82, p95 8.89, worst 10.26 (n 40); 14 to 16 guests on the course at release
+drag breaking every hole: frame holding its undo, 1x: median 7.38 ms, mean 7.58, p95 8.53, worst 9.22 (n 40); 9 holes open after
+drag off every line: frames holding a drag_to (brush 5, about 70 tiles each), 1x: median 7.60 ms, mean 7.66, p95 8.78, worst 9.91 (n 320)
+drag off every line: frame holding its undo, 1x: median 8.87 ms, mean 8.87, p95 9.95, worst 9.97 (n 40); 16 to 16 guests on the course at undo, 9 holes open after
+Play at 3x, 1.0x zoom, all guests drawn: frame median 3.15 ms, mean 3.22, p95 4.20, worst 9.18 (n 598); guest work a frame (GuestSim.advance) median 0.45 ms, mean 0.45, p95 1.01, worst 2.67 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.50 ms, mean 1.57, p95 2.51, worst 2.67 (n 30); day 1 at 122 s, 18 on the course, 18 drawn, 4 on screen
+Play at 3x, 0.5x zoom, all guests drawn: frame median 3.44 ms, mean 3.50, p95 4.08, worst 27.88 (n 600); guest work a frame (GuestSim.advance) median 0.40 ms, mean 0.40, p95 0.83, worst 2.47 (n 600); 0 frames over 10.0 ms (0 of them ran a step); frames that ran a step median 1.27 ms, mean 1.25, p95 2.33, worst 2.47 (n 29); day 1 at 151 s, 18 on the course, 18 drawn, 5 on screen
+load average at the end: 2.19, 3.43, 3.58 (1, 5, 15 minutes; 24 logical cores)
+gate (D52): 0 gated guest frames past 10.0 ms, worst 0.00; it fails at 3 or at one past 12.5 ms
+skip:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, window, load 2.19
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.86 s (target under 3.0 s); load 1.99
+skip-headless:
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, headless, load 1.99
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.67 s (target under 3.0 s); load 1.84
+

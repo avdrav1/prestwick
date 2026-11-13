@@ -12,8 +12,18 @@ extends RefCounted
 ## path's tile centres, end) quicker than the straight walk. Then the guest walks the path.
 ## Before E9-S1 every surface was walked at one speed and the path was taken when at most
 ## `cart_path_max_detour` 1.5 times the straight line's yards, so it only ever lengthened a
-## walk. No other pathfinding: a guest walks over any tile, water, trees and unowned land
-## included (E3-S1, unowned land is out of bounds for the ball, not a wall), only slower.
+## walk. A guest walks over any tile but open water, trees and unowned land included (E3-S1,
+## unowned land is out of bounds for the ball, not a wall), only slower.
+##
+## E14-S2 (D69): guests never wade. A footbridge (CourseData.is_bridge) walks at cart path's
+## speed and is a path tile for the path search. Of the straight walk and the path walk, the
+## quicker that crosses no open water (water with no bridge) is taken; when both would wade,
+## `_dry_route` searches the tiles for the quickest dry route (A*, 8 neighbours in a fixed order,
+## no diagonal past water, each step timed as time_pieces times it, ties by the order reached)
+## and straightens it where a straight line is dry and no slower. A searched walk follows a path
+## (`on_path`) when it walks any cart path or bridge. A walk to a point no dry route reaches
+## ends at the reachable tile nearest it (`goal` keeps the point asked for). The validator's
+## rule 7 keeps every open hole's tee, cup and footprint reachable from the clubhouse door.
 ##
 ## Reads CourseData only. The route is fixed when the walk starts; a path painted mid-walk is
 ## used from the next walk.
@@ -40,10 +50,25 @@ class Cache:
 	## E12-S1 (D68): {Vector4(from, to) yards: the Reason a walk between them takes no path}.
 	## Reads only the cart path tiles, as the search does.
 	var reasons: Dictionary = {}
+	## E14-S2: {Vector4(from, to) yards: the searched dry route's points}, while every tile and
+	## bridge stands (follow_dry).
+	var dry: Dictionary = {}
+	var dry_revision: String = ""
+	## E14-S2: the dry search's reading of the course (DryGrid), null until a search needs it.
+	var dry_grid: DryGrid = null
 
 	## Searches kept.
 	func size() -> int:
 		return searches.size()
+
+	## E14-S2: drops the dry routes if `course` is another course, or any tile or bridge of it
+	## was written, since they were searched.
+	func follow_dry(course: CourseData) -> void:
+		var k := "%d:%d:%d" % [course.get_instance_id(), course.revision, course.bridge_revision]
+		if k != dry_revision:
+			dry.clear()
+			dry_grid = null
+			dry_revision = k
 
 	## Drops everything if `course` is another course, or a tile of it turned to or from cart
 	## path, since it was filled.
@@ -57,7 +82,8 @@ class Cache:
 
 	## What the path search reads of `course`, as one key: the course and its cart path writes.
 	static func key(course: CourseData) -> String:
-		return "%d:%d" % [course.get_instance_id(), course.surface_revision(Surface.Type.CART_PATH)]
+		return "%d:%d:%d" % [course.get_instance_id(), course.surface_revision(Surface.Type.CART_PATH),
+				course.bridge_revision]
 
 
 ## E12-S1 (D68): why a walk follows no cart path, as the Build overlay (scenes/walk_overlay.gd)
@@ -128,6 +154,11 @@ var elapsed: float = 0.0
 ## the walk's time at that end, so a guest's position is by time.
 var _ends: PackedVector2Array = PackedVector2Array()
 var _times: PackedFloat64Array = PackedFloat64Array()
+## E14-S2: the point the walk was asked to reach, yards: its end, unless no dry route reaches it
+## (then the walk ends at the reachable tile nearest it).
+var goal: Vector2 = Vector2.ZERO
+## E14-S2: true when the route was searched (both D65 walks would have waded).
+var searched: bool = false
 
 
 ## The walk from `from` to `to` (yards) on `course`. `cache` shares the cart path search (and
@@ -136,27 +167,68 @@ var _times: PackedFloat64Array = PackedFloat64Array()
 static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
 		yards_per_tile: float = 5.0, cache: Cache = null) -> GuestWalk:
 	var w := GuestWalk.new()
+	w.goal = to
 	w.points = PackedVector2Array([from, to])
-	var on := PackedFloat64Array([0.0, 0.0])
+	var on := PackedFloat64Array([0.0, 0.0, 0.0])
 	w.straight_s = time_pieces(course, w.points, tuning, yards_per_tile, w._ends, w._times, on)
 	w.duration = w.straight_s
 	w.path_yd = on[0]
 	w.bare_s = w.straight_s - on[1] + on[0] / tuning.walk_yd_per_s
+	var dry: bool = on[2] == 0.0
 	var path := _path_route(course, from, to, tuning, yards_per_tile, w.straight_s, cache)
 	if path.size() > 2:
 		var ends := PackedVector2Array()
 		var times := PackedFloat64Array()
-		var path_on := PackedFloat64Array([0.0, 0.0])
+		var path_on := PackedFloat64Array([0.0, 0.0, 0.0])
 		var t := time_pieces(course, path, tuning, yards_per_tile, ends, times, path_on)
-		if t < w.straight_s:
+		# E14-S2: the path walk when it is dry and quicker, or dry where the straight one wades.
+		if path_on[2] == 0.0 and (t < w.straight_s or not dry):
 			w.points = path
 			w.on_path = true
 			w.duration = t
 			w._ends = ends
 			w._times = times
 			w.path_yd = path_on[0]
+			dry = true
+	if not dry:
+		_take_dry_route(w, course, from, to, tuning, yards_per_tile, cache)
 	w.length = _polyline_length(w.points)
 	return w
+
+
+## E14-S2: gives `w` the quickest dry route from `from` to `to` (_dry_route), its time and its
+## path yards; it follows a path when it walks any cart path or bridge.
+static func _take_dry_route(w: GuestWalk, course: CourseData, from: Vector2, to: Vector2,
+		tuning: GuestTuning, ypt: float, cache: Cache) -> void:
+	var pts := PackedVector2Array()
+	var key := Vector4(from.x, from.y, to.x, to.y)
+	if cache != null:
+		cache.follow_dry(course)
+		if cache.dry.has(key):
+			pts = cache.dry[key]
+	if pts.is_empty():
+		var grid: DryGrid
+		if cache != null:
+			if cache.dry_grid == null:
+				cache.dry_grid = DryGrid.new(course, tuning)
+			grid = cache.dry_grid
+		else:
+			grid = DryGrid.new(course, tuning)
+		pts = _dry_route(course, from, to, tuning, ypt, grid)
+		if cache != null:
+			cache.dry[key] = pts
+	var ends := PackedVector2Array()
+	var times := PackedFloat64Array()
+	var on := PackedFloat64Array([0.0, 0.0, 0.0])
+	var t := time_pieces(course, pts, tuning, ypt, ends, times, on)
+	w.points = pts
+	w.searched = true
+	w.duration = t
+	w._ends = ends
+	w._times = times
+	w.path_yd = on[0]
+	w.on_path = on[0] > 0.0
+	w.bare_s = t - on[1] + on[0] / tuning.walk_yd_per_s
 
 
 ## E9-S1 (D65): the time, simulated seconds, to walk the polyline `poly` (yards) on `course`:
@@ -166,7 +238,8 @@ static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestT
 ## the line grazes a tile's corner, is left out, so its tile neither slows nor lifts the walk).
 ## Off the map a tile walks as rough at the last height. E9-S2: `path_yd`, when given, gets the
 ## yards walked on cart path tiles added to its first value and, when it has a second, their
-## time (climbs left out) to that.
+## time (climbs left out) to that. E14-S2: a bridge walks as cart path (and counts as one); a
+## third value gets the yards walked on open water (water with no bridge), 0 for a dry walk.
 static func time_pieces(course: CourseData, poly: PackedVector2Array, tuning: GuestTuning,
 		ypt: float, ends: PackedVector2Array, times: PackedFloat64Array,
 		path_yd: PackedFloat64Array = PackedFloat64Array()) -> float:
@@ -198,6 +271,11 @@ static func time_pieces(course: CourseData, poly: PackedVector2Array, tuning: Gu
 			if course.in_bounds(tx, ty):
 				surface = course.get_surface(tx, ty)
 				h = course.get_height(tx, ty)
+				if surface == Surface.Type.WATER:
+					if course.is_bridge(tx, ty):
+						surface = Surface.Type.CART_PATH  # E14-S2: a bridge walks as path
+					elif path_yd.size() > 2:
+						path_yd[2] += piece
 			total += piece / tuning.walk_speed(surface)
 			if surface == Surface.Type.CART_PATH and not path_yd.is_empty():
 				path_yd[0] += piece
@@ -346,6 +424,9 @@ static func path_grid(course: CourseData) -> PackedByteArray:
 		for x: int in course.width:
 			if surfaces[src + x] == path:
 				grid[row + x] = 1
+	# E14-S2 (D69): a bridge is a path tile.
+	for b: Vector2i in course.bridge_cells():
+		grid[(b.y + 1) * w + b.x + 1] = 1
 	return grid
 
 
@@ -434,7 +515,10 @@ static func _nearest_path_tile(course: CourseData, at: Vector2, reach: float,
 
 
 static func _is_path(course: CourseData, t: Vector2i) -> bool:
-	return course.in_bounds(t.x, t.y) and course.get_surface(t.x, t.y) == Surface.Type.CART_PATH
+	if not course.in_bounds(t.x, t.y):
+		return false
+	var s := course.get_surface(t.x, t.y)
+	return s == Surface.Type.CART_PATH or (s == Surface.Type.WATER and course.is_bridge(t.x, t.y))
 
 
 # --- E12-S1 (D68): why a walk takes no path, what a path edit reaches, a round's walks ---
@@ -605,3 +689,318 @@ static func round_walks(course: CourseData, ypt: float = 5.0) -> Array[Dictionar
 		prev_number = n
 		has_prev = true
 	return out
+
+
+# --- E14-S2 (D69): the quickest dry route ---
+
+## The dry search's heuristic is the straight yards at the base walking speed divided by this
+## (a weighted A*): measured on 200 searched walks across the playtest nine (E14-S2), 1.3 halves
+## the search (median 2.0 to 1.0 ms, worst 8.4 to 5.8) for walks 0.45% slower in all. Not a
+## tunable: it changes how fast a route is found, and its routes only within that.
+const DRY_GUIDE_WEIGHT: float = 1.3
+## How far ahead (route points) the straightening looks for a dry shortcut.
+const STRAIGHTEN_LOOK: int = 16
+## A segment that passes this close (tiles) to an open water tile counts as touching it.
+const WET_MARGIN: float = 0.02
+const _ROOT2: float = 1.4142135623730951
+
+
+## True when tile (x, y) can be walked: on the map, and not water unless bridged.
+static func walkable(course: CourseData, x: int, y: int) -> bool:
+	if not course.in_bounds(x, y):
+		return false
+	return course.get_surface(x, y) != Surface.Type.WATER or course.is_bridge(x, y)
+
+
+## E14-S2: what the dry search reads of a course, read once while its tiles and bridges stand
+## (Cache.dry_grid): each tile's seconds a yard (0 for open water and off the map, a bridge at
+## cart path's) and height, in a grid bordered by one blocked tile all round, so the search reads
+## a neighbour with no bounds test; and the heuristic's speed.
+class DryGrid:
+	extends RefCounted
+	## Bordered row width (course width + 2).
+	var stride: int = 0
+	var pace := PackedFloat64Array()
+	var height := PackedByteArray()
+	## The speed the search's heuristic assumes, yards a second (the base over DRY_GUIDE_WEIGHT).
+	var guide_speed: float = 0.0
+
+	func _init(course: CourseData, tuning: GuestTuning) -> void:
+		stride = course.width + 2
+		var n: int = stride * (course.height + 2)
+		pace.resize(n)
+		height.resize(n)
+		var by_surface := PackedFloat64Array()
+		by_surface.resize(16)
+		for s: int in Surface.COUNT:
+			by_surface[s] = 1.0 / tuning.walk_speed(s)
+		by_surface[Surface.Type.WATER] = 0.0
+		var tiles: PackedByteArray = course.packed_tiles()
+		var w: int = course.width
+		for y: int in course.height:
+			var row: int = (y + 1) * stride + 1
+			var src: int = y * w
+			for x: int in w:
+				var t: int = tiles[src + x]
+				pace[row + x] = by_surface[t & 0x0F]
+				height[row + x] = t >> 4
+		var path_pace: float = 1.0 / tuning.walk_speed(Surface.Type.CART_PATH)
+		for b: Vector2i in course.bridge_cells():
+			pace[(b.y + 1) * stride + b.x + 1] = path_pace
+		guide_speed = tuning.walk_yd_per_s / DRY_GUIDE_WEIGHT
+
+
+## The quickest dry route from `from` to `to` (yards) as points: `from`, the centre of its tile,
+## the centres of the tiles between, the centre of the end tile, `to`, then straightened. A*
+## over the tiles (`grid`, DryGrid): 8 neighbours in NEIGHBOURS' order, a diagonal step only where
+## both tiles beside it are walkable, each step half its yards at each tile's speed (a bridge at
+## path's) plus the climb onto the higher tile, as time_pieces times a walk; the heuristic is the
+## straight yards at the base walking speed over DRY_GUIDE_WEIGHT, so the route is within a hair
+## of the quickest (the search stays a few hundred tiles, not the map); ties go to the tile
+## reached first, so the route is the same every run. When `to`'s tile cannot be reached the route ends at the centre of the reachable
+## tile nearest `to` (ties: the first closed). A start on open water (none in play) walks off it.
+static func _dry_route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
+		ypt: float, grid: DryGrid) -> PackedVector2Array:
+	var w: int = course.width
+	var hgt: int = course.height
+	var sw: int = grid.stride
+	var a := Vector2i(clampi(floori(from.x / ypt), 0, w - 1), clampi(floori(from.y / ypt), 0, hgt - 1))
+	var b := Vector2i(clampi(floori(to.x / ypt), 0, w - 1), clampi(floori(to.y / ypt), 0, hgt - 1))
+	var pace: PackedFloat64Array = grid.pace
+	var heights: PackedByteArray = grid.height
+	var climb: float = tuning.walk_climb_s_per_step
+	var h_scale: float = ypt / grid.guide_speed
+	var diag: float = ypt * _ROOT2
+	var n_tiles: int = pace.size()
+	var g := PackedFloat64Array()
+	g.resize(n_tiles)
+	g.fill(INF)
+	var came := PackedInt32Array()
+	came.resize(n_tiles)
+	came.fill(-1)
+	var closed := PackedByteArray()
+	closed.resize(n_tiles)
+	var hf := PackedFloat64Array()
+	var hs := PackedInt32Array()
+	var ht := PackedInt32Array()
+	var seq: int = 0
+	var start: int = (a.y + 1) * sw + a.x + 1
+	var goal: int = (b.y + 1) * sw + b.x + 1
+	var bx: int = b.x + 1
+	var by: int = b.y + 1
+	g[start] = 0.0
+	_push(hf, hs, ht, Vector2(a).distance_to(Vector2(b)) * h_scale, seq, start)
+	seq += 1
+	var best: int = start
+	var best_d: int = 1 << 30
+	var reached: bool = false
+	var offs := PackedInt32Array()
+	for d: Vector2i in NEIGHBOURS:
+		offs.append(d.y * sw + d.x)
+	var start_pace: float = pace[start] if pace[start] > 0.0 else 1.0 / tuning.walk_yd_per_s
+	while not hf.is_empty():
+		var c: int = _pop(hf, hs, ht)
+		if closed[c] != 0:
+			continue
+		closed[c] = 1
+		@warning_ignore("integer_division")
+		var cy: int = c / sw
+		var cx: int = c - cy * sw
+		var dd: int = (cx - bx) * (cx - bx) + (cy - by) * (cy - by)
+		if dd < best_d:
+			best_d = dd
+			best = c
+		if c == goal:
+			reached = true
+			break
+		var cpace: float = pace[c] if c != start else start_pace
+		var ch: int = heights[c]
+		var gc: float = g[c]
+		for k: int in 8:
+			var n: int = c + offs[k]
+			var npace: float = pace[n]
+			if npace == 0.0 or closed[n] != 0:
+				continue
+			var step: float = ypt
+			if k >= 4:
+				# A diagonal only past two walkable tiles: NEIGHBOURS[k] = (dx, dy).
+				var dx: int = NEIGHBOURS[k].x
+				if pace[c + dx] == 0.0 or pace[n - dx] == 0.0:
+					continue
+				step = diag
+			var cost: float = 0.5 * step * (cpace + npace)
+			var nh: int = heights[n]
+			if nh > ch:
+				cost += (nh - ch) * climb
+			var gn: float = gc + cost
+			if gn < g[n]:
+				g[n] = gn
+				came[n] = c
+				@warning_ignore("integer_division")
+				var ny: int = n / sw
+				var nx: int = n - ny * sw
+				_push(hf, hs, ht, gn + sqrt(float((nx - bx) * (nx - bx) + (ny - by) * (ny - by))) * h_scale, seq, n)
+				seq += 1
+	var end: int = goal if reached else best
+	var chain := PackedInt32Array()
+	var i: int = end
+	while i != -1:
+		chain.append(i)
+		if i == start:
+			break
+		i = came[i]
+	chain.reverse()
+	var pts := PackedVector2Array([from])
+	for t: int in chain:
+		@warning_ignore("integer_division")
+		var ty: int = t / sw
+		pts.append((Vector2(t - ty * sw - 1, ty - 1) + Vector2(0.5, 0.5)) * ypt)
+	if reached:
+		pts.append(to)
+	# The time to each point: the legs inside the end tiles timed as a walk, the tiles between by
+	# the search's own sums.
+	var cum := PackedFloat64Array([0.0])
+	var ends := PackedVector2Array()
+	var times := PackedFloat64Array()
+	var lead: float = time_pieces(course, PackedVector2Array([pts[0], pts[1]]), tuning, ypt, ends, times)
+	for t: int in chain:
+		cum.append(lead + g[t])
+	if reached:
+		ends.clear()
+		times.clear()
+		cum.append(cum[-1] + time_pieces(course, PackedVector2Array([pts[-2], pts[-1]]), tuning, ypt,
+				ends, times))
+	return _straighten(course, pts, tuning, ypt, grid, cum)
+
+
+## `pts` with corners taken out where the straight line between two kept points is dry
+## (_segment_dry) and walks no slower than the points between (time_pieces), looking at most
+## STRAIGHTEN_LOOK points ahead, farthest first.
+## `cum`, when given, is the time to each point along `pts`; else it is measured (time_pieces).
+## From each kept point the farthest dry line within the look is found (the look's end, else by
+## halving), then the farthest point up to it whose line is no slower is kept.
+static func _straighten(course: CourseData, pts: PackedVector2Array, tuning: GuestTuning,
+		ypt: float, grid: DryGrid = null, cum: PackedFloat64Array = PackedFloat64Array()) -> PackedVector2Array:
+	if pts.size() <= 2:
+		return pts
+	var ends := PackedVector2Array()
+	var times := PackedFloat64Array()
+	if cum.size() != pts.size():
+		cum = PackedFloat64Array([0.0])
+		for k: int in range(1, pts.size()):
+			ends.clear()
+			times.clear()
+			cum.append(cum[k - 1] + time_pieces(course, PackedVector2Array([pts[k - 1], pts[k]]), tuning,
+					ypt, ends, times))
+	var out := PackedVector2Array([pts[0]])
+	var i: int = 0
+	var last: int = pts.size() - 1
+	while i < last:
+		# The farthest dry line within the look: the look's end, else halved down to one.
+		var far: int = mini(last, i + STRAIGHTEN_LOOK)
+		if not _segment_dry(course, pts[i], pts[far], ypt, grid):
+			var lo: int = i + 1
+			while far - lo > 1:
+				@warning_ignore("integer_division")
+				var mid: int = (lo + far) / 2
+				if _segment_dry(course, pts[i], pts[mid], ypt, grid):
+					lo = mid
+				else:
+					far = mid
+			far = lo
+		var next: int = i + 1
+		for j: int in range(far, i + 1, -1):
+			ends.clear()
+			times.clear()
+			var t: float = time_pieces(course, PackedVector2Array([pts[i], pts[j]]), tuning, ypt, ends, times)
+			if t <= cum[j] - cum[i] + 1e-9:
+				next = j
+				break
+		out.append(pts[next])
+		i = next
+	return out
+
+
+## True when the segment from `a` to `b` (yards) touches no open water tile, passes no closer
+## than WET_MARGIN to one, and stays on the map.
+static func _segment_dry(course: CourseData, a: Vector2, b: Vector2, ypt: float,
+		grid: DryGrid = null) -> bool:
+	var p := a / ypt
+	var q := b / ypt
+	var m: float = WET_MARGIN
+	var x0: int = floori(minf(p.x, q.x) - m)
+	var x1: int = floori(maxf(p.x, q.x) + m)
+	var dx: float = q.x - p.x
+	for x: int in range(x0, x1 + 1):
+		# The part of the segment over column x (widened by the margin), and its y span.
+		var t0: float = 0.0
+		var t1: float = 1.0
+		if absf(dx) > 1e-12:
+			var ta: float = (float(x) - m - p.x) / dx
+			var tb: float = (float(x + 1) + m - p.x) / dx
+			t0 = maxf(0.0, minf(ta, tb))
+			t1 = minf(1.0, maxf(ta, tb))
+			if t0 > t1:
+				continue
+		var ya: float = p.y + (q.y - p.y) * t0
+		var yb: float = p.y + (q.y - p.y) * t1
+		for y: int in range(floori(minf(ya, yb) - m), floori(maxf(ya, yb) + m) + 1):
+			if grid != null:
+				if x < 0 or y < 0 or x >= course.width or y >= course.height \
+						or grid.pace[(y + 1) * grid.stride + x + 1] == 0.0:
+					return false
+			elif not walkable(course, x, y):
+				return false
+	return true
+
+
+static func _push(hf: PackedFloat64Array, hs: PackedInt32Array, ht: PackedInt32Array, f: float,
+		sq: int, t: int) -> void:
+	hf.append(f)
+	hs.append(sq)
+	ht.append(t)
+	var i: int = hf.size() - 1
+	while i > 0:
+		@warning_ignore("integer_division")
+		var parent: int = (i - 1) / 2
+		if hf[parent] < f or (hf[parent] == f and hs[parent] < sq):
+			break
+		hf[i] = hf[parent]
+		hs[i] = hs[parent]
+		ht[i] = ht[parent]
+		i = parent
+	hf[i] = f
+	hs[i] = sq
+	ht[i] = t
+
+
+static func _pop(hf: PackedFloat64Array, hs: PackedInt32Array, ht: PackedInt32Array) -> int:
+	var top: int = ht[0]
+	var last: int = hf.size() - 1
+	var f: float = hf[last]
+	var sq: int = hs[last]
+	var t: int = ht[last]
+	hf.resize(last)
+	hs.resize(last)
+	ht.resize(last)
+	if last == 0:
+		return top
+	var i: int = 0
+	while true:
+		var l: int = 2 * i + 1
+		if l >= last:
+			break
+		var c: int = l
+		var r: int = l + 1
+		if r < last and (hf[r] < hf[l] or (hf[r] == hf[l] and hs[r] < hs[l])):
+			c = r
+		if f < hf[c] or (f == hf[c] and sq < hs[c]):
+			break
+		hf[i] = hf[c]
+		hs[i] = hs[c]
+		ht[i] = ht[c]
+		i = c
+	hf[i] = f
+	hs[i] = sq
+	ht[i] = t
+	return top

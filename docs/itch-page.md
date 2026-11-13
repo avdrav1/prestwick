@@ -18,7 +18,7 @@ And it's your course, so play it. Pick a club, aim, and swing with a three-click
 
 - Build on smooth, rolling ground: raise, lower, and paint nine surfaces. Water finds its own level.
 - Up to nine holes: par 3s, 4s and 5s, doglegs included. A ruler shows each hole's length and par as you place it.
-- Guests who play your course, wait their turn, walk your cart paths, and comment on every hole.
+- Guests who play your course, wait their turn, walk your cart paths and footbridges (they never wade: paint cart path over water to bridge it), and comment on every hole.
 - An economy with green fees, upkeep, land to buy, and a star rating set each evening.
 - Play any hole yourself, with a readable swing bar, a landing marker, and a top-down green view for putts.
 - A goal checklist that walks you through your first course.

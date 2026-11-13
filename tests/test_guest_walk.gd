@@ -79,7 +79,8 @@ func test_trees_bunkers_and_water_slow_a_walk_by_their_factors() -> void:
 	# 10 tiles (50 yd) of each in the middle of a 150 yd rough walk.
 	var from := Vector2(2.5, 12.5)
 	var to := Vector2(152.5, 12.5)
-	for s: Surface.Type in [Surface.Type.TREES, Surface.Type.BUNKER, Surface.Type.WATER]:
+	# E14-S2: water is never walked (test_a_pond_on_the_line_is_walked_round).
+	for s: Surface.Type in [Surface.Type.TREES, Surface.Type.BUNKER]:
 		var c := _strip()
 		_paint(c, _row(2, 10, 19), s)
 		var w := GuestWalk.route(c, from, to, tuning)
@@ -277,3 +278,129 @@ func test_round_walks_are_the_walks_guests_take_to_each_tee() -> void:
 			var w: Dictionary = GuestWalk.round_walks(c)[r.number - 1]
 			assert_eq(r.walk_from_hole, int(w.from_hole))
 			assert_almost_eq(r.walk_s, GuestWalk.route(c, w.from, w.to, tuning).duration, 1e-6)
+
+
+# --- E14-S2 (D69): guests never wade ---
+
+## A 40 x 24 map of rough at 2 with a pond, x 15 to 24, y 6 to 17, across the walk along row 12.
+func _pond() -> CourseData:
+	var c := CourseData.create(40, 24, Surface.Type.ROUGH, 2)
+	for y: int in range(6, 18):
+		for x: int in range(15, 25):
+			c.set_tile(x, y, 2, Surface.Type.WATER)
+	return c
+
+
+## True when no point of `w`, sampled every `step` s of its time, ends and corners included,
+## stands on a tile of open water (water with no bridge).
+func _dry(c: CourseData, w: GuestWalk, step: float = 0.01) -> bool:
+	var t := 0.0
+	while t <= w.duration + step:
+		var p := w.point_at_time(minf(t, w.duration))
+		if not GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)):
+			return false
+		t += step
+	for p: Vector2 in w.points:
+		if not GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)):
+			return false
+	return true
+
+
+func test_a_pond_on_the_line_is_walked_round() -> void:
+	var c := _pond()
+	var from := Vector2(27.5, 62.5)
+	var to := Vector2(172.5, 62.5)
+	var w := GuestWalk.route(c, from, to, tuning)
+	assert_true(w.searched, "the straight walk wades, so the route is searched")
+	assert_true(_dry(c, w), "no point of the walk is on the pond")
+	assert_eq(w.end(), to, "it gets there")
+	assert_eq(w.goal, to)
+	assert_false(w.on_path)
+	assert_gt(w.length, 145.0, "longer than the straight 145 yd")
+	assert_lt(w.length, 200.0, "but round the near end, not far out: %.1f yd" % w.length)
+	assert_lt(w.points.size(), 8, "straightened, not a tile staircase: %s" % w.points)
+	# The route round is no slower than the tile route it was straightened from.
+	var raw := GuestWalk._dry_route(c, from, to, tuning, 5.0, GuestWalk.DryGrid.new(c, tuning))
+	assert_eq(raw, w.points, "the search gives the walk's points")
+	var again := GuestWalk.route(c, from, to, tuning)
+	assert_eq(again.points, w.points, "the same route every time")
+	assert_eq(again.duration, w.duration)
+
+
+func test_a_bridge_across_the_pond_is_taken_as_a_path() -> void:
+	var c := _pond()
+	var round := GuestWalk.route(c, Vector2(27.5, 62.5), Vector2(172.5, 62.5), tuning)
+	var b := CourseBuilder.new(c)
+	b.begin_stroke()
+	for x: int in range(15, 25):
+		b.paint(Vector2i(x, 12), Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+	assert_eq(c.bridge_cells().size(), 10)
+	var w := GuestWalk.route(c, Vector2(27.5, 62.5), Vector2(172.5, 62.5), tuning)
+	assert_true(_dry(c, w), "over the bridge, not the water")
+	assert_almost_eq(w.path_yd, 50.0, 1e-4, "its 50 yd on the bridge")
+	assert_lt(w.duration, round.duration, "quicker than the walk round")
+	var slant := GuestWalk.route(c, Vector2(27.5, 47.5), Vector2(172.5, 77.5), tuning)
+	assert_true(slant.searched, "a slanting walk would wade off the bridge: searched")
+	assert_true(_dry(c, slant), "it finds the bridge")
+	assert_true(slant.on_path, "a searched walk over a bridge follows a path")
+	assert_gt(slant.path_yd, 45.0)
+	assert_almost_eq(w.duration, 95.0 / tuning.walk_yd_per_s + 50.0 / tuning.walk_speed(Surface.Type.CART_PATH),
+			1e-6, "the bridge walks at cart path's speed")
+
+
+func test_a_cart_path_walk_that_would_wade_is_not_taken() -> void:
+	# A path in reach of both ends, but its last leg cuts across the pond's corner.
+	var c := _pond()
+	var b := CourseBuilder.new(c)
+	b.level_water = false
+	b.begin_stroke()
+	for y: int in range(2, 6):
+		b.paint(Vector2i(12, y), Surface.Type.CART_PATH, 1)
+	for x: int in range(12, 30):
+		b.paint(Vector2i(x, 5), Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+	var w := GuestWalk.route(c, Vector2(57.5, 22.5), Vector2(112.5, 72.5), tuning)
+	assert_true(_dry(c, w), "never on the pond")
+
+
+func test_a_point_no_dry_route_reaches_ends_at_the_nearest_reachable_tile() -> void:
+	var c := _pond()
+	c.set_tile(20, 12, 2, Surface.Type.ROUGH)  # an island in the pond
+	var to := Vector2(102.5, 62.5)
+	var w := GuestWalk.route(c, Vector2(27.5, 62.5), to, tuning)
+	assert_true(_dry(c, w), "it does not wade out to the island")
+	assert_eq(w.goal, to, "the goal stays the island")
+	assert_ne(w.end(), to)
+	assert_almost_eq(w.end().x, 127.5, 1e-4, "on the bank's tile nearest it, x 25")
+	assert_almost_eq(w.end().y, 62.5, 1e-4)
+
+
+func test_dry_routes_are_cached_until_the_course_changes() -> void:
+	var c := _pond()
+	var cache := GuestWalk.Cache.new()
+	var a := GuestWalk.route(c, Vector2(27.5, 62.5), Vector2(172.5, 62.5), tuning, 5.0, cache)
+	assert_eq(cache.dry.size(), 1, "the search is kept")
+	var b := GuestWalk.route(c, Vector2(27.5, 62.5), Vector2(172.5, 62.5), tuning, 5.0, cache)
+	assert_eq(b.points, a.points, "a kept route is the fresh one")
+	var dry := GuestWalk.route(c, Vector2(27.5, 12.5), Vector2(172.5, 12.5), tuning, 5.0, cache)
+	assert_false(dry.searched, "a dry straight walk searches nothing")
+	assert_eq(cache.dry.size(), 1)
+	var builder := CourseBuilder.new(c)
+	builder.paint(Vector2i(16, 12), Surface.Type.CART_PATH, 1)
+	GuestWalk.route(c, Vector2(27.5, 62.5), Vector2(172.5, 62.5), tuning, 5.0, cache)
+	assert_eq(cache.dry.size(), 1, "an edit dropped the old route, the new one is kept")
+
+
+func test_a_diagonal_never_cuts_a_corner_of_water() -> void:
+	# Two water tiles meeting at a corner, the walk's tile route squeezing between them.
+	var c := CourseData.create(20, 20, Surface.Type.ROUGH, 2)
+	for y: int in 20:
+		if y != 10:
+			c.set_tile(10, y, 2, Surface.Type.WATER)
+	c.set_tile(11, 9, 2, Surface.Type.WATER)
+	var w := GuestWalk.route(c, Vector2(22.5, 27.5), Vector2(77.5, 77.5), tuning)
+	assert_true(w.searched, "the straight walk wades")
+	assert_true(_dry(c, w, 0.002), "through the one gap, round the corner tile: %s" % w.points)
+	for i: int in range(1, w.points.size()):
+		assert_true(GuestWalk._segment_dry(c, w.points[i - 1], w.points[i], 5.0), "segment %d of %s" % [i, w.points])

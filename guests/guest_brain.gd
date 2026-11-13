@@ -659,7 +659,7 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 	for guest: Guest in g.guests:
 		if guest.hole != null and not guest.hole.hole_still_stands():
 			guest.hole = null  # the tee moved, or the par changed: plan afresh
-		if guest.is_walking() and guest.walk.end() != tee:
+		if guest.is_walking() and guest.walk.goal != tee:
 			guest.walk = null
 			guest.state = Guest.State.WAITING
 		if not guest.is_walking() and guest.position != tee:
@@ -1132,7 +1132,7 @@ func _update_to_clubhouse(g: GuestGroup, t: int) -> void:
 			_leave(guest, t, false)
 			continue
 		var to := door()
-		if guest.is_walking() and guest.walk.end() != to:
+		if guest.is_walking() and guest.walk.goal != to:
 			guest.walk = null  # the clubhouse moved under it
 			guest.state = Guest.State.WAITING
 		if not guest.is_walking() and guest.position != to:
@@ -1197,6 +1197,10 @@ func _walk(guest: Guest, t: int) -> void:
 	guest.position = guest.walk.advance(1.0 - s0)
 	guest.leg_start = s0
 	guest.leg_end = minf(s0 + (guest.walk.elapsed - was), 1.0)
+	# E14-S2: the leg is drawn along the walk's route, not straight across (it may bend round water).
+	guest.leg_walk = guest.walk
+	guest.leg_from_s = was
+	guest.leg_to_s = guest.walk.elapsed
 	if guest.walk.is_done():
 		guest.position = guest.walk.end()
 		guest.walk = null

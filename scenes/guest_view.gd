@@ -342,6 +342,18 @@ func pass_room(f: Figure, at: Vector2, dir: Vector2) -> Vector2:
 	return out
 
 
+## E14-S2: where figure `f` stands `p` of the way along its leg: on the walk's route when the leg
+## the brain walked last second runs from `f.from` to `f.to` (a route bends round water), else
+## on the straight line between them.
+func _leg_point(f: Figure, g: Guest, p: float) -> Vector2:
+	if g.leg_walk != null and g.last_walk_s == _brain.second - 1:
+		var a: Vector2 = g.leg_walk.point_at_time(g.leg_from_s)
+		var b: Vector2 = g.leg_walk.point_at_time(g.leg_to_s)
+		if a.distance_squared_to(f.from) < 1e-6 and b.distance_squared_to(f.to) < 1e-6:
+			return g.leg_walk.point_at_time(lerpf(g.leg_from_s, g.leg_to_s, p))
+	return f.from.lerp(f.to, p)
+
+
 ## Screen vector (CourseView space, x right, y down) of a step `d` in yards.
 func screen_vector(d: Vector2) -> Vector2:
 	var t := d / _field.yards_per_tile
@@ -381,7 +393,7 @@ func _update_figure(f: Figure, delta: float, speed: float, frac: float) -> void:
 		f.spread = minf(f.spread, maxf(0.0, 1.0 - closing))
 	else:
 		f.spread = minf(1.0, f.spread + delta * speed / maxf(tuning.spread_ease_s, 0.001))
-	f.at = f.from.lerp(f.to, p) + place_offset(g.place) * f.spread
+	f.at = _leg_point(f, g, p) + place_offset(g.place) * f.spread
 	# E3-S38: a figure walking this second sidesteps round a striker across its walk line
 	# (pass_room) instead of stepping back up the screen (strike_room), whose push would carry it
 	# across the line it steps aside from. Over the last yards of the walk the sidestep fades out

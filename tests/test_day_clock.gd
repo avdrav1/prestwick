@@ -526,3 +526,24 @@ func test_the_morning_line_counts_the_late_guests_and_a_load_replays_them() -> v
 	var data: Dictionary = JSON.parse_string(text)
 	data["late_starts"] = [[0, -5, 2]]
 	assert_null(GameSave.from_json(JSON.stringify(data), errors), "a bad late start is refused")
+
+
+## E14-S2 (D69): on a course whose walks go round water (the dogleg round its pond, searched
+## routes cached by GuestBrain's GuestWalk.Cache), a skip from morning gives the day run at 3x.
+func test_a_day_of_walks_round_water_skips_as_it_runs() -> void:
+	var sims: Array[GuestSim] = []
+	var ends: Array = []
+	for i: int in 2:
+		var sim := GuestSim.new()
+		add_child_autofree(sim)
+		sim.set_process(false)
+		sim.start(ReactionHoles.dogleg_par4(), SEED)
+		sim.running = true
+		sims.append(sim)
+		ends.append(_ended_states(sim))
+	sims[0].set_speed(3.0)
+	_run_until_day_ends(sims[0], 1, 1.0 / 60.0, 100000)
+	_skip(sims[1])
+	assert_eq((ends[1] as Array).size(), 1)
+	assert_gt(((ends[1] as Array)[0][1][0] as Array).size(), 0, "the day gave feed lines")
+	assert_eq((ends[1] as Array)[0][1], (ends[0] as Array)[0][1], "the same day, skipped or run")

@@ -114,7 +114,7 @@ func _state_key() -> Array:
 	var holes: Array = []
 	for h: HoleData in c.holes:
 		holes.append([h.number, h.tee, h.cup, h.open])
-	return [c.get_instance_id(), c.revision, holes, c.has_clubhouse(),
+	return [c.get_instance_id(), c.revision, c.bridge_revision, holes, c.has_clubhouse(),
 			c.clubhouse_door() if c.has_clubhouse() else Vector2i(-1, -1)]
 
 

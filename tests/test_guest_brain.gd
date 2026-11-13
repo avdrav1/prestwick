@@ -1717,3 +1717,32 @@ func test_a_brain_given_the_late_starts_replays_the_day() -> void:
 	var morning := GuestBrain.new(b.course, 3, tuning, model)
 	morning.run_day()
 	assert_ne(_arrivals(morning), _arrivals(first))
+
+
+## E14-S2 (D69): guests never wade. Every second of a seeded day on the playtest nine (ponds and
+## a creek across its lines) and on the dogleg round its pond, each guest stands on a dry or
+## bridged tile, and so does every point of the leg it walked that second (as GuestView draws it,
+## along the walk's route).
+func test_no_guest_stands_on_open_water_at_any_frame_of_a_day() -> void:
+	var courses: Array[CourseData] = [CourseSave.load_file(PlaytestNine.PATH), ReactionHoles.dogleg_par4()]
+	var searched := [0]
+	for c: CourseData in courses:
+		var brain := GuestBrain.new(c, 1, tuning, model)
+		var wet: Array[String] = []
+		while not brain.day_over:
+			brain.step()
+			for g: Guest in brain.guests:
+				if g.is_done() or g.arrived_s > brain.second:
+					continue
+				var points: Array[Vector2] = [g.position]
+				if g.leg_walk != null and g.last_walk_s == brain.second - 1:
+					if g.leg_walk.searched:
+						searched[0] += 1
+					for k: int in 21:
+						points.append(g.leg_walk.point_at_time(lerpf(g.leg_from_s, g.leg_to_s, k / 20.0)))
+				for p: Vector2 in points:
+					if not GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)) and wet.size() < 5:
+						wet.append("guest %d at %s, second %d" % [g.id, p, brain.second])
+		assert_eq(wet, [] as Array[String], "%s: no guest on open water" % c.course_name)
+		assert_gt(brain.guests.size(), 0)
+	assert_gt(searched[0], 0, "some walks went round water")

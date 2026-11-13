@@ -78,6 +78,11 @@ var last_walk_s: int = -1
 var leg_start: float = 0.0
 var leg_end: float = 1.0
 var next_leg_start: float = 0.0
+## E14-S2: that second's leg was walked on `leg_walk` from `leg_from_s` to `leg_to_s` of its time,
+## so GuestView draws it along the route (round a pond), not on a straight line across.
+var leg_walk: GuestWalk
+var leg_from_s: float = 0.0
+var leg_to_s: float = 0.0
 ## The finished holes, in the order played (a hole cut short by an edit or dusk has none).
 var records: Array[HoleRecord] = []
 ## Pace on the hole under way: seconds waited that count, and the walk to its tee. E3-S22:
