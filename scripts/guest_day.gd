@@ -25,7 +25,7 @@ extends SceneTree
 ## day prints its pace fails by hole and where the counted waits were (on the tee, on the hole
 ## behind its own queue, or held for a group on another hole, on the tee or the hole).
 ##
-## E13-S5: `examples` plays the example courses (res://courses/, CourseExport.EXAMPLES) instead,
+## E13-S5: `examples` plays the example courses (res://courses/, FamousCourses.files()) instead,
 ## at 24 arrivals unless `arrivals=N` is given, and prints a row per course (_examples).
 ##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
@@ -151,7 +151,7 @@ func _initialize() -> void:
 	quit(0)
 
 
-## E13-S5 `examples`: a row per example course (CourseExport.EXAMPLES, res://courses/), each
+## E13-S5 `examples`: a row per example course (FamousCourses.files(), res://courses/), each
 ## played on the day seeds as /balance reactions plays them (ReactionField.example_day,
 ## example_row): every day's line, then the course's reaction mix, its rating and stars, each
 ## check's fail share and the latest finish. At ReactionField.EXAMPLE_ARRIVALS guests a day
@@ -162,7 +162,7 @@ func _examples(seeds: Array[int], tuning: GuestTuning, model: ShotModel, own_arr
 			",".join(seeds.map(func(s: int) -> String: return str(s)))])
 	var field := ReactionField.new(model)
 	var rows: Array[Dictionary] = []
-	for file: String in CourseExport.EXAMPLES:
+	for file: String in FamousCourses.files():
 		var days: Array[Dictionary] = []
 		for s: int in seeds:
 			var day := field.example_day(file, s, arrivals, tuning)

@@ -19,7 +19,14 @@ extends Resource
 ##   has_unlimited_budget(), revision, height_revision, land_revision, surface_revision(s),
 ##   has_clubhouse(), clubhouse, clubhouse_facing, clubhouse_cells(), is_clubhouse(x, y),
 ##   clubhouse_door(), clubhouse_revision, decor_at(x, y), decor_cells(), decor_revision,
-##   is_bridge(x, y), bridge_cells(), has_bridges(), bridge_revision.
+##   is_bridge(x, y), bridge_cells(), has_bridges(), bridge_revision, course_id,
+##   course_version, is_famous().
+##
+## Famous courses (E15-S1, D70): a course built into the game (FamousCourses, res://courses/)
+## carries its id and its version, optional fields of version 3 ("course_id", a text, and
+## "course_version", a whole number from 1; both absent on every other course, so its file and
+## hash stay as before). A game saved on one keeps them inside its course, so a load knows which
+## course and which version it holds.
 ##
 ## Bridges (E14-S1, D69): a footbridge stands on a water tile, one per tile, built by painting
 ## cart path on water. The tile stays water at its level, so the ball and every reader of water
@@ -41,7 +48,8 @@ extends Resource
 ## room was found for it): then no guests come.
 ##
 ## WRITERS: only course/builder.gd and course/save.gd may call set_tile, set_holes,
-## set_info, set_parcel_owned, set_land_budget, set_clubhouse, set_decor and set_bridge (CLAUDE.md Architecture). Tests may call
+## set_info, set_parcel_owned, set_land_budget, set_clubhouse, set_decor, set_bridge and
+## set_course_id (CLAUDE.md Architecture). Tests may call
 ## them to build fixtures.
 ##
 ## Serialised as course format version 3 (.claude/skills/course-file/SKILL.md):
@@ -97,6 +105,14 @@ var author: String:
 var thumbnail: String:
 	get:
 		return _thumbnail
+## E15-S1 (D70): the famous course this is ("cliffside"), empty for every other course.
+var course_id: String:
+	get:
+		return _course_id
+## E15-S1 (D70): that course's version, from 1; 0 when course_id is empty.
+var course_version: int:
+	get:
+		return _course_version
 ## Parcels along x and along y: ceil(width / PARCEL_TILES), ceil(height / PARCEL_TILES).
 var parcels_wide: int:
 	get:
@@ -145,6 +161,8 @@ var _holes: Array[HoleData] = []
 var _course_name: String = ""
 var _author: String = ""
 var _thumbnail: String = ""
+var _course_id: String = ""
+var _course_version: int = 0
 ## One byte per parcel, row-major (index = q * parcels_wide + p): 1 owned, 0 not.
 var _owned: PackedByteArray = PackedByteArray()
 var _land_budget: int = UNLIMITED_BUDGET
@@ -412,6 +430,8 @@ func copy() -> CourseData:
 	c._course_name = _course_name
 	c._author = _author
 	c._thumbnail = _thumbnail
+	c._course_id = _course_id
+	c._course_version = _course_version
 	c._owned = _owned.duplicate()
 	c._land_budget = _land_budget
 	c._clubhouse = _clubhouse
@@ -452,7 +472,15 @@ func to_dict() -> Dictionary:
 		for cell: Vector2i in bridge_cells():
 			cells.append([cell.x, cell.y])
 		out["bridges"] = cells
+	if not _course_id.is_empty():
+		out["course_id"] = _course_id
+		out["course_version"] = _course_version
 	return out
+
+
+## E15-S1 (D70): a famous course (it has a course id).
+func is_famous() -> bool:
+	return not _course_id.is_empty()
 
 
 # --- write (course/builder.gd and course/save.gd only) ---
@@ -484,6 +512,14 @@ func set_info(p_name: String, p_author: String, p_thumbnail: String) -> void:
 	_course_name = p_name
 	_author = p_author
 	_thumbnail = p_thumbnail
+
+
+## E15-S1 (D70): names the famous course this is and its version (from 1), or makes it no
+## famous course with an empty id (the version is then 0).
+func set_course_id(id: String, version: int) -> void:
+	assert(id.is_empty() or version >= 1, "a famous course's version is 1 or more")
+	_course_id = id
+	_course_version = version if not id.is_empty() else 0
 
 
 ## Marks parcel `p` owned or not.
@@ -607,6 +643,7 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	var house := _read_clubhouse(data, w, h, errors)
 	var decor := _read_decor(data, w, h, errors)
 	var bridges := _read_bridges(data, w, h, tiles, errors)
+	var famous := _read_course_id(data, errors)
 	if errors.size() > start:
 		return null
 
@@ -643,8 +680,29 @@ static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseDat
 	c._clubhouse_facing = house[1]
 	c._decor = decor
 	c._bridges = bridges
+	c._course_id = famous[0]
+	c._course_version = famous[1]
 	c._replace_holes(parsed_holes)
 	return c
+
+
+## Reads the optional "course_id" and "course_version" (E15-S1, D70): [id, version], ["", 0]
+## when there is no id. An id is a text that is not empty, and comes with a version of 1 or
+## more.
+static func _read_course_id(data: Dictionary, errors: Array[String]) -> Array:
+	if not data.has("course_id"):
+		return ["", 0]
+	var id: Variant = data["course_id"]
+	if typeof(id) != TYPE_STRING or (id as String).is_empty():
+		errors.append("course_id must be a name")
+		return ["", 0]
+	var start := errors.size()
+	var version := read_int(data, "course_version", errors)
+	if errors.size() == start and version < 1:
+		errors.append("course_version must be 1 or more, got %d" % version)
+	if errors.size() > start:
+		return ["", 0]
+	return [id, version]
 
 
 ## Reads the optional "bridges" field (E14-S1): a list of [x, y], each on a water tile of the

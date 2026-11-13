@@ -169,6 +169,7 @@ func _ready() -> void:
 	guest_sim.day_started.connect(_on_day_started)
 	main_menu.new_course_requested.connect(func() -> void: new_course())
 	main_menu.load_requested.connect(func(path: String) -> void: request_load(path, true))
+	main_menu.famous_requested.connect(func(id: String) -> void: request_famous(id, true))
 	main_menu.save_requested.connect(func() -> void: request_save(true))
 	main_menu.import_requested.connect(import_course)
 	main_menu.export_requested.connect(export_course)
@@ -189,10 +190,11 @@ func _ready() -> void:
 			[main_menu, audio_panel, confirm_dialog] as Array[Control])
 	build_tool.cursor_moved.connect(_on_cursor_moved)
 	autosaves = get_tree().current_scene == self
-	# E13-S5: the game itself (not a test or playtest adding Main to its own tree) puts the
-	# example courses in the course folder, each only if no file there has its name.
+	# E15-S1 (D70): the game itself (not a test or playtest adding Main to its own tree) tidies
+	# away E13-S5's copies of the famous courses, once: unchanged ones go, edited ones stay as
+	# "<name> (my copy)". The courses themselves are played from res://courses/.
 	if get_tree().current_scene == self:
-		CourseExport.install_examples()
+		FamousCourses.migrate_copies()
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null
@@ -647,6 +649,51 @@ func request_load(path: String = "", from_menu: bool = false) -> void:
 		main_menu.show_load()
 	confirm_dialog.ask("Load Day %d and lose today's progress?" % e.state.day, "Load",
 			func() -> void: load_game(at), back if from_menu else Callable())
+
+
+## E15-S1 (D70): the Famous courses page's pick. With a game under way (game_in_progress) it asks
+## first ("Start a new game on Cliffside? ...", Enter starts, Esc leaves the game as it is); from
+## the menu, no goes back to the Famous courses page.
+func request_famous(id: String, from_menu: bool = false) -> void:
+	if not game_in_progress():
+		start_famous(id)
+		return
+	var back := func() -> void:
+		open_menu()
+		main_menu.show_famous()
+	confirm_dialog.ask("Start a new game on %s? Today's game is lost unless you saved it."
+			% FamousCourses.display_name(id), "Start", func() -> void: start_famous(id),
+			back if from_menu else Callable())
+
+
+## E15-S1: a game the player would lose: the course has a hole or an edit to undo.
+func game_in_progress() -> bool:
+	return course != null and (not course.holes.is_empty() or
+			(build_tool.builder != null and build_tool.builder.can_undo()))
+
+
+## E15-S1 (D70): a new game on the famous course `id`, the latest version from res://courses/:
+## a fresh builder and game id, the starting balance (D57, data/land.json's land_budget) with the
+## file's land owned, Day 1, no goals (E10-S1: only a New course has them). The notice names the
+## course and any hole the builder closed. A course that does not load changes nothing but the
+## notice. True when it started.
+func start_famous(id: String) -> bool:
+	var errors: Array[String] = []
+	var c := FamousCourses.load_course(id, errors)
+	if c == null:
+		save_notice.show_lines(SaveNotice.famous_lines(FamousCourses.display_name(id), errors,
+				null, []))
+		return false
+	land_seed = randi() % 1000000
+	show_course(c)
+	var b: CourseBuilder = build_tool.builder
+	b.restore_balance(maxi(LandPrices.load_default().land_budget, 0))
+	ledger.clear(b.balance(), b.has_unlimited_money())
+	money_panel.refresh()
+	build_palette.set_buying(true)
+	save_notice.show_lines(SaveNotice.famous_lines(c.course_name, [], c, b.load_notes(),
+			b.balance()))
+	return true
 
 
 ## E8-S4: writes the morning's autosave (GameSave.autosave_file: the newest `autosave_slots` of

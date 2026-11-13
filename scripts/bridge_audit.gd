@@ -1,5 +1,5 @@
 extends SceneTree
-## E14-S5 (D69): audits the example courses' footbridges. For each course (CourseExport.EXAMPLES
+## E14-S5 (D69): audits the example courses' footbridges. For each course (FamousCourses.files()
 ## in res://courses/, or `course=<file>`):
 ## - Round walks: clubhouse door to the first tee, each green to the next tee, the last green
 ##   back to the door, as GuestWalk.route walks them, against the straight line with no water
@@ -41,7 +41,7 @@ func _initialize() -> void:
 	var only := ""
 	var arrivals := ReactionField.EXAMPLE_ARRIVALS
 	var list_spots := false
-	var from_dir := CourseExport.EXAMPLES_FROM
+	var from_dir := FamousCourses.FROM
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("seeds="):
 			seeds.clear()
@@ -59,7 +59,7 @@ func _initialize() -> void:
 			map_rect = arg.substr(4).split(",")
 	tuning = GuestTuning.load_default()
 	model = ShotModel.new()
-	for file: String in CourseExport.EXAMPLES:
+	for file: String in FamousCourses.files():
 		if only != "" and file != only:
 			continue
 		var errors: Array[String] = []

@@ -37,6 +37,12 @@ extends RefCounted
 const PATH: String = "res://courses/old_grey_links.json"
 const COURSE_NAME: String = "Old Grey Links"
 const COURSE_AUTHOR: String = "Prestwick"
+## E15-S1 (D70): the famous course's id and version, written into the file. Versions count
+## the files that shipped (FamousCourses: 1 is rc8's); a change to this fixture that changes the
+## file needs the next COURSE_VERSION and the new file's hash appended to FamousCourses
+## (tests/test_example_courses.gd checks both).
+const COURSE_ID: String = "old_grey_links"
+const COURSE_VERSION: int = 4
 const SIZE: int = 128
 ## The clubhouse stands within this many tiles of hole 1's tee (ClubhouseRule.spot_beside).
 const CLUBHOUSE_REACH: int = 8
@@ -187,6 +193,7 @@ static func course() -> CourseData:
 	var b := CourseBuilder.new(c)
 	build(b)
 	b.set_info(COURSE_NAME, COURSE_AUTHOR)
+	c.set_course_id(COURSE_ID, COURSE_VERSION)
 	return c
 
 

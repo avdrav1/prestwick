@@ -4,11 +4,12 @@ extends Node2D
 ## (main_menu_shot*.tscn): the menu with Import course focused, the Export page, the Import
 ## page listing an exported course and a file of a newer format, the notice an import of
 ## tests/fixtures/course_v1_short_par4.json gives (both holes closed, each with its reason), and
-## the notice a refused (newer format) file gives. E13-S5: the Import page on a first start, the
-## example courses copied in as the game copies them (main_menu_shot_import_examples.tscn).
+## the notice a refused (newer format) file gives. E15-S1 (D70): the Famous courses page
+## (main_menu_shot_famous.tscn), and with a save on an older Cliffside the note on it
+## (main_menu_shot_famous_newer.tscn) and on the Load page (main_menu_shot_load_newer.tscn).
 ## Run: scripts/screenshot.sh tests/fixtures/main_menu_shot.tscn
 
-enum Page { MENU, EXPORT, IMPORT, IMPORT_NOTICE, REFUSED_NOTICE, EXAMPLES }
+enum Page { MENU, EXPORT, IMPORT, IMPORT_NOTICE, REFUSED_NOTICE, FAMOUS, FAMOUS_NEWER, LOAD_NEWER }
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
@@ -24,7 +25,7 @@ func _ready() -> void:
 	match page:
 		Page.MENU:
 			_main.open_menu()
-			_main.main_menu.main_buttons()[4].grab_focus()
+			_main.main_menu.main_buttons()[MainMenu.IMPORT_INDEX].grab_focus()
 		Page.EXPORT:
 			_main.open_menu()
 			_main.main_menu.show_export()
@@ -42,10 +43,28 @@ func _ready() -> void:
 		Page.REFUSED_NOTICE:
 			_write("user://future.json", JSON.stringify({"version": CourseData.FORMAT_VERSION + 1}))
 			_main.import_course("user://future.json")
-		Page.EXAMPLES:
-			CourseExport.install_examples()
+		Page.FAMOUS:
 			_main.open_menu()
-			_main.main_menu.show_import()
+			_main.main_menu.show_famous()
+		Page.FAMOUS_NEWER, Page.LOAD_NEWER:
+			_save_older_cliffside()
+			_main.open_menu()
+			if page == Page.FAMOUS_NEWER:
+				_main.main_menu.show_famous()
+				_main.main_menu.famous_buttons()[3].grab_focus()
+			else:
+				_main.main_menu.show_load()
+
+
+## A saved game from Day 4 on the version of Cliffside before the shipped one.
+func _save_older_cliffside() -> void:
+	_main.start_famous("cliffside")
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FamousCourses.path("cliffside")))
+	data["course_version"] = FamousCourses.latest_version("cliffside") - 1
+	var s := _main.save_state()
+	s.course = CourseSave.from_dict(data)
+	s.day = 4
+	GameSave.save_file(s, _main.save_path)
 
 
 func _write(path: String, text: String) -> void:

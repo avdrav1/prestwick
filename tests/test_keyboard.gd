@@ -640,8 +640,8 @@ func test_the_menus_load_page_lists_the_saves_and_asks_before_loading() -> void:
 	var c: CourseData = _m.course
 	_tap(KEY_ESCAPE)
 	assert_true(_m.main_menu.visible)
-	_tap(KEY_TAB)
-	_tap(KEY_TAB)
+	for i in MainMenu.LOAD_INDEX:
+		_tap(KEY_TAB)
 	assert_eq(_focus(), _m.main_menu.main_buttons()[MainMenu.LOAD_INDEX])
 	_tap(KEY_ENTER)
 	assert_true(_m.main_menu.load_page.visible, "Load game opens the Load page")
@@ -661,9 +661,8 @@ func test_the_menus_load_page_lists_the_saves_and_asks_before_loading() -> void:
 	assert_not_same(_m.course, c, "yes loads it")
 	_tap(KEY_ESCAPE)  # the notice
 	_tap(KEY_ESCAPE)
-	_tap(KEY_TAB)
-	_tap(KEY_TAB)
-	_tap(KEY_TAB)
+	for i in MainMenu.SAVE_INDEX:
+		_tap(KEY_TAB)
 	assert_eq(_focus(), _m.main_menu.main_buttons()[MainMenu.SAVE_INDEX])
 	_tap(KEY_ENTER)
 	assert_true(_m.confirm_dialog.visible, "Save game asks too, over the saved game")

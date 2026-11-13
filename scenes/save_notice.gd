@@ -95,6 +95,23 @@ static func import_lines(path: String, errors: Array[String], c: CourseData,
 	return out
 
 
+## E15-S1 (D70): the lines of the notice a new game on a famous course gives: the course, its
+## par and yardage, Day 1 and the balance, then each hole the builder closed with its reason; or
+## why it could not start, and that the game is unchanged.
+static func famous_lines(course_name: String, errors: Array[String], c: CourseData,
+		closed: Array[String], balance: int = 0) -> PackedStringArray:
+	var out := PackedStringArray()
+	if not errors.is_empty() or c == null:
+		var why: String = errors[0] if not errors.is_empty() else "cannot read it"
+		out.append("Could not start %s: %s." % [course_name, why])
+		out.append("Your game is unchanged.")
+		return out
+	out.append("New game on %s: %s." % [CourseExport.title(c), CourseExport.summary(c)])
+	out.append("Day 1, %s to build with." % LandPrices.money(balance))
+	out.append_array(closed)
+	return out
+
+
 ## E5-S5: the lines of the notice an export gives: what was exported and where (the full path,
 ## to find the file and send it), then one line per half-placed hole the file leaves out.
 static func export_lines(err: Error, c: CourseData, path: String,

@@ -7,9 +7,15 @@ ship, credits the real holes. A number marked "approximate" is from memory and m
 few yards or a tee.
 
 E13-S5: the four ship in the exported pack (`courses/*.json`), beside the build and in each itch
-channel's `courses/`, and the game copies them into the player's course folder at start
-(`CourseExport.install_examples`, never over a file of the same name), so Import course lists
-them by Prestwick with their par and yardage. `/balance reactions` and `scripts/guest_day.gd --
+channel's `courses/`. E15-S1 (D70): they are the famous courses (`course/famous_courses.gd`,
+`FamousCourses`), listed on the main menu's Famous courses page and played from `res://courses/`,
+so each update brings their latest version; the start-up copy into the player's course folder
+is gone, and the game removes the old copies once. Each file carries `course_id` (its file stem)
+and `course_version` (its fixture's `COURSE_ID` and `COURSE_VERSION`); versions count the files
+that shipped (1 is rc8's), and `FamousCourses` keeps every version's SHA-256. After changing a
+fixture, raise its `COURSE_VERSION` by one, rerun its save script and append the file's new
+SHA-256 to its list (`sha256sum courses/<file>.json`): `tests/test_example_courses.gd` fails
+until both are done. `/balance reactions` and `scripts/guest_day.gd --
 examples` print a row per course (five days at 24 arrivals: the reaction mix, its rating, the
 latest finish), reported, not targets (`docs/decisions/e13-s5-balance-reactions.txt`). At 24
 arrivals: Harbor Links 4.32, Old Grey Links 4.46, Pine Ridge 4.44, Cliffside 4.25 (4.0 stars;

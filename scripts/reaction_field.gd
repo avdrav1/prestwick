@@ -63,7 +63,7 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const JOB_SCRIPT: String = "res://scripts/reaction_job.gd"
 const JOB_POLL_MS: int = 20
 const EPS := 0.001
-## E13-S5: the example courses (CourseExport.EXAMPLES, in res://courses/), each played
+## E13-S5: the example courses (FamousCourses.files(), in res://courses/), each played
 ## EXAMPLE_DAYS days (day seeds 1 on, as scripts/guest_day.gd plays them) at EXAMPLE_ARRIVALS
 ## guests a day (the most a day draws, data/economy.json arrivals_max; a 4.5-star course draws
 ## it). Each prints one row: the reaction mix, its rating and the latest finish. Reported, not
@@ -214,7 +214,7 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 				crossing.cross_wait_mean, crossing.pace, crossing.note]))
 	# E13-S5: a row per example course, reported (no target).
 	if example_days > 0:
-		for file: String in CourseExport.EXAMPLES:
+		for file: String in FamousCourses.files():
 			var days: Array[Dictionary] = []
 			for d: int in range(1, example_days + 1):
 				days.append(by[job_key(example_job(file, d))])
@@ -236,7 +236,7 @@ func jobs_for(n: int, rng_seed: int, nine_days: int, pace_days: int, edges: bool
 		pf: int, example_days: int = 0) -> Array[Dictionary]:
 	var jobs: Array[Dictionary] = []
 	# E13-S5: the example courses' days first, the longest jobs of all.
-	for file: String in CourseExport.EXAMPLES:
+	for file: String in FamousCourses.files():
 		for d: int in range(1, example_days + 1):
 			jobs.append(example_job(file, d))
 	var days := {}
@@ -583,13 +583,13 @@ func nine_hole_days(days: int, fixture: String = PACE_FIXTURE) -> Dictionary:
 	return combine_days(out, fixture)
 
 
-## E13-S5: the job of day `d` on the example course `file` (CourseExport.EXAMPLES_FROM), at
+## E13-S5: the job of day `d` on the example course `file` (FamousCourses.FROM), at
 ## EXAMPLE_ARRIVALS guests.
 static func example_job(file: String, d: int) -> Dictionary:
 	return {"kind": "example_day", "file": file, "day": d, "arrivals": EXAMPLE_ARRIVALS}
 
 
-## E13-S5: day `day_seed` of the example course `file` (CourseExport.EXAMPLES_FROM) with
+## E13-S5: day `day_seed` of the example course `file` (FamousCourses.FROM) with
 ## `arrivals` guests (GuestBrain's p_arrivals; -1 for `tuning`'s arrivals_per_day), run to
 ## dusk through GuestBrain as scripts/guest_day.gd runs it: {name, kinds: [praise, neutral,
 ## complaint], fails: a count per GuestReaction.Check, records, groups, nine: the groups that
@@ -598,7 +598,7 @@ static func example_job(file: String, d: int) -> Dictionary:
 func example_day(file: String, day_seed: int, arrivals: int,
 		tuning: GuestTuning = null) -> Dictionary:
 	var errors: Array[String] = []
-	var course := CourseSave.load_file(CourseExport.EXAMPLES_FROM.path_join(file), errors)
+	var course := CourseSave.load_file(FamousCourses.FROM.path_join(file), errors)
 	if course == null:
 		push_error("example course %s: %s" % [file, "; ".join(errors)])
 		return {}

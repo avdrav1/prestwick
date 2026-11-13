@@ -45,6 +45,12 @@ extends RefCounted
 const PATH: String = "res://courses/harbor_links.json"
 const COURSE_NAME: String = "Harbor Links"
 const COURSE_AUTHOR: String = "Prestwick"
+## E15-S1 (D70): the famous course's id and version, written into the file. Versions count
+## the files that shipped (FamousCourses: 1 is rc8's); a change to this fixture that changes the
+## file needs the next COURSE_VERSION and the new file's hash appended to FamousCourses
+## (tests/test_example_courses.gd checks both).
+const COURSE_ID: String = "harbor_links"
+const COURSE_VERSION: int = 3
 const SIZE: int = 128
 ## The land's height step; water is dug one step below it.
 const GROUND: int = 2
@@ -209,6 +215,8 @@ static func course() -> CourseData:
 	var data: Dictionary = JSON.parse_string(CourseSave.to_json(c))
 	data["name"] = COURSE_NAME
 	data["author"] = COURSE_AUTHOR
+	data["course_id"] = COURSE_ID
+	data["course_version"] = COURSE_VERSION
 	return CourseSave.from_dict(data)
 
 

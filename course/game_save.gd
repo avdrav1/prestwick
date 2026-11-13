@@ -6,7 +6,9 @@ extends RefCounted
 ## rating history, the green fee (E4-S6), the guest feed, and (E4-S11) what the saved day's
 ## morning drew and its guests paid so far, and (E8-S2) when the first hole's opening sent out the
 ## groups a closed course had turned away, so its replay is the day the player saved, and (E10-S1)
-## the New course goal checklist's done goals and fold. Only course/ save code writes CourseData on load
+## the New course goal checklist's done goals and fold. E15-S1 (D70): a game on a famous course
+## holds its id and version inside its course (CourseData.course_id), so a load keeps the saved
+## version and the Load page can say a newer one ships. Only course/ save code writes CourseData on load
 ## (CLAUDE.md): the course is read by CourseSave.from_dict and nothing here writes it.
 ##
 ## Guests out on the course are not saved (D38: none stays overnight), so a load resumes at the
@@ -300,6 +302,11 @@ class Entry:
 			return "%s: can't be read (%s)" % [kind, error]
 		var money: String = "unlimited money" if state.unlimited_money else LandPrices.money(state.money)
 		return "%s: Day %d, %s, %s" % [kind, state.day, money, GameSave.date_text(saved_at)]
+
+	## E15-S1 (D70): "A newer version of Cliffside is available." when the save is of a famous
+	## course this game ships a newer version of; empty otherwise. A load keeps the saved course.
+	func newer_note() -> String:
+		return FamousCourses.newer_note(state.course) if state != null else ""
 
 
 ## The autosave file of `slot` (from 1) in `folder`.

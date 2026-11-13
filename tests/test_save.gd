@@ -480,3 +480,27 @@ func test_a_save_over_the_saved_game_and_a_load_ask_first() -> void:
 	m.confirm_dialog.answer(true)
 	assert_not_same(m.course, c, "yes loads")
 	assert_eq(m.save_notice.label.text, "Loaded day 2.")
+
+
+# --- E15-S1 (D70): a save on a famous course ---
+
+## The save holds the famous course's id and version inside its course (no new save field), a
+## load keeps that version, and the Load page's entry says when a newer one ships.
+func test_a_famous_course_save_keeps_its_id_and_version_and_notes_a_newer_one() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(FamousCourses.path("cliffside")))
+	data["course_version"] = 1
+	var s := _state("g1", 3)
+	s.course = CourseSave.from_dict(data)
+	var text := GameSave.to_json(s)
+	var raw: Dictionary = JSON.parse_string(text)
+	assert_eq(raw["save_version"], 1.0, "the save format is unchanged")
+	assert_eq([raw["course"]["course_id"], raw["course"]["course_version"]], ["cliffside", 1.0])
+	var back := GameSave.from_json(text)
+	assert_eq([back.course.course_id, back.course.course_version], ["cliffside", 1])
+	assert_eq(back.course.content_hash(), s.course.content_hash(), "the saved course, not today's")
+	assert_eq(GameSave.save_file(s, PATH), OK)
+	var e := GameSave.read_entry(PATH, false)
+	assert_eq(e.newer_note(), "A newer version of Cliffside is available.")
+	assert_eq(e.label(), "Saved game: Day 3, $300, %s" % GameSave.date_text(s.saved_at),
+			"the line itself is as before")
+	assert_eq(GameSave.read_entry(V1_SAVE, false).newer_note(), "", "a save on any other course")

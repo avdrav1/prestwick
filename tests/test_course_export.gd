@@ -377,7 +377,7 @@ func test_the_menu_lists_its_actions_and_takes_keyboard_focus() -> void:
 	for btn: Button in m.main_menu.main_buttons():
 		texts.append(btn.text)
 		assert_eq(btn.focus_mode, Control.FOCUS_ALL, "%s takes focus" % btn.text)
-	assert_eq(texts, ["Back to the course", "New course", "Load game", "Save game",
+	assert_eq(texts, ["Back to the course", "New course", "Famous courses", "Load game", "Save game",
 			"Import course", "Export course", "Sound settings", "Goals", "Quit"] as Array[String])
 	assert_false(m.main_menu.goals_button.visible, "E10-S1: Goals only with a New course's goals")
 	assert_same(m.get_viewport().gui_get_focus_owner(), m.main_menu.main_buttons()[0])
@@ -500,7 +500,7 @@ func test_esc_on_a_page_goes_back_to_the_menu() -> void:
 	_tap(m, KEY_ESCAPE)
 	assert_true(m.main_menu.visible)
 	assert_true(m.main_menu.main_page.visible)
-	assert_same(m.get_viewport().gui_get_focus_owner(), m.main_menu.main_buttons()[5],
+	assert_same(m.get_viewport().gui_get_focus_owner(), m.main_menu.main_buttons()[MainMenu.EXPORT_INDEX],
 			"focus back on Export course")
 
 

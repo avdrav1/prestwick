@@ -49,6 +49,12 @@ extends RefCounted
 const PATH: String = "res://courses/pine_ridge.json"
 const COURSE_NAME: String = "Pine Ridge"
 const COURSE_AUTHOR: String = "Prestwick"
+## E15-S1 (D70): the famous course's id and version, written into the file. Versions count
+## the files that shipped (FamousCourses: 1 is rc8's); a change to this fixture that changes the
+## file needs the next COURSE_VERSION and the new file's hash appended to FamousCourses
+## (tests/test_example_courses.gd checks both).
+const COURSE_ID: String = "pine_ridge"
+const COURSE_VERSION: int = 3
 ## The ground every rise in RIDGE starts from.
 const BASE_HEIGHT: float = 1.0
 ## The rises: [centre, sigma (tiles), height in steps], summed as Gaussian bumps.
@@ -207,6 +213,8 @@ static func course() -> CourseData:
 	var data: Dictionary = JSON.parse_string(CourseSave.to_json(c))
 	data["name"] = COURSE_NAME
 	data["author"] = COURSE_AUTHOR
+	data["course_id"] = COURSE_ID
+	data["course_version"] = COURSE_VERSION
 	return CourseSave.from_dict(data)
 
 
