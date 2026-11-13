@@ -24,7 +24,7 @@ var walk_yd_per_s: float = 0.0
 var walk_surface_speed: PackedFloat64Array = PackedFloat64Array()
 var walk_climb_s_per_step: float = 0.0
 ## E3-S4: a walk may follow a cart path with a tile within cart_path_reach_yd of both ends
-## (E9-S3: 25 yd, 15 before, which no path round a 30 yd green reached from its cup).
+## (E12-S1, D68: 40 yd; E9-S3: 25, 15 before, which no path round a 30 yd green reached).
 ## E9-S1 (D65): it does when that route is quicker than the straight walk (E3-S4's
 ## cart_path_max_detour, a cap on its length, is retired).
 var cart_path_reach_yd: float = 0.0
@@ -137,10 +137,9 @@ var taste_weights: Dictionary = {}
 var doubled_check_weight: int = 0
 
 ## E9-S2 (D65): the Walk check weighs walk_check_weight when it fails (2: a long walk alone
-## makes a complaint), and a walk followed a cart path when at least walk_path_share of its
-## yards were on path tiles.
+## makes a complaint). E12-S1 (D68): a walk follows a cart path when GuestWalk.route takes one;
+## walk_path_share (0.5 of its yards on path tiles, E9-S2) is retired.
 var walk_check_weight: int = 0
-var walk_path_share: float = 0.0
 
 var praise_passes: int = 0
 var complaint_fails: int = 0
@@ -255,7 +254,6 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 		errors.append("taste_weights must be an object")
 	t.doubled_check_weight = CourseData.read_int(d, "doubled_check_weight", errors)
 	t.walk_check_weight = CourseData.read_int(d, "walk_check_weight", errors)
-	t.walk_path_share = _float(d, "walk_path_share", errors)
 	t.praise_passes = CourseData.read_int(d, "praise_passes", errors)
 	t.complaint_fails = CourseData.read_int(d, "complaint_fails", errors)
 	t.rating_window = CourseData.read_int(d, "rating_window", errors)
@@ -366,8 +364,6 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 		errors.append("praise_passes (%s) must be 1 to %d (the checks)" % [t.praise_passes,
 				GuestReaction.Check.size()])
 	_at_least(errors, "walk_check_weight", t.walk_check_weight, 1)
-	if t.walk_path_share < 0.0 or t.walk_path_share > 1.0:
-		errors.append("walk_path_share (%s) must be 0 to 1" % t.walk_path_share)
 	_at_least(errors, "complaint_fails", t.complaint_fails, 1)
 	_positive(errors, "sight_step_yd", t.sight_step_yd)
 	_at_least(errors, "guest_putt_max_runs", t.guest_putt_max_runs, 2, " (Swing.validate)")

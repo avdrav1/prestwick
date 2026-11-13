@@ -95,6 +95,9 @@ var walk_s: float = -1.0
 var walk_bare_s: float = -1.0
 var walk_path_share: float = 0.0
 var walk_from_hole: int = 0
+## E12-S1 (D68): that walk followed a cart path, and why not when it did not (HoleRecord's).
+var walk_on_path: bool = false
+var walk_reason: GuestWalk.Reason = null
 ## E5-S11: `walk_yd` is the walk from the clubhouse door (the first hole of its round).
 var walk_from_clubhouse: bool = false
 ## E5-S11: true once it has stood on the first tee of its round (GuestBrain.reached_first_tee).
@@ -135,6 +138,10 @@ class HoleRecord:
 	var walk_bare_s: float = -1.0
 	var walk_path_share: float = 0.0
 	var walk_from_hole: int = 0
+	## E12-S1 (D68): the walk followed a cart path (GuestWalk.route took it, being quicker), and,
+	## when it did not and could be long, why not (GuestWalk.why; null otherwise).
+	var walk_on_path: bool = false
+	var walk_reason: GuestWalk.Reason = null
 	## E5-S11: `walk_yd` was the walk from the clubhouse door.
 	var walk_from_clubhouse: bool = false
 	## Simulated seconds of the day it teed off and holed out.

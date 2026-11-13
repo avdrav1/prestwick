@@ -13,10 +13,11 @@ extends RefCounted
 ##     Casual: casual_challenge_within.
 ##   Walk (E9-S2, D65): the walk to this tee, from the previous hole's green or on the round's
 ##     first hole from the clubhouse door, fails when it took over walk_base_s +
-##     walk_per_patience_s x patience simulated seconds and did not follow a cart path (at
-##     least walk_path_share of its yards on path). It weighs walk_check_weight (2), so a long
-##     walk alone makes the hole a complaint naming it. One E5-S11's clubhouse walk and the walk
-##     between holes share. A walk that followed a path and passed, where with no path laid it
+##     walk_per_patience_s x patience simulated seconds and did not follow a cart path (E12-S1,
+##     D68: GuestWalk.route took the path, being quicker; at least walk_path_share 0.5 of its
+##     yards on path until then). It weighs walk_check_weight (2), so a long walk alone makes
+##     the hole a complaint naming it and why no path served it (GuestWalk.why, the reason the
+##     Build overlay shows). One E5-S11's clubhouse walk and the walk between holes share. A walk that followed a path and passed, where with no path laid it
 ##     would have failed (GuestWalk.bare_s), is named in the hole's praise: the path made it
 ##     quick.
 ##
@@ -62,11 +63,14 @@ var walk_limit_s: float = 0.0
 ## E5-S11: the walk was from the clubhouse door (the round's first hole), not a previous cup.
 var from_clubhouse: bool = false
 ## E9-S2: the hole whose green the walk left (0 from the clubhouse), whether it followed a cart
-## path (walk_path_share of its yards), and whether that path made it quick (with no path laid
+## path (E12-S1: the route took one), and whether that path made it quick (with no path laid
 ## the walk would have taken over the limit).
 var walk_from_hole: int = 0
 var walk_on_path: bool = false
 var path_made_quick: bool = false
+## E12-S1 (D68): why no cart path served the walk (GuestWalk.why), when it could be long; null
+## otherwise (a failed walk with none reads as "no cart path").
+var walk_reason: GuestWalk.Reason = null
 ## The hole's statics as the checks read them.
 var statics: HoleChecks.Statics
 ## One line for the feed, naming the hole ("Hole 3: blind from the tee, could not see the flag.
@@ -97,7 +101,8 @@ static func judge(guest: Guest, record: Guest.HoleRecord, statics: HoleChecks.St
 	r.from_clubhouse = record.walk_from_clubhouse
 	r.walk_from_hole = record.walk_from_hole
 	r.walk_limit_s = walk_limit(guest.patience, tuning)
-	r.walk_on_path = record.walk_s >= 0.0 and record.walk_path_share >= tuning.walk_path_share
+	r.walk_on_path = record.walk_s >= 0.0 and record.walk_on_path
+	r.walk_reason = record.walk_reason
 	r.path_made_quick = r.walk_on_path and record.walk_s <= r.walk_limit_s + EPS \
 			and record.walk_bare_s > r.walk_limit_s + EPS
 	r.passed[Check.FAIR] = statics.fair()
@@ -145,11 +150,12 @@ static func pace_passes(record: Guest.HoleRecord, patience: int, tuning: GuestTu
 
 ## E9-S2 (D65): the walk to the tee (from the previous green, or the clubhouse door on the round's
 ## first hole; -1 for none) passes when it took at most the guest's walk_limit, or followed a
-## cart path (at least walk_path_share of its yards on path): a long walk without a path fails.
+## cart path (E12-S1, D68: the route took the path, which it does only when that is quicker; at
+## least walk_path_share 0.5 of its yards on path until then): a long walk without a path fails.
 static func walk_passes(record: Guest.HoleRecord, patience: int, tuning: GuestTuning) -> bool:
 	if record.walk_s < 0.0 or record.walk_s <= walk_limit(patience, tuning) + EPS:
 		return true
-	return record.walk_path_share >= tuning.walk_path_share
+	return record.walk_on_path
 
 
 ## Challenge: the score is within the band of the expected score, both ends included.
@@ -271,8 +277,8 @@ func _reason(c: int) -> String:
 		Check.PACE:
 			return "slow, waited %d s" % wait_s
 		Check.WALK:
-			return "a long walk %s to the %s tee, %d yd and no cart path" % [_walk_from(),
-					ordinal(hole_number), roundi(walk_yd)]
+			return "a long walk %s to the %s tee, %d yd: %s" % [_walk_from(),
+					ordinal(hole_number), roundi(walk_yd), walk_why()]
 		_:
 			if score > expected:
 				return "too hard, %d on a par %d" % [score, par]
@@ -291,7 +297,7 @@ func _short_reason(c: int) -> String:
 		Check.PACE:
 			return "slow (%d s wait)" % wait_s
 		Check.WALK:
-			return "a long walk %s (%d yd, no cart path)" % [_walk_from(), roundi(walk_yd)]
+			return "a long walk %s (%d yd, %s)" % [_walk_from(), roundi(walk_yd), walk_why()]
 		_:
 			if score > expected:
 				return "too hard (%d on a par %d)" % [score, par]
@@ -301,9 +307,26 @@ func _short_reason(c: int) -> String:
 ## E9-S2: where the walk to this tee began, as a guest says it: "from the clubhouse" or "from
 ## the 4th green".
 func _walk_from() -> String:
-	if from_clubhouse or walk_from_hole <= 0:
-		return "from the clubhouse"
-	return "from the %s green" % ordinal(walk_from_hole)
+	return "from " + walk_start_name(from_clubhouse or walk_from_hole <= 0, walk_from_hole)
+
+
+## E12-S1 (D68): why no cart path served the walk, in the words the Build overlay uses
+## (GuestWalk.Reason.text): "path stops 32 yd short of the 5th tee"; "no cart path" without a
+## reason.
+func walk_why() -> String:
+	var why := walk_reason if walk_reason != null else GuestWalk.Reason.new()
+	return why.text(walk_start_name(from_clubhouse or walk_from_hole <= 0, walk_from_hole),
+			walk_end_name(hole_number))
+
+
+## E12-S1: a walk's start as a guest names it: "the clubhouse", or "the 4th green" (hole `from_hole`).
+static func walk_start_name(clubhouse: bool, from_hole: int) -> String:
+	return "the clubhouse" if clubhouse else "the %s green" % ordinal(from_hole)
+
+
+## E12-S1: a walk's end as a guest names it: "the 5th tee" (hole `to_hole`).
+static func walk_end_name(to_hole: int) -> String:
+	return "the %s tee" % ordinal(to_hole)
 
 
 ## "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st".
@@ -343,6 +366,7 @@ func to_save() -> Dictionary:
 		"walk_limit_s": walk_limit_s,
 		"from_clubhouse": from_clubhouse, "walk_from_hole": walk_from_hole,
 		"walk_on_path": walk_on_path, "path_made_quick": path_made_quick,
+		"walk_reason": walk_reason.to_save() if walk_reason != null else null,
 		"text": text, "lead": _lead, "rest": _rest,
 	}
 
@@ -390,6 +414,7 @@ static func from_save(d: Variant, errors: Array[String], context: String = "reac
 	r.walk_from_hole = int(data.get("walk_from_hole", 0))  # E9-S2; 0 in older saves
 	r.walk_on_path = bool(data.get("walk_on_path", false))
 	r.path_made_quick = bool(data.get("path_made_quick", false))
+	r.walk_reason = GuestWalk.Reason.from_save(data.get("walk_reason"))  # E12-S1; null in older saves
 	r.text = str(data.get("text", ""))
 	r._lead = str(data.get("lead", ""))
 	r._rest = str(data.get("rest", ""))

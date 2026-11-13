@@ -43,6 +43,10 @@ signal slot_cleared(slot: int)
 ## The hole in slot `slot` was edited (or went away): emitted on every clear_slot, whether or
 ## not the window held a reaction for it, so GuestSim can drop the plays under way there.
 signal slot_edited(slot: int)
+## E12-S1 (D68): cart path the walk to the tee of the hole in slot `slot` can reach was laid or
+## taken up: its walk complaints were cleared (walks_edited), so GuestSim can drop the verdicts
+## of guests that walked there before the edit.
+signal walk_edited(slot: int)
 ## E4-S5: the window changed (a push, neutrals included, a clear, a clear_slot that cleared a
 ## reaction, a copy_from), so the course rating (rating) may have moved.
 signal changed
@@ -72,6 +76,8 @@ class Entry:
 	## E3-S68: its hole has been edited since the line was given (or it judged the version
 	## before an edit): the feed draws it dimmed, as history.
 	var edited: bool = false
+	## E12-S1: the reaction failed its walk (a cart path edit the walk can reach dims it).
+	var walk_failed: bool = false
 
 	func is_praise() -> bool:
 		return kind == GuestReaction.Kind.PRAISE
@@ -163,6 +169,7 @@ func push(reaction: GuestReaction, day: int, second: int, slot: int = -1, counte
 	entry.text = reaction.text
 	entry.failed_text = "" if reaction.is_praise() else reaction.failed_line()
 	entry.edited = not counted
+	entry.walk_failed = not reaction.passed[GuestReaction.Check.WALK]
 	entries.append(entry)
 	if entries.size() > max_entries:
 		entries = entries.slice(entries.size() - max_entries)
@@ -215,7 +222,7 @@ func to_save(before_day: int) -> Dictionary:
 		if e.day < before_day:
 			lines.append({"id": e.id, "day": e.day, "second": e.second, "hole": e.hole_number,
 					"slot": e.slot, "kind": int(e.kind), "text": e.text, "failed": e.failed_text,
-					"count": e.count, "edited": e.edited})
+					"count": e.count, "edited": e.edited, "walk": e.walk_failed})
 	var window_out: Array = []
 	if spill_day >= before_day:
 		for i: int in spilled.size():
@@ -281,6 +288,7 @@ static func from_save(d: Variant, p_window: int, p_max_entries: int, errors: Arr
 		e.failed_text = str(ld.get("failed", ""))
 		e.count = maxi(CourseData.read_int(ld, "count", errors, ctx), 1)
 		e.edited = bool(ld.get("edited", false))
+		e.walk_failed = bool(ld.get("walk", false))  # E12-S1; false in older saves
 		f.entries.append(e)
 	for i: int in (win as Array).size():
 		var ctx := "feed reaction %d" % (i + 1)
@@ -424,6 +432,56 @@ func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValida
 			if not line.is_empty() and _touches(line, cells, validator, pad):
 				clear_slot(c.holes, i)
 				break
+
+
+## E12-S1 (D68): tiles `cells` of `c` turned to or from cart path. Each walk of a round
+## (GuestWalk.round_walks) the change can reach (GuestWalk.path_edit_reaches: a tile within
+## `cart_path_reach_yd` of its ends, or on or beside a path piece that is) has its walk
+## complaints cleared from the tally of the hole it leads to (clear_walk), so the next guests'
+## verdict on the walk shows. Returns the slots cleared.
+func walks_edited(c: CourseData, cells: Array[Vector2i], tuning: GuestTuning,
+		ypt: float = 5.0) -> Array[int]:
+	var out: Array[int] = []
+	if cells.is_empty():
+		return out
+	var grid := GuestWalk.path_grid(c)
+	for w: Dictionary in GuestWalk.round_walks(c, ypt):
+		if GuestWalk.path_edit_reaches(c, w.from, w.to, cells, tuning, ypt, grid):
+			clear_walk(c.holes, int(w.to_slot))
+			out.append(int(w.to_slot))
+	return out
+
+
+## E12-S1 (D68): the reactions in the window about the hole in slot `slot` of `holes` that failed
+## their walk count for no hole from now on (CLEARED, as clear_slot clears them, the other
+## reactions kept), and their lines are marked `edited` (dimmed, E3-S68). Emits walk_edited
+## always, and slot_cleared and changed when it cleared one.
+func clear_walk(holes: Array[HoleData], slot: int) -> void:
+	walk_edited.emit(slot)
+	var any: bool = false
+	for i: int in recent.size():
+		if recent_slots[i] == CLEARED or recent[i].passed[GuestReaction.Check.WALK]:
+			continue
+		var at: int = recent_slots[i]
+		if at != slot and (at != -1 or _resolve_in(holes, -1, recent[i].hole_number) != slot):
+			continue
+		recent_slots[i] = CLEARED
+		any = true
+	for i: int in spilled.size():
+		var at: int = spilled_slots[i]
+		if spilled[i].passed[GuestReaction.Check.WALK]:
+			continue
+		if at == slot or (at == -1 and _resolve_in(holes, -1, spilled[i].hole_number) == slot):
+			spilled_slots[i] = CLEARED
+	for e: Entry in entries:
+		if not e.walk_failed or e.edited:
+			continue
+		if e.slot == slot or (e.slot == -1 and _resolve_in(holes, -1, e.hole_number) == slot):
+			e.edited = true
+			any = true
+	if any:
+		slot_cleared.emit(slot)
+		changed.emit()
 
 
 ## True when one of `cells` is near `line` (CourseValidator.near_line), testing only the cells

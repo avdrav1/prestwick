@@ -81,6 +81,17 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export var ring_width_px: float = 2.0
 @export var ruler_font_px: int = 16
 @export var ring_font_px: int = 13
+## E12-S1 (D68), the walk overlay (scenes/walk_overlay.gd), with the Cart path brush in hand:
+## each walk a round takes, green_light when a cart path serves it, flag_red (lightened for its
+## text) when it would draw a walk complaint, chalk when it is short with no path; on the
+## ruler's ink edge. Widths and label size in screen px at every zoom.
+@export var walk_served_color: Color = Color8(188, 234, 140, 242)
+@export var walk_long_color: Color = Color8(216, 58, 58, 242)
+@export var walk_long_text_color: Color = Color8(255, 140, 130)
+@export var walk_quick_color: Color = Color8(240, 236, 224, 200)
+@export var walk_width_px: float = 3.0
+@export var walk_halo_px: float = 1.5
+@export var walk_font_px: int = 14
 ## E8-S5, the first-hole hint: on a course with no cup yet the hole panel suggests a first par 3
 ## this long (yards, between tile centres), and the tiles it is at 5 yd a tile. D67: the 4 x 4
 ## starting block is 315 yd along an edge and 445 yd corner to corner, so the hint offers a par 3

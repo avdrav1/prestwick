@@ -37,6 +37,9 @@ class Cache:
 	var searches: Dictionary = {}
 	## path_grid of that course (empty until a search needs it).
 	var grid := PackedByteArray()
+	## E12-S1 (D68): {Vector4(from, to) yards: the Reason a walk between them takes no path}.
+	## Reads only the cart path tiles, as the search does.
+	var reasons: Dictionary = {}
 
 	## Searches kept.
 	func size() -> int:
@@ -48,12 +51,60 @@ class Cache:
 		var k := key(course)
 		if k != revision:
 			searches.clear()
+			reasons.clear()
 			grid = PackedByteArray()
 			revision = k
 
 	## What the path search reads of `course`, as one key: the course and its cart path writes.
 	static func key(course: CourseData) -> String:
 		return "%d:%d" % [course.get_instance_id(), course.surface_revision(Surface.Type.CART_PATH)]
+
+
+## E12-S1 (D68): why a walk follows no cart path, as the Build overlay (scenes/walk_overlay.gd)
+## and the walk complaint (GuestReaction) both say it (`why` finds it, `text` words it).
+class Reason:
+	extends RefCounted
+	## NO_PATH: no cart path on the course. NOT_NEAR: no path tile within reach of either end.
+	## SHORT: a path within reach of one end stops `gap_yd` short of reach of the other.
+	## SLOWER: a path joins both ends, but walking across is quicker.
+	enum Kind { NO_PATH, NOT_NEAR, SHORT, SLOWER }
+	var kind: Kind = Kind.NO_PATH
+	## SHORT: how many yards nearer the path must come to be within reach, rounded up.
+	var gap_yd: int = 0
+	## NOT_NEAR and SHORT: the end the path does not reach is the walk's start (else its end).
+	var at_start: bool = true
+	## SHORT: the path tile nearest the end it misses (where the Build overlay draws the gap
+	## from); (-1, -1) otherwise. Not saved.
+	var near_tile := Vector2i(-1, -1)
+
+	## The reason in a guest's words, `start` and `end` naming the walk's ends ("the 4th green",
+	## "the 5th tee"): "path stops 32 yd short of the 5th tee".
+	func text(start: String, end: String) -> String:
+		match kind:
+			Kind.NOT_NEAR:
+				return "no path within reach of %s" % (start if at_start else end)
+			Kind.SHORT:
+				return "path stops %d yd short of %s" % [gap_yd, start if at_start else end]
+			Kind.SLOWER:
+				return "path is slower than walking across"
+		return "no cart path"
+
+	## For a save: [kind, gap_yd, at_start].
+	func to_save() -> Array:
+		return [int(kind), gap_yd, at_start]
+
+	## The Reason `a` (to_save) holds; null when it is not one.
+	static func from_save(a: Variant) -> Reason:
+		if typeof(a) != TYPE_ARRAY or (a as Array).size() != 3:
+			return null
+		var k := int(a[0])
+		if k < 0 or k >= Kind.size():
+			return null
+		var r := Reason.new()
+		r.kind = k as Kind
+		r.gap_yd = int(a[1])
+		r.at_start = bool(a[2])
+		return r
 
 
 ## The route's corners, yards: the start first, the end last.
@@ -66,8 +117,8 @@ var on_path: bool = false
 ## (the same unless it follows a path).
 var duration: float = 0.0
 var straight_s: float = 0.0
-## E9-S2: the yards of the walk on cart path tiles (the Walk check asks whether it followed a
-## path: GuestTuning.walk_path_share of its length), and the straight walk's time were no cart
+## E9-S2: the yards of the walk on cart path tiles (the Walk check asked for half its length
+## until E12-S1, D68; now `on_path` alone), and the straight walk's time were no cart
 ## path laid (its path tiles walked at the base speed): whether a path made the walk quick.
 var path_yd: float = 0.0
 var bare_s: float = 0.0
@@ -384,3 +435,173 @@ static func _nearest_path_tile(course: CourseData, at: Vector2, reach: float,
 
 static func _is_path(course: CourseData, t: Vector2i) -> bool:
 	return course.in_bounds(t.x, t.y) and course.get_surface(t.x, t.y) == Surface.Type.CART_PATH
+
+
+# --- E12-S1 (D68): why a walk takes no path, what a path edit reaches, a round's walks ---
+
+## Why the walk from `from` to `to` (yards) on `course` follows no cart path (Reason): no path on
+## the course; none within `cart_path_reach_yd` of either end; a path within reach of one end that
+## comes no nearer the other than reach plus `gap_yd`; or one joining both ends but slower than
+## walking across. Ask it of a walk that took no path (route's `on_path` false): it reads only
+## the cart path tiles (path_grid), never the route's time, so `cache` keeps it as it keeps the
+## search. The Build overlay and the walk complaint both call it.
+static func why(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
+		ypt: float = 5.0, cache: Cache = null) -> Reason:
+	var key := Vector4(from.x, from.y, to.x, to.y)
+	var grid: PackedByteArray
+	if cache != null:
+		cache.follow(course)
+		if cache.reasons.has(key):
+			return cache.reasons[key]
+		if cache.grid.is_empty():
+			cache.grid = path_grid(course)
+		grid = cache.grid
+	else:
+		grid = path_grid(course)
+	var r := _why(course, grid, from, to, tuning.cart_path_reach_yd, ypt)
+	if cache != null:
+		cache.reasons[key] = r
+	return r
+
+
+static func _why(course: CourseData, grid: PackedByteArray, from: Vector2, to: Vector2,
+		reach: float, ypt: float) -> Reason:
+	var r := Reason.new()
+	if grid.find(1) < 0:
+		return r
+	var a := _nearest_path_tile(course, from, reach, ypt)
+	var b := _nearest_path_tile(course, to, reach, ypt)
+	if a.x < 0 and b.x < 0:
+		r.kind = Reason.Kind.NOT_NEAR
+		r.at_start = true
+		return r
+	# The path piece within reach of one end: does it hold the other end's tile, and how near
+	# does it come to the other end?
+	var from_start := a.x >= 0
+	var origin := a if from_start else b
+	var goal := b if from_start else a
+	var near := _piece_nearest(course, grid, origin, to if from_start else from, goal, ypt)
+	if origin == goal or near.y > 0.0:
+		r.kind = Reason.Kind.SLOWER
+		return r
+	r.kind = Reason.Kind.SHORT
+	r.at_start = not from_start
+	r.gap_yd = maxi(1, ceili(near.x - reach - 1e-6))
+	r.near_tile = Vector2i(int(near.z), int(near.w))
+	return r
+
+
+## Over the path piece (8-connected cart path tiles) holding `origin`: x, the nearest a tile
+## centre of it comes to `point`, yards; y, 1 when `goal` is on it, else 0; z and w, that
+## nearest tile (the first in the search's order on a tie).
+static func _piece_nearest(course: CourseData, grid: PackedByteArray, origin: Vector2i,
+		point: Vector2, goal: Vector2i, ypt: float) -> Vector4:
+	var w := course.width + 2
+	var best := INF
+	var best_t := origin
+	var found := 0.0
+	var goal_i := (goal.y + 1) * w + goal.x + 1 if goal.x >= 0 else -1
+	for i: int in _piece(grid, w, [(origin.y + 1) * w + origin.x + 1]):
+		if i == goal_i:
+			found = 1.0
+		var t := Vector2i(i % w - 1, i / w - 1)
+		var d := _center(t, ypt).distance_to(point)
+		if d < best:
+			best = d
+			best_t = t
+	return Vector4(best, found, best_t.x, best_t.y)
+
+
+## The bordered-grid indices (path_grid, rows `w` wide) of every cart path tile 8-connected to
+## one of `seeds`, the seeds included.
+static func _piece(grid: PackedByteArray, w: int, seeds: Array) -> PackedInt32Array:
+	var offsets := PackedInt32Array()
+	for d: Vector2i in NEIGHBOURS:
+		offsets.append(d.y * w + d.x)
+	var mark := PackedByteArray()
+	mark.resize(grid.size())
+	var queue := PackedInt32Array()
+	for s: int in seeds:
+		if grid[s] != 0 and mark[s] == 0:
+			mark[s] = 1
+			queue.append(s)
+	var head := 0
+	while head < queue.size():
+		var c: int = queue[head]
+		head += 1
+		for off: int in offsets:
+			var n: int = c + off
+			if grid[n] != 0 and mark[n] == 0:
+				mark[n] = 1
+				queue.append(n)
+	return queue
+
+
+## E12-S1 (D68): true when a change to or from cart path on one of `cells` can change the walk
+## from `from` to `to` (yards): the cell lies within `cart_path_reach_yd` of either end, or it or
+## one of its 8 neighbours is on a path piece (as the course is now) with a tile within reach of
+## either end: path laid on, or taken off, a piece the walk could use (ReactionFeed.walks_edited).
+static func path_edit_reaches(course: CourseData, from: Vector2, to: Vector2,
+		cells: Array[Vector2i], tuning: GuestTuning, ypt: float = 5.0,
+		grid: PackedByteArray = PackedByteArray()) -> bool:
+	var reach := tuning.cart_path_reach_yd
+	for cell: Vector2i in cells:
+		var c := _center(cell, ypt)
+		if c.distance_to(from) <= reach or c.distance_to(to) <= reach:
+			return true
+	if grid.is_empty():
+		grid = path_grid(course)
+	var w := course.width + 2
+	var seeds: Array = []
+	var r := ceili(reach / ypt) + 1
+	for end: Vector2 in [from, to]:
+		var at := Vector2i(floori(end.x / ypt), floori(end.y / ypt))
+		for y in range(at.y - r, at.y + r + 1):
+			for x in range(at.x - r, at.x + r + 1):
+				var t := Vector2i(x, y)
+				if _is_path(course, t) and _center(t, ypt).distance_to(end) <= reach:
+					seeds.append((y + 1) * w + x + 1)
+	if seeds.is_empty():
+		return false
+	var mark := {}
+	for i: int in _piece(grid, w, seeds):
+		mark[i] = true
+	for cell: Vector2i in cells:
+		var i := (cell.y + 1) * w + cell.x + 1
+		if mark.has(i):
+			return true
+		for d: Vector2i in NEIGHBOURS:
+			if mark.has(i + d.y * w + d.x):
+				return true
+	return false
+
+
+## E12-S1 (D68): the walks of a round the Walk check judges, as GuestBrain walks them: the
+## clubhouse door to the first open hole's tee (with a clubhouse), then each open hole's cup to
+## the next open hole's tee, holes by number (the first hole with a number stands for it, as
+## GuestBrain.hole_numbered reads it). Each: {from, to (yards, tile centres), from_hole (0 for
+## the clubhouse), to_hole, to_slot (its slot in CourseData.holes)}.
+static func round_walks(course: CourseData, ypt: float = 5.0) -> Array[Dictionary]:
+	var first := {}
+	for i: int in course.holes.size():
+		var h: HoleData = course.holes[i]
+		if not first.has(h.number):
+			first[h.number] = i
+	var numbers: Array = first.keys()
+	numbers.sort()
+	var out: Array[Dictionary] = []
+	var has_prev := course.has_clubhouse()
+	var prev := _center(course.clubhouse_door(), ypt) if has_prev else Vector2.ZERO
+	var prev_number := 0
+	for n: int in numbers:
+		var slot: int = first[n]
+		var h: HoleData = course.holes[slot]
+		if not h.open:
+			continue
+		if has_prev:
+			out.append({"from": prev, "to": _center(h.tee, ypt), "from_hole": prev_number,
+					"to_hole": n, "to_slot": slot})
+		prev = _center(h.cup, ypt)
+		prev_number = n
+		has_prev = true
+	return out

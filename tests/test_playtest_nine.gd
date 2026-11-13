@@ -284,7 +284,7 @@ func test_cart_paths_join_the_long_walks() -> void:
 		var to := _hole(p[1])
 		var w := GuestWalk.route(_c, _yd(from.cup), _yd(to.tee), tuning, 5.0, cache)
 		assert_true(w.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
-		assert_gte(w.path_share(), tuning.walk_path_share, "most of it on the path")
+		assert_gt(w.path_share(), 0.5, "most of it on the path")
 		assert_lt(w.duration, w.bare_s, "quicker than with no path laid")
 		joined[p[1]] = true
 		gut.p("walk %d to %d: %.0f yd, %.2f s on the path (%.2f s with none; %.0f%% on path)" % [
@@ -295,7 +295,7 @@ func test_cart_paths_join_the_long_walks() -> void:
 	for n: int in range(1, 10):
 		var h := _hole(n)
 		var w := GuestWalk.route(_c, _yd(prev), _yd(h.tee), tuning, 5.0, cache)
-		assert_true(w.duration <= limit or w.path_share() >= tuning.walk_path_share,
+		assert_true(w.duration <= limit or w.on_path,
 				"the walk to the %d tee: %.2f s against %.2f, %.0f%% on path" % [n, w.duration,
 					limit, 100.0 * w.path_share()])
 		prev = h.cup

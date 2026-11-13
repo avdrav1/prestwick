@@ -46,6 +46,8 @@ extends Node2D
 ## once the hole has both, its par is the one its yardage makes, unless the par buttons picked
 ## it (select_par marks the hole's par as picked by hand; pressed before a new hole's first tee
 ## or cup, the hole is created so marked).
+## E12-S1 (D68): `walks`, a WalkOverlay child, draws every walk a round takes while the Cart path
+## brush is in hand (scenes/walk_overlay.gd); the tool, surface and active setters tell it.
 
 enum Tool { PAINT, RAISE, LOWER, TEE, CUP, BUY, CLUBHOUSE, DECOR }
 
@@ -83,11 +85,17 @@ const PARCEL_EDGE_POINTS: int = 4
 @export var buy_color: Color = Color8(240, 200, 58, 242)
 
 var builder: CourseBuilder
-var tool: Tool = Tool.PAINT
+var tool: Tool = Tool.PAINT:
+	set(value):
+		tool = value
+		_follow_walks()
 ## E5-S3: the decor kind the Decor tool places (CourseData.DECOR_KINDS); a click on decor steps it
 ## to the next kind, and this follows.
 var decor_kind: int = 0
-var surface: Surface.Type = Surface.Type.FAIRWAY
+var surface: Surface.Type = Surface.Type.FAIRWAY:
+	set(value):
+		surface = value
+		_follow_walks()
 ## The hole the tee and cup tools build, picked in the hole list (select_hole, E3-S2).
 var hole_number: int = 1
 ## Which of several holes sharing hole_number is picked: its slot in CourseData.holes (E3-S11,
@@ -107,6 +115,7 @@ var active: bool = true:
 			release()
 			_hover = TilePicker.NONE
 		queue_redraw()
+		_follow_walks()
 ## The parcel waiting on the HUD's buy confirm, outlined in buy_color until it is cleared to
 ## TilePicker.NONE. Display state only (LandPanel sets it); it never writes the course.
 var pinned_parcel: Vector2i = TilePicker.NONE:
@@ -123,6 +132,9 @@ var key_held: bool = false
 var stroke_count: int = 0
 ## E8-S5: the ruler and the rings round the tee (scenes/build_ruler.gd).
 var ruler: BuildRuler
+## E12-S1 (D68): the walks a round takes, drawn while the Cart path brush is in hand
+## (scenes/walk_overlay.gd).
+var walks: WalkOverlay
 ## Tile under the cursor, or TilePicker.NONE.
 var hover: Vector2i:
 	get:
@@ -142,6 +154,16 @@ func _ready() -> void:
 	ruler = BuildRuler.new()
 	ruler.tool = self
 	add_child(ruler)
+	walks = WalkOverlay.new()
+	walks.tool = self
+	add_child(walks)
+
+
+## E12-S1: the tool, its surface or Build's active flag changed: the walk overlay shows and
+## runs only with the Cart path brush in hand (WalkOverlay.follow).
+func _follow_walks() -> void:
+	if walks != null:
+		walks.follow()
 
 
 func select_surface(s: Surface.Type) -> void:

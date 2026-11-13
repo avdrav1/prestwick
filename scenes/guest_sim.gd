@@ -111,6 +111,15 @@ var _holes_seen: Array[HoleData] = []
 ## The plays under way when Build edited their slot ({GuestHole: true}): their reactions are
 ## pushed uncounted. Emptied with each day.
 var _stale: Dictionary = {}
+## E12-S1 (D68): the plays whose walk to the tee was judged before a cart path edit it can reach
+## ({GuestHole: true}, GuestBrain.walked_to): a walk complaint of theirs is pushed uncounted.
+## Emptied with each day.
+var _walk_stale: Dictionary = {}
+## E12-S1: the watched course's cart path tiles as the feed last read them (GuestWalk.path_grid)
+## and that course's cart path revision then: a flush compares them to find the tiles that
+## turned to or from cart path (ReactionFeed.walks_edited).
+var _path_grid := PackedByteArray()
+var _path_revision: int = -1
 ## E3-S61: the tiles the watched builder wrote since the feed last read them ({tile: true}),
 ## and each slot's line of play as it stood before them (CourseBuilder.slot_lines). The feed
 ## reads them once a frame (_flush_cells, deferred) and at every check, not once a paint: a
@@ -163,6 +172,7 @@ func _ensure_feed() -> void:
 	if feed == null:
 		feed = ReactionFeed.new(tuning.rating_window, feed_tuning.max_entries)
 		feed.slot_edited.connect(_on_slot_edited)
+		feed.walk_edited.connect(_on_walk_edited)
 		feed.changed.connect(_on_feed_changed)
 
 
@@ -254,6 +264,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	_set_skipping(false)
 	_first_day = 1
 	_stale.clear()
+	_walk_stale.clear()
 	feed.clear()
 	_resume_arrivals = -1
 	_resume_late_starts.clear()
@@ -272,6 +283,7 @@ func resume_at(d: int, arrivals: int = -1, late_starts: Array[Vector3i] = []) ->
 	_first_day = maxi(d, 1)
 	day = _first_day
 	_stale.clear()
+	_walk_stale.clear()
 	_resume_arrivals = arrivals
 	_resume_late_starts = late_starts.duplicate()
 
@@ -300,6 +312,7 @@ func watch(builder: CourseBuilder) -> void:
 		_watched.checked.disconnect(_on_checked)
 	_watched = builder
 	_holes_seen = _copy_holes(builder.course)
+	_read_paths()
 	builder.holes_changed.connect(_on_holes_changed)
 	builder.tiles_changed.connect(_on_tiles_changed)
 	builder.checked.connect(_on_checked)
@@ -332,6 +345,33 @@ func _flush_cells() -> void:
 	cells.assign(_cells.keys())
 	_cells.clear()
 	feed.cells_edited(_watched.course, cells, _watched.validator, _cells_lines, _watched.lines_now())
+	_flush_paths(cells)
+
+
+## E12-S1 (D68): of `cells`, the tiles that turned to or from cart path since the last read
+## (the course's cart path revision moved, and the path grid differs there) clear the walk
+## complaints of the walks they can reach (ReactionFeed.walks_edited).
+func _flush_paths(cells: Array[Vector2i]) -> void:
+	var c: CourseData = _watched.course
+	if c.surface_revision(Surface.Type.CART_PATH) == _path_revision:
+		return
+	var before := _path_grid
+	_read_paths()
+	var w := c.width + 2
+	var changed: Array[Vector2i] = []
+	for cell: Vector2i in cells:
+		var i := (cell.y + 1) * w + cell.x + 1
+		if i < 0 or i >= _path_grid.size():
+			continue
+		if before.size() != _path_grid.size() or before[i] != _path_grid[i]:
+			changed.append(cell)
+	feed.walks_edited(c, changed, tuning)
+
+
+## The watched course's cart path tiles and revision as they are now (_path_grid).
+func _read_paths() -> void:
+	_path_grid = GuestWalk.path_grid(_watched.course)
+	_path_revision = _watched.course.surface_revision(Surface.Type.CART_PATH)
 
 
 ## Build edited the hole in slot `slot`: a guest whose group has struck there, its verdict not
@@ -343,6 +383,15 @@ func _on_slot_edited(slot: int) -> void:
 		return
 	for play: GuestHole in brain.slot_edited(slot):
 		_stale[play] = true
+
+
+## E12-S1 (D68): cart path the walk to slot `slot`'s tee can reach changed: a guest that walked
+## there before the edit, its verdict not yet given, gives its walk complaint uncounted.
+func _on_walk_edited(slot: int) -> void:
+	if brain == null:
+		return
+	for play: GuestHole in brain.walked_to(slot):
+		_walk_stale[play] = true
 
 
 static func _copy_holes(c: CourseData) -> Array[HoleData]:
@@ -453,6 +502,7 @@ func _new_day(d: int) -> void:
 	_ensure_feed()
 	day = d
 	_stale.clear()
+	_walk_stale.clear()
 	var resumed := _resume_arrivals >= 0 and d == _first_day
 	day_arrivals = _resume_arrivals if resumed else arrivals_today()
 	var late: Array[Vector3i] = []
@@ -480,6 +530,10 @@ func _on_reacted(guest: Guest, reaction: GuestReaction, from_brain: GuestBrain) 
 	var counted := play == null or not _stale.has(play)
 	if play != null:
 		_stale.erase(play)
+		# E12-S1: a walk judged before a cart path edit it could reach is not the walk now.
+		if _walk_stale.has(play) and not reaction.passed[GuestReaction.Check.WALK]:
+			counted = false
+		_walk_stale.erase(play)
 	feed.push(reaction, day, from_brain.second, slot, counted)
 
 

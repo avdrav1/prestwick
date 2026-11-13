@@ -6,6 +6,8 @@ extends GutTest
 ## than the straight line. docs/design.md Guests and reactions, Walking. (The path search and
 ## its cache are tested in tests/test_guest_brain.gd, walking.)
 
+const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
+
 var tuning: GuestTuning
 
 
@@ -179,3 +181,99 @@ func test_a_walk_steps_by_time_and_ends_where_it_should() -> void:
 	assert_eq(none.duration, 0.0)
 	assert_true(none.is_done())
 	assert_eq(none.position(), from)
+
+
+# --- E12-S1 (D68): why a walk takes no path, the reach, what a path edit reaches ---
+
+## A walk along row 2 of the strip, tile (2, 2) to tile (36, 2): 170 yd.
+const WHY_FROM := Vector2(12.5, 12.5)
+const WHY_TO := Vector2(182.5, 12.5)
+
+
+func _why_text(c: CourseData, from: Vector2 = WHY_FROM, to: Vector2 = WHY_TO) -> String:
+	assert_false(GuestWalk.route(c, from, to, tuning).on_path, "the walk takes no path")
+	return GuestWalk.why(c, from, to, tuning).text("the 4th green", "the 5th tee")
+
+
+func test_the_reach_is_40_yd_and_the_share_is_gone() -> void:
+	assert_eq(tuning.cart_path_reach_yd, 40.0, "D68: about 40 yd")
+	assert_false("walk_path_share" in tuning, "D68: the half-the-walk share is retired")
+	# A path whose ends stand 37 yd from each end of the walk, quicker than walking across: taken.
+	var c := _strip()
+	_paint(c, _row(3, 9, 29), Surface.Type.CART_PATH)
+	var w := GuestWalk.route(c, WHY_FROM, WHY_TO, tuning)
+	assert_true(w.on_path, "within 40 yd of both ends")
+	assert_lt(w.path_share(), 0.7, "even with a good part of the walk off the path")
+
+
+func test_why_names_each_reason() -> void:
+	assert_eq(_why_text(_strip()), "no cart path")
+	var far := _strip()
+	_paint(far, _row(10, 15, 20), Surface.Type.CART_PATH)
+	assert_eq(_why_text(far), "no path within reach of the 4th green")
+	# From beside the green to tile (20, 3): its centre 80.2 yd from the tee, 40.2 past reach.
+	var short_of_tee := _strip()
+	_paint(short_of_tee, _row(3, 3, 20), Surface.Type.CART_PATH)
+	assert_eq(_why_text(short_of_tee), "path stops 41 yd short of the 5th tee")
+	var why := GuestWalk.why(short_of_tee, WHY_FROM, WHY_TO, tuning)
+	assert_eq(why.kind, GuestWalk.Reason.Kind.SHORT)
+	assert_eq(why.gap_yd, 41)
+	assert_false(why.at_start)
+	# The same path laid from the tee's end stops short of the green.
+	var short_of_green := _strip()
+	_paint(short_of_green, _row(3, 18, 35), Surface.Type.CART_PATH)
+	assert_eq(_why_text(short_of_green), "path stops 41 yd short of the 4th green")
+	# A path that joins both ends but swings 9 rows away and back: slower than walking across.
+	var slow := CourseData.create(40, 20, Surface.Type.ROUGH, 2)
+	var cells := []
+	for y in range(3, 13):
+		cells.append(Vector2i(3, y))
+		cells.append(Vector2i(35, y))
+	cells.append_array(_row(12, 3, 35))
+	_paint(slow, cells, Surface.Type.CART_PATH)
+	assert_eq(_why_text(slow), "path is slower than walking across")
+	# Through a cache, the same answer, kept until the path changes.
+	var cache := GuestWalk.Cache.new()
+	var kept := GuestWalk.why(short_of_tee, WHY_FROM, WHY_TO, tuning, 5.0, cache)
+	assert_same(GuestWalk.why(short_of_tee, WHY_FROM, WHY_TO, tuning, 5.0, cache), kept)
+	_paint(short_of_tee, _row(3, 21, 35), Surface.Type.CART_PATH)
+	assert_true(GuestWalk.route(short_of_tee, WHY_FROM, WHY_TO, tuning, 5.0, cache).on_path,
+			"extended to the tee, the path serves the walk")
+
+
+func test_a_path_edit_reaches_a_walk_on_its_piece_or_within_reach_of_its_ends() -> void:
+	var c := _strip()
+	_paint(c, _row(3, 3, 20), Surface.Type.CART_PATH)
+	var reaches := func(cell: Vector2i) -> bool:
+		return GuestWalk.path_edit_reaches(c, WHY_FROM, WHY_TO, [cell] as Array[Vector2i], tuning)
+	assert_true(reaches.call(Vector2i(21, 3)), "laid on the end of the piece by the green")
+	assert_true(reaches.call(Vector2i(21, 4)), "diagonally beside it")
+	assert_true(reaches.call(Vector2i(10, 3)), "taken up from the piece")
+	assert_true(reaches.call(Vector2i(34, 5)), "within reach of the tee")
+	assert_false(reaches.call(Vector2i(28, 9)), "beside no piece the walk can use, out of reach")
+	assert_false(reaches.call(Vector2i(23, 3)), "two tiles past the piece's end")
+
+
+func test_round_walks_are_the_walks_guests_take_to_each_tee() -> void:
+	var c: CourseData = GuestCourse.far_next_tee(false)
+	var walks := GuestWalk.round_walks(c)
+	assert_eq(walks.size(), 2)
+	assert_eq(walks[0].from, (Vector2(c.clubhouse_door()) + Vector2(0.5, 0.5)) * 5.0)
+	assert_eq([walks[0].from_hole, walks[0].to_hole, walks[0].to_slot], [0, 1, 0])
+	assert_eq(walks[1].from, (Vector2(c.holes[0].cup) + Vector2(0.5, 0.5)) * 5.0)
+	assert_eq(walks[1].to, (Vector2(c.holes[1].tee) + Vector2(0.5, 0.5)) * 5.0)
+	assert_eq([walks[1].from_hole, walks[1].to_hole, walks[1].to_slot], [1, 2, 1])
+	# A closed hole is skipped, as GuestBrain.next_open_hole skips it.
+	c.holes[0].open = false
+	walks = GuestWalk.round_walks(c)
+	assert_eq(walks.size(), 1)
+	assert_eq([walks[0].from_hole, walks[0].to_hole], [0, 2])
+	# The brain walks the same: every record of hole 2 left from where round_walks says.
+	c.holes[0].open = true
+	var brain := GuestBrain.new(c, 3, tuning)
+	brain.run_day()
+	for g: Guest in brain.guests:
+		for r: Guest.HoleRecord in g.records:
+			var w: Dictionary = GuestWalk.round_walks(c)[r.number - 1]
+			assert_eq(r.walk_from_hole, int(w.from_hole))
+			assert_almost_eq(r.walk_s, GuestWalk.route(c, w.from, w.to, tuning).duration, 1e-6)

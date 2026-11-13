@@ -641,6 +641,8 @@ func _head_for(g: GuestGroup, n: int, t: int, update: bool = true) -> void:
 		guest.walk_bare_s = -1.0
 		guest.walk_path_share = 0.0
 		guest.walk_from_hole = 0
+		guest.walk_on_path = false
+		guest.walk_reason = null
 	g.cross_held_s = 0
 	if update:
 		_update_to_tee(g, t)
@@ -697,7 +699,15 @@ func _tee_off(g: GuestGroup, h: HoleData, t: int) -> void:
 	g.struck = false
 	var tee := field.tile_center(h.tee)
 	var walk := route(g.prev_cup, tee) if g.has_prev_cup else null
+	# E12-S1 (D68): why no path served a walk the least patient guest would find long, the
+	# reason its complaint names (GuestWalk.why, the Build overlay's too).
+	var reason: GuestWalk.Reason = null
+	if walk != null and not walk.on_path \
+			and walk.duration > GuestReaction.walk_limit(tuning.patience_min, tuning):
+		reason = GuestWalk.why(course, g.prev_cup, tee, tuning, field.yards_per_tile, _route_cache)
 	for guest: Guest in g.guests:
+		guest.walk_on_path = walk != null and walk.on_path
+		guest.walk_reason = reason
 		guest.walk_yd = walk.length if walk != null else -1.0
 		guest.walk_s = walk.duration if walk != null else -1.0
 		guest.walk_bare_s = walk.bare_s if walk != null else -1.0
@@ -817,6 +827,20 @@ func slot_edited(slot: int) -> Array[GuestHole]:
 		else:
 			guest.hole.replan()
 	return stale
+
+
+## E12-S1 (D68): Build changed cart path the walk to the tee of the hole in slot `slot` can
+## reach. Returns the plays there whose walk is already judged (their group teed off, the verdict
+## not yet given): their walk was the one before the edit (GuestSim gives their walk complaint
+## uncounted). A group still walking to the tee measures its walk as it tees off.
+func walked_to(slot: int) -> Array[GuestHole]:
+	var out: Array[GuestHole] = []
+	for guest: Guest in guests:
+		if guest.hole == null or guest.hole_recorded or guest.hole.slot != slot or guest.is_done():
+			continue
+		if group_of(guest).phase == GuestGroup.Phase.ON_HOLE:
+			out.append(guest.hole)
+	return out
 
 
 ## True when `guest` stands at its ball, ready to swing in second `t` (E3-S20): not walking,
@@ -1060,6 +1084,8 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.walk_bare_s = guest.walk_bare_s
 	r.walk_path_share = guest.walk_path_share
 	r.walk_from_hole = guest.walk_from_hole
+	r.walk_on_path = guest.walk_on_path
+	r.walk_reason = guest.walk_reason
 	r.walk_from_clubhouse = guest.walk_from_clubhouse
 	r.start_s = g.start_s
 	r.end_s = t

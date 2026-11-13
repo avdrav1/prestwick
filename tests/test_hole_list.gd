@@ -1156,7 +1156,7 @@ func test_a_walk_complaint_names_the_walk_in_the_hole_panel() -> void:
 	_give(m, r, 20)
 	assert_true(panel.reaction_label.visible)
 	assert_string_contains(panel.reaction_label.text,
-			"a long walk from the 4th green to the 5th tee, 260 yd and no cart path.")
+			"a long walk from the 4th green to the 5th tee, 260 yd: no cart path.")
 	assert_string_contains(panel.reaction_label.tooltip_text, "Failed: walk.")
 
 

@@ -268,10 +268,10 @@ func test_the_walk_fails_over_its_limit_without_a_cart_path() -> void:
 				"no walk (a hole changed under the group): nothing to judge")
 	# The same long walk along a cart path passes.
 	var on_path := _record(2, 4, 4, 0, 9.0)
-	on_path.walk_path_share = tuning.walk_path_share
-	assert_true(GuestReaction.walk_passes(on_path, 1, tuning), "it followed a path")
-	on_path.walk_path_share = tuning.walk_path_share - 0.01
-	assert_false(GuestReaction.walk_passes(on_path, 1, tuning), "a little path is no path")
+	on_path.walk_on_path = true
+	assert_true(GuestReaction.walk_passes(on_path, 1, tuning), "it followed a path (the route took it)")
+	on_path.walk_on_path = false
+	assert_false(GuestReaction.walk_passes(on_path, 1, tuning), "no path taken, a long walk fails")
 
 
 func test_a_long_walk_alone_is_a_complaint_naming_it() -> void:
@@ -285,8 +285,8 @@ func test_a_long_walk_alone_is_a_complaint_naming_it() -> void:
 		assert_true(r.passed[GuestReaction.Check.PACE], "pace is the waits")
 		assert_eq(r.fail_weight, tuning.walk_check_weight)
 		assert_eq(r.lead_check(), GuestReaction.Check.WALK)
-		assert_eq(r.text, "Hole 5: a long walk from the 4th green to the 5th tee, 240 yd and no cart path.")
-		assert_eq(r.lead_line(), "a long walk from the 4th green to the 5th tee, 240 yd and no cart path.")
+		assert_eq(r.text, "Hole 5: a long walk from the 4th green to the 5th tee, 240 yd: no cart path.")
+		assert_eq(r.lead_line(), "a long walk from the 4th green to the 5th tee, 240 yd: no cart path.")
 		assert_eq(r.failed_line(), "Failed: walk.")
 	# From the clubhouse, on the round's first hole.
 	var out := _record(1, 4, 4, 0, 9.0)
@@ -294,23 +294,69 @@ func test_a_long_walk_alone_is_a_complaint_naming_it() -> void:
 	out.walk_from_clubhouse = true
 	out.walk_from_hole = 0
 	var first := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), out, _statics(), tuning)
-	assert_eq(first.text, "Hole 1: a long walk from the clubhouse to the 1st tee, 300 yd and no cart path.")
+	assert_eq(first.text, "Hole 1: a long walk from the clubhouse to the 1st tee, 300 yd: no cart path.")
 	assert_true(first.from_clubhouse)
 	# After another fail it is the short form.
 	var slow := _record(3, 4, 4, 60, 9.0)
 	slow.walk_yd = 200.0
 	var both := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), slow, _statics(), tuning)
-	assert_eq(both.text, "Hole 3: a long walk from the 2nd green to the 3rd tee, 200 yd and no cart path. Also slow (60 s wait).")
+	assert_eq(both.text, "Hole 3: a long walk from the 2nd green to the 3rd tee, 200 yd: no cart path. Also slow (60 s wait).")
 	# A purist's blind tee shot weighs the same and comes first in Check order.
 	var blind := GuestReaction.judge(_guest(10, 5, Guest.Taste.PURIST), slow, _statics(false, true), tuning)
 	assert_eq(blind.lead_check(), GuestReaction.Check.FAIR)
 	assert_string_ends_with(blind.text, "Also slow (60 s wait) and a long walk from the 2nd green (200 yd, no cart path).")
 
 
+## E12-S1 (D68): the complaint names why no path served the walk, in GuestWalk.Reason's words
+## (the Build overlay's), and a save keeps the reason.
+func test_a_walk_complaint_names_why_no_path_served_it() -> void:
+	var cases := {
+		GuestWalk.Reason.Kind.NOT_NEAR: "no path within reach of the 4th green",
+		GuestWalk.Reason.Kind.SLOWER: "path is slower than walking across",
+	}
+	for k: int in cases:
+		var rec := _record(5, 4, 4, 0, 9.0)
+		rec.walk_yd = 240.0
+		rec.walk_from_hole = 4
+		rec.walk_reason = GuestWalk.Reason.new()
+		rec.walk_reason.kind = k as GuestWalk.Reason.Kind
+		var r := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), rec, _statics(), tuning)
+		assert_eq(r.text, "Hole 5: a long walk from the 4th green to the 5th tee, 240 yd: %s." % cases[k])
+	var short := _record(5, 4, 4, 0, 9.0)
+	short.walk_yd = 240.0
+	short.walk_from_hole = 4
+	short.walk_reason = GuestWalk.Reason.new()
+	short.walk_reason.kind = GuestWalk.Reason.Kind.SHORT
+	short.walk_reason.gap_yd = 32
+	short.walk_reason.at_start = false
+	var r := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), short, _statics(), tuning)
+	assert_eq(r.walk_why(), "path stops 32 yd short of the 5th tee")
+	assert_eq(r.text, "Hole 5: a long walk from the 4th green to the 5th tee, 240 yd: path stops 32 yd short of the 5th tee.")
+	var slow := _record(5, 4, 4, 60, 9.0)
+	slow.walk_yd = 240.0
+	slow.walk_from_hole = 4
+	slow.walk_reason = short.walk_reason
+	var both := GuestReaction.judge(_guest(10, 5, Guest.Taste.PURIST), slow, _statics(false, true), tuning)
+	assert_string_ends_with(both.text,
+			"a long walk from the 4th green (240 yd, path stops 32 yd short of the 5th tee).")
+	var errors: Array[String] = []
+	var back := GuestReaction.from_save(r.to_save(), errors)
+	assert_eq(errors, [] as Array[String])
+	assert_eq(back.walk_why(), r.walk_why(), "a save keeps the reason")
+	var old := r.to_save()
+	old.erase("walk_reason")
+	assert_null(GuestReaction.from_save(old, errors).walk_reason, "an older save has none")
+	# A long walk that followed a path passes: the share of it on path no longer matters (D68).
+	var part := _record(5, 4, 4, 0, 9.0)
+	part.walk_on_path = true
+	part.walk_path_share = 0.2
+	assert_true(GuestReaction.walk_passes(part, 1, tuning), "a fifth of the walk on a quicker path")
+
+
 func test_a_path_that_made_a_long_walk_quick_is_named_in_the_praise() -> void:
 	var rec := _record(5, 4, 4, 0, 2.0)
 	rec.walk_bare_s = 9.0
-	rec.walk_path_share = 0.9
+	rec.walk_on_path = true
 	rec.walk_from_hole = 4
 	var r := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), rec, _statics(), tuning)
 	assert_eq(r.kind, GuestReaction.Kind.PRAISE)
@@ -318,7 +364,7 @@ func test_a_path_that_made_a_long_walk_quick_is_named_in_the_praise() -> void:
 	assert_eq(r.text, "Hole 5: loved it, 4 on a par 4, and the cart path from the 4th green made the walk quick.")
 	# A short walk that would have been short anyway: plain praise.
 	var near := _record(5, 4, 4, 0, 1.0)
-	near.walk_path_share = 1.0
+	near.walk_on_path = true
 	var plain := GuestReaction.judge(_guest(10, 5, Guest.Taste.CASUAL), near, _statics(), tuning)
 	assert_false(plain.path_made_quick)
 	assert_eq(plain.text, "Hole 5: loved it, 4 on a par 4.")
