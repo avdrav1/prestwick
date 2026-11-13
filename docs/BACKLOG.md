@@ -1550,6 +1550,22 @@ Done when: rc11 is cut with every story below checked.
   - Touches: `docs/`, `.claude/skills/ship-it/`
   - Done 2026-11-13: `/ship-it` cut 0.6.0-rc11 (tag `v0.6.0-rc11`) with E15-S1 (D70): tests 1360/1360, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. The user confirmed a famous-course game starts on $5,000. GitHub pre-release, itch channels linux and windows, the download page pointed at Famous courses.
 
+## E16: Dogleg Hollow — active
+
+From the user (2026-11-13): "it seems like none of the famous courses have doglegs; can we add new courses or new holes with doglegs?" Only Pine Ridge has doglegs (1, 5, 9), and they bend gently; Harbor Links straightened its two. The user chose a fifth famous course of famous real doglegs. Ships as rc12.
+
+Done when: rc12 is cut with the course built in and every story below checked.
+
+- [ ] E16-S1 Build "Dogleg Hollow": nine famous doglegs. Every hole turns.
+  - Note: built like the other famous courses (E13, D69 bridges, D70 built in): a fixture `tests/fixtures/dogleg_hollow.gd` laying the course through `CourseBuilder` on a 128 x 128 map with every parcel owned, contoured greens, the clubhouse, cart paths and bridges where walks and balls need them (`scripts/bridge_audit.gd`), saved to `courses/dogleg_hollow.json` by a save script, with `course_id` and `course_version` 1, its hash in `course/famous_courses.gd`, and a section in `docs/courses.md` crediting each real hole (names original; no trademarks in game or file). Every hole is modelled on a famous real dogleg at its real yardage and par (sharp left and right par 4s, a double-dogleg par 5, a dogleg round water, a short dogleg drivable for the brave), with the turn clear on the map at 0.175x (a bend of at least 30 degrees, D47), and trees, water or bunkers in each corner so cutting it is a real risk-reward choice. Doglegs must pass D47 and D51 (the landing zone and footprint follow the line of play; rule 4 yardage round the turn), and guests aim round the bend (D54).
+  - Accept: the course is listed on the Famous courses page and starts a game; all nine holes open with no validator issue; every hole's turn reads at 0.175x; the walk overlay shows no red walk; a 24-arrival guest day finishes before dusk (`scripts/guest_day.gd -- examples` gains its row) and `/balance reactions` gains its row; it rates at least 3.5 stars or the note says which holes are deliberately hard; the bridge audit flags nothing.
+  - Test: `tests/test_example_courses.gd` (its test, including each hole's turn angle), `tests/test_famous_courses.gd` (five courses); screenshots at 0.175x and of three signature holes at 0.5x.
+  - Touches: `tests/`, `courses/`, `course/`, `scripts/`, `docs/`
+- [ ] E16-S2 Cut the next release candidate (rc12).
+  - Accept: `/ship-it` with the itch push; the ship-it skill's course list, the download page, `docs/how-to-play.md` and `docs/itch-page.md` name all five famous courses.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`, `.claude/skills/ship-it/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
