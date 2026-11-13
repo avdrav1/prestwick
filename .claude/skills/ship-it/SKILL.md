@@ -27,6 +27,7 @@ description: Cut a milestone build of Prestwick. Verifies the epic is complete, 
 6. Copy the newest example course into `build/courses/` so the build ships with something to play.
 7. Commit `release: <version>` and tag `v<version>`.
 8. Push only when the user asks (`git push origin main --tags`). Say the tag, the build paths and the release note path in three lines.
+9. When the user asks to publish to itch.io (avdrav.itch.io/prestwick, butler in `~/.local/bin`, logged in): stage `build/itch-<version>/linux/prestwick.x86_64` and `build/itch-<version>/windows/Prestwick.exe` (the same file names every release, so the itch app updates in place), each folder with `how-to-play.md` and `courses/playtest_nine.json`; then `butler push build/itch-<version>/linux avdrav/prestwick:linux --userversion <version>` and the same for `windows`, and wait for `butler status avdrav/prestwick:<channel>` to show the build done. Never use `rm -rf` (denied); stage into a new folder per version.
 
 ## Rules
 
