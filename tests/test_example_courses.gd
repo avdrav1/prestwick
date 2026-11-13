@@ -109,3 +109,82 @@ func test_pine_ridge() -> void:
 	var built := PineRidge.course()
 	assert_eq(c.content_hash(), built.content_hash(),
 			"courses/pine_ridge.json is out of date: rerun tests/fixtures/pine_ridge_save.gd")
+
+
+## E13-S1: Harbor Links (HarborLinks), nine holes over water. Beyond _check_holes: par 35, no
+## hint (no tee where another hole's approaches land), every tee shot seen and every hole with
+## a hazard on its line and a dry way round it (so guests can praise every hole), contoured
+## greens D7 holds a ball on, every pond flat one step below its shore (D66), and no walk a
+## guest would complain of (D65, D68: each quick enough or on a cart path).
+func test_harbor_links() -> void:
+	var c := _load(HarborLinks.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, HarborLinks.COURSE_NAME)
+	assert_eq(c.author, HarborLinks.COURSE_AUTHOR)
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, HarborLinks.HOLES)
+	var v := CourseValidator.new()
+	var checks := HoleChecks.new()
+	var par := 0
+	for h: HoleData in c.holes:
+		par += h.par
+		var st := checks.measure(c, h)
+		assert_true(st.fair(), "hole %d tee shot seen (blind at %s)" % [h.number, st.blind_at])
+		assert_true(st.interesting(), "hole %d: a hazard on the line and a dry way round" % h.number)
+		_assert_contoured(c, h)
+	assert_eq(par, 35, "par of the nine")
+	for slot: Array in v.hint_slots(c):
+		assert_eq(slot.size(), 0, "no tee where another hole's approaches land: %s" % [slot])
+	for y: int in c.height:
+		for x: int in c.width:
+			if c.get_surface(x, y) != Surface.Type.WATER:
+				continue
+			assert_eq(c.get_height(x, y), HarborLinks.GROUND - 1, "water at %d, %d" % [x, y])
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var t := Vector2i(x, y) + d
+				if c.in_bounds(t.x, t.y) and c.get_surface(t.x, t.y) != Surface.Type.WATER:
+					assert_gt(c.get_height(t.x, t.y), c.get_height(x, y), "shore %s above its water" % t)
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	var on_path := 0
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+		if r.on_path:
+			on_path += 1
+	assert_eq(on_path, HarborLinks.PATHS.size(), "every cart path serves its walk")
+	assert_eq(c.content_hash(), HarborLinks.course().content_hash(),
+			"courses/harbor_links.json is out of date: rerun scripts/save_harbor_links.gd")
+
+
+## A green D7 holds a still ball on: 25 to 60 tiles, at least one contour, each one step.
+func _assert_contoured(c: CourseData, h: HoleData) -> void:
+	var tiles: Array[Vector2i] = [h.cup]
+	var seen := {h.cup: true}
+	var i := 0
+	while i < tiles.size():
+		var t: Vector2i = tiles[i]
+		i += 1
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := t + d
+			if not seen.has(n) and c.in_bounds(n.x, n.y) and c.get_surface(n.x, n.y) == Surface.Type.GREEN:
+				seen[n] = true
+				tiles.append(n)
+	assert_between(tiles.size(), 25, 60, "hole %d green tiles" % h.number)
+	var low := CourseData.MAX_HEIGHT
+	var high := 0
+	var steepest := 0
+	for t: Vector2i in tiles:
+		low = mini(low, c.get_height(t.x, t.y))
+		high = maxi(high, c.get_height(t.x, t.y))
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+			if seen.has(t + d):
+				steepest = maxi(steepest, absi(c.get_height(t.x + d.x, t.y + d.y) - c.get_height(t.x, t.y)))
+	assert_gte(high - low, 1, "hole %d green has a contour" % h.number)
+	assert_eq(steepest, 1, "hole %d contours are one step" % h.number)

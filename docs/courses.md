@@ -58,3 +58,32 @@ Yards are the line of play the validator measures (rule 4). Hole 4 is 15 yd shor
 hole: the east edge holds no more. Not modelled: Pinehurst's sandy waste areas, Augusta 13th's
 azaleas, the 18th's pair of fairway bunkers (one here, at the corner), Merion's wicker baskets, and the pews' grass
 strips between rows at their real scale (here a row every 3 tiles, 15 yd).
+
+## Harbor Links (E13-S1)
+
+`courses/harbor_links.json`, built by `tests/fixtures/harbor_links.gd` (HarborLinks) and saved
+by `scripts/save_harbor_links.gd`. Nine holes over water, par 35, 3,200 yd, on flat lowland
+with every pond dug into a hollow (D66). The front four run anticlockwise round the edge of the
+map; the back five play round the two big waters in the middle, the harbour (the 5th's left,
+the 7th's "water left all the way") and the west lake (the 1st's right, the 8th's green, the
+9th's island). The clubhouse stands beside the 1st tee; one cart path joins the only long walk,
+the 4th green round its pond to the 5th tee.
+
+| Hole | Name | Par | Yards | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Heron's Reach | 4 | 435 | PGA National (Champion) 16th, the first of the "Bear Trap", par 4, about 434 yd (approximate) | Water down the right (the west lake) and a creek across the approach. The real hole doglegs right round its lake; here it runs straight up the edge. |
+| 2 | Creek Bend | 5 | 516 | Augusta National 13th, par 5, 510 yd (before its 2023 lengthening) | A fairway that bows away and turns back left to a green behind a creek, reachable in two. A gentle bend, not the real sharp dogleg, along the map's edge. |
+| 3 | Long Wharf | 5 | 517 | TPC Sawgrass (Stadium) 16th, par 5, 523 yd | Water right of the green and a bunker in front; reachable in two. |
+| 4 | Lantern Pond | 3 | 185 | Muirfield Village 12th, par 3, about 184 yd (approximate) | A pond the whole way to a shallow green set across the line, bunkers behind. |
+| 5 | Breakwater | 4 | 460 | Bay Hill 18th, par 4, about 458 yd (approximate) | Water short and right of the green; here the harbour also runs down the left. |
+| 6 | Ferry Crossing | 3 | 156 | Augusta National 12th, par 3, 155 yd | A creek in front of a wide, shallow green, bunkers behind. |
+| 7 | Long Shore | 4 | 461 | TPC Sawgrass (Stadium) 18th, par 4, 462 yd | Water left the whole way, curling in short and left of the green. Straight here; the real hole bends gently left. |
+| 8 | Short Tack | 4 | 332 | TPC Scottsdale (Stadium) 17th, par 4, about 332 yd (approximate) | A short par 4 a long hitter can drive, water left of the green. |
+| 9 | Lighthouse Isle | 3 | 138 | TPC Sawgrass (Stadium) 17th, par 3, 137 yd | An island green with a walkway at its back. |
+
+Yards are the line of play the validator measures (rule 4); each is within 6 yd of the real
+hole's (the 2nd and 3rd are set where the 640 yd map and their neighbours fit them). Not
+modelled: the real holes' elevation (the course is flat), PGA National's and Augusta's doglegs,
+and the island green's single pot bunker. Measured on the file (10 guest days at
+data/guests.json's arrivals): praise 0.83, neutral 0.16, complaint 0.01, 4.5 stars; at 24
+arrivals every group finished nine, the latest at 474 s of the 540 s day (seeds 1 to 5).
