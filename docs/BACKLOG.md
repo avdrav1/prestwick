@@ -1450,7 +1450,7 @@ Done when: rc7 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-12: `/ship-it` cut 0.6.0-rc7 (tag `v0.6.0-rc7`) with E12-S1 (D68): tests 1303/1303, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release, itch.io channels linux and windows, and the download page.
 
-## E13: Famous holes — active
+## E13: Famous holes — done
 
 Example courses modelled on famous real holes, renamed (user, 2026-11-13): shipped for players and testers, and used as balance and stress fixtures. Ships in the next release candidate (rc8).
 
@@ -1488,10 +1488,11 @@ Done when: four example courses ship with the build and on itch, the balance and
   - Touches: `scripts/`, `tests/`, `docs/`, `.claude/skills/ship-it/`
   - Done 2026-11-13: shipped as they are (the user: no difficulty targets). `/ship-it` steps 6 and 9 copy `courses/harbor_links.json`, `old_grey_links.json`, `pine_ridge.json`, `cliffside.json` and `playtest_nine.json` into `build/courses/` and each itch channel's `courses/`. The export presets already pack `courses/*.json` (checked). At start the game itself (Main as the running scene, not a test's Main) copies the four from `res://courses/` into `user://courses/` (`CourseExport.EXAMPLES`, `install_examples`: byte for byte through a temp file, never over a file of the same name), so the itch build lists them on Import course with no step of the player's. Every file's name and author were right ("Prestwick"); no fixture changed. `scripts/check_build.sh` now boots the build with a throwaway `XDG_DATA_HOME`, so the copy never reaches the player's folder. Rows: `ReactionField.example_day` / `example_row` (5 days at `EXAMPLE_ARRIVALS` 24, day seeds 1 to 5, no target), in `/balance reactions` and `scripts/guest_day.gd -- examples [arrivals=N]`, which print the same rows: Harbor Links 4.32 (praise 0.69, neutral 0.28, complaint 0.03; 4.5 stars; latest finish 474 s), Old Grey Links 4.46 (0.75/0.23/0.02; 4.5; 436 s), Pine Ridge 4.44 (0.74/0.24/0.02; 4.5; 421 s), Cliffside 4.25 (0.65/0.32/0.03; 4.0 stars; 524 s), every group finishing nine on every day (dusk 540); every other `/balance reactions` row the same as E12-S1's bit for bit, every target hit (`docs/decisions/e13-s5-balance-reactions.txt`, `-guest-day-examples.txt`). Docs: `docs/how-to-play.md` (Start), `docs/itch-page.md` (What's in this build), `docs/courses.md`, the balance skill. Tests: `tests/test_example_courses.gd` (EXAMPLES names the four, every preset packs `courses/*.json`, the ship-it skill names all five files, an install into an empty folder lists each as "\"Harbor Links\" by Prestwick: 9 holes, par 35, 3,200 yd" and the like, a file of the same name is kept and a second install copies nothing, a missing source is skipped, a test's Main installs nothing), `tests/test_balance_reactions.gd` (a reported row per course). Screenshot looked at: `docs/decisions/e13-s5-import-examples.png` (`tests/fixtures/main_menu_shot_import_examples.tscn`).
   - Open: Cliffside's mix at 24 arrivals shows 4.0 stars (4.25; 4.49 at data/guests.json's 16 arrivals), its pace fails 0.26 and latest finish 524 s the closest to dusk. A player who deletes an example gets it back at the next start. `playtest_nine.json` ships beside the build but is not copied in (its author reads "E3-S50"). The download page (gh-pages) is the user's.
-- [ ] E13-S6 Cut the next release candidate (rc8).
+- [x] E13-S6 Cut the next release candidate (rc8).
   - Accept: `/ship-it` with the itch push; tag, GitHub pre-release, itch, download page.
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`
+  - Done 2026-11-13: `/ship-it` cut 0.6.0-rc8 (tag `v0.6.0-rc8`) with E13-S1 to S5: tests 1314/1314, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the five course files and how-to-play; itch channels linux and windows; the download page.
 
 ## Icebox
 
