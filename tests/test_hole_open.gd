@@ -271,7 +271,8 @@ func test_water_on_a_rule3_path_outside_the_footprint_closes_it() -> void:
 	# And round the bottom end: no path is left, so the rerun closes it.
 	_paint_column(b, 20, 31, 39, Surface.Type.WATER)
 	assert_false(b.hole(1).open, "the rerun closes a hole that now fails rule 3")
-	assert_eq(_rules(b.issues_for(1)), [3] as Array[int])
+	# E14-S3 (D69): and rule 7, the lake cuts the green off from the tee's side on foot too.
+	assert_eq(_rules(b.issues_for(1)), [3, 7] as Array[int])
 	assert_false(b.can_open(1))
 
 

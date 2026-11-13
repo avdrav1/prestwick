@@ -16,6 +16,16 @@ arrivals: Harbor Links 4.32, Old Grey Links 4.46, Pine Ridge 4.44, Cliffside 4.2
 4.49 at data/guests.json's 16), every group finishing nine, the latest at 474, 436, 421 and 524 s
 of the 540 s day.
 
+E14-S3 (D69): guests never wade, so each course carries footbridges where its lines cross water
+(cart path painted on water, laid by `tests/fixtures/fixture_bridges.gd` on the water tiles of a
+line): Harbor Links over the 1st's, 2nd's and 6th's creeks and from the 9th tee's shore over the
+west lake to the island green (the walkway at its back stays); Old Grey Links over the 1st's burn
+and both of the 3rd's (beside the 9th's, which it had); Pine Ridge over the 5th's creek before its
+green and the 7th's, the Footbridge; Cliffside straight over the cove on the 7th, The Crossing.
+Every hole passes rule 7. At 24 arrivals, five days: Harbor Links 4.37, Old Grey Links 4.47, Pine
+Ridge 4.42, Cliffside 4.26 (4.5 stars), every group finishing nine, the latest at 468, 431, 437 and
+530 s (`docs/decisions/e14-s3-balance-reactions.txt`).
+
 ## Old Grey Links (E13-S2)
 
 `courses/old_grey_links.json`, built by `tests/fixtures/old_grey_links.gd` (OldGreyLinks) and

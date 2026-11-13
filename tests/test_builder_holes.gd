@@ -299,8 +299,10 @@ func test_an_undo_puts_back_the_reads_a_later_paint_moves_the_turn_by() -> void:
 	assert_eq(b.lines_now()[0], v.line_of_play(c, c.holes[0]), "as a fresh measure has it")
 	assert_true(b.paint(z, Surface.Type.FAIRWAY, 1))
 	assert_eq(b.lines_now()[0].size(), 2, "the landing zone's read still counts: measured again")
-	# E8-S1 (D64): the footprint closes it and the rerun opens it again, since it still passes.
-	assert_true(c.holes[0].open, "still legal straight, so open after the paint")
+	# E8-S1 (D64): the footprint closes it. E14-S3 (D69): the painted tile stands in the pond, a
+	# one-tile island in the footprint no guest can walk to, so rule 7 keeps it closed.
+	assert_false(c.holes[0].open, "an island in the pond: closed")
+	assert_eq(b.issues_for(1)[0].rule, 7)
 	# A step that kept no lines (a paint outside a stroke) searches the reads as it writes.
 	assert_true(b.undo())
 	assert_eq(b.lines_now()[0], line)

@@ -14,6 +14,13 @@ extends RefCounted
 ##   5. No tee inside another hole's landing zone (a disc on the line of play of each hole of
 ##      zone_from_yd or more, whatever its par: D35, E6-S37; a dogleg's at its turn, D51).
 ##   6. Tee and cup on owned land (D30, E6-S4). The footprint need not be owned.
+##   7. On foot (E14-S3, D69): the tee, the cup and every dry tile of the footprint a ball could
+##      rest on (owned, not OB, not the clubhouse) can be walked to from the clubhouse door (from
+##      the tee with no clubhouse): through tiles that are dry or bridged, 8 neighbours, no
+##      diagonal past water, heights ignored, any land, owned or not (the walks guests take,
+##      guests/guest_walk.gd). The reason names the place: "no way to walk to the 9th green:
+##      add a bridge". Measured once per course water and bridges (Walk) and per hole while they
+##      and the hole's line stand, so an edit that moves no water costs nothing here.
 ##
 ## Each failing rule is one Issue: the rule, the tile at fault and a one-line reason.
 ## Hints (E3-S39, hint_slots) are Issues with rule HINT: advice shown in Build that never
@@ -22,7 +29,7 @@ extends RefCounted
 
 ## Grid constant (CLAUDE.md Grid, D4), the same as BallParams.yards_per_tile (a test checks).
 const YARDS_PER_TILE: float = 5.0
-const RULE_COUNT: int = 6
+const RULE_COUNT: int = 7
 ## The `rule` of a hint (hint_slots): not a rule at all.
 const HINT: int = 0
 
@@ -48,6 +55,13 @@ class Issue:
 
 var tuning: ValidatorTuning
 
+## E14-S3: rule 7's walking graph for the course's water and bridges as last read (Walk.key),
+## and the last few graphs by their walkable tiles (WALK_KEPT), so an undo that puts the water
+## back as it was finds its graph labelled already.
+var _walk_graph: Walk = null
+var _walk_kept: Array[Walk] = []
+## Rule 7's graphs kept for an undo (the latest and the ones before it).
+const WALK_KEPT: int = 4
 ## _disc_offsets' cache: the radius it was built for and its offsets.
 var _disc_r: float = -1.0
 var _disc_cache: Array[Vector2i] = []
@@ -305,6 +319,120 @@ static func by_number(course: CourseData, slots: Array) -> Dictionary:
 	return out
 
 
+## E14-S3 (D69): rule 7's graph. A tile is walkable when it is on the map and is not water or
+## carries a bridge; tiles join through their 8 neighbours, a diagonal only where both tiles
+## beside it are walkable (as GuestWalk's search steps). Components are labelled when asked for,
+## a flood from the tile asked about. One per course's water and bridges (key).
+class Walk:
+	extends RefCounted
+	var key: String = ""
+	var _w: int
+	var _h: int
+	var _ok := PackedByteArray()
+	var _label := PackedInt32Array()
+	var _next: int = 1
+	var _strays := PackedInt32Array()
+	var _strays_home: int = -1
+	## Each hole's rule 7 issue on this graph (CourseValidator._rule7), null when it passes.
+	var issues: Dictionary = {}
+
+	## The graph of `course`, its walkable tiles `ok` (walkable_tiles).
+	func _init(course: CourseData, ok: PackedByteArray) -> void:
+		key = Walk.key_of(course)
+		_w = course.width
+		_h = course.height
+		_ok = ok
+		_label.resize(ok.size())
+
+	## 1 on each walkable tile of `course`, row by row.
+	static func walkable_tiles(course: CourseData) -> PackedByteArray:
+		var tiles: PackedByteArray = course.packed_tiles()
+		var ok := PackedByteArray()
+		ok.resize(tiles.size())
+		var water: int = Surface.Type.WATER
+		for i: int in tiles.size():
+			if (tiles[i] & 0x0F) != water:
+				ok[i] = 1
+		for b: Vector2i in course.bridge_cells():
+			ok[b.y * course.width + b.x] = 1
+		return ok
+
+	## True when this graph's walkable tiles are `ok`.
+	func same(ok: PackedByteArray) -> bool:
+		return _ok == ok
+
+	## What the graph reads of `course`: the course, its water and its bridges.
+	static func key_of(course: CourseData) -> String:
+		return "%d:%d:%d" % [course.get_instance_id(), course.surface_revision(Surface.Type.WATER),
+				course.bridge_revision]
+
+	func walkable(t: Vector2i) -> bool:
+		return t.x >= 0 and t.y >= 0 and t.x < _w and t.y < _h and _ok[t.y * _w + t.x] != 0
+
+	## The component of `t`, 0 when it is not walkable.
+	func label(t: Vector2i) -> int:
+		if not walkable(t):
+			return 0
+		var i: int = t.y * _w + t.x
+		if _label[i] == 0:
+			_flood(i)
+		return _label[i]
+
+	## E14-S3: the walkable tiles not in component `home`, by index (row order): the islands, read
+	## once per graph and home (one pass over the map), so a hole's footprint is checked against
+	## them alone, and a course with none checks nothing.
+	func strays(home: int) -> PackedInt32Array:
+		if home == _strays_home:
+			return _strays
+		_strays_home = home
+		_strays = PackedInt32Array()
+		for i: int in _ok.size():
+			if _ok[i] != 0 and _label[i] != home:
+				_strays.append(i)
+		return _strays
+
+	## Row width.
+	func width() -> int:
+		return _w
+
+	## Labels the component holding `start` by spans: each run of a row is filled at once and
+	## the rows above and below it are searched for runs to fill next. Diagonals step only past
+	## two walkable tiles, so a diagonal tile is reached through either of them anyway, and 8
+	## neighbours label as 4 do.
+	func _flood(start: int) -> void:
+		var id: int = _next
+		_next += 1
+		var w: int = _w
+		var stack := PackedInt32Array([start])
+		while not stack.is_empty():
+			var i: int = stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
+			if _label[i] != 0:
+				continue
+			@warning_ignore("integer_division")
+			var y: int = i / w
+			var row: int = y * w
+			var l: int = i
+			while l > row and _ok[l - 1] != 0 and _label[l - 1] == 0:
+				l -= 1
+			var r: int = i
+			while r < row + w - 1 and _ok[r + 1] != 0 and _label[r + 1] == 0:
+				r += 1
+			for k: int in range(l, r + 1):
+				_label[k] = id
+			for off: int in [-w, w]:
+				if (off < 0 and y == 0) or (off > 0 and y == _h - 1):
+					continue
+				var run: bool = false
+				for k: int in range(l + off, r + off + 1):
+					if _ok[k] != 0 and _label[k] == 0:
+						if not run:
+							stack.append(k)
+							run = true
+					else:
+						run = false
+
+
 ## The failing rules of `hole`, in rule order; empty when all six pass. When its tee or cup
 ## is not placed, only rule 1 is reported: the others cannot be measured yet.
 ## `hole` is matched to its entry in `course.holes` (rules 1 and 5 compare it with the
@@ -338,6 +466,7 @@ func _check(course: CourseData, hole: HoleData, own: int, reach: Reach, turns: A
 	_rule4(hole, turn, issues)
 	_rule5(course, hole, own, turn, turns, issues)
 	_rule6(course, hole, issues)
+	_rule7(course, hole, turn, issues)
 	return issues
 
 
@@ -657,6 +786,87 @@ func _rule6(course: CourseData, hole: HoleData, issues: Array[Issue]) -> void:
 		issues.append(Issue.new(6, hole.tee, "tee is on land you do not own, at %s" % _fmt(hole.tee)))
 	if not course.is_owned(hole.cup.x, hole.cup.y):
 		issues.append(Issue.new(6, hole.cup, "cup is on land you do not own, at %s" % _fmt(hole.cup)))
+
+
+## E14-S3 (D69): the tee, the cup and every dry tile of the footprint a ball could rest on can
+## be walked to from the clubhouse door, or from the tee with no clubhouse (Walk). One issue, on
+## the first place no walk reaches: the tee, else the green (the cup), else the island nearest
+## the tee along the footprint's rows. Kept per hole while the water, the bridges, the hole's line
+## and the door stand.
+func _rule7(course: CourseData, hole: HoleData, turn: Variant, issues: Array[Issue]) -> void:
+	var k := Walk.key_of(course)
+	if _walk_graph == null or _walk_graph.key != k:
+		var ok := Walk.walkable_tiles(course)
+		_walk_graph = null
+		for g: Walk in _walk_kept:
+			if g.same(ok) and g.key.begins_with("%d:" % course.get_instance_id()):
+				_walk_graph = g
+				_walk_kept.erase(g)
+				break
+		if _walk_graph == null:
+			_walk_graph = Walk.new(course, ok)
+		_walk_graph.key = k
+		_walk_kept.push_front(_walk_graph)
+		if _walk_kept.size() > WALK_KEPT:
+			_walk_kept.resize(WALK_KEPT)
+	var door: Vector2i = course.clubhouse_door() if course.has_clubhouse() else hole.tee
+	var hk := [hole.number, hole.tee, hole.cup, turn, door, course.land_revision,
+			course.clubhouse_revision, course.surface_revision(Surface.Type.OOB)]
+	var kept_issues: Dictionary = _walk_graph.issues
+	if kept_issues.has(hk):
+		var kept: Variant = kept_issues[hk]
+		if kept != null:
+			issues.append(kept)
+		return
+	var issue: Issue = _walk_issue(course, hole, turn, door)
+	kept_issues[hk] = issue
+	if issue != null:
+		issues.append(issue)
+
+
+func _walk_issue(course: CourseData, hole: HoleData, turn: Variant, door: Vector2i) -> Issue:
+	var home: int = _walk_graph.label(door)
+	var name: String = _nth(hole.number)
+	if home == 0 or _walk_graph.label(hole.tee) != home:
+		return Issue.new(7, hole.tee, "no way to walk to the %s tee: add a bridge" % name)
+	if _walk_graph.label(hole.cup) != home:
+		return Issue.new(7, hole.cup, "no way to walk to the %s green: add a bridge" % name)
+	var line: PackedVector2Array = line_of_play_through(hole, turn)
+	var pad: float = tuning.footprint_half_width_yd / YARDS_PER_TILE
+	var box := Rect2(line[0], Vector2.ZERO)
+	for pt: Vector2 in line:
+		box = box.expand(pt)
+	var lo := Vector2i(maxi(floori(box.position.x - pad), 0), maxi(floori(box.position.y - pad), 0))
+	var hi := Vector2i(mini(ceili(box.end.x + pad), course.width - 1), mini(ceili(box.end.y + pad), course.height - 1))
+	var oob: int = Surface.Type.OOB
+	var water: int = Surface.Type.WATER
+	var w: int = _walk_graph.width()
+	for i: int in _walk_graph.strays(home):
+		@warning_ignore("integer_division")
+		var t := Vector2i(i % w, i / w)
+		if t.x < lo.x or t.x > hi.x or t.y < lo.y or t.y > hi.y:
+			continue
+		var s: int = course.get_surface(t.x, t.y)
+		if s == oob or s == water or not course.is_owned(t.x, t.y) or course.is_clubhouse(t.x, t.y) \
+				or not near_line(line, t):
+			continue
+		return Issue.new(7, t, "no way to walk to the island at %s on the %s: add a bridge"
+				% [_fmt(t), name])
+	return null
+
+
+## "1st", "2nd", "3rd", "4th" ... for hole `n`.
+static func _nth(n: int) -> String:
+	var tail: String = "th"
+	if n % 100 < 11 or n % 100 > 13:
+		match n % 10:
+			1:
+				tail = "st"
+			2:
+				tail = "nd"
+			3:
+				tail = "rd"
+	return "%d%s" % [n, tail]
 
 
 # --- helpers ---

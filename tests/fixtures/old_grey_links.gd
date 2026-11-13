@@ -72,6 +72,7 @@ const HOLES: Array = [
 		"burns": [[[Vector2(4, 37), Vector2(8, 36), Vector2(13, 37), Vector2(17, 36)], 2.0]],
 		"swales": [],
 		"trees": [],
+		"bridged": true,
 	},
 	{
 		# The long par 5 east along the shore, the great cross bunker on the second shot.
@@ -96,6 +97,7 @@ const HOLES: Array = [
 				[[Vector2(106, 81), Vector2(113, 78), Vector2(119, 81), Vector2(124, 79)], 2.0]],
 		"swales": [],
 		"trees": [],
+		"bridged": true,
 	},
 	{
 		# The road hole, west along the south: a pot bunker eating into the green's front left
@@ -223,6 +225,11 @@ static func build(b: CourseBuilder) -> Array[int]:
 		_paint(b, course, PlaytestNine.path_tiles(course, p[2]), Surface.Type.CART_PATH)
 	# The bridge over the home hole's burn, on its line.
 	_paint(b, course, [Vector2i(72, 56), Vector2i(73, 56)] as Array[Vector2i], Surface.Type.CART_PATH)
+	# E14-S3 (D69): footbridges where the 1st's and the 3rd's lines cross their burns
+	# (FixtureBridges.lay: the water tiles of the line), so guests walk to their balls over them.
+	for s: Dictionary in HOLES:
+		if s.get("bridged", false):
+			FixtureBridges.lay(b, line(s))
 	for s: Dictionary in HOLES:
 		var n: int = s["n"]
 		b.place_tee(n, s["tee"], s["par"])

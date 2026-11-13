@@ -142,6 +142,9 @@ const HOLES: Array = [
 		"green": [Vector2(96, 113), 3.5, 3.0, 0.0, 0, Vector2(1, -0.3), 1, 2, 0.0],
 		"bunkers": [[Vector2(92, 117), 1.8, 1.7, 0.0]],
 		"trees": [],
+		# E14-S3 (D69): a footbridge straight over the cove beside the line, so guests cross with their balls
+		# instead of walking round the cove's head (300 yd and more).
+		"bridge": [Vector2(50, 110), Vector2(90, 110)],
 	},
 	{
 		"n": 8, "name": "Headland", "par": 5, "yd": 525,
@@ -201,6 +204,9 @@ static func build(b: CourseBuilder) -> Array[int]:
 		_paint(b, course, PlaytestNine.green_tiles(spec), Surface.Type.GREEN)
 	for p: Array in PATHS:
 		_paint(b, course, PlaytestNine.path_tiles(course, p[2]), Surface.Type.CART_PATH)
+	for spec: Dictionary in HOLES:
+		if spec.has("bridge"):
+			FixtureBridges.lay(b, spec["bridge"])
 	for spec: Dictionary in HOLES:
 		var n: int = spec["n"]
 		b.place_tee(n, spec["tee"], spec["par"])

@@ -11,6 +11,10 @@ extends Node
 ## out of its way) and from the north bank to the south-east one (over the bridge).
 ## Each walk's route is drawn as a chalk line, its guests at 20%, 45% and 70% of its time.
 ##   BRIDGE_STEP=walk scripts/screenshot.sh tests/fixtures/bridge_shot.tscn walk.png 30
+##
+## E14-S3: BRIDGE_STEP=island puts a green on an island in the pond and hole 1's tee on the south
+## bank, no bridge: rule 7 closes it and its issue box says why.
+##   BRIDGE_STEP=island scripts/screenshot.sh tests/fixtures/bridge_shot.tscn island.png 30
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const SIZE: int = 40
@@ -27,7 +31,16 @@ func _ready() -> void:
 	var walk: bool = OS.get_environment("BRIDGE_STEP") == "walk"
 	_main.show_course(pond_course())
 	var b: CourseBuilder = _main.build_tool.builder
-	if walk:
+	if OS.get_environment("BRIDGE_STEP") == "island":
+		for y: int in range(17, 22):
+			for x: int in range(18, 23):
+				b.level_water = false
+				b.paint(Vector2i(x, y), Surface.Type.GREEN, 1)
+		b.place_tee(1, Vector2i(20, 33), 3)
+		b.place_cup(1, Vector2i(20, 19))
+		b.move_clubhouse_beside(Vector2i(20, 33))
+		_main.build_tool.select_hole(1)
+	elif walk:
 		b.begin_stroke()
 		for y: int in range(12, 27):
 			b.paint(Vector2i(24, y), Surface.Type.CART_PATH, 1)
@@ -42,6 +55,8 @@ func _ready() -> void:
 	var label := Label.new()
 	label.position = Vector2(330, 40)
 	label.text = "E14-S1 bridges at %sx: a footbridge across the pond, one corner bridge, path on the banks" % zoom
+	if OS.get_environment("BRIDGE_STEP") == "island":
+		label.text = "E14-S3 at %sx: an island green with no bridge, closed by rule 7" % zoom
 	if walk:
 		label.text = "E14-S2 at %sx: guests walk round the pond (west to east) and over the bridge (north to south-east)" % zoom
 	label.add_theme_color_override("font_color", Color.WHITE)

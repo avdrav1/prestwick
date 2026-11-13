@@ -584,19 +584,19 @@ func test_a_collapsed_panel_stays_under_its_limit_whatever_the_hole_fails() -> v
 		var rules: Array[int] = []
 		for issue: CourseValidator.Issue in m.build_tool.builder.issues_for(n):
 			rules.append(issue.rule)
-		for want: int in [2, 3, 4, 6]:
+		for want: int in [2, 3, 4, 6, 7]:  # E14-S3: water on the cup, no walk to the green
 			assert_has(rules, want, "hole %d fails rule %d" % [n, want])
 		assert_eq(rules.count(6), 2, "hole %d: both rule 6 lines" % n)
 		var shut_h: float = m._hud_rect(panel).size.y
 		assert_lte(shut_h, limit, "hole %d: collapsed, %.0f px is under %.0f" % [n, shut_h, limit])
 		assert_false(panel.issues_label.text.contains("\n"), "hole %d: one summary line (E3-S27)" % n)
-		assert_string_starts_with(panel.issues_label.text, "Fails rules 2, 3, 4 and 6")
+		assert_string_starts_with(panel.issues_label.text, "Fails rules 2, 3, 4, 6 and 7")
 		assert_eq(panel.issues_label.tooltip_text.count("\n") + 1, rules.size(),
 				"hole %d: every issue is still on hover" % n)
 		gut.p("E3-S27: hole %d fails %s: issue line %.0f px, panel %.0f px collapsed"
 				% [n, rules, panel.issues_label.get_combined_minimum_size().y, shut_h])
 	panel.collapse_button.pressed.emit()
-	assert_eq(panel.issues_label.text.count("\n") + 1, 5, "expanded, the issues show in full")
+	assert_eq(panel.issues_label.text.count("\n") + 1, 6, "expanded, the issues show in full")
 	assert_eq(panel.issues_label.tooltip_text, "")
 
 
@@ -615,12 +615,12 @@ func test_a_collapsed_panels_width_is_the_same_with_long_and_short_issue_text() 
 	var short_w: float = m._hud_rect(panel).size.x
 	var short_text: String = panel.issues_label.text
 	assert_string_starts_with(short_text, "rule 4: ", "one rule: its reason")
-	# The most a hole fails (rules 2, 3 with its long reason, 4 and both 6 lines).
+	# The most a hole fails (rules 2, 3 with its long reason, 4, both 6 lines and 7, E14-S3).
 	var worst := _main_with(_nine_failing_worst())
 	worst.camera.view_size_override = Vector2(1280, 720)
 	worst.hole_panel.collapse_button.pressed.emit()
 	worst.build_tool.select_hole(2)
-	assert_eq(worst.build_tool.builder.issues_for(2).size(), 5)
+	assert_eq(worst.build_tool.builder.issues_for(2).size(), 6)
 	var long_w: float = worst._hud_rect(worst.hole_panel).size.x
 	panel = worst.hole_panel
 	assert_gt(panel.issues_label.tooltip_text.length(), short_text.length() * 3, "a far longer text")

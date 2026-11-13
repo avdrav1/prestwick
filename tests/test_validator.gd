@@ -425,8 +425,8 @@ func _owned_strip(tee: Vector2i, cup: Vector2i) -> CourseData:
 	return c
 
 
-func test_rule_count_is_six() -> void:
-	assert_eq(CourseValidator.RULE_COUNT, 6)
+func test_rule_count_is_seven() -> void:
+	assert_eq(CourseValidator.RULE_COUNT, 7, "E14-S3: rule 7, on foot")
 
 
 func test_rule6_passes_tee_and_cup_on_owned_land() -> void:
@@ -1126,3 +1126,123 @@ func test_a_dogleg_costs_the_validator_little() -> void:
 			bent_ms, straight_ms, BestTime.RUNS])
 	assert_lt(bent_ms, 2.0, "a dogleg's line of play stays under 2 ms (debug build)" + BestTime.load_note())
 	assert_lt(straight_ms, 1.0, "a straight hole's zone check stays under 1 ms" + BestTime.load_note())
+
+
+# --- rule 7, on foot (E14-S3, D69) ---
+
+## A 48 x 40 course of rough at 2, clubhouse in the south-west, with a lake x 20 to 39, y 6 to 25
+## and an island green (x 27 to 31, y 13 to 17, the cup at its middle) inside it; hole 1's tee
+## south of the lake at (29, 34), par 3.
+func _island() -> CourseData:
+	var c := CourseData.create(48, 40, Surface.Type.ROUGH, 2)
+	for y: int in range(6, 26):
+		for x: int in range(20, 40):
+			c.set_tile(x, y, 1, Surface.Type.WATER)
+	for y: int in range(13, 18):
+		for x: int in range(27, 32):
+			c.set_tile(x, y, 2, Surface.Type.GREEN)
+	c.set_holes([HoleData.new(1, 3, Vector2i(29, 34), Vector2i(29, 15))])
+	c.set_clubhouse(Vector2i(6, 34), 0)
+	return c
+
+
+## Paints cart path from (29, 18) to (29, 25), a bridge from the island to the south shore.
+func _bridge(b: CourseBuilder) -> void:
+	b.begin_stroke()
+	for y: int in range(18, 26):
+		b.paint(Vector2i(29, y), Surface.Type.CART_PATH, 1)
+	b.end_stroke()
+
+
+func test_rule7_an_island_green_with_no_bridge_fails_with_the_reason() -> void:
+	var c := _island()
+	var issues := _v.check_hole(c, c.holes[0])
+	var i := _issue(issues, 7)
+	assert_not_null(i, "rule 7 fails: %s" % [issues])
+	assert_eq(i.reason, "no way to walk to the 1st green: add a bridge")
+	assert_eq(i.tile, Vector2i(29, 15), "on the cup")
+	_assert_one_line(i)
+
+
+func test_rule7_a_bridge_opens_the_island_hole() -> void:
+	var c := _island()
+	var b := CourseBuilder.new(c)
+	assert_false(b.hole(1).open, "closed: no way to walk to its green")
+	assert_has(_rules(b.issues_for(1)), 7)
+	var opened: Array = []
+	b.holes_opened.connect(func(n: Array[int]) -> void: opened.append_array(n))
+	_bridge(b)
+	assert_eq(b.issues_for(1), [] as Array[CourseValidator.Issue], "every rule passes")
+	assert_true(b.hole(1).open, "the bridge opens it (D64)")
+	assert_eq(opened, [1])
+	assert_true(b.undo())
+	assert_false(b.hole(1).open, "undo takes the bridge and closes it again")
+	assert_has(_rules(b.issues_for(1)), 7)
+
+
+func test_rule7_a_tee_cut_off_from_the_clubhouse_fails() -> void:
+	var c := _island()
+	# Water right across the map between the clubhouse (west) and the tee: the tee is cut off.
+	for y: int in c.height:
+		c.set_tile(15, y, 1, Surface.Type.WATER)
+	var b := CourseBuilder.new(c)
+	_bridge(b)
+	var i := _issue(b.issues_for(1), 7)
+	assert_not_null(i)
+	assert_eq(i.reason, "no way to walk to the 1st tee: add a bridge")
+	assert_eq(i.tile, Vector2i(29, 34))
+	b.paint(Vector2i(15, 34), Surface.Type.CART_PATH, 1)
+	assert_null(_issue(b.issues_for(1), 7), "a bridge over the channel joins them")
+	assert_true(b.hole(1).open)
+
+
+func test_rule7_an_island_in_the_footprint_fails_and_one_outside_it_does_not() -> void:
+	var c := _island()
+	var b := CourseBuilder.new(c)
+	_bridge(b)
+	assert_true(b.hole(1).open)
+	# A dry islet of rough beside the line inside the lake: a ball could rest there.
+	b.paint(Vector2i(25, 21), Surface.Type.ROUGH, 1)
+	var i := _issue(b.issues_for(1), 7)
+	assert_not_null(i, "an island in the footprint")
+	assert_eq(i.reason, "no way to walk to the island at (25, 21) on the 1st: add a bridge")
+	assert_false(b.hole(1).open)
+	assert_true(b.undo())
+	assert_true(b.hole(1).open)
+	# Far from the line (footprint 30 yd: 6 tiles), an islet is no ball's.
+	b.paint(Vector2i(38, 7), Surface.Type.ROUGH, 1)
+	assert_null(_issue(b.issues_for(1), 7), "outside the footprint it does not count")
+	assert_true(b.hole(1).open)
+
+
+func test_rule7_with_no_clubhouse_reads_from_the_tee() -> void:
+	var c := _island()
+	c.set_clubhouse(CourseData.NO_CLUBHOUSE, 0)
+	var i := _issue(_v.check_hole(c, c.holes[0]), 7)
+	assert_not_null(i, "the green still cannot be walked to from the tee")
+	assert_eq(i.reason, "no way to walk to the 1st green: add a bridge")
+	assert_eq(_v.check_hole(_island(), c.holes[0]).size() > 0, true)
+
+
+func test_rule7_is_measured_once_while_the_water_stands() -> void:
+	var c := _island()
+	var b := CourseBuilder.new(c)
+	_bridge(b)
+	var walk: Variant = b.validator.get("_walk_graph")
+	b.paint(Vector2i(2, 2), Surface.Type.FAIRWAY, 1)
+	assert_same(b.validator.get("_walk_graph"), walk, "a paint that moves no water keeps the graph")
+	b.paint(Vector2i(2, 2), Surface.Type.CART_PATH, 1)
+	b.paint(Vector2i(25, 21), Surface.Type.CART_PATH, 1)
+	assert_not_same(b.validator.get("_walk_graph"), walk, "a bridge built reads the graph again")
+
+
+func test_rule7_an_undo_finds_the_graph_it_had() -> void:
+	var c := _island()
+	var b := CourseBuilder.new(c)
+	_bridge(b)
+	var before: Variant = b.validator.get("_walk_graph")
+	b.paint(Vector2i(22, 10), Surface.Type.ROUGH, 3)  # land in the lake: the water changed
+	assert_not_same(b.validator.get("_walk_graph"), before)
+	assert_true(b.undo())
+	assert_same(b.validator.get("_walk_graph"), before, "the water as it was: its graph, labelled")
+	assert_true(b.hole(1).open)

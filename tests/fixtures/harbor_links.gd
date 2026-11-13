@@ -27,6 +27,11 @@ extends RefCounted
 ## CAUSEWAYS keep a dry way across them: the 9th's walkway to its island, so rule 3 joins tee
 ## to cup and guests have a safe route (HoleChecks, interesting).
 ##
+## Bridges (E14-S3, D69): a hole's "bridge" is a polyline of tile points whose water tiles get a
+## footbridge (FixtureBridges.lay: cart path painted on water), laid after the water: across the
+## 1st's, 2nd's and 6th's creeks on their lines, and from the 9th tee's shore over the west lake to
+## the island green, so guests walk to it on the line, not round by the walkway at its back.
+##
 ## Routing: the front four go anticlockwise round the map's edge (up the west side, along the
 ## top, down the east side, back west along the bottom), the back five in the middle, round
 ## the harbour and the west lake, finishing on the island across the lake from the clubhouse. Every
@@ -98,6 +103,7 @@ const HOLES: Array = [
 				[Vector2(7, 58), 1.5, 3.0, 90.0]],
 		"water": [[Vector2(13, 26), 8.0, 1.6, 0.0]],
 		"trees": [],
+		"bridge": [Vector2(12, 20), Vector2(12, 32)],
 	},
 	{
 		# "Creek Bend": a par 5 along the top, bowing south then back north, a creek across the
@@ -110,6 +116,7 @@ const HOLES: Array = [
 		"bunkers": [[Vector2(118, 6), 2.4, 1.6, 0.0], [Vector2(80, 7), 2.5, 1.5, 0.0]],
 		"water": [[Vector2(108, 12), 1.5, 7.0, 10.0]],
 		"trees": [],
+		"bridge": [Vector2(100, 12), Vector2(117, 12)],
 	},
 	{
 		# "Long Wharf": a par 5 down the east edge, a pond right of the green, a bunker in front.
@@ -151,6 +158,7 @@ const HOLES: Array = [
 		"bunkers": [[Vector2(54.5, 18), 2.2, 1.6, 90.0], [Vector2(54.5, 26), 2.2, 1.6, 90.0]],
 		"water": [[Vector2(65, 21), 1.4, 5.5, 0.0]],
 		"trees": [],
+		"bridge": [Vector2(75, 23), Vector2(62, 23)],
 	},
 	{
 		# "Long Shore": a long par 4 south, the harbour on the left all the way and a bay short
@@ -183,6 +191,7 @@ const HOLES: Array = [
 		"water": [],
 		"trees": [],
 		"island": true,
+		"bridge": [Vector2(30, 50), Vector2(30, 70)],
 	},
 ]
 
@@ -244,6 +253,9 @@ static func build(b: CourseBuilder) -> Array[int]:
 	b.end_stroke()
 	for p: Array in PATHS:
 		_paint(b, course, PlaytestNine.path_tiles(course, p[2]), Surface.Type.CART_PATH)
+	for s: Dictionary in HOLES:
+		if s.has("bridge"):
+			FixtureBridges.lay(b, s["bridge"])
 	for s: Dictionary in HOLES:
 		var n: int = s["n"]
 		b.place_tee(n, s["tee"], s["par"])

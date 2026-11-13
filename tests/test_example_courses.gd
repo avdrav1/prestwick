@@ -361,3 +361,38 @@ func test_main_added_by_a_test_installs_nothing() -> void:
 	add_child_autofree(main)
 	for f: String in CourseExport.EXAMPLES:
 		assert_false(FileAccess.file_exists(CourseExport.FOLDER.path_join(f)), "%s not installed" % f)
+
+
+## E14-S3 (D69): each example course carries its footbridges where its lines cross water (Harbor
+## Links' island green and creeks, Old Grey Links' burns, Pine Ridge's creeks, Cliffside's cove),
+## every one on a water tile; every hole passes rule 7, on foot; and a walk across each bridged
+## water goes over its bridge, dry, near the straight line.
+func test_the_example_courses_have_their_bridges() -> void:
+	var tuning := GuestTuning.load_default()
+	# [path, bridge tiles at least, a walk across bridged water: from tile, to tile].
+	var cases: Array = [
+		["res://courses/harbor_links.json", 20, Vector2i(30, 50), Vector2i(28, 73)],
+		["res://courses/old_grey_links.json", 8, Vector2i(118, 50), Vector2i(118, 70)],
+		["res://courses/pine_ridge.json", 4, Vector2i(58, 94), Vector2i(73, 94)],
+		["res://courses/cliffside.json", 20, Vector2i(52, 108), Vector2i(90, 111)],
+	]
+	var v := CourseValidator.new()
+	for k: Array in cases:
+		var c := _load(k[0])
+		assert_gte(c.bridge_cells().size(), k[1], "%s: its bridges" % c.course_name)
+		for t: Vector2i in c.bridge_cells():
+			assert_eq(c.get_surface(t.x, t.y), Surface.Type.WATER)
+		for h: HoleData in c.holes:
+			for i: CourseValidator.Issue in v.check_hole(c, h):
+				assert_ne(i.rule, 7, "%s hole %d: %s" % [c.course_name, h.number, i.reason])
+			assert_true(h.open)
+		var from := (Vector2(k[2]) + Vector2(0.5, 0.5)) * 5.0
+		var to := (Vector2(k[3]) + Vector2(0.5, 0.5)) * 5.0
+		var w := GuestWalk.route(c, from, to, tuning)
+		assert_gt(w.path_yd, 0.0, "%s: the walk crosses a bridge" % c.course_name)
+		assert_lt(w.length, from.distance_to(to) * 1.3, "%s: near the straight line, %.0f yd" % [c.course_name, w.length])
+		var t := 0.0
+		while t < w.duration:
+			var p := w.point_at_time(t)
+			assert_true(GuestWalk.walkable(c, floori(p.x / 5.0), floori(p.y / 5.0)), "dry at %s" % p)
+			t += 0.05

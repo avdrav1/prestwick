@@ -24,6 +24,9 @@ extends RefCounted
 ##   thin bunkers beside the fairway, across the line of play: [from, to (tiles from the tee
 ##   along the tee-to-cup line), spacing, offset to the left of the line, half length].
 ## - creek: [polyline, width] of water, dug one step below the lowest ground near it.
+## - bridge (E14-S3, D69): a polyline of tile points whose water tiles get a footbridge
+##   (FixtureBridges.lay), laid after the cart paths: over the 5th's creek in front of its green
+##   and the 7th's, the Footbridge itself, on their lines.
 ## - yd: the yardage the validator measures (rule 4, D47's line of play), the spec the test holds.
 ##
 ## Parkland: every hole plays down its own corridor of rough (CORRIDOR_ROUGH past the fairway's
@@ -138,6 +141,7 @@ const HOLES: Array = [
 		"bunkers": [[Vector2(59, 25.5), 1.2, 1.8, 30.0], [Vector2(60, 35), 1.0, 1.5, 0.0]],
 		"creek": [[Vector2(86, 52), Vector2(77, 43), Vector2(69.5, 36), Vector2(69.5, 26)], 2.0],
 		"trees": [[Vector2(88, 68), 8.0, 4.0, 50.0]],
+		"bridge": [Vector2(76, 32), Vector2(66, 30)],
 	},
 	{
 		# Long and straight down the west side, rows of narrow bunkers left of the landing.
@@ -161,6 +165,7 @@ const HOLES: Array = [
 				[Vector2(77.5, 98), 0.9, 1.4, 0.0]],
 		"creek": [[Vector2(66, 92), Vector2(67, 103)], 2.0],
 		"trees": [],
+		"bridge": [Vector2(60, 94), Vector2(71, 94)],
 	},
 	{
 		# Downhill off the plateau to a green framed by pines.
@@ -244,6 +249,9 @@ static func build(b: CourseBuilder) -> Array[int]:
 		_paint_hole(b, course, spec)
 	for p: Array in PATHS:
 		_paint(b, course, PlaytestNine.path_tiles(course, p[2]), Surface.Type.CART_PATH)
+	for spec: Dictionary in HOLES:
+		if spec.has("bridge"):
+			FixtureBridges.lay(b, spec["bridge"])
 	for spec: Dictionary in HOLES:
 		var n: int = spec["n"]
 		b.place_tee(n, spec["tee"], spec["par"])
