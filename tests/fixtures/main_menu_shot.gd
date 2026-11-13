@@ -4,10 +4,11 @@ extends Node2D
 ## (main_menu_shot*.tscn): the menu with Import course focused, the Export page, the Import
 ## page listing an exported course and a file of a newer format, the notice an import of
 ## tests/fixtures/course_v1_short_par4.json gives (both holes closed, each with its reason), and
-## the notice a refused (newer format) file gives.
+## the notice a refused (newer format) file gives. E13-S5: the Import page on a first start, the
+## example courses copied in as the game copies them (main_menu_shot_import_examples.tscn).
 ## Run: scripts/screenshot.sh tests/fixtures/main_menu_shot.tscn
 
-enum Page { MENU, EXPORT, IMPORT, IMPORT_NOTICE, REFUSED_NOTICE }
+enum Page { MENU, EXPORT, IMPORT, IMPORT_NOTICE, REFUSED_NOTICE, EXAMPLES }
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
@@ -41,6 +42,10 @@ func _ready() -> void:
 		Page.REFUSED_NOTICE:
 			_write("user://future.json", JSON.stringify({"version": CourseData.FORMAT_VERSION + 1}))
 			_main.import_course("user://future.json")
+		Page.EXAMPLES:
+			CourseExport.install_examples()
+			_main.open_menu()
+			_main.main_menu.show_import()
 
 
 func _write(path: String, text: String) -> void:

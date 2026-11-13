@@ -63,6 +63,13 @@ const GuestCourse := preload("res://tests/fixtures/guest_course.gd")
 const JOB_SCRIPT: String = "res://scripts/reaction_job.gd"
 const JOB_POLL_MS: int = 20
 const EPS := 0.001
+## E13-S5: the example courses (CourseExport.EXAMPLES, in res://courses/), each played
+## EXAMPLE_DAYS days (day seeds 1 on, as scripts/guest_day.gd plays them) at EXAMPLE_ARRIVALS
+## guests a day (the most a day draws, data/economy.json arrivals_max; a 4.5-star course draws
+## it). Each prints one row: the reaction mix, its rating and the latest finish. Reported, not
+## targets (the user, 2026-11-13).
+const EXAMPLE_DAYS: int = 5
+const EXAMPLE_ARRIVALS: int = 24
 
 var model: Variant
 
@@ -97,20 +104,23 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 ## headless Godots (run_jobs, scripts/reaction_job.gd); the rows are the same either way. A
 ## field is played once at its largest size and its first records tallied for the smaller
 ## (the first `n` records of a field are the field of `n`), and each nine-hole day once.
+## E13-S5: before the edges, a row per example course (example_row; its first `example_days`
+## days at EXAMPLE_ARRIVALS guests), reported, with no target.
 func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool = true,
-		pace_field: int = PACE_FIELD, pace_days: int = PACE_DAYS, workers: int = 1) -> Array[Dictionary]:
+		pace_field: int = PACE_FIELD, pace_days: int = PACE_DAYS, workers: int = 1,
+		example_days: int = EXAMPLE_DAYS) -> Array[Dictionary]:
 	var n := maxi(runs, 1)
 	var pf := maxi(pace_field, 1)
 	var nd := maxi(nine_days, 1)
 	var pd := maxi(pace_days, 1)
-	var jobs := jobs_for(n, rng_seed, nd, pd, edges, pf)
-	return rows_from(n, rng_seed, nd, pd, edges, pf, jobs, run_jobs(jobs, workers))
+	var jobs := jobs_for(n, rng_seed, nd, pd, edges, pf, example_days)
+	return rows_from(n, rng_seed, nd, pd, edges, pf, jobs, run_jobs(jobs, workers), example_days)
 
 
 ## measure's rows from the `results` of its `jobs` (jobs_for with the same arguments; a test
 ## may run them in one batch with others).
 func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
-		jobs: Array[Dictionary], results: Array[Dictionary]) -> Array[Dictionary]:
+		jobs: Array[Dictionary], results: Array[Dictionary], example_days: int = 0) -> Array[Dictionary]:
 	var by := {}
 	for i: int in jobs.size():
 		by[job_key(jobs[i])] = results[i]
@@ -202,6 +212,13 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 			crossing.cross_held, Vector2(-INF, INF),
 			"a par 3's green on a par 4's line 250 yd out; held %.1f s a record on average; pace fails %.2f; %s" % [
 				crossing.cross_wait_mean, crossing.pace, crossing.note]))
+	# E13-S5: a row per example course, reported (no target).
+	if example_days > 0:
+		for file: String in CourseExport.EXAMPLES:
+			var days: Array[Dictionary] = []
+			for d: int in range(1, example_days + 1):
+				days.append(by[job_key(example_job(file, d))])
+			rows.append(example_row(file, days))
 	if edges:
 		var edge_results: Array[Dictionary] = []
 		for i: int in jobs.size():
@@ -216,8 +233,12 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 ## largest size, cut at the sizes measure reads; each nine-hole day of each fixture once; the
 ## edges' jobs (ScoringEdges.jobs).
 func jobs_for(n: int, rng_seed: int, nine_days: int, pace_days: int, edges: bool,
-		pf: int) -> Array[Dictionary]:
+		pf: int, example_days: int = 0) -> Array[Dictionary]:
 	var jobs: Array[Dictionary] = []
+	# E13-S5: the example courses' days first, the longest jobs of all.
+	for file: String in CourseExport.EXAMPLES:
+		for d: int in range(1, example_days + 1):
+			jobs.append(example_job(file, d))
 	var days := {}
 	for d: int in range(1, pace_days + 1):
 		days[[PACE_FIXTURE, d]] = true
@@ -353,6 +374,8 @@ func run_job(job: Dictionary) -> Dictionary:
 			return out
 		"nine_day":
 			return nine_day(String(job.fixture), int(job.day))
+		"example_day":
+			return example_day(String(job.file), int(job.day), int(job.arrivals))
 		_:
 			return ScoringEdges.new(model).run_job(job)
 
@@ -558,3 +581,103 @@ func nine_hole_days(days: int, fixture: String = PACE_FIXTURE) -> Dictionary:
 	for d: int in range(1, days + 1):
 		out.append(nine_day(fixture, d))
 	return combine_days(out, fixture)
+
+
+## E13-S5: the job of day `d` on the example course `file` (CourseExport.EXAMPLES_FROM), at
+## EXAMPLE_ARRIVALS guests.
+static func example_job(file: String, d: int) -> Dictionary:
+	return {"kind": "example_day", "file": file, "day": d, "arrivals": EXAMPLE_ARRIVALS}
+
+
+## E13-S5: day `day_seed` of the example course `file` (CourseExport.EXAMPLES_FROM) with
+## `arrivals` guests (GuestBrain's p_arrivals; -1 for `tuning`'s arrivals_per_day), run to
+## dusk through GuestBrain as scripts/guest_day.gd runs it: {name, kinds: [praise, neutral,
+## complaint], fails: a count per GuestReaction.Check, records, groups, nine: the groups that
+## teed off and all finished every open hole before dusk, latest: the last guest's leaving
+## second, day_s}. {} when the file does not load. `tuning` null reads data/guests.json.
+func example_day(file: String, day_seed: int, arrivals: int,
+		tuning: GuestTuning = null) -> Dictionary:
+	var errors: Array[String] = []
+	var course := CourseSave.load_file(CourseExport.EXAMPLES_FROM.path_join(file), errors)
+	if course == null:
+		push_error("example course %s: %s" % [file, "; ".join(errors)])
+		return {}
+	var t := tuning if tuning != null else GuestTuning.load_default()
+	var brain := GuestBrain.new(course, day_seed, t, model, [], null, arrivals)
+	while not brain.day_over:
+		brain.serve(-1)
+		brain.step()
+	var kinds := [0, 0, 0]
+	var fails := []
+	fails.resize(GuestReaction.Check.size())
+	fails.fill(0)
+	var records := 0
+	var latest := 0
+	var holes := 0
+	for h: HoleData in course.holes:
+		if h.open:
+			holes += 1
+	for g: Guest in brain.guests:
+		latest = maxi(latest, g.left_s)
+		for r: Guest.HoleRecord in g.records:
+			records += 1
+			kinds[r.reaction.kind] += 1
+			for c: int in GuestReaction.Check.size():
+				if not r.reaction.passed[c]:
+					fails[c] += 1
+	var nine := 0
+	for gr: GuestGroup in brain.groups:
+		var all := brain.guests.has(gr.guests[0])
+		for g: Guest in gr.guests:
+			all = all and g.records.size() == holes and not g.left_at_dusk
+		if all:
+			nine += 1
+	return {"name": course.course_name, "kinds": kinds, "fails": fails, "records": records,
+		"groups": brain.groups.size(), "nine": nine, "latest": latest, "day_s": t.day_s}
+
+
+## E13-S5: an example course's row from its days (example_day's results, in day order):
+## measured is the rating of its reaction mix (the mean of EconomyTuning.rating_points over
+## every reaction, 1 to 5, as the course rating reads a full window), with no target; the note
+## gives the mix, the stars that rating shows, each check's fail share, and the latest finish
+## against dusk. `arrivals` names the guests a day in the row's name.
+static func example_row(file: String, days: Array[Dictionary],
+		arrivals: int = EXAMPLE_ARRIVALS) -> Dictionary:
+	var points := EconomyTuning.load_default().rating_points
+	var kinds := [0, 0, 0]
+	var fails := []
+	fails.resize(GuestReaction.Check.size())
+	fails.fill(0)
+	var records := 0
+	var latest := 0
+	var full_days := 0
+	var latest_by_day := PackedStringArray()
+	var course_name := file
+	var day_s := 0
+	for day: Dictionary in days:
+		if day.is_empty():
+			continue
+		course_name = String(day.name)
+		day_s = int(day.day_s)
+		records += int(day.records)
+		for k: int in kinds.size():
+			kinds[k] += int(day.kinds[k])
+		for c: int in GuestReaction.Check.size():
+			fails[c] += int(day.fails[c])
+		latest = maxi(latest, int(day.latest))
+		latest_by_day.append(str(int(day.latest)))
+		if int(day.nine) == int(day.groups):
+			full_days += 1
+	var n := float(maxi(records, 1))
+	var rating := 0.0
+	for k: int in kinds.size():
+		rating += points[k] * kinds[k] / n
+	var fail_text := PackedStringArray()
+	for c: int in GuestReaction.Check.size():
+		fail_text.append("%s %.2f" % [GuestReaction.CHECK_NAMES[c], fails[c] / n])
+	return _row("example course %s: rating of its reaction mix (%d arrivals; reported)" % [
+			course_name, arrivals], rating, Vector2(-INF, INF),
+			"praise %.2f, neutral %.2f, complaint %.2f of %d reactions, %.1f stars; fails: %s; every group finished nine on %d of %d days, latest finish %d s of %d (days 1 to %d: %s)" % [
+				kinds[0] / n, kinds[1] / n, kinds[2] / n, records, EconomyTuning.stars_of(rating),
+				", ".join(fail_text), full_days, days.size(), latest, day_s, days.size(),
+				"/".join(latest_by_day)])

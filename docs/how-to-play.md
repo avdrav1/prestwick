@@ -6,6 +6,8 @@ Prestwick is a golf course you build, then play. Guests play it too, pay a green
 
 Run the game. The menu opens: choose **New course** (or **Import course** to open a course a friend sent you; a course file goes in the folder the Import page's **Open folder** shows). Esc opens the menu at any time and pauses the guests' day.
 
+Four example courses come with the game, each nine holes modelled on famous real holes: **Harbor Links** (holes over water, an island green to finish), **Old Grey Links** (seaside links, pot bunkers and burns), **Pine Ridge** (tree-lined parkland with doglegs and creeks) and **Cliffside** (clifftop holes across the sea). **Import course** lists them, by Prestwick, with their par and yardage; each opens with every hole open, all the land owned and unlimited money, to play, watch the guests on, or rebuild. The game puts them in your course folder when it starts, and never writes over a file there of the same name, so an edited copy you export under that name is kept.
+
 ## Build (the starting mode)
 
 - You start with **$5,000** and a 4 x 4 parcel block of land round your clubhouse. Painting, raising and lowering ground cost money; undo (Ctrl+Z) gives back what that step charged. **Buy land** adds a neighbouring parcel.

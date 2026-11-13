@@ -23,6 +23,7 @@ And it's your course, so play it. Pick a club, aim, and swing with a three-click
 - Play any hole yourself, with a readable swing bar, a landing marker, and a top-down green view for putts.
 - A goal checklist that walks you through your first course.
 - Autosave every morning; F5 and F9 ask before they overwrite.
+- Four example courses to play or rebuild, each nine holes modelled on famous real holes: Harbor Links (water and an island green), Old Grey Links (seaside links), Pine Ridge (tree-lined parkland) and Cliffside (clifftops over the sea). Import course in the menu lists them.
 - Export a course as one file and send it to a friend.
 - Fully playable from the keyboard (F1 lists every key).
 - Original music by avdrav.

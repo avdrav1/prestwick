@@ -43,9 +43,10 @@ func _result(job: Dictionary) -> Dictionary:
 	return batch[ReactionField.job_key(job)]
 
 
-## The jobs of the rows test's measure: a field of SMALL, one nine-hole day, no edges.
+## The jobs of the rows test's measure: a field of SMALL, one nine-hole day, one day of each
+## example course (E13-S5), no edges.
 func _rows_jobs() -> Array[Dictionary]:
-	return sim.jobs_for(SMALL, SEED, 1, 1, false, SMALL)
+	return sim.jobs_for(SMALL, SEED, 1, 1, false, SMALL, 1)
 
 
 func _fifty(course_name: String) -> Dictionary:
@@ -133,7 +134,20 @@ func test_reaction_rows_print_next_to_their_targets() -> void:
 	var results: Array[Dictionary] = []
 	for job: Dictionary in jobs:
 		results.append(_result(job))
-	var rows := sim.rows_from(SMALL, SEED, 1, 1, false, SMALL, jobs, results)
+	var rows := sim.rows_from(SMALL, SEED, 1, 1, false, SMALL, jobs, results, 1)
+	# E13-S5: a row per example course, reported with no target: the rating of its reaction
+	# mix, the mix and the latest finish at 24 arrivals.
+	for course_name: String in ["Harbor Links", "Old Grey Links", "Pine Ridge", "Cliffside"]:
+		var r := _named(rows, "example course %s:" % course_name)
+		assert_false(r.is_empty(), "a row for %s" % course_name)
+		if r.is_empty():
+			continue
+		assert_eq(r.target, Vector2(-INF, INF), "%s is reported, not a target" % course_name)
+		assert_true(r.ok)
+		assert_string_contains(String(r.name), "24 arrivals")
+		assert_between(float(r.measured), 1.0, 5.0, "%s rating" % course_name)
+		for part: String in ["praise ", "neutral ", "complaint ", "stars", "latest finish "]:
+			assert_string_contains(String(r.note), part)
 	for prefix: String in ["fair par 4: praise", "fair par 4: complaints",
 			"blind par 4: praise", "blind par 4: complaints",
 			"corridor par 4", "dogleg par 4", "nine holes", "pace fails: fair par 4",

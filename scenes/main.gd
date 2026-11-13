@@ -189,6 +189,10 @@ func _ready() -> void:
 			[main_menu, audio_panel, confirm_dialog] as Array[Control])
 	build_tool.cursor_moved.connect(_on_cursor_moved)
 	autosaves = get_tree().current_scene == self
+	# E13-S5: the game itself (not a test or playtest adding Main to its own tree) puts the
+	# example courses in the course folder, each only if no file there has its name.
+	if get_tree().current_scene == self:
+		CourseExport.install_examples()
 	_apply_mode()
 	var errors: Array[String] = []
 	var loaded: CourseData = null

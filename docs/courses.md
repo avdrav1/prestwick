@@ -6,6 +6,16 @@ forces it. The names in the game and in the course files are our own; this file,
 ship, credits the real holes. A number marked "approximate" is from memory and may be off by a
 few yards or a tee.
 
+E13-S5: the four ship in the exported pack (`courses/*.json`), beside the build and in each itch
+channel's `courses/`, and the game copies them into the player's course folder at start
+(`CourseExport.install_examples`, never over a file of the same name), so Import course lists
+them by Prestwick with their par and yardage. `/balance reactions` and `scripts/guest_day.gd --
+examples` print a row per course (five days at 24 arrivals: the reaction mix, its rating, the
+latest finish), reported, not targets (`docs/decisions/e13-s5-balance-reactions.txt`). At 24
+arrivals: Harbor Links 4.32, Old Grey Links 4.46, Pine Ridge 4.44, Cliffside 4.25 (4.0 stars;
+4.49 at data/guests.json's 16), every group finishing nine, the latest at 474, 436, 421 and 524 s
+of the 540 s day.
+
 ## Old Grey Links (E13-S2)
 
 `courses/old_grey_links.json`, built by `tests/fixtures/old_grey_links.gd` (OldGreyLinks) and

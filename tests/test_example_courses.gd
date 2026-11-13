@@ -2,6 +2,9 @@ extends GutTest
 ## E13: the example courses (docs/courses.md), one test per course: the file loads with nine
 ## holes open and no validator issue, each hole's par and yardage within 10 yd of its fixture
 ## spec, a scripted stroke from each tee comes to rest, and the file is the fixture rebuilt.
+## E13-S5: the four ship (packed by the export presets, beside the build and in each itch
+## channel by /ship-it) and the game copies them into the course folder at start, never over a
+## file of the same name, so the Import page lists each with its name, author, par and yardage.
 
 const YARD_SLACK: int = 10
 
@@ -247,3 +250,114 @@ func test_cliffside() -> void:
 	var built := Cliffside.course()
 	assert_eq(c.content_hash(), built.content_hash(),
 			"courses/cliffside.json is out of date: rerun scripts/save_cliffside.gd")
+
+
+# --- E13-S5: the examples ship, and the Import page lists them ---
+
+## Where these tests install the examples: a folder of their own under this run's user://
+## (scripts/run_tests.sh gives every test job its own), never CourseExport.FOLDER.
+const INSTALL_DIR := "user://test_example_courses"
+## Each example's Import page line (CourseExport.Entry.label): name, author, par, yardage.
+const LABELS := {
+	"cliffside.json": "\"Cliffside\" by Prestwick: 9 holes, par 36, 3,353 yd",
+	"harbor_links.json": "\"Harbor Links\" by Prestwick: 9 holes, par 35, 3,200 yd",
+	"old_grey_links.json": "\"Old Grey Links\" by Prestwick: 9 holes, par 34, 3,023 yd",
+	"pine_ridge.json": "\"Pine Ridge\" by Prestwick: 9 holes, par 34, 2,935 yd",
+}
+
+
+func before_each() -> void:
+	_clear(INSTALL_DIR)
+
+
+func after_each() -> void:
+	_clear(INSTALL_DIR)
+
+
+func _clear(dir: String) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for f: String in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(dir.path_join(f))
+	DirAccess.remove_absolute(dir)
+
+
+func test_the_four_examples_are_the_shipped_files() -> void:
+	var files := Array(CourseExport.EXAMPLES)
+	files.sort()
+	var want := LABELS.keys()
+	want.sort()
+	assert_eq(files, want, "CourseExport.EXAMPLES names the four example courses")
+	for f: String in CourseExport.EXAMPLES:
+		assert_true(FileAccess.file_exists(CourseExport.EXAMPLES_FROM.path_join(f)), "res://courses/%s" % f)
+
+
+## The export packs courses/*.json, so res://courses/ holds the examples in the itch build.
+func test_every_export_preset_packs_the_course_files() -> void:
+	var cfg := ConfigFile.new()
+	assert_eq(cfg.load("res://export_presets.cfg"), OK, "export_presets.cfg")
+	var presets := 0
+	for section: String in cfg.get_sections():
+		if not section.begins_with("preset.") or section.ends_with(".options"):
+			continue
+		presets += 1
+		var include := String(cfg.get_value(section, "include_filter", ""))
+		var exclude := String(cfg.get_value(section, "exclude_filter", ""))
+		var preset := String(cfg.get_value(section, "name", section))
+		assert_string_contains(include, "courses/*.json", "%s packs courses/*.json" % preset)
+		assert_false(exclude.contains("courses"), "%s excludes no course file" % preset)
+	assert_gte(presets, 2, "the Linux and Windows presets")
+
+
+## /ship-it puts every example (and the playtest nine) beside the build and in each itch channel.
+func test_ship_it_ships_every_example() -> void:
+	var text := FileAccess.get_file_as_string("res://.claude/skills/ship-it/SKILL.md")
+	assert_false(text.is_empty(), "the ship-it skill")
+	for f: String in CourseExport.EXAMPLES:
+		assert_string_contains(text, "courses/%s" % f)
+	assert_string_contains(text, "courses/playtest_nine.json")
+
+
+func test_installing_into_an_empty_folder_lists_every_example_on_the_import_page() -> void:
+	var written := CourseExport.install_examples(INSTALL_DIR)
+	assert_eq(written.size(), CourseExport.EXAMPLES.size(), "all four copied: %s" % [written])
+	for f: String in CourseExport.EXAMPLES:
+		assert_eq(FileAccess.get_file_as_bytes(INSTALL_DIR.path_join(f)),
+				FileAccess.get_file_as_bytes(CourseExport.EXAMPLES_FROM.path_join(f)),
+				"%s copied byte for byte" % f)
+	assert_eq(Array(DirAccess.get_files_at(INSTALL_DIR)).filter(
+			func(f: String) -> bool: return f.ends_with(".tmp")), [], "no temp file left")
+	var labels := {}
+	for e: CourseExport.Entry in CourseExport.list_folder(INSTALL_DIR):
+		assert_not_null(e.course, "%s reads: %s" % [e.path, e.error])
+		labels[e.path.get_file()] = e.label()
+	assert_eq(labels, LABELS, "the Import page's lines: name, author Prestwick, par and yardage")
+
+
+func test_installing_keeps_a_file_of_the_same_name_and_copies_the_rest() -> void:
+	DirAccess.make_dir_recursive_absolute(INSTALL_DIR)
+	var mine := FileAccess.open(INSTALL_DIR.path_join("pine_ridge.json"), FileAccess.WRITE)
+	mine.store_string("my own edit")
+	mine.close()
+	var written := CourseExport.install_examples(INSTALL_DIR)
+	assert_eq(written.size(), 3, "the other three: %s" % [written])
+	assert_false(written.has(INSTALL_DIR.path_join("pine_ridge.json")))
+	assert_eq(FileAccess.get_file_as_string(INSTALL_DIR.path_join("pine_ridge.json")), "my own edit",
+			"the player's file is never written over")
+	assert_eq(CourseExport.install_examples(INSTALL_DIR), [] as Array[String],
+			"a second start copies nothing")
+
+
+func test_a_missing_source_is_skipped() -> void:
+	var written := CourseExport.install_examples(INSTALL_DIR, CourseExport.EXAMPLES_FROM,
+			PackedStringArray(["no_such_course.json", "cliffside.json"]))
+	assert_eq(written, [INSTALL_DIR.path_join("cliffside.json")] as Array[String])
+
+
+## Only the game itself installs (Main as the running scene, scenes/main.gd _ready): a test that
+## adds Main to its own tree leaves the course folder alone.
+func test_main_added_by_a_test_installs_nothing() -> void:
+	var main := (load("res://scenes/main.tscn") as PackedScene).instantiate() as Main
+	add_child_autofree(main)
+	for f: String in CourseExport.EXAMPLES:
+		assert_false(FileAccess.file_exists(CourseExport.FOLDER.path_join(f)), "%s not installed" % f)

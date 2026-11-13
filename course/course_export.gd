@@ -23,6 +23,12 @@ extends RefCounted
 const FOLDER: String = "user://courses"
 ## The longest file name stem path_for makes, in characters.
 const STEM_MAX: int = 40
+## E13-S5: the example courses the game ships (docs/courses.md), in EXAMPLES_FROM (the export
+## presets' include_filter packs courses/*.json). install_examples copies them into FOLDER at
+## start, so the Import page lists them with no step of the player's.
+const EXAMPLES: PackedStringArray = ["harbor_links.json", "old_grey_links.json",
+		"pine_ridge.json", "cliffside.json"]
+const EXAMPLES_FROM: String = "res://courses"
 
 
 ## A file in the course folder: the course it holds, or why it cannot be read.
@@ -118,6 +124,37 @@ static func read_text(text: String, errors: Array[String] = []) -> CourseData:
 		errors.append("unknown course format version %d" % version)
 		return null
 	return CourseSave.from_dict(data, errors)
+
+
+## E13-S5: copies each of `names` from `from` (res://, read-only in an export) into `to`,
+## making the folder if need be, unless `to` already has a file of that name (a player's own
+## copy, edited or not, is never written over). Each is written whole before it takes its name
+## (a temp file renamed), and copied byte for byte. Returns the paths written; a file missing
+## from `from` or one that cannot be written is skipped.
+static func install_examples(to: String = FOLDER, from: String = EXAMPLES_FROM,
+		names: PackedStringArray = EXAMPLES) -> Array[String]:
+	var out: Array[String] = []
+	for f: String in names:
+		var dest := to.path_join(f)
+		var src := from.path_join(f)
+		if FileAccess.file_exists(dest) or not FileAccess.file_exists(src):
+			continue
+		var bytes := FileAccess.get_file_as_bytes(src)
+		if bytes.is_empty():
+			continue
+		if not DirAccess.dir_exists_absolute(to) and DirAccess.make_dir_recursive_absolute(to) != OK:
+			return out
+		var tmp := dest + ".tmp"
+		var w := FileAccess.open(tmp, FileAccess.WRITE)
+		if w == null:
+			continue
+		w.store_buffer(bytes)
+		w.close()
+		if DirAccess.rename_absolute(tmp, dest) == OK:
+			out.append(dest)
+		else:
+			DirAccess.remove_absolute(tmp)
+	return out
 
 
 ## Every .json file in `folder`, by file name, each with its course or why it cannot be read.

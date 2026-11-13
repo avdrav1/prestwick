@@ -17,6 +17,12 @@ bin="$1"
 frames="${2:-300}"
 [ -x "$bin" ] || { echo "not an executable build: $bin" >&2; exit 2; }
 
+# A throwaway user:// (E13-S5): the game copies the example courses into its course folder at
+# start, and its autosave writes there too; neither may touch the player's own folder.
+BUILD_DATA="$(mktemp -d)"
+trap 'rm -rf "$BUILD_DATA"' EXIT
+export XDG_DATA_HOME="$BUILD_DATA"
+
 status=0
 out="$(timeout 60 "$bin" --headless --verbose --quit-after "$frames" 2>&1)" || status=$?
 if [ "$status" -ne 0 ]; then

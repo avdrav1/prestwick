@@ -25,8 +25,11 @@ extends SceneTree
 ## day prints its pace fails by hole and where the counted waits were (on the tee, on the hole
 ## behind its own queue, or held for a group on another hole, on the tee or the hole).
 ##
+## E13-S5: `examples` plays the example courses (res://courses/, CourseExport.EXAMPLES) instead,
+## at 24 arrivals unless `arrivals=N` is given, and prints a row per course (_examples).
+##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
-##       [day_s=540] [arrival_window_s=90] [arrivals=24] [quick] [--lines]
+##       [day_s=540] [arrival_window_s=90] [arrivals=24] [quick] [--lines] [examples]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
@@ -50,7 +53,8 @@ func _initialize() -> void:
 			fixture = NineHolesHazards
 	var course: CourseData = fixture.land(7)
 	var opened: Array[int] = fixture.build(CourseBuilder.new(course))
-	print("nine holes (%s): %d open" % [fixture.resource_path.get_file(), opened.size()])
+	if not OS.get_cmdline_user_args().has("examples"):
+		print("nine holes (%s): %d open" % [fixture.resource_path.get_file(), opened.size()])
 	var model := ShotModel.new()
 	var tuning := GuestTuning.load_default()
 	var quick := false
@@ -67,6 +71,11 @@ func _initialize() -> void:
 			lines = true
 		elif arg == "frames":
 			frames_only = true
+	if OS.get_cmdline_user_args().has("examples"):
+		_examples(seeds, tuning, model, Array(OS.get_cmdline_user_args()).any(
+				func(a: String) -> bool: return a.begins_with("arrivals=")))
+		quit(0)
+		return
 	print("day_s %d s (%d guests a day, arriving over the first %d s)" % [tuning.day_s, tuning.arrivals_per_day, tuning.arrival_window_s])
 	GuestClubTable.warm(model)
 	if not quick:
@@ -140,6 +149,31 @@ func _initialize() -> void:
 			size, skill, g.records.size(), g.left_s - g.arrived_s, g.left_s, "dusk" if g.left_at_dusk else "done",
 			_sum_waits(alone), _strokes(alone) / float(size)])
 	quit(0)
+
+
+## E13-S5 `examples`: a row per example course (CourseExport.EXAMPLES, res://courses/), each
+## played on the day seeds as /balance reactions plays them (ReactionField.example_day,
+## example_row): every day's line, then the course's reaction mix, its rating and stars, each
+## check's fail share and the latest finish. At ReactionField.EXAMPLE_ARRIVALS guests a day
+## unless `arrivals=N` was given (`own_arrivals`). Reported, not targets.
+func _examples(seeds: Array[int], tuning: GuestTuning, model: ShotModel, own_arrivals: bool) -> void:
+	var arrivals := tuning.arrivals_per_day if own_arrivals else ReactionField.EXAMPLE_ARRIVALS
+	print("example courses: %d guests a day, dusk at %d s, day seeds %s" % [arrivals, tuning.day_s,
+			",".join(seeds.map(func(s: int) -> String: return str(s)))])
+	var field := ReactionField.new(model)
+	var rows: Array[Dictionary] = []
+	for file: String in CourseExport.EXAMPLES:
+		var days: Array[Dictionary] = []
+		for s: int in seeds:
+			var day := field.example_day(file, s, arrivals, tuning)
+			days.append(day)
+			if not day.is_empty():
+				print("%s day %d: %d of %d groups finished nine, latest finish %d s; praise %d, neutral %d, complaint %d of %d" % [
+						day.name, s, day.nine, day.groups, day.latest, day.kinds[0], day.kinds[1],
+						day.kinds[2], day.records])
+		rows.append(ReactionField.example_row(file, days, arrivals))
+	for r: Dictionary in rows:
+		print("%s: %.2f; %s" % [r.name, r.measured, r.note])
 
 
 ## Returns whether every group that teed off finished its nine before dusk. `p_groups`
