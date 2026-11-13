@@ -32,3 +32,29 @@ Yards are the line of play the validator measures (rule 4); each is within 2 yd 
 hole's. Not modelled: the Road hole's hotel and the out-of-bounds wall, the Old Course's
 double greens and shared fairways, Carnoustie 17th's out of bounds, and the Heathery's hidden
 bunkers (raised to be seen: a blind landing area fails Fair, D43).
+
+## Pine Ridge (E13-S3)
+
+`courses/pine_ridge.json`, built by `tests/fixtures/pine_ridge.gd` (PineRidge) and saved by
+`tests/fixtures/pine_ridge_save.gd`. Nine holes of tree-lined parkland, par 34, 2,935 yd, on
+flat New sandbox land raised into a ridge: a long rise in the west holds the clubhouse, the 1st
+tee and the home green, and a plateau in the east centre is what the 8th drops off. Every hole
+plays down its own corridor of rough walled by a belt of pines, with stands in the ground
+between; three doglegs (1, 5, 9), two creeks, contoured greens and one crowned green.
+
+| Hole | Name | Par | Yards | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Sentry Pines | 4 | 352 | Merion (East) 1st, par 4, about 350 yd, dogleg right (approximate) | Down off the ridge, turning right round a stand of pines at the corner. |
+| 2 | Long Meadow | 4 | 350 | Augusta National 3rd, "Flowering Peach", par 4, 350 yd | A short par 4: bunkers left of the landing and one in front of the green. |
+| 3 | Thimble | 3 | 125 | Merion (East) 13th, par 3, about 127 yd (approximate) | A small green from a raised tee, ringed with sand. |
+| 4 | Turtle Back | 4 | 372 | Pinehurst No. 2, 3rd, par 4, about 387 yd (approximate), scaled to the map | A crowned green raised a step, whose edges shed a ball. |
+| 5 | Creekside Bend | 5 | 513 | Augusta National 13th, "Azalea", par 5, 510 yd (before its 2023 lengthening) | A sweeping dogleg left round the pines, a creek down the inside of the bend and across the front of the green. |
+| 6 | Chapel Rows | 4 | 427 | Oakmont 3rd, par 4, 428 yd | Rows of narrow bunkers (the "church pews") left of the landing area. |
+| 7 | Footbridge | 3 | 155 | Augusta National 12th, "Golden Bell", par 3, 155 yd | Over a creek to a wide, shallow green, sand in front and behind. |
+| 8 | Ridge Drop | 3 | 181 | Augusta National 6th, "Juniper", par 3, 180 yd | Downhill four steps off the plateau to a green framed by pines. |
+| 9 | Homeward Climb | 4 | 460 | Augusta National 18th, "Holly", par 4, 465 yd | Out through a chute of pines, turning right and climbing five steps to the green beside the clubhouse. |
+
+Yards are the line of play the validator measures (rule 4). Hole 4 is 15 yd short of the real
+hole: the east edge holds no more. Not modelled: Pinehurst's sandy waste areas, Augusta 13th's
+azaleas, the 18th's pair of fairway bunkers (one here, at the corner), Merion's wicker baskets, and the pews' grass
+strips between rows at their real scale (here a row every 3 tiles, 15 yd).

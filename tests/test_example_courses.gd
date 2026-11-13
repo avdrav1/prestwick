@@ -76,3 +76,36 @@ func test_old_grey_links() -> void:
 	var built := OldGreyLinks.course()
 	assert_eq(c.content_hash(), built.content_hash(),
 			"courses/old_grey_links.json is out of date: rerun scripts/save_old_grey_links.gd")
+
+
+## E13-S3: Pine Ridge, nine holes of tree-lined parkland (tests/fixtures/pine_ridge.gd).
+func test_pine_ridge() -> void:
+	var c := _load(PineRidge.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, PineRidge.COURSE_NAME)
+	assert_eq(c.author, PineRidge.COURSE_AUTHOR)
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, PineRidge.HOLES)
+	var par := 0
+	for h: HoleData in c.holes:
+		par += h.par
+	assert_between(par, 34, 36, "par of the nine")
+	# The three doglegs are measured round the bend (D47).
+	var v := CourseValidator.new()
+	for h: HoleData in c.holes:
+		assert_eq(v.turn_point(c, h) != null, h.number in [1, 5, 9], "hole %d dogleg" % h.number)
+	# Every walk is within the least patient guest's limit or on a cart path (E9-S2, D68).
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+	var built := PineRidge.course()
+	assert_eq(c.content_hash(), built.content_hash(),
+			"courses/pine_ridge.json is out of date: rerun tests/fixtures/pine_ridge_save.gd")
