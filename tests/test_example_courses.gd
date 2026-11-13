@@ -188,3 +188,62 @@ func _assert_contoured(c: CourseData, h: HoleData) -> void:
 				steepest = maxi(steepest, absi(c.get_height(t.x + d.x, t.y + d.y) - c.get_height(t.x, t.y)))
 	assert_gte(high - low, 1, "hole %d green has a contour" % h.number)
 	assert_eq(steepest, 1, "hole %d contours are one step" % h.number)
+
+
+## E13-S4: Cliffside (Cliffside), nine holes round an island of clifftops. Beyond _check_holes:
+## all land owned, the sea at height 0 under shores a step above it, every tee shot seen, and no
+## walk a guest would complain of (D65, D68).
+func test_cliffside() -> void:
+	var c := _load(Cliffside.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, Cliffside.COURSE_NAME)
+	assert_eq(c.author, Cliffside.COURSE_AUTHOR)
+	assert_eq(c.width, Cliffside.SIZE)
+	assert_eq(c.height, Cliffside.SIZE)
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, Cliffside.HOLES)
+	var par := 0
+	for h: HoleData in c.holes:
+		par += h.par
+	assert_between(par, 34, 36, "par of the nine")
+	# The sea is water at height 0 under every shore tile, and the bluffs rise from it a step a
+	# tile at most (D50's smooth slopes).
+	var sea := Cliffside.sea_mask()
+	var wrong: Array[Vector2i] = []
+	var sea_tiles := 0
+	for y: int in c.height:
+		for x: int in c.width:
+			if sea[y * c.width + x] == 0:
+				continue
+			sea_tiles += 1
+			if c.get_surface(x, y) != Surface.Type.WATER or c.get_height(x, y) != 0:
+				wrong.append(Vector2i(x, y))
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]:
+				var n := Vector2i(x, y) + d
+				if c.in_bounds(n.x, n.y) and sea[n.y * c.width + n.x] == 0 and c.get_height(n.x, n.y) > 1:
+					wrong.append(n)
+	assert_gt(sea_tiles, 0, "the sea")
+	assert_eq(wrong, [] as Array[Vector2i], "sea at height 0, every shore tile one step above it")
+	# Every tee shot is seen from the tee (D43), so the holes can be praised.
+	var checks := HoleChecks.new()
+	for h: HoleData in c.holes:
+		assert_true(checks.measure(c, h).fair(), "hole %d seen from the tee" % h.number)
+	# Every walk between holes is within the least patient guest's limit or on a cart path
+	# (E9-S2, D68), and each of the fixture's paths serves its walk.
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+		for p: Array in Cliffside.PATHS:
+			if int(p[1]) == int(wk["to_hole"]):
+				assert_true(r.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
+	var built := Cliffside.course()
+	assert_eq(c.content_hash(), built.content_hash(),
+			"courses/cliffside.json is out of date: rerun scripts/save_cliffside.gd")

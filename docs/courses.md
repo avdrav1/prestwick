@@ -87,3 +87,36 @@ modelled: the real holes' elevation (the course is flat), PGA National's and Aug
 and the island green's single pot bunker. Measured on the file (10 guest days at
 data/guests.json's arrivals): praise 0.83, neutral 0.16, complaint 0.01, 4.5 stars; at 24
 arrivals every group finished nine, the latest at 474 s of the 540 s day (seeds 1 to 5).
+
+## Cliffside (E13-S4)
+
+`courses/cliffside.json`, built by `tests/fixtures/cliffside.gd` (Cliffside) and saved by
+`scripts/save_cliffside.gd`. Nine holes round an island of clifftops, par 36, 3,353 yd. The sea
+is water at height 0 round every edge of the map and in three coves (a chasm across the 3rd, a
+narrow inlet between the 5th and 6th, and a bay the 6th, 7th and 1st play round); a headland
+stands out under the 4th green. The plateau rolls from about 6 steps in the north to 4 in the
+south and drops to the sea a step a tile (smooth bluffs, D50), so a ball that runs off a
+fairway's seaward edge rolls into the sea. The clubhouse stands on the south-east headland by
+the 1st tee and the 9th green; cart paths serve the five climbing walks (1-2, 3-4, 4-5, 5-6,
+8-9).
+
+| Hole | Name | Par | Yards | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Bay Bluff | 4 | 395 | Cypress Point 17th, par 4, 393 yd (approximate) | North up the bay's bluff, the water all down the left; a bunker in the middle of the fairway stands in for the real hole's cypresses (trees there slowed the guest day too much). |
+| 2 | North Ledge | 4 | 363 | Bandon Dunes 16th, par 4, 363 yd (approximate) | West along the northern cliff top from a raised tee, a cross bunker in the fairway, the green on the cliff's edge. |
+| 3 | The Chasm | 4 | 430 | Pebble Beach 8th, par 4, 428 yd | A drive along the western cliffs, then the approach over a sea chasm to a green on the far side. |
+| 4 | Little Point | 3 | 107 | Pebble Beach 7th, par 3, 106 yd | A short drop from a raised tee to a small green on a headland in the sea, a bunker in front. |
+| 5 | Long Bluff | 4 | 445 | Pebble Beach 10th, par 4, 446 yd (approximate; longer from the Open tees) | North along the inlet's bluff, the water all down the right. |
+| 6 | Cliff Edge | 4 | 332 | Pebble Beach 4th, par 4, 331 yd (approximate) | A short par 4 down the inlet's far side, a bunker in the fairway, to a green on the clifftop above the water. |
+| 7 | The Crossing | 3 | 231 | Cypress Point 16th, par 3, 231 yd (approximate; 219 to 233 by tee) | The long carry over the bay's mouth to a green on the far headland. |
+| 8 | Headland | 5 | 525 | Pebble Beach 6th, par 5, 523 yd | Uphill all the way north to a green on the northern cliff. |
+| 9 | Homeward | 5 | 525 | Pebble Beach 18th, par 5, 543 yd | Down the eastern shore, the sea all down the left, home to a green above the southern cliff; scaled to 525 yd, since the map's north and south seas leave no more room. |
+
+Yards are the line of play the validator measures (rule 4); each is within 2 yd of the real
+hole's but the 9th. Measured on the saved file (data/guests.json's arrivals, day seeds 1 to 10,
+1,440 reactions): praise 0.76, neutral 0.23, complaint 0.01, a rating of 4.49, 4.5 stars
+(fair and interesting never fail; the 3rd plays 1.9 over par, the hardest). The 2nd fails pace
+on two thirds of its reactions, the groups backing up behind the slow 3rd. At 24 arrivals (day
+seeds 1 to 10) every group finishes nine, the latest at 524 s (dusk 540). Not modelled: Cypress
+Point's cypresses in the 17th fairway and Pebble Beach 18th's tree, the 7th's ring of bunkers,
+and the real holes' beaches and sea walls.
