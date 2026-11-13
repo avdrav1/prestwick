@@ -24,3 +24,7 @@ Relayed by the user. Findings and what was decided.
 | Aim camera jumpy, moves on every mouse move | 2 | Camera holds still while aiming; glides only when the marker leaves a large safe box | E10-S2 |
 | Swing bar: how power maps to distance, what the green zone means | 2 | Label the bar with yards, a live distance readout, and a one-time practice hint | E10-S3 |
 | Water paints at any height (towering pools) | 4 | Water finds its level: painting water floods the connected low ground to its rim | E10-S4 |
+
+## Tester (rc6, 2026-11-12): cart path
+
+A tester laid a cart path and still got "long walk" complaints. The rule was invisible: a walk counts as on a path only if the path starts within 25 yd of the cup, ends within 25 yd of the next tee, covers half the walk and is quicker; and complaints from before the path stayed in the tags. The user chose all four fixes (E12-S1).

@@ -1431,6 +1431,22 @@ Done when: rc6 is cut with every story below checked.
   - Touches: `docs/`
   - Done 2026-11-12: `/ship-it` cut 0.6.0-rc6 (tag `v0.6.0-rc6`) with E11-S1 (D67): tests 1288/1288, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub pre-release with both builds, the example course and how-to-play; the download page points at it.
 
+## E12: Paths you can see — active
+
+From an rc6 tester (2026-11-12): "added a path, but still getting complaints". Ships as the next release candidate (rc7).
+
+Done when: rc7 is cut with every story below checked.
+
+- [ ] E12-S1 Make cart paths obvious. A player can see which walks a path serves and why one does not.
+  - Note: the walk check (D65, E9-S2) counts a walk as served only when a cart path starts within `cart_path_reach_yd` 25 yd of the cup it walks from, ends within 25 yd of the next tee, covers `walk_path_share` 0.5 of the walk, and is quicker; none of that shows, and complaints given before the path stay in the hole's tag. The user chose all four: (1) with the Cart path tool in hand, draw every walk (each open hole's green to the next open tee, and the clubhouse door to the first tee) as the route guests would take, red when it would draw a complaint and green when a path serves it, labelled with its time and, when red, the reason ("path stops 32 yd short of the 5th tee", "no path within reach of the 4th green", "path covers 30% of the walk", "path is slower than walking across"); (2) the complaint names the same reason; (3) laying or removing cart path that a walk can reach clears that walk's complaints from the hole's tag and tally (E3-S17's clearing, the walk check only), so the next guests' verdict shows; (4) loosen the rule: `cart_path_reach_yd` to about 40 and drop the half-the-walk share (a path that serves the walk and is quicker counts), recorded as a `/decision` amending D65, with `/balance reactions` rerun and its targets kept.
+  - Accept: on a test course, a path that stops short of a tee shows a red walk with the gap in yards and draws a complaint naming it; extending it turns the walk green and clears the old walk complaints; the overlay is hidden in Play and costs no frame time when the tool is not in hand (D52); every reaction target still passes.
+  - Test: `tests/test_guest_walk.gd`, `tests/test_reactions.gd`, `tests/test_walk_overlay.gd`; screenshots of red and green walks; the balance output in the commit.
+  - Touches: `guests/`, `scenes/`, `data/`, `tests/`
+- [ ] E12-S2 Cut the next release candidate (rc7).
+  - Accept: `/ship-it` as for E11-S2, including the itch.io push (step 9); tag, GitHub pre-release, itch, download page.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
