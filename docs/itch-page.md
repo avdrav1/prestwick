@@ -23,7 +23,7 @@ And it's your course, so play it. Pick a club, aim, and swing with a three-click
 - Play any hole yourself, with a readable swing bar, a landing marker, and a top-down green view for putts.
 - A goal checklist that walks you through your first course.
 - Autosave every morning; F5 and F9 ask before they overwrite.
-- Six famous courses built in, to play or rebuild, modelled on famous real holes: Old Grey Links (Championship), a full eighteen of famous links holes, and five nines: Harbor Links (water and an island green), Old Grey Links (seaside links), Pine Ridge (tree-lined parkland), Cliffside (clifftops over the sea) and Dogleg Hollow (nine famous doglegs). Famous courses in the menu starts a new game on one, and each update brings their latest version.
+- Seven famous courses built in, to play or rebuild, modelled on famous real holes: two full eighteens, Old Grey Links (Championship) (famous links holes) and Dogleg Hollow (Championship) (eighteen famous doglegs), and five nines: Harbor Links (water and an island green), Old Grey Links (seaside links), Pine Ridge (tree-lined parkland), Cliffside (clifftops over the sea) and Dogleg Hollow (nine famous doglegs). Famous courses in the menu starts a new game on one, and each update brings their latest version.
 - Export a course as one file and send it to a friend.
 - Fully playable from the keyboard (F1 lists every key).
 - Original music by avdrav.

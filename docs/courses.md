@@ -1,6 +1,7 @@
 # Example courses
 
-The example courses of E13 (Famous holes) and E16's Dogleg Hollow: each hole is modelled on a famous real hole at its
+The example courses of E13 (Famous holes), E16's Dogleg Hollow and the two eighteens (E18-S6,
+E19-S1): each hole is modelled on a famous real hole at its
 real par and yardage, with its signature feature, scaled only where the 128 x 128 map (640 yd)
 forces it. The names in the game and in the course files are our own; this file, which does not
 ship, credits the real holes. A number marked "approximate" is from memory and may be off by a
@@ -262,3 +263,76 @@ Not modelled: the out of bounds of the real holes (Prestwick's railway is a cart
 Hogan's Alley's fence left is open rough), North Berwick's stone wall as stone, Calamity's real
 drop (about 50 ft), Lytham's other bunkers (it has well over a dozen on the 18th; five here), and
 the Old Course's shared fairways and double greens.
+
+## Dogleg Hollow (Championship) (E19-S1)
+
+`courses/dogleg_hollow_championship.json`, built by `tests/fixtures/dogleg_championship.gd`
+(DoglegChampionship) and saved by `scripts/save_dogleg_championship.gd`. The second famous
+eighteen (the user, 2026-11-14: "what about 18 holes with dog legs? All the holes on the current
+18 holes are dead straight."), on D71's 192 x 192 map with every parcel owned: par 74, 7,552 yd,
+and every one of the eighteen bends. Dogleg Hollow's nine is the front nine (Out), hole for hole
+where it lies on its own course (the same tees, cups, pars, yardages, cart paths and parkland),
+and nine more famous real doglegs are the back nine (In), laid with the same pieces
+(`DoglegHollow.lay`) on the L of new ground the bigger map adds to the east and south and the
+empty corner south-east of the 9th green: every hole down its own corridor of rough walled by a
+belt of trees, and trees, water or sand in every corner. Where two new holes run side by side
+their corridors meet with no belt between, which the 128 x 128 nine never needed. Dogleg Hollow
+stays a famous course of its own; this is the seventh.
+
+The back nine was laid out with a scratch annealing search for nine L shapes (first leg 240 yd,
+the turn, the real hole's yardage) that keep 55 yd of corridor from each other and the front
+nine, keep rule 4's straight-line disc clear of every fairway, and chain green to tee; then
+placed by hand. The 10th leaves the clubhouse south and turns west; the 11th runs west and turns
+south-west to the corner; the 12th runs east along the south edge and turns north; the 13th runs
+east and turns north to a green beside the clubhouse; the 14th goes north-east up the middle of
+the new ground and back north-west; the 15th runs south-east and turns up to a green in the
+north-east corner; the 16th runs south down the east edge and turns west; the 17th leaves the
+clubhouse east and wraps south round its lake down the east edge; the 18th comes back north-west
+to a green 105 yd from the clubhouse door. The clubhouse stands south-east of the 9th green
+(Dogleg Hollow's nine has it on the east edge by the 1st tee): its door is 23 tiles (115 yd) from
+the 9th green, a cart path's walk from the 1st tee, 69 yd from the 10th tee, and 105 yd from the
+18th green, so an eighteen turns there (D72).
+
+No par 3 turns. D47 measures a turn only on a hole of 240 yd or more straight, at the ring 240 yd
+out, and a par 3 is under 320 yd on its line of play, so a par 3 could bend only in its last 80
+yd, past a 240 yd tee shot (about a 300 to 319 yd par 3 turning 30 degrees, with its turn 60 to
+80 yd short of the green): the rules allow it, but no real par 3 is played so, so the back nine
+is par 4s and a par 5, as the front is.
+
+| Hole | Name | Par | Yards | Turn | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 to 9 | Dogleg Hollow's nine | 37 | 3,545 | See Dogleg Hollow above | | As there. |
+| 10 | Long Sand | 4 | 441 | 84 right | Augusta National 1st, "Tea Olive", par 4, 445 yd, dogleg right | A long bunker on the inside of the corner, where the big hitter's line cuts it. |
+| 11 | Sound Side | 4 | 460 | 65 left | Harbour Town 18th, par 4, about 460 yd from the middle tees (approximate; 472 from the back), bending left along Calibogue Sound | Water down the inside of the bend left; the bold line flies it. |
+| 12 | Beach Carry | 4 | 431 | 85 left | Machrihanish 1st, "Battery", par 4, about 428 yd (approximate), the drive across the beach | Water (the beach and sea) filling the inside of the bend left; the more the drive carries, the shorter the approach. |
+| 13 | Deep Corner | 4 | 455 | 85 left | Augusta National 5th, "Magnolia", par 4, 455 yd (before its 2019 lengthening to 495), dogleg left | Two deep bunkers on the inside of the corner left; the green beside the clubhouse. |
+| 14 | Mashie Shot | 4 | 451 | 84 left | Royal Lytham & St Annes 17th, par 4, about 453 yd (approximate), dogleg left | Bunkers in the corner left, the sand Bobby Jones played his mashie from in 1926. |
+| 15 | The Elbow | 4 | 369 | 81 left | The Country Club (Brookline) 17th, par 4, about 373 yd (approximate), dogleg left | One bunker in the elbow of the bend left. |
+| 16 | Corner Cluster | 4 | 442 | 83 right | Muirfield 8th, par 4, about 441 yd (approximate), dogleg right | A cluster of bunkers in the corner right. |
+| 17 | Wraparound | 5 | 553 | 72 right | Bay Hill 6th, par 5, about 555 yd (approximate), wrapping right round a lake | The bending par 5: a lake inside the bend right; the bolder the line over it, the nearer the green in two. |
+| 18 | Lakeside | 4 | 405 | 40 right | Hazeltine National 16th, par 4, about 402 yd (approximate), bending right along Lake Hazeltine | A pond in the corner right. |
+
+The back nine is par 37, 4,007 yd. Yards are the line of play the validator measures (rule 4,
+D47), each within 4 yd of the real hole's; turn is the angle tee to turn against turn to cup
+(`DoglegHollow.turn_angle`), at least 30 degrees on every one of the eighteen
+(`tests/test_example_courses.gd`). None of the back nine repeats a hole Dogleg Hollow or Pine
+Ridge models (the other famous courses neither).
+
+Walks: the front nine's five cart paths, one from the clubhouse door up to the 1st tee, and five
+on the back nine's walks too long for the least patient guest: 10-11 (crossing the 13th's
+fairway on a 45 degree diagonal, so it stays joined through its corners), 11-12, 13-14 (joining
+the 1st tee's path beside the clubhouse), 14-15 and 15-16. No eighteen walks from the 9th green straight to the 10th tee
+(it turns at the door). Bridges (D69): none; `scripts/bridge_audit.gd` flags nothing (no walk of
+a round over 1.21 times its straight line, the 12th's two wet balls in three days the only
+detours; `docs/decisions/e19-s1-bridge-audit.txt`). With all eighteen open its guests have an
+eighteen-hole day (D72: dusk at 1,020 s). At 24 arrivals, five days (`/balance reactions`,
+`docs/decisions/e19-s1-balance-reactions.txt`; `scripts/guest_day.gd -- examples`,
+`e19-s1-guest-day-examples.txt`): 26 of 48 groups played eighteen, every group finished its round
+on every day, the latest at 764 s of 1,020; praise 0.83, neutral 0.16, complaint 0.01 of 1,638
+reactions, a rating of 4.64 (4.5 stars), fair, interesting and walk never fail.
+
+Not modelled: the real holes' elevation (the ground is flat, so every tee shot is seen), Augusta's
+pines and the real holes' trees (here the belts), the sharpness of the gentler real bends
+(Tea Olive, Harbour Town, Magnolia and Lytham bend less than here; the map packs eighteen L
+shapes), Harbour Town's lighthouse and Machrihanish's beach as sand (both water here), and Bay
+Hill's and Hazeltine's water along the green (here only in the corner).

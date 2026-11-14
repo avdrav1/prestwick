@@ -217,14 +217,27 @@ static func spec_of(n: int) -> Dictionary:
 ## Builds the course on `b`'s course, water levelled as painted (D66). Returns the numbers that
 ## opened.
 static func build(b: CourseBuilder) -> Array[int]:
+	lay(b, HOLES, walks(), PATHS)
+	var first: Vector2i = (HOLES[0] as Dictionary)["tee"]
+	var spot: Array = ClubhouseRule.spot_beside(b.course, first, b.slot_lines(), CLUBHOUSE_REACH)
+	b.move_clubhouse(spot[0], spot[1])
+	return opened(b, HOLES)
+
+
+## Lays the holes `specs` (HOLES' form) on `b`'s course as this nine is laid: the ground, the
+## belts of trees and their corridors, a lane on each walk of `walk_lines` (tile polylines), the
+## trees, fairways, sand, tees, greens and water (levelled, D66), the cart paths `paths`
+## (PATHS' form), the bridges, then each hole's tee, cup and par. No clubhouse. E19-S1's
+## eighteen (DoglegChampionship) lays its eighteen with it.
+static func lay(b: CourseBuilder, specs: Array, walk_lines: Array, paths: Array) -> void:
 	var course: CourseData = b.course
 	var level_water: bool = b.level_water
 	b.level_water = true
-	var water := water_tiles(course)
-	_shape(b, course, water)
+	var water := water_tiles(course, specs)
+	_shape(b, course, water, specs)
 	var belts: Array[Vector2i] = []
 	var cuts: Array[Vector2i] = []
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		var line := corridor_line(spec)
 		var half := corridor_half(spec)
 		belts.append_array(PlaytestNine.strip(line, 2.0 * (half + BELT)))
@@ -235,15 +248,15 @@ static func build(b: CourseBuilder) -> Array[int]:
 	_paint(b, course, belts, Surface.Type.TREES)
 	_paint(b, course, cuts, Surface.Type.ROUGH)
 	var lanes: Array[Vector2i] = []
-	for w: Array in walks():
+	for w: Array in walk_lines:
 		lanes.append_array(PlaytestNine.strip(w, LANE))
 	_paint(b, course, lanes, Surface.Type.ROUGH)
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		for e: Array in spec["trees"]:
 			_paint(b, course, PlaytestNine.ellipse(e), Surface.Type.TREES)
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		_paint(b, course, PlaytestNine.fairway_tiles(spec), Surface.Type.FAIRWAY)
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		for e: Array in spec["bunkers"]:
 			_paint(b, course, PlaytestNine.ellipse(e), Surface.Type.BUNKER)
 		_paint(b, course, PlaytestNine.tee_tiles(spec), Surface.Type.TEE)
@@ -255,25 +268,26 @@ static func build(b: CourseBuilder) -> Array[int]:
 		if course.get_surface(t.x, t.y) != Surface.Type.WATER:
 			b.paint(t, Surface.Type.WATER, 1)
 	b.end_stroke()
-	for p: Array in PATHS:
+	for p: Array in paths:
 		_paint(b, course, path_tiles(course, p[2]), Surface.Type.CART_PATH)
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		if spec.has("bridge"):
 			FixtureBridges.lay(b, spec["bridge"])
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		var n: int = spec["n"]
 		b.place_tee(n, spec["tee"], spec["par"])
 		b.place_cup(n, spec["cup"])
 		b.set_par(n, spec["par"])
-	var first: Vector2i = (HOLES[0] as Dictionary)["tee"]
-	var spot: Array = ClubhouseRule.spot_beside(course, first, b.slot_lines(), CLUBHOUSE_REACH)
-	b.move_clubhouse(spot[0], spot[1])
 	b.level_water = level_water
-	var opened: Array[int] = []
-	for spec: Dictionary in HOLES:
+
+
+## The numbers of `specs` whose holes are open on `b`'s course.
+static func opened(b: CourseBuilder, specs: Array) -> Array[int]:
+	var out: Array[int] = []
+	for spec: Dictionary in specs:
 		if b.hole(spec["n"]).open:
-			opened.append(spec["n"])
-	return opened
+			out.append(spec["n"])
+	return out
 
 
 ## The walks a round takes, as tile polylines: the 1st tee toward the clubhouse (CLUBHOUSE_WALK),
@@ -322,17 +336,17 @@ static func corridor_half(spec: Dictionary) -> float:
 	return float(spec["width"]) / 2.0 + CORRIDOR_ROUGH
 
 
-## The tiles dug and flooded: every hole's water, less every tee box and green, one
+## The tiles dug and flooded: every hole's water (of `specs`), less every tee box and green, one
 ## tile in from the map's edge (so no pond drains off it, D66), sorted.
-static func water_tiles(course: CourseData) -> Array[Vector2i]:
+static func water_tiles(course: CourseData, specs: Array = HOLES) -> Array[Vector2i]:
 	var dry := {}
-	for s: Dictionary in HOLES:
+	for s: Dictionary in specs:
 		for t: Vector2i in PlaytestNine.green_tiles(s):
 			dry[t] = true
 		for t: Vector2i in PlaytestNine.tee_tiles(s):
 			dry[t] = true
 	var wet := {}
-	for s: Dictionary in HOLES:
+	for s: Dictionary in specs:
 		var cells: Array[Vector2i] = []
 		for e: Array in s.get("water", []):
 			cells.append_array(PlaytestNine.ellipse(e))
@@ -364,7 +378,8 @@ static func turn_angle(course: CourseData, h: HoleData, v: CourseValidator) -> f
 ## Heights: flat GROUND, every green contoured, every tee box lifted, each pond dug one step
 ## below the lowest ground round it, flat; the ground round them eased as PlaytestNine eases it
 ## (neighbours one step apart at most, one riser every 2 tiles along an axis).
-static func _shape(b: CourseBuilder, course: CourseData, water: Array[Vector2i]) -> void:
+static func _shape(b: CourseBuilder, course: CourseData, water: Array[Vector2i],
+		specs: Array = HOLES) -> void:
 	var w: int = course.width
 	var h: int = course.height
 	var target := PackedInt32Array()
@@ -401,7 +416,7 @@ static func _shape(b: CourseBuilder, course: CourseData, water: Array[Vector2i])
 		for p: Vector2i in pond:
 			target[p.y * w + p.x] = maxi(low - 1, 0)
 			locked[p] = true
-	for spec: Dictionary in HOLES:
+	for spec: Dictionary in specs:
 		var g: Array = spec["green"]
 		var cells := PlaytestNine.green_tiles(spec)
 		var base: int = _mean_target(target, w, h, cells) + int(g[4])

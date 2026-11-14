@@ -3,7 +3,7 @@ extends GutTest
 ## holes open and no validator issue, each hole's par and yardage within 10 yd of its fixture
 ## spec, a scripted stroke from each tee comes to rest, and the file is the fixture rebuilt.
 ## E13-S5: the four ship (packed by the export presets, beside the build and in each itch
-## channel by /ship-it). E16-S1: Dogleg Hollow, the fifth. E15-S1 (D70): they are the famous courses, played from res://courses/
+## channel by /ship-it). E16-S1: Dogleg Hollow, the fifth. E18-S6 and E19-S1: the two eighteens. E15-S1 (D70): they are the famous courses, played from res://courses/
 ## and never copied; each file carries its id and version, and a changed file must bump it.
 
 const YARD_SLACK: int = 10
@@ -368,6 +368,97 @@ func test_old_grey_championship() -> void:
 			"courses/old_grey_championship.json is out of date: rerun scripts/save_old_grey_championship.gd")
 
 
+## E19-S1: Dogleg Hollow (Championship) (DoglegChampionship), eighteen famous doglegs on D71's
+## 192 x 192 map. Beyond _check_holes for all eighteen: every parcel owned; the front nine is
+## Dogleg Hollow's nine as it ships (tees, cups, pars, yardages); every hole measured round its
+## bend, turning at least MIN_TURN_DEG to the side its spec names; every tee shot seen, a hazard
+## on its line with a dry way round, and a contoured green; the par; the turn (D72) as on Old
+## Grey Links (Championship); no walk of a round a guest would complain of, each path serving its
+## walk; the file is the fixture rebuilt.
+func test_dogleg_hollow_championship() -> void:
+	var c := _load(DoglegChampionship.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, DoglegChampionship.COURSE_NAME)
+	assert_eq(c.author, DoglegChampionship.COURSE_AUTHOR)
+	assert_eq([c.width, c.height], [192, 192], "D71's map")
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, DoglegChampionship.holes())
+	var nine := _load(DoglegHollow.PATH)
+	var v := CourseValidator.new()
+	for h: HoleData in nine.holes:
+		var e: HoleData = c.holes[h.number - 1]
+		assert_eq([e.number, e.tee, e.cup, e.par], [h.number, h.tee, h.cup, h.par],
+				"front nine hole %d is Dogleg Hollow's" % h.number)
+		assert_eq(v.hole_yardage(c, e), v.hole_yardage(nine, h), "hole %d's yardage" % h.number)
+	var checks := HoleChecks.new()
+	var par := 0
+	var fives := 0
+	for h: HoleData in c.holes:
+		par += h.par
+		if h.par == 5:
+			fives += 1
+		var spec := DoglegChampionship.spec(h.number)
+		assert_not_null(v.turn_point(c, h), "hole %d is measured round its dogleg" % h.number)
+		var angle := DoglegHollow.turn_angle(c, h, v)
+		assert_gte(absf(angle), MIN_TURN_DEG, "hole %d turns %.0f degrees" % [h.number, angle])
+		assert_eq("right" if angle > 0.0 else "left", spec["turn"], "hole %d turns %s" % [h.number, spec["turn"]])
+		var st := checks.measure(c, h)
+		assert_true(st.fair(), "hole %d tee shot seen (blind at %s)" % [h.number, st.blind_at])
+		assert_true(st.interesting(), "hole %d: a hazard on the line and a dry way round" % h.number)
+		_assert_contoured(c, h)
+	assert_eq(par, DoglegChampionship.PAR, "par of the eighteen")
+	var back_fives := 0
+	for s: Dictionary in DoglegChampionship.BACK:
+		if int(s["par"]) == 5:
+			back_fives += 1
+	assert_gte(back_fives, 1, "a bending par 5 on the back nine")
+	# The turn (D72): out from the door to the 1st and the 10th, in to it from the 9th and 18th.
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	var door_tile := c.clubhouse_door()
+	assert_eq(door_tile, DoglegChampionship.door())
+	var door := (Vector2(door_tile) + Vector2(0.5, 0.5)) * 5.0
+	for n: int in [1, 10]:
+		var tee: Vector2i = c.holes[n - 1].tee
+		var r := GuestWalk.route(c, door, (Vector2(tee) + Vector2(0.5, 0.5)) * 5.0, tuning)
+		assert_true(r.on_path or r.duration <= limit, "door to the %d tee: %.2f s" % [n, r.duration])
+	for n: int in [9, 18]:
+		var cup: Vector2i = c.holes[n - 1].cup
+		assert_lte(Vector2(cup).distance_to(Vector2(door_tile)), TURN_GREEN_TILES,
+				"the %d green near the door" % n)
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		if int(wk["to_hole"]) == 10:
+			continue
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+		for p: Array in DoglegHollow.PATHS + DoglegChampionship.PATHS:
+			if int(p[1]) == int(wk["to_hole"]):
+				assert_true(r.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
+	assert_eq(c.content_hash(), DoglegChampionship.course().content_hash(),
+			"courses/dogleg_hollow_championship.json is out of date: rerun scripts/save_dogleg_championship.gd")
+
+
+## E19-S1: a 24-arrival day on Dogleg Hollow (Championship) is an eighteen-hole day, and every
+## group that tees off finishes its round, nine or eighteen, before dusk.
+func test_dogleg_hollow_championship_day_finishes_before_dusk() -> void:
+	var day := ReactionField.new().example_day("dogleg_hollow_championship.json", 1,
+			ReactionField.EXAMPLE_ARRIVALS)
+	assert_false(day.is_empty(), "the day ran")
+	if day.is_empty():
+		return
+	assert_eq(int(day.holes), 18, "all eighteen open")
+	assert_eq(int(day.day_s), int(GuestTuning.load_default().eighteen_day_s), "an eighteen-hole day")
+	assert_gt(int(day.eighteens), 0, "some groups play eighteen")
+	assert_eq(int(day.nine), int(day.groups), "every group finished its round")
+	assert_lt(int(day.latest), int(day.day_s), "before dusk")
+
+
 ## E18-S6: a 24-arrival day on the eighteen (as /balance reactions plays it) is an eighteen-hole
 ## day, and every group that tees off finishes its round, nine or eighteen, before dusk.
 func test_old_grey_championship_day_finishes_before_dusk() -> void:
@@ -389,6 +480,7 @@ func test_old_grey_championship_day_finishes_before_dusk() -> void:
 const SUMMARIES := {
 	"cliffside": "9 holes, par 36, 3,353 yd",
 	"dogleg_hollow": "9 holes, par 37, 3,545 yd",
+	"dogleg_hollow_championship": "18 holes, par 74, 7,552 yd",
 	"harbor_links": "9 holes, par 35, 3,200 yd",
 	"old_grey_championship": "18 holes, par 70, 6,533 yd",
 	"old_grey_links": "9 holes, par 34, 3,023 yd",
@@ -403,6 +495,7 @@ func _fixture_ids() -> Dictionary:
 		"cliffside": [Cliffside.COURSE_ID, Cliffside.COURSE_VERSION],
 		"dogleg_hollow": [DoglegHollow.COURSE_ID, DoglegHollow.COURSE_VERSION],
 		"old_grey_championship": [OldGreyChampionship.COURSE_ID, OldGreyChampionship.COURSE_VERSION],
+		"dogleg_hollow_championship": [DoglegChampionship.COURSE_ID, DoglegChampionship.COURSE_VERSION],
 	}
 
 
@@ -411,7 +504,7 @@ func test_the_famous_courses_are_the_shipped_files() -> void:
 	ids.sort()
 	var want := SUMMARIES.keys()
 	want.sort()
-	assert_eq(ids, want, "FamousCourses names the six famous courses")
+	assert_eq(ids, want, "FamousCourses names the seven famous courses")
 	for id: String in FamousCourses.ids():
 		assert_eq(FamousCourses.spec(id)["file"], "%s.json" % id)
 		assert_true(FileAccess.file_exists(FamousCourses.path(id)), FamousCourses.path(id))
@@ -503,6 +596,9 @@ func test_the_example_courses_have_their_bridges() -> void:
 		["res://courses/old_grey_championship.json", 15, [[Vector2i(118, 50), Vector2i(118, 70)],
 				[Vector2i(70, 56), Vector2i(74, 56)], [Vector2i(130, 181), Vector2i(146, 181)],
 				[Vector2i(182, 110), Vector2i(182, 98)]]],
+		# E19-S1: Dogleg Hollow (Championship) needs none either (the audit: no walk of a round
+		# over 1.21 times its straight line, no hole sending over 5% of its balls round water).
+		["res://courses/dogleg_hollow_championship.json", 0, []],
 	]
 	var v := CourseValidator.new()
 	for k: Array in cases:

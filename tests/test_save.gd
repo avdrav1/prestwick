@@ -527,14 +527,14 @@ func test_nine_hole_files_and_famous_courses_load_as_they_were() -> void:
 		assert_eq(Vector2i(c.width, c.height), Vector2i(int(raw["width"]), int(raw["height"])),
 				"%s keeps its own size" % path)
 		assert_eq(c.holes.size(), (raw["holes"] as Array).size(), "%s keeps its holes" % path)
-		# E18-S6: the famous eighteen is the one shipped file past nine holes.
-		if path != OldGreyChampionship.PATH:
+		# E18-S6, E19-S1: the famous eighteens are the shipped files past nine holes.
+		if path != OldGreyChampionship.PATH and path != DoglegChampionship.PATH:
 			assert_lte(c.holes.size(), 9, "%s is a nine" % path)
 		var again := CourseSave.from_json(CourseSave.to_json(c), errors)
 		assert_eq(again.content_hash(), c.content_hash(), "%s saves back as the same course" % path)
 	for id: String in FamousCourses.ids():
 		var famous := CourseSave.load_file(FamousCourses.path(id))
-		if id == OldGreyChampionship.COURSE_ID:
+		if id == OldGreyChampionship.COURSE_ID or id == DoglegChampionship.COURSE_ID:
 			assert_eq([famous.width, famous.height, famous.holes.size()], [192, 192, 18],
 					"%s is an eighteen on D71's map" % id)
 			continue

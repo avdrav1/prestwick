@@ -1,0 +1,49 @@
+=== Dogleg Hollow (Championship): 0 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1      150 yd straight, walked  153 yd (1.02x, +2 yd),    3 s against    3 s
+  green 1 to tee 2         51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3        158 yd straight, walked  166 yd (1.05x, +8 yd),    3 s against    4 s
+  green 3 to tee 4         92 yd straight, walked   95 yd (1.03x, +3 yd),    2 s against    2 s
+  green 4 to tee 5         63 yd straight, walked   63 yd (1.00x, +0 yd),    2 s against    2 s
+  green 5 to tee 6         55 yd straight, walked   55 yd (1.00x, +0 yd),    2 s against    2 s
+  green 6 to tee 7        128 yd straight, walked  139 yd (1.09x, +11 yd),    3 s against    3 s
+  green 7 to tee 8        105 yd straight, walked  111 yd (1.05x, +5 yd),    2 s against    3 s
+  green 8 to tee 9        141 yd straight, walked  170 yd (1.21x, +29 yd),    3 s against    4 s
+  green 9 to tee 10       170 yd straight, walked  170 yd (1.00x, +0 yd),    5 s against    5 s
+  green 10 to tee 11      176 yd straight, walked  192 yd (1.09x, +16 yd),    4 s against    4 s
+  green 11 to tee 12       74 yd straight, walked   84 yd (1.14x, +10 yd),    2 s against    2 s
+  green 12 to tee 13       43 yd straight, walked   43 yd (1.00x, +0 yd),    1 s against    1 s
+  green 13 to tee 14       75 yd straight, walked   90 yd (1.20x, +15 yd),    2 s against    2 s
+  green 14 to tee 15       71 yd straight, walked   77 yd (1.08x, +6 yd),    2 s against    2 s
+  green 15 to tee 16      105 yd straight, walked  117 yd (1.12x, +12 yd),    2 s against    3 s
+  green 16 to tee 17       60 yd straight, walked   60 yd (1.00x, +0 yd),    2 s against    2 s
+  green 17 to tee 18       46 yd straight, walked   46 yd (1.00x, +0 yd),    1 s against    1 s
+  green 18 to clubhouse   104 yd straight, walked  104 yd (1.00x, +0 yd),    3 s against    3 s
+  0 of 19 walks with a detour
+day 1: latest finish 599 s
+  last home: arrived 82 s; 1: 107-136 (29 s, wait 29), 2: 142-165 (23 s, wait 7), 3: 180-198 (18 s, wait 11), 4: 209-230 (21 s, wait 8), 5: 236-251 (15 s, wait 4), 6: 262-279 (17 s, wait 8), 7: 288-305 (17 s, wait 6), 8: 320-342 (22 s, wait 12), 9: 347-363 (16 s, wait 0), 10: 379-398 (19 s, wait 0), 11: 403-422 (19 s, wait 0), 12: 425-448 (23 s, wait 0), 13: 452-475 (23 s, wait 0), 14: 477-497 (20 s, wait 0), 15: 500-521 (21 s, wait 0), 16: 527-550 (23 s, wait 0), 17: 552-575 (23 s, wait 0), 18: 577-596 (19 s, wait 0)
+day 2: latest finish 623 s
+  last home: arrived 72 s; 1: 112-143 (31 s, wait 48), 2: 150-169 (19 s, wait 9), 3: 186-204 (18 s, wait 18), 4: 213-240 (27 s, wait 12), 5: 243-263 (20 s, wait 4), 6: 277-296 (19 s, wait 12), 7: 303-325 (22 s, wait 6), 8: 335-367 (32 s, wait 19), 9: 381-398 (17 s, wait 10), 10: 414-436 (22 s, wait 0), 11: 441-460 (19 s, wait 0), 12: 463-486 (23 s, wait 0), 13: 489-515 (26 s, wait 0), 14: 518-539 (21 s, wait 0), 15: 542-557 (15 s, wait 0), 16: 561-578 (17 s, wait 0), 17: 581-602 (21 s, wait 0), 18: 605-620 (15 s, wait 0)
+day 3: latest finish 747 s
+  last home: arrived 80 s; 1: 127-157 (30 s, wait 52), 2: 179-202 (23 s, wait 20), 3: 213-227 (14 s, wait 7), 4: 230-252 (22 s, wait 1), 5: 255-272 (17 s, wait 1), 6: 290-307 (17 s, wait 12), 7: 323-340 (17 s, wait 14), 8: 356-384 (28 s, wait 19), 9: 396-416 (20 s, wait 8), 10: 433-460 (27 s, wait 6), 11: 469-502 (33 s, wait 12), 12: 504-532 (28 s, wait 5), 13: 538-568 (30 s, wait 9), 14: 573-591 (18 s, wait 3), 15: 617-633 (16 s, wait 8), 16: 655-672 (17 s, wait 15), 17: 696-720 (24 s, wait 10), 18: 722-744 (22 s, wait 0)
+ball spots (3530 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 222 balls, 0 with a detour
+  hole 2: 197 balls, 0 with a detour
+  hole 3: 180 balls, 0 with a detour
+  hole 4: 213 balls, 0 with a detour
+  hole 5: 191 balls, 0 with a detour
+  hole 6: 200 balls, 0 with a detour
+  hole 7: 200 balls, 0 with a detour
+  hole 8: 264 balls, 0 with a detour
+  hole 9: 184 balls, 0 with a detour
+  hole 10: 183 balls, 0 with a detour
+  hole 11: 189 balls, 0 with a detour
+  hole 12: 178 balls, 2 with a detour (1.1%), worst +33 yd
+    tiles (48..51, 168..171): 2 balls; extra yd walk to it 33, from tee 0, to cup 0; wet 11 tiles (53, 176)..(49, 170)
+  hole 13: 188 balls, 0 with a detour
+  hole 14: 198 balls, 0 with a detour
+  hole 15: 167 balls, 0 with a detour
+  hole 16: 195 balls, 0 with a detour
+  hole 17: 209 balls, 0 with a detour
+  hole 18: 172 balls, 0 with a detour
+bridges:

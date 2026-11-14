@@ -1,7 +1,8 @@
 class_name FamousCourses
 extends RefCounted
-## The famous courses (E15-S1, D70): the four example courses of E13, E16-S1's Dogleg Hollow and
-## E18-S6's Old Grey Links (Championship), the first eighteen
+## The famous courses (E15-S1, D70): the four example courses of E13, E16-S1's Dogleg Hollow,
+## E18-S6's Old Grey Links (Championship), the first eighteen, and E19-S1's Dogleg Hollow
+## (Championship)
 ## (docs/courses.md), built into the game in res://courses/ (the export presets' include_filter packs courses/*.json)
 ## and played from there, so each update brings their latest version. The main menu's Famous
 ## courses page lists them and starts a new game on one (Main.start_famous).
@@ -94,6 +95,17 @@ const COURSES: Array[Dictionary] = [
 		"style": "Eighteen holes of links: Old Grey Links out, nine famous holes home.",
 		"versions": [
 			"b6bee726fcd99f14e41eb3fcfecc4a86f6cc0c267f08a9a586be437d2d22614b",  # 1: 0.7.0
+		],
+	},
+	{
+		# E19-S1: the second famous eighteen: Dogleg Hollow's nine out and nine more famous
+		# doglegs home. First shipped in 0.7.1, so its version 1 is that file.
+		"id": "dogleg_hollow_championship",
+		"file": "dogleg_hollow_championship.json",
+		"name": "Dogleg Hollow (Championship)",
+		"style": "Eighteen famous doglegs: Dogleg Hollow out, nine more bends home.",
+		"versions": [
+			"e2e2d161e658b212b0dff746248ede0493662454cb0022a5bfdc04c3c7f992fe",  # 1: 0.7.1
 		],
 	},
 ]
