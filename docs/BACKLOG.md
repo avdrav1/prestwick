@@ -1588,6 +1588,47 @@ The people-only checks 0.6.0 shipped without (user, 2026-11-13: "ship 0.6.0 now"
   - Test: the answers in `docs/playtests/`.
   - Touches: `docs/`
 
+## E18: Eighteen holes — planned
+
+The first epic after 0.6.0 (user, 2026-11-13: "finish 0.6.0 first, then write an epic for 18 holes"). Today a course holds at most nine holes (`BuilderTuning.max_holes` 9, the MVP's "9 holes"), on a 128 x 128 map (640 yd square, about 85 acres; `map_size` and `plot_size`), with a guest day (`day_s` 540) and an economy (D56, D59, D67: a 3-star course opens its nine around day 30) tuned for nine. A real eighteen needs 150 to 200 acres and most of a day. The user chose a bigger map with an 18-hole limit, guests who play 9 or 18 holes, and a perf spike first. Ships as 0.7.0.
+
+Done when: a player can build and run an 18-hole course on a bigger map, guests choose 9 or 18 holes, the economy paces the back nine, and 0.7.0 ships with at least one famous eighteen.
+
+- [ ] E18-S1 Measure a bigger map. Decide its size on numbers, not hope.
+  - Note: a spike. Build 192 x 192 (960 yd, about 190 acres) and 256 x 160 test maps of generated land, and measure them on a quiet machine against D52: New course and load times, Build drag and undo frames, the farthest-zoom Play frame with a full field, tree and terrain draw (E5-S15), skip to morning (E7-S4's 3 s), guest routing (D69) and save size. Recommend one size (or say the engine needs work first, and what) and record a `/decision` that also moves "18 holes" into the MVP-plus scope, says what it delays, and settles parcels (keep 16 x 16 tiles, more of them), the free starting block (D67's 4 x 4 or larger) and the land generator's rules at the new size.
+  - Accept: the decision names the map size with its measured figures, and every D52 budget either holds at that size or has a story in this epic to bring it back.
+  - Test: the perf output in the commit.
+  - Touches: `course/`, `scripts/`, `docs/`
+- [ ] E18-S2 Allow eighteen holes on the bigger map. The course model, builder, saves and hole list go to 18.
+  - Note: `max_holes` 18 and the chosen `map_size` / `plot_size`; the course format keeps reading 9-hole files (a v3 file loads unchanged; record whether the map size is per file, so old courses stay 128 x 128); the hole list gets Out (1 to 9) and In (10 to 18) groups and still fits a 1280 x 720 window (E5-S13, E3-S65's collapse); renumbering, the goal checklist (a goal for "Build hole 10" or "Open the back nine"), export and import, and the famous-course versioning (D70) work at 18.
+  - Accept: a player builds 18 holes on a New course of the new size; a 9-hole save and every famous course still load as they were; the hole list reads at 18; tests and playtests pass.
+  - Test: `tests/test_builder_holes.gd`, `tests/test_save.gd`, `tests/test_hole_list.gd`; screenshots of the hole list at 18.
+  - Touches: `course/`, `scenes/`, `tests/`
+- [ ] E18-S3 Let guests play nine or eighteen. A round fits a day.
+  - Note: each group chooses 9 or 18 holes when it arrives (a tunable share, and 18 only when the course has 18 open holes): nine-hole groups play the front nine (or the back nine when the front is full, a tunable rule), eighteen-hole groups play both and turn at the clubhouse (the walk from 9's green to 10's tee passes it); fees are per round (a 9-hole and an 18-hole fee, the fee slider sets both or the 18 is a tunable multiple); `day_s` and arrival windows are retuned so an eighteen finishes before dusk; reactions, the feed, tags and the rating work across 18 holes; skip to morning and save/load replays still match.
+  - Accept: on an 18-hole test course a 24-arrival day finishes before dusk with the chosen mix of 9s and 18s; `/balance reactions` holds every target (new rows for an 18-hole field); D59's daily rating still reads right.
+  - Test: `tests/test_guest_brain.gd`, `tests/test_day_clock.gd`, `tests/test_economy_day.gd`; the balance and guest-day outputs in the commit.
+  - Touches: `guests/`, `scenes/`, `data/`, `tests/`
+- [ ] E18-S4 Pace the back nine. The economy still tells a story at 18.
+  - Note: a second pacing target for the back nine (state it in days and real time, as E4-S8 did), land prices and the money scale rechecked on the bigger map, and the 18-hole fee's place in it; `/balance economy` and `/balance land` gain 18-hole rows; record the numbers in a `/decision` (amending D56, D57, D59 and D67 as needed).
+  - Accept: `/balance economy` meets both targets (the nine around day 30 for a 3-star course, the eighteen at the new target) without going negative; `/balance land` holds at the new size.
+  - Test: the balance outputs in the commit; `tests/test_economy_tuning.gd`.
+  - Touches: `data/`, `scripts/`, `docs/`
+- [ ] E18-S5 Keep the frame budget at eighteen. Everything stays smooth on the big map.
+  - Note: whatever E18-S1 found over budget, plus a full re-measure on an 18-hole course with a full field: Build drag and undo, the farthest zoom, the walk overlay (E12-S1) and the ruler (E8-S5), the green view, skip to morning, routing (D69) and the D52 gate.
+  - Accept: every D52 budget holds on the 18-hole test course, measured alone on a quiet machine.
+  - Test: the perf output in the commit.
+  - Touches: `course/`, `scenes/`, `guests/`, `scripts/`
+- [ ] E18-S6 Build the first famous eighteen. Two of the nines become one course.
+  - Note: either join two existing famous nines into a full course on the bigger map (for example Old Grey Links out and a new links back nine in), or build a new eighteen of famous holes, through a fixture like the others (D69 bridges, D70 built in, versioned); credit the real holes in `docs/courses.md`.
+  - Accept: the course is on the Famous courses page, all 18 holes open, a 24-arrival day finishes, the bridge audit flags nothing, and it rates at least 3.5 stars.
+  - Test: `tests/test_example_courses.gd`, `tests/test_famous_courses.gd`; screenshots.
+  - Touches: `tests/`, `courses/`, `course/`, `docs/`
+- [ ] E18-S7 Ship 0.7.0.
+  - Accept: `/ship-it` with the itch push; the download page, `docs/how-to-play.md`, `docs/itch-page.md` and a devlog say 18 holes.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
