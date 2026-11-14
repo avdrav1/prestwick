@@ -77,9 +77,9 @@ func test_a_bridge_costs_nothing_twice_and_a_short_balance_refuses_it() -> void:
 	var b := _builder(c)
 	assert_true(b.paint(Vector2i(11, 9), P, 1))
 	assert_false(b.paint(Vector2i(11, 9), P, 1), "a bridge over a bridge changes nothing")
-	assert_false(b.paint(Vector2i(11, 10), P, 1), "$9 left buys no bridge tile")
+	assert_false(b.paint(Vector2i(11, 10), P, 1), "$12 left buys no bridge tile")
 	assert_eq(_refusals.size(), 1)
-	assert_string_contains(_refusals[0], "costs $31")
+	assert_string_contains(_refusals[0], "costs $28")
 
 
 func test_painting_over_a_bridge_removes_it_and_undo_puts_it_back() -> void:
@@ -261,7 +261,7 @@ func test_the_cart_path_hover_says_it_builds_a_bridge_and_its_price() -> void:
 	tool.brush_size = 1
 	tool.hover_at(Iso.tile_to_screen(Vector2(11, 10), 1))
 	assert_eq(tool.hover, Vector2i(11, 10))
-	assert_eq(tool.hover_note(), "builds a bridge, $31 a tile")
+	assert_eq(tool.hover_note(), "builds a bridge, $28 a tile")
 	tool.hover_at(Iso.tile_to_screen(Vector2(4, 4), 2))
 	assert_eq(tool.hover_note(), "", "on dry ground it is path")
 	tool.surface = Surface.Type.FAIRWAY

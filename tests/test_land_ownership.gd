@@ -11,9 +11,9 @@ const EXAMPLE_PATH := "res://courses/example_par3.json"
 const BLOCK: Rect2i = Rect2i(2, 2, 4, 4)
 
 
-## The 128 x 128 map, flat rough at height 2 (every parcel $800 at D67's money scale 0.78; $650
-## at E4-S8's 0.63, $600 at D57's 0.61), owning only the starting block, with the $5,000 land
-## budget. Built with CourseData's setters, as a fixture.
+## The 128 x 128 map, flat rough at height 2 (every parcel $700 at D73's money scale 0.70; $800 at
+## D67's 0.78, $650 at E4-S8's 0.63, $600 at D57's 0.61), owning only the starting block, with
+## the $5,000 land budget. Built with CourseData's setters, as a fixture.
 func _land_course() -> CourseData:
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
 	for q: int in c.parcels_high:
@@ -102,32 +102,32 @@ func test_prices_come_from_data_land_json() -> void:
 	assert_eq(lp.tree_tile_price, -2, "a tree cleared to rough (D57)")
 	assert_eq(lp.water_tile_price, -12, "a pond tile filled: rough and a step (D57)")
 	assert_eq([lp.min_price, lp.max_price, lp.price_round], [500, 2000, 50])
-	assert_almost_eq(lp.price_scale, 0.78, 1e-9, "the money scale (D56, D57, E4-S8 0.63, D67 0.78)")
+	assert_almost_eq(lp.price_scale, 0.70, 1e-9, "the money scale (D56, D57, E4-S8 0.63, D67 0.78, D73 0.70)")
 
 
 func test_price_reads_relief_trees_and_water() -> void:
 	var lp := LandPrices.load_default()
 	var c := CourseData.create(128, 128, Surface.Type.ROUGH, 2)
-	# Every price is D28's formula times price_scale 0.78 (D57, D67), clamped, then rounded to $50.
-	assert_eq(lp.price(c, Vector2i(0, 0)), 800, "flat open rough: 1000 x 0.78 = 780")
+	# Every price is D28's formula times price_scale 0.70 (D57, D73), clamped, then rounded to $50.
+	assert_eq(lp.price(c, Vector2i(0, 0)), 700, "flat open rough: 1000 x 0.70 = 700")
 	# The design's typical parcel: relief 2, 31 trees, 10 water: 1000 + 200 - 62 - 120 = 1018,
-	# x 0.78 = 794, $800.
+	# x 0.70 = 713, $700.
 	c.set_tile(16, 0, 4, Surface.Type.ROUGH)
 	for i: int in 31:
 		c.set_tile(17 + i % 14, 1 + i / 14, 2, Surface.Type.TREES)
 	for i: int in 10:
 		c.set_tile(17 + i, 10, 2, Surface.Type.WATER)
-	assert_eq(lp.price(c, Vector2i(1, 0)), 800)
-	# A hill parcel: relief 5, 20 trees: 1460, x 0.78 = 1139, $1,150.
+	assert_eq(lp.price(c, Vector2i(1, 0)), 700)
+	# A hill parcel: relief 5, 20 trees: 1460, x 0.70 = 1022, $1,000.
 	c.set_tile(32, 0, 7, Surface.Type.ROUGH)
 	for i: int in 20:
 		c.set_tile(33 + i % 10, 2 + i / 10, 2, Surface.Type.TREES)
-	assert_eq(lp.price(c, Vector2i(2, 0)), 1150)
-	# All water clamps at the floor, 500 x 0.78 = 390, $400.
+	assert_eq(lp.price(c, Vector2i(2, 0)), 1000)
+	# All water clamps at the floor, 500 x 0.70 = 350, $350.
 	for y: int in 16:
 		for x: int in 16:
 			c.set_tile(48 + x, y, 2, Surface.Type.WATER)
-	assert_eq(lp.price(c, Vector2i(3, 0)), 400)
+	assert_eq(lp.price(c, Vector2i(3, 0)), 350)
 
 
 func test_money_is_written_with_thousands() -> void:
@@ -142,17 +142,17 @@ func test_buy_a_parcel_next_to_owned_land() -> void:
 	var c := _land_course()
 	var b := CourseBuilder.new(c)
 	watch_signals(b)
-	assert_eq(b.parcel_price(Vector2i(6, 3)), 800)
+	assert_eq(b.parcel_price(Vector2i(6, 3)), 700)
 	assert_eq(b.buy_refusal(Vector2i(6, 3)), "")
 	assert_true(b.buy_parcel(Vector2i(6, 3)))
 	assert_true(c.is_parcel_owned(Vector2i(6, 3)))
 	assert_true(c.is_owned(96, 48), "its tiles are owned")
-	assert_eq(c.land_budget, 4200, "the price comes off the budget")
+	assert_eq(c.land_budget, 4300, "the price comes off the budget")
 	assert_signal_emitted_with_parameters(b, "land_changed", [Vector2i(6, 3)])
 	assert_eq(b.undo_depth(), 1, "one undo step")
 	assert_eq(b.buy_refusal(Vector2i(6, 3)), "already yours")
 	assert_false(b.buy_parcel(Vector2i(6, 3)))
-	assert_eq(c.land_budget, 4200, "buying an owned parcel again changes nothing")
+	assert_eq(c.land_budget, 4300, "buying an owned parcel again changes nothing")
 	assert_true(b.buy_parcel(Vector2i(7, 3)), "the bought parcel is now land to grow from")
 
 
@@ -171,27 +171,27 @@ func test_refuse_a_parcel_not_next_to_owned_land() -> void:
 
 func test_refuse_a_parcel_the_budget_cannot_pay_for() -> void:
 	var c := _land_course()
-	c.set_land_budget(750)
+	c.set_land_budget(650)
 	var b := CourseBuilder.new(c)
 	var before := c.content_hash()
-	assert_eq(b.buy_refusal(Vector2i(1, 3)), "costs $800, you have $750")
+	assert_eq(b.buy_refusal(Vector2i(1, 3)), "costs $700, you have $650")
 	assert_false(b.buy_parcel(Vector2i(1, 3)))
 	assert_eq(c.content_hash(), before)
-	c.set_land_budget(800)
+	c.set_land_budget(700)
 	assert_true(b.buy_parcel(Vector2i(1, 3)), "exactly the price is enough")
 	assert_eq(c.land_budget, 0)
-	assert_eq(b.buy_refusal(Vector2i(0, 3)), "costs $800, you have $0")
+	assert_eq(b.buy_refusal(Vector2i(0, 3)), "costs $700, you have $0")
 
 
-func test_five_thousand_buys_six_flat_parcels_and_no_more() -> void:
-	# D67: $800 a flat parcel at the money scale 0.78 (seven at $650 before).
+func test_five_thousand_buys_seven_flat_parcels_and_no_more() -> void:
+	# D73: $700 a flat parcel at the money scale 0.70 (six at D67's $800, seven at $650 before).
 	var c := _land_course()
 	var b := CourseBuilder.new(c)
 	for p: Vector2i in [Vector2i(6, 2), Vector2i(6, 3), Vector2i(6, 4), Vector2i(6, 5), Vector2i(1, 2),
-			Vector2i(1, 3)]:
+			Vector2i(1, 3), Vector2i(1, 4)]:
 		assert_true(b.buy_parcel(p), str(p))
-	assert_eq(c.land_budget, 200)
-	assert_eq(b.buy_refusal(Vector2i(1, 4)), "costs $800, you have $200")
+	assert_eq(c.land_budget, 100)
+	assert_eq(b.buy_refusal(Vector2i(1, 5)), "costs $700, you have $100")
 
 
 func test_undo_gives_the_parcel_up_and_the_price_back() -> void:
@@ -272,12 +272,12 @@ func test_a_v2_round_trip_keeps_ownership_and_the_hash() -> void:
 	assert_eq(int(raw["version"]), CourseData.FORMAT_VERSION)
 	assert_eq(raw["owned"][1], "00001000", "parcel row 1: only parcel 4")
 	assert_eq(raw["owned"][3], "00111110")
-	assert_eq(int(raw["land_budget"]), 3400, "what was left, not a fresh $5,000 (two $800 parcels)")
+	assert_eq(int(raw["land_budget"]), 3600, "what was left, not a fresh $5,000 (two $700 parcels)")
 	assert_not_null(loaded, "loads: %s" % [errors])
 	if loaded == null:
 		return
 	assert_eq(_owned_parcels(loaded), _owned_parcels(a))
-	assert_eq(loaded.land_budget, 3400)
+	assert_eq(loaded.land_budget, 3600)
 	assert_eq(loaded.content_hash(), a.content_hash())
 
 

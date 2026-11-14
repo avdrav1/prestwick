@@ -1,5 +1,5 @@
 {
-  "_doc": "Land prices and the land budget in dollars (D28, docs/design.md Land), read by course/land_prices.gd. E6-S8's /balance land kept every number (docs/design.md Land, Measured; Balance targets, land). E4-S1 (D56, D57): every term is D28's dollars before the money scale, and price_scale (the money scale D56 sets: 0.61, 0.63 since E4-S8, 0.78 since D67) multiplies the whole price and its clamp, so land moves with the build costs; tree_tile_price and water_tile_price are what clearing the tile costs at D56's table before the scale (a tree tile repainted rough, $2; a pond tile repainted rough and raised a step, $2 + $10), so a wooded or wet parcel is cheaper by the work it needs. land_budget is the $5,000 that becomes the one starting balance (D57) when E4-S2 charges for building.",
+  "_doc": "Land prices and the land budget in dollars (D28, docs/design.md Land), read by course/land_prices.gd. E6-S8's /balance land kept every number (docs/design.md Land, Measured; Balance targets, land). E4-S1 (D56, D57): every term is D28's dollars before the money scale, and price_scale (the money scale D56 sets: 0.61, 0.63 since E4-S8, 0.78 since D67, 0.70 since D73) multiplies the whole price and its clamp, so land moves with the build costs; tree_tile_price and water_tile_price are what clearing the tile costs at D56's table before the scale (a tree tile repainted rough, $2; a pond tile repainted rough and raised a step, $2 + $10), so a wooded or wet parcel is cheaper by the work it needs. land_budget is the $5,000 that becomes the one starting balance (D57) when E4-S2 charges for building.",
   "land_budget": 5000,
   "base_price": 1000,
   "relief_step_price": 100,
@@ -8,5 +8,5 @@
   "min_price": 500,
   "max_price": 2000,
   "price_round": 50,
-  "price_scale": 0.78
+  "price_scale": 0.70
 }

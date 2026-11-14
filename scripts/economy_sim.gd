@@ -57,6 +57,12 @@ const BUILD_EVERY_DAYS: int = 2
 const RUN_DAYS: int = 45
 const STAR_TARGET: float = 3.0
 const WINDOW: int = 50
+## E18-S4: the back nine's pacing (user, 2026-11-13; docs/design.md Balance targets, economy): a
+## 3-star course opens all eighteen around day 60, day 50 to 70, at the same build rule (a hole
+## every 2 days whenever the money is there), the nine still in DAYS_TARGET on the way.
+const EIGHTEEN_DAYS_TARGET := Vector2(50.0, 70.0)
+const EIGHTEEN_DAYS_AIM: float = 60.0
+const RUN18_DAYS: int = 90
 
 ## Cost tables: dollars per tile painted with each surface and per step of height moved.
 ## "doc" is the design doc's table as it stands (OOB "set in the economy milestone").
@@ -78,6 +84,15 @@ const RUN_TABLE: String = "fit-green"
 ## Fixture names, in fixtures() order, and the run's nine as [fixture index, yards].
 const PLAN: Array = [[0, 160.0], [4, 380.0], [0, 160.0], [1, 380.0], [2, 520.0], [0, 160.0],
 		[5, 450.0], [4, 380.0], [2, 520.0]]
+## E18-S4: the run's eighteen: the frugal nine, then the same nine again as holes 10 to 18 (its
+## land the footprints past the first nine's, at the median parcel of a New course's 192 x 192
+## land, D71).
+static func plan18() -> Array:
+	var out: Array = PLAN.duplicate()
+	out.append_array(PLAN)
+	return out
+
+
 ## Parcels the free starting block gives (D26: 4; D67: 16, LandTuning.start_block_parcels
 ## squared).
 static func block_parcels() -> float:
@@ -137,6 +152,8 @@ var land: LandPrices = _unscaled_land()
 var economy: EconomyTuning = EconomyTuning.load_default()
 var chosen_land: LandPrices = LandPrices.load_default()
 var rating_window: int = GuestTuning.load_default().rating_window
+## E18-S4: the share of groups that wants eighteen (D72, data/guests.json).
+var eighteen_share: float = GuestTuning.load_default().eighteen_share
 ## Each income model's run log at its fitted scale, from the last measure().
 var run_logs: Dictionary = {}
 
@@ -165,7 +182,7 @@ func chosen_income() -> Dictionary:
 	return {"arrivals": "chosen", "tuning": economy, "cap": economy.arrivals_max,
 			"ceiling": float(economy.fee_ceiling_per_star), "fee_share": CHOSEN_FEE_SHARE,
 			"curve": "chosen", "start": chosen_land.land_budget, "upkeep": economy.upkeep_per_open_hole,
-			"window": rating_window}
+			"window": rating_window, "eighteen_share": eighteen_share}
 
 
 # --- what a hole costs ---
@@ -312,14 +329,17 @@ func parcels_price(c: CourseData, parcels: Array[Vector2i], lp: LandPrices = nul
 
 
 ## The median price of every parcel outside the starting block on New courses of `seeds`
-## seeds from 1, on D67's 128 x 128 land (LandTuning.load_d67: D71 pins the economy's
-## measures until E18-S4 paces the bigger map).
-func median_parcel(seeds: int, lp: LandPrices = null) -> int:
+## seeds from 1, on D67's 128 x 128 land (LandTuning.load_d67) unless `lt` names other land.
+## E18-S4 (D73): the nine's rows stay on 128 x 128, as measured since D67; the eighteen's run
+## reads a New course's 192 x 192 land (LandTuning.load_default, D71).
+func median_parcel(seeds: int, lp: LandPrices = null, lt: LandTuning = null) -> int:
 	if lp == null:
 		lp = land
+	if lt == null:
+		lt = LandTuning.load_d67()
 	var prices: Array[int] = []
 	for s in range(1, seeds + 1):
-		var c := CourseBuilder.new_course(s, lp, LandTuning.load_d67())
+		var c := CourseBuilder.new_course(s, lp, lt)
 		var b := CourseBuilder.new(c, null, null, lp)
 		for q: int in c.parcels_high:
 			for p: int in c.parcels_wide:
@@ -475,11 +495,13 @@ static func chosen_fee(e: Dictionary, stars: float, held: int = -1) -> Vector2:
 # --- the run ---
 
 ## The plan's holes priced: [{name, yd, build, land}] at `scale` (cost table and land alike).
-func plan_costs(fx: Array[Dictionary], table: Dictionary, parcel: int, scale: float) -> Array[Dictionary]:
+## `holes` is PLAN (the nine) or plan18() (E18-S4).
+func plan_costs(fx: Array[Dictionary], table: Dictionary, parcel: int, scale: float,
+		holes: Array = PLAN) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var parcels := 0.0
 	var bought := 0
-	for p: Array in PLAN:
+	for p: Array in holes:
 		var f: Dictionary = fx[int(p[0])]
 		parcels += BalanceSim.footprint_parcels(float(p[1]))
 		var need := maxi(ceili(parcels - block_parcels() - 1e-6), 0) - bought
@@ -491,9 +513,14 @@ func plan_costs(fx: Array[Dictionary], table: Dictionary, parcel: int, scale: fl
 
 ## A run under income model `e`: the plan built a hole at least BUILD_EVERY_DAYS apart, each
 ## when the balance covers it; guests pay at morning, react by `mix`, upkeep at dusk.
-## {nine_day, star_day, min_money, money, stalled, log}.
+## {nine_day, eighteen_day, star_day, min_money, money, stalled, log}, over `days` days.
+## E18-S4: on an eighteen-hole plan, once all eighteen are open (D72's eighteen-hole day) the
+## share `eighteen_share` of the morning's guests, rounded, plays eighteen, pays
+## `eighteen_fee_multiple` times the fee (EconomyTuning.round_fee) and reacts on 18 holes; the
+## rest play a nine. Before that every guest plays a nine (D72: a course with open holes past 9
+## but not all eighteen plays nines), reacting on at most nine holes.
 func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
-		start: Array) -> Dictionary:
+		start: Array, days: int = RUN_DAYS) -> Dictionary:
 	var money: int = e.get("start", START_MONEY)
 	var upkeep_each: int = e.get("upkeep", UPKEEP_PER_HOLE)
 	var size: int = e.get("window", WINDOW)
@@ -503,11 +530,12 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 	var min_money := money
 	var stalled := 0
 	var nine_day := -1
+	var eighteen_day := -1
 	var star_day := -1
 	var log: PackedStringArray = []
 	var acc := [0.0, 0.0]
 	var held_fee := -1
-	for day in range(1, RUN_DAYS + 1):
+	for day in range(1, days + 1):
 		var built := ""
 		if open < plan.size() and day >= next_build:
 			var h: Dictionary = plan[open]
@@ -517,8 +545,10 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 				open += 1
 				next_build = day + BUILD_EVERY_DAYS
 				built = " built hole %d ($%d + land $%d)" % [open, h.build, h.land]
-				if open == plan.size():
+				if open == 9:
 					nine_day = day
+				if open == 18:
+					eighteen_day = day
 			else:
 				stalled += 1
 		# The stars shown all day: the mean at the last dusk (D59, GuestSim.stars).
@@ -533,10 +563,17 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 			held_fee = int(fp.x)
 			guests = 0 if open <= 0 else (e.tuning as EconomyTuning).arrivals(stars, fp.y)
 		var income := roundi(guests * fee)
+		var plays := guests * mini(open, 9)
+		var eighteens := 0
+		if open >= 18 and e.has("tuning"):
+			var t: EconomyTuning = e.tuning
+			eighteens = roundi(guests * float(e.get("eighteen_share", 0.0)))
+			income = (guests - eighteens) * int(fee) + eighteens * t.round_fee(int(fee), 18)
+			plays = (guests - eighteens) * 9 + eighteens * 18
 		var upkeep := upkeep_each * open
 		money += income - upkeep
 		min_money = mini(min_money, money)
-		for i in guests * open:
+		for i in plays:
 			acc[0] += mix[0]
 			acc[1] += mix[2]
 			if acc[0] >= 1.0:
@@ -552,9 +589,10 @@ func run(e: Dictionary, plan: Array[Dictionary], mix: Array[float], pts: Array,
 		var after := stars_of(_rating(window, float(start[0]), int(start[1])))
 		if star_day < 0 and open == plan.size() and after >= STAR_TARGET:
 			star_day = day
-		log.append("day %2d: %d open, %2d guests at $%.2f, +$%d -$%d, balance $%d, %.1f stars%s" % [
-				day, open, guests, fee, income, upkeep, money, after, built])
-	return {"nine_day": nine_day, "star_day": star_day, "min_money": min_money, "money": money,
+		log.append("day %2d: %d open, %2d guests at $%.2f%s, +$%d -$%d, balance $%d, %.1f stars%s" % [
+				day, open, guests, fee, (" (%d eighteens)" % eighteens) if open >= 18 else "", income,
+				upkeep, money, after, built])
+	return {"nine_day": nine_day, "eighteen_day": eighteen_day, "star_day": star_day, "min_money": min_money, "money": money,
 			"stalled": stalled, "log": log}
 
 
@@ -803,7 +841,116 @@ func measure_chosen(fx: Array[Dictionary], nn: Dictionary, mix: Array[Dictionary
 			pfit.scale, any, ("nine opens day %d, 3 stars day %d, stalled %d days" % [
 				pfit.run.nine_day, pfit.run.star_day, pfit.run.stalled]) if float(pfit.scale) > 0.0
 				else "none fits: the mix never holds 3 stars"))
+	rows.append_array(measure_eighteen(fx, pmix))
 	return rows
+
+
+## E18-S4 (D73): the chosen economy's eighteen on a New course's 192 x 192 land (D71): the back
+## nine's cost, an eighteen-hole day's net (D72's rounds and fees), and the run that builds the
+## frugal nine and then holes 10 to 18 the same way, against the targets: the nine in 25 to 35
+## days and all eighteen in 50 to 70 (around 60), never negative.
+func measure_eighteen(fx: Array[Dictionary], pmix: Array[float]) -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var any := Vector2(-INF, INF)
+	var table := chosen_table()
+	var lt := LandTuning.load_default()
+	var parcel := median_parcel(10, chosen_land, lt)
+	rows.append(row("chosen 18: median parcel, New courses %d x %d seeds 1 to 10 ($)" % [
+			lt.map_size.x, lt.map_size.y], parcel, any,
+			"the eighteen's land (D71); the nine's rows above read D67's 128 x 128"))
+	var plan := plan_costs(fx, table, parcel, 1.0, plan18())
+	var front_parcels := 0
+	var back_build := 0
+	var back_land := 0
+	var back_parcels := 0
+	for i in plan.size():
+		if i < 9:
+			front_parcels += int(plan[i].parcels)
+			continue
+		back_build += int(plan[i].build)
+		back_land += int(plan[i].land)
+		back_parcels += int(plan[i].parcels)
+	rows.append(row("chosen 18: frugal back nine, holes 10 to 18 ($)", back_build, any,
+			"land %s more (%d parcels at the median %s); the front nine's land %d parcels" % [
+				LandPrices.money(back_land), back_parcels, LandPrices.money(parcel), front_parcels]))
+	var e := chosen_income()
+	for stars: float in [1.0, 3.0, 5.0]:
+		var fp := chosen_fee(e, stars)
+		var g := economy.arrivals(stars, fp.y)
+		var fee := int(fp.x)
+		var n18 := roundi(g * eighteen_share)
+		var fee18 := economy.round_fee(fee, 18)
+		rows.append(row("chosen 18: an eighteen-hole day at %.0f stars, fee 80%%, net ($)" % stars,
+				(g - n18) * fee + n18 * fee18 - economy.upkeep_per_open_hole * 18, any,
+				"%d guests: %d nines at $%d, %d eighteens at $%d (x%.2f); upkeep $%d" % [g, g - n18, fee,
+					n18, fee18, economy.eighteen_fee_multiple, economy.upkeep_per_open_hole * 18]))
+	var pts: Array = Array(economy.rating_points)
+	var start: Array = [float(economy.rating_points[1]), rating_window]
+	var r := run(e, plan, MID_MIX, pts, start, RUN18_DAYS)
+	run_logs["chosen economy, 3-star eighteen"] = r.log
+	rows.append(row("chosen 18: 3-star course, day the nine opens",
+			r.nine_day if int(r.nine_day) > 0 else INF, DAYS_TARGET,
+			"on the way to eighteen, land at the %s parcel" % LandPrices.money(parcel)))
+	rows.append(row("chosen 18: 3-star course, day all eighteen open",
+			r.eighteen_day if int(r.eighteen_day) > 0 else INF, EIGHTEEN_DAYS_TARGET,
+			"stalled %d days for money; %s" % [r.stalled, real_time(int(r.eighteen_day))]))
+	rows.append(row("chosen 18: 3-star course, lowest balance ($)", r.min_money, Vector2(0.0, INF),
+			"balance on day %d %s" % [RUN18_DAYS, LandPrices.money(r.money)]))
+	var fit := fit_scale18(e, fx, parcel, MID_MIX, pts, start, table)
+	rows.append(row("chosen 18: 3-star course, cost scale on the chosen table nearest day 60",
+			fit.scale, any, ("nine day %d, eighteen day %d, lowest %s; 1.00 is the table as chosen" % [
+				fit.run.nine_day, fit.run.eighteen_day, LandPrices.money(fit.run.min_money)])
+				if float(fit.scale) > 0.0 else "none keeps the nine in 25 to 35 and the eighteen in 50 to 70"))
+	var passive := e.duplicate()
+	passive.fee_share = -1.0
+	var rp := run(passive, plan, MID_MIX, pts, start, RUN18_DAYS)
+	rows.append(row("chosen 18: 3-star course, fee left at the start fee, day all eighteen open",
+			rp.eighteen_day if int(rp.eighteen_day) > 0 else INF, any,
+			"nine day %d, stalled %d days, lowest %s; recorded, not a target" % [rp.nine_day,
+				rp.stalled, LandPrices.money(rp.min_money)]))
+	var r45 := run(e, plan, FAIR_MIX, pts, start, RUN18_DAYS)
+	rows.append(row("chosen 18: 4.5-star fair course, day all eighteen open",
+			r45.eighteen_day if int(r45.eighteen_day) > 0 else INF, any,
+			"nine day %d, stalled %d days, lowest %s; recorded, not a target" % [r45.nine_day,
+				r45.stalled, LandPrices.money(r45.min_money)]))
+	var pn := run(e, plan, pmix, pts, start, RUN18_DAYS)
+	rows.append(row("chosen 18: PlaytestNine's measured mix, day all eighteen open",
+			pn.eighteen_day if int(pn.eighteen_day) > 0 else INF, any,
+			"nine day %d, stalled %d days, lowest %s; recorded, not a target" % [pn.nine_day,
+				pn.stalled, LandPrices.money(pn.min_money)]))
+	return rows
+
+
+## E18-S4: day `day` of a run in real time at 1x and 3x: the days before it are nine-hole days
+## (`day_s`); the eighteen-hole days (`eighteen_day_s`) start the morning after it opens.
+static func real_time(day: int) -> String:
+	if day <= 0:
+		return "never"
+	var gt := GuestTuning.load_default()
+	var hours := (day - 1) * gt.day_s / 3600.0
+	return "%d nine-hole days before it, %.1f h at 1x, %.1f h at 3x; an eighteen-hole day %d min at 1x" % [
+			day - 1, hours, hours / 3.0, roundi(gt.eighteen_day_s / 60.0)]
+
+
+## E18-S4: the cost scale (tiles and land alike, 0.01 steps) whose eighteen opens nearest
+## EIGHTEEN_DAYS_AIM with the nine in DAYS_TARGET, the eighteen in EIGHTEEN_DAYS_TARGET and never
+## negative. {scale, run}, scale -1 when none does.
+func fit_scale18(e: Dictionary, fx: Array[Dictionary], parcel: int, mix: Array[float], pts: Array,
+		start: Array, table: Dictionary) -> Dictionary:
+	var best := {"scale": -1.0, "run": {}}
+	var best_gap := INF
+	for i in range(1, 301):
+		var s := i / 100.0
+		var r := run(e, plan_costs(fx, table, parcel, s, plan18()), mix, pts, start, RUN18_DAYS)
+		if int(r.min_money) < 0 or int(r.nine_day) < DAYS_TARGET.x or int(r.nine_day) > DAYS_TARGET.y:
+			continue
+		if int(r.eighteen_day) < EIGHTEEN_DAYS_TARGET.x or int(r.eighteen_day) > EIGHTEEN_DAYS_TARGET.y:
+			continue
+		var gap := absf(float(r.eighteen_day) - EIGHTEEN_DAYS_AIM)
+		if gap < best_gap - 1e-9:
+			best_gap = gap
+			best = {"scale": s, "run": r}
+	return best
 
 
 func _plan_parcels() -> float:
