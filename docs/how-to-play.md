@@ -4,9 +4,9 @@ Prestwick is a golf course you build, then play. Guests play it too, pay a green
 
 ## Start
 
-Run the game. The menu opens: choose **New course**, **Famous courses** to start on one of the five courses built into the game, or **Import course** to open a course a friend sent you (a course file goes in the folder the Import page's **Open folder** shows). Esc opens the menu at any time and pauses the guests' day.
+Run the game. The menu opens: choose **New course**, **Famous courses** to start on one of the six courses built into the game, or **Import course** to open a course a friend sent you (a course file goes in the folder the Import page's **Open folder** shows). Esc opens the menu at any time and pauses the guests' day.
 
-**Famous courses** lists the five courses that come with the game, each nine holes modelled on famous real holes: **Harbor Links** (holes over water, an island green to finish), **Old Grey Links** (seaside links, pot bunkers and burns), **Pine Ridge** (tree-lined parkland with doglegs and creeks), **Cliffside** (clifftop holes across the sea) and **Dogleg Hollow** (nine famous doglegs, every hole bending round a lake, woods or sand), each with its par and yardage. Picking one starts a new game on it (it asks first if you have a game under way): Day 1, every hole open, all the land owned and the starting $5,000 to rebuild with, to play, watch the guests on, or change. They are built into the game, so each update brings their latest version. A game you saved on one keeps the course as it was when you saved it; the Load game and Famous courses pages say "A newer version of Cliffside is available." when an update changed it, and a new game from Famous courses plays the new one.
+**Famous courses** lists the six courses that come with the game, modelled on famous real holes: five nines, **Harbor Links** (holes over water, an island green to finish), **Old Grey Links** (seaside links, pot bunkers and burns), **Pine Ridge** (tree-lined parkland with doglegs and creeks), **Cliffside** (clifftop holes across the sea) and **Dogleg Hollow** (nine famous doglegs, every hole bending round a lake, woods or sand), and a full eighteen, **Old Grey Links (Championship)** (the links nine plus a back nine of famous links holes), each with its par and yardage. Picking one starts a new game on it (it asks first if you have a game under way): Day 1, every hole open, all the land owned and the starting $5,000 to rebuild with, to play, watch the guests on, or change. They are built into the game, so each update brings their latest version. A game you saved on one keeps the course as it was when you saved it; the Load game and Famous courses pages say "A newer version of Cliffside is available." when an update changed it, and a new game from Famous courses plays the new one.
 
 Earlier versions (rc8 to rc10) copied the four into your course folder. The game tidies those copies away once when it first starts: a copy you never changed is removed, and one you edited is kept as "Cliffside (my copy)" (`cliffside_my_copy.json`) on the Import page.
 
@@ -63,3 +63,7 @@ The game also saves itself each morning, keeping the last 3 mornings apart from 
 ## Keys
 
 **F1** shows every key. **F2** sets the volumes. With **F6** every button can be reached from the keyboard; the arrow keys move a build cursor, and Space or Enter uses the tool.
+
+## Eighteen holes
+
+A new course is 192 x 192 tiles (960 yards a side) and holds up to eighteen holes. Once hole 10 exists the hole list splits into Out (1 to 9) and In (10 to 18). With all eighteen open, the day runs longer (17 minutes at 1x) and about half the groups play the full eighteen, stopping at the clubhouse at the turn and paying 1.75 times the nine-hole fee; the rest play nine, on the back nine when the 1st tee is busy.
