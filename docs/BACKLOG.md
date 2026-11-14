@@ -1642,6 +1642,22 @@ Done when: a player can build and run an 18-hole course on a bigger map, guests 
   - Touches: `docs/`
   - Done 2026-11-14: `/ship-it` cut 0.7.0 (tag `v0.7.0`): tests 1405/1405, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub release (latest), itch channels linux and windows, the download page, `docs/how-to-play.md`, `docs/itch-page.md` and `docs/itch-devlog-03.md` say eighteen holes.
 
+## E19: Dogleg Hollow eighteen — active
+
+From the user (2026-11-14): "what about 18 holes with dog legs? All the holes on the current 18 holes are dead straight." Old Grey Links (Championship) is links, which runs mostly straight. The user chose to extend Dogleg Hollow to a full eighteen: its nine famous doglegs as the front, plus a new back nine of nine more famous doglegs. Ships as 0.7.1.
+
+Done when: the course is built in and 0.7.1 ships.
+
+- [ ] E19-S1 Build "Dogleg Hollow (Championship)": eighteen famous doglegs. Every hole bends.
+  - Note: built like Old Grey Links (Championship) (E18-S6): 192 x 192, every parcel owned, the front nine is Dogleg Hollow's nine where it lies (same holes, bridges, paths), the back nine fills the new ground; clubhouse placed for the turn (1st and 10th tees, 9th and 18th greens near it, D72); contoured greens; cart paths and bridges where the walk overlay and `scripts/bridge_audit.gd` say; `course_id` `dogleg_hollow_championship`, version 1, hash in `FamousCourses`; a section in `docs/courses.md` crediting each real hole (names original). The back nine's nine holes are famous real doglegs not already modelled by Dogleg Hollow or Pine Ridge, at real yardage and par, each turning at least 30 degrees with trouble in the corner; at least one bending par 5 and, if the validator's rules allow a par 3 to turn (D47 measures doglegs on holes of 240 yd or more), say so, otherwise the back nine is par 4s and 5s like the front.
+  - Accept: listed on Famous courses; all 18 open with no validator issue; every hole's turn reads at 0.175x and the test checks each angle; an 18-hole 24-arrival day finishes before dusk; the bridge audit flags nothing; rating at least 3.5 stars; rows in `scripts/guest_day.gd -- examples` and `/balance reactions`.
+  - Test: `tests/test_example_courses.gd`, `tests/test_famous_courses.gd` (seven courses); screenshots at 0.1x and 0.175x and of three back-nine doglegs at 0.5x.
+  - Touches: `tests/`, `courses/`, `course/`, `scripts/`, `docs/`
+- [ ] E19-S2 Ship 0.7.1.
+  - Accept: `/ship-it` with the itch push; the ship-it course list, download page, `docs/how-to-play.md` and `docs/itch-page.md` name seven courses.
+  - Test: every check `/ship-it` runs.
+  - Touches: `docs/`, `.claude/skills/ship-it/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
