@@ -862,7 +862,7 @@ func test_a_long_hole_one_frames_tee_and_cup_clear_of_the_hud() -> void:
 	var c: CourseData = NineHoles.land(7)
 	NineHoles.build(CourseBuilder.new(c))
 	var m := _main_with(c)
-	assert_eq(m.camera.zoom.x, m.camera.tuning.zoom_levels[0], "framed at the farthest zoom")
+	assert_almost_eq(m.camera.zoom.x, m.camera.tuning.frame_farthest_zoom, 0.0001, "framed at the farthest framing zoom")
 	var free: Rect2 = m.free_view_rect_for(m.tile_world(c.holes[0].tee), m.tile_world(c.holes[0].cup))
 	for cell: Vector2i in [c.holes[0].tee, c.holes[0].cup]:
 		var at: Vector2 = _screen_of(m, cell)

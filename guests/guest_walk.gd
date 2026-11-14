@@ -28,6 +28,11 @@ extends RefCounted
 ## Reads CourseData only. The route is fixed when the walk starts; a path painted mid-walk is
 ## used from the next walk.
 
+## E18-S5: _joins' tile budget: JOIN_SLACK x the 8-neighbour distance + JOIN_BASE. Not a
+## tunable: it changes only how fast `why` answers, never what.
+const JOIN_SLACK: int = 4
+const JOIN_BASE: int = 256
+
 const NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1),
@@ -416,14 +421,12 @@ static func path_grid(course: CourseData) -> PackedByteArray:
 	var w := course.width + 2
 	var grid := PackedByteArray()
 	grid.resize(w * (course.height + 2))
-	var surfaces := course.surface_grid()
-	var path := Surface.Type.CART_PATH
-	for y: int in course.height:
-		var row := (y + 1) * w + 1
-		var src := y * course.width
-		for x: int in course.width:
-			if surfaces[src + x] == path:
-				grid[row + x] = 1
+	# E18-S5: only the cart path tiles are visited (CourseValidator.surface_indices), not every
+	# tile of the map.
+	var cw: int = course.width
+	for i: int in CourseValidator.surface_indices(course.packed_tiles(), Surface.Type.CART_PATH):
+		@warning_ignore("integer_division")
+		grid[(i / cw + 1) * w + i % cw + 1] = 1
 	# E14-S2 (D69): a bridge is a path tile.
 	for b: Vector2i in course.bridge_cells():
 		grid[(b.y + 1) * w + b.x + 1] = 1
@@ -564,6 +567,13 @@ static func _why(course: CourseData, grid: PackedByteArray, from: Vector2, to: V
 	var from_start := a.x >= 0
 	var origin := a if from_start else b
 	var goal := b if from_start else a
+	# E18-S5: with a path tile in reach of both ends, a search from one toward the other that
+	# reaches it answers SLOWER without flooding the piece (on E3-S15's lattice, one piece over
+	# the whole map, the flood cost 15.4 ms on 256 x 160). Only when it does not is the piece
+	# flooded, as before, so every reason is the one the flood alone gives.
+	if goal.x >= 0 and origin != goal and _joins(grid, course.width + 2, origin, goal):
+		r.kind = Reason.Kind.SLOWER
+		return r
 	var near := _piece_nearest(course, grid, origin, to if from_start else from, goal, ypt)
 	if origin == goal or near.y > 0.0:
 		r.kind = Reason.Kind.SLOWER
@@ -573,6 +583,56 @@ static func _why(course: CourseData, grid: PackedByteArray, from: Vector2, to: V
 	r.gap_yd = maxi(1, ceili(near.x - reach - 1e-6))
 	r.near_tile = Vector2i(int(near.z), int(near.w))
 	return r
+
+
+## E18-S5: true when a best-first search over cart path tiles (8-connected, the bordered grid
+## path_grid, rows `w` wide) from `a` reaches `b`, nearest-to-`b` first by the 8-neighbour
+## distance, within JOIN_SLACK times that distance plus JOIN_BASE tiles seen. False means only
+## that it did not: the two may still share a piece.
+static func _joins(grid: PackedByteArray, w: int, a: Vector2i, b: Vector2i) -> bool:
+	var start: int = (a.y + 1) * w + a.x + 1
+	var goal: int = (b.y + 1) * w + b.x + 1
+	if grid[start] == 0 or grid[goal] == 0:
+		return false
+	var bx: int = b.x + 1
+	var by: int = b.y + 1
+	var offsets := PackedInt32Array()
+	for d: Vector2i in NEIGHBOURS:
+		offsets.append(d.y * w + d.x)
+	var lo: int = maxi(absi(a.x - b.x), absi(a.y - b.y))
+	var budget: int = JOIN_SLACK * lo + JOIN_BASE
+	# A bucket queue on the distance to b: each bucket's tiles in a packed list (head links).
+	var top: int = grid.size() / w + w
+	var head := PackedInt32Array()
+	head.resize(top)
+	head.fill(-1)
+	var link := {}
+	var seen := {start: true}
+	link[start] = -1
+	head[lo] = start
+	while true:
+		while lo < top and head[lo] == -1:
+			lo += 1
+		if lo >= top:
+			return false
+		var c: int = head[lo]
+		head[lo] = link[c]
+		for off: int in offsets:
+			var n: int = c + off
+			if grid[n] == 0 or seen.has(n):
+				continue
+			if n == goal:
+				return true
+			if seen.size() >= budget:
+				return false
+			seen[n] = true
+			@warning_ignore("integer_division")
+			var d: int = maxi(absi(n % w - bx), absi(n / w - by))
+			link[n] = head[d]
+			head[d] = n
+			if d < lo:
+				lo = d
+	return false
 
 
 ## Over the path piece (8-connected cart path tiles) holding `origin`: x, the nearest a tile

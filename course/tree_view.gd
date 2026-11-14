@@ -77,11 +77,18 @@ func show_course(c: CourseData) -> void:
 	if c == null:
 		return
 	_marks.resize(c.width * c.height)
-	for y: int in c.height:
-		for x: int in c.width:
-			_marks[y * c.width + x] = _mark(x, y)
-			if c.get_surface(x, y) == Surface.Type.TREES:
-				_place(Vector2i(x, y))
+	# E18-S5: the packed tiles read in place (_mark's answers), not calls a tile.
+	var tiles: PackedByteArray = c.packed_tiles()
+	var trees_s: int = Surface.Type.TREES
+	var w: int = c.width
+	for i: int in tiles.size():
+		var t: int = tiles[i]
+		if (t & 0x0F) == trees_s:
+			_marks[i] = (t >> 4) | MARK_TREES
+			@warning_ignore("integer_division")
+			_place(Vector2i(i % w, i / w))
+		else:
+			_marks[i] = t >> 4
 	for row: Row in _rows.values():
 		row.queue_redraw()
 

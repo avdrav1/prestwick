@@ -476,7 +476,8 @@ func free_view_rect_for(a: Vector2, b: Vector2) -> Rect2:
 		if z > best_zoom:
 			best = strip
 			best_zoom = z
-	if best_zoom > 0 or camera.fits(a, b, camera.tuning.zoom_levels[0], best.size):
+	var floor_i: int = camera.frame_floor_index()
+	if best_zoom > floor_i or camera.fits(a, b, camera.tuning.zoom_levels[floor_i], best.size):
 		return best
 	var best_f: CourseCamera.Framing = camera.frame_placement(a, b, best, strips)
 	for strip: Rect2 in strips:

@@ -83,6 +83,12 @@ var repainted: int = 0
 var _w: int = 0
 var _h: int = 0
 var _hs := PackedByteArray()
+## E18-S5: whether emit_tile takes _emit_flat for a flat tile (tests turn it off to compare).
+var fast_flat: bool = true
+## _flat_template's fans by side mask, for subdiv _flat_n.
+var _flat_templates: Dictionary = {}
+var _flat_n: int = 0
+var _origins := PackedVector2Array()
 var _wat := PackedByteArray()
 var _slo := PackedByteArray()
 
@@ -348,12 +354,30 @@ func sync(cells: Array[Vector2i] = []) -> void:
 		_hs.resize(_w * _h)
 		_wat.resize(_w * _h)
 		_slo.resize(_w * _h)
+		# E18-S5: the packed tiles read in place (_read's answers), and the slope flags of the
+		# tiles off the map's edge rows by their eight neighbours' indices (_slope_flag's), not
+		# calls a tile.
+		var tiles: PackedByteArray = course.packed_tiles()
+		var water: int = Surface.Type.WATER
+		for i: int in _w * _h:
+			var t: int = tiles[i]
+			_hs[i] = t >> 4
+			_wat[i] = 1 if (t & 0x0F) == water else 0
+		var w: int = _w
 		for y: int in _h:
+			var inner_y: bool = y > 0 and y < _h - 1
 			for x: int in _w:
-				_read(x, y)
-		for y: int in _h:
-			for x: int in _w:
-				_slo[y * _w + x] = _slope_flag(x, y)
+				var i: int = y * w + x
+				if not inner_y or x == 0 or x == w - 1:
+					_slo[i] = _slope_flag(x, y)
+					continue
+				if _wat[i] != 0:
+					_slo[i] = 0
+					continue
+				var h: int = _hs[i]
+				_slo[i] = 1 if _hs[i - w - 1] != h or _hs[i - w] != h or _hs[i - w + 1] != h \
+						or _hs[i - 1] != h or _hs[i + 1] != h or _hs[i + w - 1] != h \
+						or _hs[i + w] != h or _hs[i + w + 1] != h else 0
 		return
 	var near := {}
 	for cell: Vector2i in cells:
@@ -743,6 +767,8 @@ func water_seen(cell: Vector2i) -> bool:
 ## triangles, land hatch uvs (empty on owned land), face points, face colours, face triangles,
 ## and for repaint_tile each point's texture offset, height and slope light].
 func emit_tile(cell: Vector2i, key_y: float) -> Array:
+	if fast_flat and not sloped(cell) and _flat_exact():
+		return _emit_flat(cell, key_y)
 	var sheet: TileSheet = art.surfaces
 	var strength: float = tuning.light_strength
 	var lmin: float = tuning.light_min
@@ -808,6 +834,146 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 			var lx: float = (pts[i].x - cell.x) * _uv_scale
 			var ly: float = (pts[i].y - cell.y) * _uv_scale
 			land_uvs[i] = (lorigin + Vector2((lx - ly) * Iso.HALF_W, (lx + ly) * Iso.HALF_H)) * _inv_land
+	var faces: Array = _emit_faces(cell, key_y, tint)
+	return [screen, uvs, cols, geo[1], land_uvs, faces[0], faces[1], faces[2], uv_off, zs, lights]
+
+
+## E18-S5: emit_tile for a flat tile (not sloped: a fan at its height, water at its level), from
+## the fan's template for which of its sides meet sloped ground (_flat_template): every point at
+## one height, so one shade and slope light 1, and its offsets from the tile centre the same on
+## every tile. The same numbers emit_tile's general path computes, in the same order, for about
+## a third of the work (New course drew 192 x 192 in 1.06 to 1.12 s, D71).
+func _emit_flat(cell: Vector2i, key_y: float) -> Array:
+	var sheet: TileSheet = art.surfaces
+	# Which sides meet sloped ground (sloped() on each FAN_SIDES neighbour, off the map none).
+	var x: int = cell.x
+	var y: int = cell.y
+	var i0: int = y * _w + x
+	var mask: int = 0
+	if y > 0 and _slo[i0 - _w] != 0:
+		mask |= 1
+	if x < _w - 1 and _slo[i0 + 1] != 0:
+		mask |= 2
+	if y < _h - 1 and _slo[i0 + _w] != 0:
+		mask |= 4
+	if x > 0 and _slo[i0 - 1] != 0:
+		mask |= 8
+	var t: Array = _flat_templates[mask] if _flat_n == tuning.subdiv and _flat_templates.has(mask) \
+			else _flat_template(mask)
+	var dxs: PackedFloat64Array = t[0]
+	var dys: PackedFloat64Array = t[1]
+	var los: PackedVector2Array = t[2]
+	var tris: PackedInt32Array = t[3]
+	var h: float = _hs[i0]
+	var frame: int = course.get_surface(x, y)
+	var land: int = CourseView.land_frame(course, x, y)
+	var owned: bool = land < 0
+	var row: PackedFloat32Array = shades[frame]
+	var tint: Color = Color.WHITE if owned else unowned_tint
+	# Iso.tile_to_screen and the sheet's variant origin written out (as emit_tile's).
+	var centre: Vector2 = Vector2((x - y) * Iso.HALF_W, (x + y) * Iso.HALF_H - 0.0 * Iso.STEP_PX) \
+			- Vector2(0.0, key_y)
+	if _origins.is_empty():
+		_read_origins()
+	var m: int = sheet.macro
+	var origin: Vector2 = _origins[frame if m <= 1
+			else frame + sheet.frames.size() * (posmod(x, m) + posmod(y, m) * m)]
+	var count: int = dxs.size()
+	var screen := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	screen.resize(count)
+	uvs.resize(count)
+	var lift: float = h * Iso.STEP_PX
+	for i: int in count:
+		var dx: float = dxs[i]
+		var dy: float = dys[i]
+		screen[i] = centre + Vector2((dx - dy) * Iso.HALF_W, (dx + dy) * Iso.HALF_H - lift)
+		uvs[i] = (origin + los[i]) * _inv_tex
+	var k: int = clampi(floori(h), 0, CourseData.MAX_HEIGHT)
+	var hs: float = lerpf(row[k], row[mini(k + 1, CourseData.MAX_HEIGHT)], h - k)
+	var v: float = minf(hs * 1.0, caps[frame])
+	var cols := PackedColorArray()
+	cols.resize(count)
+	cols.fill(Color(v * tint.r, v * tint.g, v * tint.b))
+	var zs := PackedFloat64Array()
+	zs.resize(count)
+	zs.fill(h)
+	var lights := PackedFloat64Array()
+	lights.resize(count)
+	lights.fill(1.0)
+	var land_uvs := PackedVector2Array()
+	if not owned:
+		var land_sheet: TileSheet = art.land
+		var lorigin: Vector2 = Vector2(land_sheet.region(land).position) + Vector2(land_sheet.anchor)
+		land_uvs.resize(count)
+		for i: int in count:
+			var lx: float = dxs[i] * _uv_scale
+			var ly: float = dys[i] * _uv_scale
+			land_uvs[i] = (lorigin + Vector2((lx - ly) * Iso.HALF_W, (lx + ly) * Iso.HALF_H)) * _inv_land
+	if _wat[i0] != 0 or x == _w - 1 or y == _h - 1 or _wat[i0 + 1] != 0 or _wat[i0 + _w] != 0:
+		var faces: Array = _emit_faces(cell, key_y, tint)
+		return [screen, uvs, cols, tris.duplicate(), land_uvs, faces[0], faces[1], faces[2],
+				los.duplicate(), zs, lights]
+	return [screen, uvs, cols, tris.duplicate(), land_uvs, PackedVector2Array(), PackedColorArray(),
+			PackedInt32Array(), los.duplicate(), zs, lights]
+
+
+## E18-S5: the fan tile_geometry builds for a flat tile whose sides toward FAN_SIDES[e] meet
+## sloped ground where bit e of `mask` is set, as offsets from the tile centre:
+## [dx, dy (PackedFloat64Array), texture offsets (emit_tile's `lo`), triangles]. Built once a
+## mask per subdiv.
+func _flat_template(mask: int) -> Array:
+	if _flat_n != tuning.subdiv:
+		_flat_n = tuning.subdiv
+		_flat_templates.clear()
+	if _flat_templates.has(mask):
+		return _flat_templates[mask]
+	var n: int = tuning.subdiv
+	var dxs := PackedFloat64Array([0.0])
+	var dys := PackedFloat64Array([0.0])
+	for e: int in 4:
+		var a0: Vector2 = FAN_CORNERS[e]
+		dxs.append(a0.x)
+		dys.append(a0.y)
+		if mask & (1 << e):
+			var a1: Vector2 = FAN_CORNERS[(e + 1) % 4]
+			for k: int in range(1, n):
+				var p: Vector2 = a0.lerp(a1, float(k) / n)
+				dxs.append(p.x)
+				dys.append(p.y)
+	var los := PackedVector2Array()
+	for i: int in dxs.size():
+		var lx: float = dxs[i] * _uv_scale
+		var ly: float = dys[i] * _uv_scale
+		los.append(Vector2((lx - ly) * Iso.HALF_W, (lx + ly) * Iso.HALF_H))
+	var tris := PackedInt32Array()
+	var ring: int = dxs.size() - 1
+	for k: int in ring:
+		tris.append_array([0, 1 + k, 1 + (k + 1) % ring])
+	var t: Array = [dxs, dys, los, tris]
+	_flat_templates[mask] = t
+	return t
+
+
+## E18-S5: each surface sheet frame's (variant included) region position plus the sheet's
+## anchor, by frame index: emit_tile's `origin`.
+func _read_origins() -> void:
+	var sheet: TileSheet = art.surfaces
+	_origins.resize(sheet.frames.size() * maxi(sheet.macro, 1) * maxi(sheet.macro, 1))
+	for i: int in _origins.size():
+		_origins[i] = Vector2(sheet.region(i).position) + Vector2(sheet.anchor)
+
+
+## E18-S5: true when a flat fan's offsets from its tile centre are exact on every tile (the
+## subdiv's fractions are halves, quarters or eighths, and a tile index plus one stays exact in
+## a float), so _emit_flat's template gives emit_tile's numbers bit for bit.
+func _flat_exact() -> bool:
+	return tuning.subdiv in [1, 2, 4, 8]
+
+
+## emit_tile's faces of `cell` (tile_faces) in screen points relative to its chunk's `key_y`,
+## tinted by `tint`: [points, colours, triangles].
+func _emit_faces(cell: Vector2i, key_y: float, tint: Color) -> Array:
 	var face_pts := PackedVector2Array()
 	var face_cols := PackedColorArray()
 	var face_idx := PackedInt32Array()
@@ -828,4 +994,4 @@ func emit_tile(cell: Vector2i, key_y: float) -> Array:
 			for i: int in top.size() - 1:
 				var a: int = fbase + 2 * i
 				face_idx.append_array([a, a + 2, a + 3, a, a + 3, a + 1])
-	return [screen, uvs, cols, geo[1], land_uvs, face_pts, face_cols, face_idx, uv_off, zs, lights]
+	return [face_pts, face_cols, face_idx]

@@ -19,9 +19,9 @@ const GROUPS: int = 7
 const SPOTS: Array[Vector2i] = [Vector2i(4, 6), Vector2i(8, 6), Vector2i(11, 8), Vector2i(14, 6),
 		Vector2i(17, 4), Vector2i(20, 6), Vector2i(9, 3)]
 
-## The camera's zoom level (CameraTuning.zoom_levels index): 2 is 1x, 1 is 0.5x (D45 added
-## 0.175x at 0).
-@export var zoom_index: int = 2
+## The camera's zoom level (CameraTuning.zoom_levels index): 3 is 1x, 2 is 0.5x (D45 added
+## 0.175x, E18-S5 0.1x at 0).
+@export var zoom_index: int = 3
 
 
 func _ready() -> void:

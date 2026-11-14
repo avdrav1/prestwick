@@ -470,3 +470,56 @@ func test_pick_matches_what_is_drawn_frontmost() -> void:
 	assert_gt(hits, 400, "most samples land on the course")
 	assert_eq(misses.size(), 0, "\n".join(misses.slice(0, 5)))
 
+
+
+# --- E18-S5 (D71): New course and load at 192 x 192 ---
+
+## E18-S5: a flat tile's fan comes from its template (_emit_flat) with the general path's numbers
+## bit for bit, on generated land with hills, water, trees and unowned land (a New course), and
+## sync and CourseView.land_frame read every tile as tile by tile.
+func test_flat_tiles_and_the_caches_are_emitted_as_the_general_path() -> void:
+	var c := CourseBuilder.new_course(3)
+	var m := _mesh(c)
+	var flat: int = 0
+	var bad: int = 0
+	var bad_cache: int = 0
+	var bad_land: int = 0
+	for y: int in c.height:
+		for x: int in c.width:
+			var cell := Vector2i(x, y)
+			if not m.sloped(cell):
+				flat += 1
+			m.fast_flat = true
+			var a: Array = m.emit_tile(cell, 37.0)
+			m.fast_flat = false
+			var b: Array = m.emit_tile(cell, 37.0)
+			if a != b:
+				bad += 1
+			var i: int = y * c.width + x
+			if m._hs[i] != c.get_height(x, y) or (m._wat[i] != 0) != (c.get_surface(x, y) == Surface.Type.WATER) \
+					or m._slo[i] != m._slope_flag(x, y):
+				bad_cache += 1
+			if not c.is_owned(x, y) and CourseView.land_frame(c, x, y) != CourseView._land_frame_off_map(c, x, y):
+				bad_land += 1
+	assert_gt(flat, c.width * c.height / 2, "most tiles are flat")
+	assert_lt(flat, c.width * c.height, "and some are sloped")
+	assert_eq(bad, 0, "every tile emitted as the general path emits it")
+	assert_eq(bad_cache, 0, "the heights, water and slope flags read tile by tile")
+	assert_eq(bad_land, 0, "every unowned tile's parcel edges by parcel_of")
+
+
+## E18-S5: the land frame of a map whose size is no multiple of a parcel puts an edge on its last
+## row and column, as parcel_of and in_bounds say.
+func test_land_frame_marks_the_edge_of_a_map_cut_mid_parcel() -> void:
+	var c := CourseData.create(40, 21, Surface.Type.ROUGH, 0)
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			c.set_parcel_owned(Vector2i(p, q), false)
+	var bad: Array[Vector2i] = []
+	for y: int in c.height:
+		for x: int in c.width:
+			if CourseView.land_frame(c, x, y) != CourseView._land_frame_off_map(c, x, y):
+				bad.append(Vector2i(x, y))
+	assert_eq(bad, [] as Array[Vector2i])
+	assert_eq(CourseView.land_frame(c, 39, 20), CourseView.LAND_EDGE_E | CourseView.LAND_EDGE_S,
+			"the map's last tile closes its cut parcel")

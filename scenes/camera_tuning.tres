@@ -5,8 +5,9 @@
 [resource]
 script = ExtResource("1_tuning")
 pan_speed = 600.0
-zoom_levels = PackedFloat32Array(0.175, 0.5, 1, 2)
-start_zoom_index = 2
+zoom_levels = PackedFloat32Array(0.1, 0.175, 0.5, 1, 2)
+start_zoom_index = 3
+frame_farthest_zoom = 0.175
 edge_margin = 128.0
 centre_time = 0.15
 aim_frame_margin = 64.0

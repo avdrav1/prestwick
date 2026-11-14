@@ -751,6 +751,135 @@ func test_reach_finds_a_long_way_round_past_its_search_budget() -> void:
 	assert_true(r.connected(Vector2i(3, 3), Vector2i(3, 3)), "a tile reaches itself")
 
 
+# --- E18-S5: the frame budget at eighteen holes (D71) ---
+
+## The kept graph answers as a fresh one on every pair of `pairs`.
+func _assert_reach_as_fresh(r: CourseValidator.Reach, c: CourseData, pairs: Array, why: String) -> void:
+	var fresh := CourseValidator.Reach.new(c)
+	for pair: Array in pairs:
+		assert_eq(r.connected(pair[0], pair[1]), fresh.connected(pair[0], pair[1]),
+				"%s: %s to %s" % [why, pair[0], pair[1]])
+
+
+func test_surface_indices_finds_every_tile_of_a_surface_in_order() -> void:
+	var c := LandGenerator.generate(7)
+	var tiles: PackedByteArray = c.packed_tiles()
+	for s: int in [Surface.Type.WATER, Surface.Type.OOB, Surface.Type.TREES, Surface.Type.ROUGH]:
+		var want := PackedInt32Array()
+		for i: int in tiles.size():
+			if (tiles[i] & 0x0F) == s:
+				want.append(i)
+		assert_eq(CourseValidator.surface_indices(tiles, s), want, Surface.name_of(s))
+
+
+func test_walkable_tiles_and_the_reach_read_the_map_as_tile_by_tile() -> void:
+	var c := LandGenerator.generate(7)
+	c.set_tile(3, 4, 0, Surface.Type.OOB)
+	var water := CourseValidator.surface_indices(c.packed_tiles(), Surface.Type.WATER)
+	var wet := Vector2i(water[0] % c.width, water[0] / c.width)
+	c.set_bridge(wet, true)
+	var ok := CourseValidator.Walk.walkable_tiles(c)
+	var r := CourseValidator.Reach.new(c)
+	var bad_walk: int = 0
+	var bad_reach: int = 0
+	for y: int in c.height:
+		for x: int in c.width:
+			var s: Surface.Type = c.get_surface(x, y)
+			var walk: int = 1 if s != Surface.Type.WATER or c.is_bridge(x, y) else 0
+			if ok[y * c.width + x] != walk:
+				bad_walk += 1
+			if r._passable[y * c.width + x] != (1 if CourseValidator._crossable(c, Vector2i(x, y)) else 0):
+				bad_reach += 1
+	assert_eq(bad_walk, 0, "every tile walkable as rule 7 reads it")
+	assert_eq(bad_reach, 0, "every tile crossable as rule 3 reads it")
+
+
+## E18-S5: an update that only opens crossings keeps the pairs joined; one that closes any drops
+## them; an update back to crossings seen before takes up what was found on them. Every answer
+## is a fresh graph's.
+func test_reach_keeps_what_it_found_for_crossings_it_has_seen() -> void:
+	var c := CourseData.create(40, 20, Surface.Type.ROUGH, 0)
+	for y: int in 20:
+		c.set_tile(20, y, 0, Surface.Type.WATER)
+	var pairs: Array = [[Vector2i(2, 2), Vector2i(10, 15)], [Vector2i(2, 2), Vector2i(30, 5)],
+			[Vector2i(30, 5), Vector2i(38, 18)], [Vector2i(5, 10), Vector2i(35, 10)]]
+	var r := CourseValidator.Reach.new(c)
+	_assert_reach_as_fresh(r, c, pairs, "the wall")
+	assert_true(r._joined.size() > 0, "same-side pairs joined by a search")
+	var joined: int = r._joined.size()
+	# A gap: crossings only open, so the joined pairs stand.
+	c.set_tile(20, 10, 0, Surface.Type.ROUGH)
+	assert_true(r.update(c, [Vector2i(20, 10)] as Array[Vector2i]))
+	assert_eq(r._joined.size(), joined, "opening a crossing keeps the joined pairs")
+	_assert_reach_as_fresh(r, c, pairs, "the gap")
+	var after_gap: Dictionary = r._joined.duplicate()
+	# Closed again (the undo): the wall's own labels and pairs come back.
+	c.set_tile(20, 10, 0, Surface.Type.WATER)
+	assert_true(r.update(c, [Vector2i(20, 10)] as Array[Vector2i]))
+	assert_eq(r._joined.size(), joined, "the wall's pairs, as they were")
+	_assert_reach_as_fresh(r, c, pairs, "the wall again")
+	# And open once more (a redo): the gap's.
+	c.set_tile(20, 10, 0, Surface.Type.ROUGH)
+	assert_true(r.update(c, [Vector2i(20, 10)] as Array[Vector2i]))
+	assert_eq(r._joined, after_gap, "the gap's pairs, as they were")
+	_assert_reach_as_fresh(r, c, pairs, "the gap again")
+	# A new closing (OB on the gap): nothing kept fits, so everything goes.
+	c.set_tile(20, 10, 0, Surface.Type.OOB)
+	c.set_tile(5, 5, 0, Surface.Type.OOB)
+	assert_true(r.update(c, [Vector2i(20, 10), Vector2i(5, 5)] as Array[Vector2i]))
+	assert_eq(r._joined.size(), 0, "a closed crossing drops the pairs")
+	_assert_reach_as_fresh(r, c, pairs, "OB")
+
+
+## E18-S5 (D71): on 192 x 192 with eighteen holes, the drag that breaks every hole and its undo
+## give the issues a fresh validator gives, and the rerun costs a few ms, not the 4 to 5 ms that
+## put the release and undo frames past 16.7 ms.
+func test_eighteen_holes_breaking_drag_and_undo_check_as_fresh() -> void:
+	var land := LandTuning.load_d26()
+	land.map_size = Vector2i(192, 192)
+	var bt := BuilderTuning.load_default().duplicate() as BuilderTuning
+	bt.plot_size = Vector2i(192, 192)
+	bt.max_holes = 18
+	var c := LandGenerator.generate(7, land)
+	var b := CourseBuilder.new(c, bt)
+	var NineHoles: GDScript = load("res://tests/fixtures/nine_holes.gd")
+	NineHoles.build(b)
+	for spec: Array in NineHoles.HOLES:
+		var n: int = spec[0] + 9
+		var tee: Vector2i = spec[2] + Vector2i(64, 100)
+		var cup: Vector2i = spec[3] + Vector2i(64, 100)
+		b.begin_stroke()
+		for cell: Vector2i in BuildTool.grid_line(tee, cup):
+			b.paint(cell, Surface.Type.FAIRWAY, 3)
+		b.end_stroke()
+		b.paint(tee, Surface.Type.TEE, 3)
+		b.paint(cup, Surface.Type.GREEN, 5)
+		b.place_tee(n, tee, spec[1])
+		b.place_cup(n, cup)
+		b.set_par(n, spec[1])
+	assert_eq(c.holes.size(), 18)
+	_assert_matches_fresh(b, "eighteen built")
+	var cups: Array[Vector2i] = []
+	for h: HoleData in c.holes:
+		cups.append(h.cup)
+	cups.sort_custom(func(x: Vector2i, y: Vector2i) -> bool: return x.y < y.y or (x.y == y.y and x.x < y.x))
+	var spent: Array[float] = []
+	for k: int in 3:
+		b.begin_stroke()
+		for i: int in range(1, cups.size()):
+			for cell: Vector2i in BuildTool.grid_line(cups[i - 1], cups[i]):
+				b.paint(cell, Surface.Type.ROUGH, 1)
+		var t0 := Time.get_ticks_usec()
+		b.end_stroke()
+		spent.append((Time.get_ticks_usec() - t0) / 1000.0)
+		_assert_matches_fresh(b, "the breaking drag %d" % k)
+		t0 = Time.get_ticks_usec()
+		b.undo()
+		spent.append((Time.get_ticks_usec() - t0) / 1000.0)
+		_assert_matches_fresh(b, "its undo %d" % k)
+	gut.p("E18-S5: eighteen holes, breaking drag's check and undo (ms): %s" % [spent])
+
+
 # --- rule 4 on doglegs: the line of play (D47, E3-S25) ---
 
 ## A rough 100 x 70 course: a 5-wide fairway from `tee` to `corner` and from `corner` to `cup`,

@@ -242,6 +242,84 @@ func test_why_names_each_reason() -> void:
 			"extended to the tee, the path serves the walk")
 
 
+## The reason the flood of the piece alone gives (_piece_nearest, as `why` read it before E18-S5).
+func _why_by_flood(c: CourseData, from: Vector2, to: Vector2) -> Array:
+	var grid := GuestWalk.path_grid(c)
+	var reach: float = tuning.cart_path_reach_yd
+	var a := GuestWalk._nearest_path_tile(c, from, reach, 5.0)
+	var b := GuestWalk._nearest_path_tile(c, to, reach, 5.0)
+	if grid.find(1) < 0:
+		return [GuestWalk.Reason.Kind.NO_PATH]
+	if a.x < 0 and b.x < 0:
+		return [GuestWalk.Reason.Kind.NOT_NEAR, 0, true]
+	var from_start := a.x >= 0
+	var origin := a if from_start else b
+	var goal := b if from_start else a
+	var near := GuestWalk._piece_nearest(c, grid, origin, to if from_start else from, goal, 5.0)
+	if origin == goal or near.y > 0.0:
+		return [GuestWalk.Reason.Kind.SLOWER]
+	return [GuestWalk.Reason.Kind.SHORT, maxi(1, ceili(near.x - reach - 1e-6)), not from_start,
+			Vector2i(int(near.z), int(near.w))]
+
+
+func _reason_of(r: GuestWalk.Reason) -> Array:
+	match r.kind:
+		GuestWalk.Reason.Kind.NO_PATH, GuestWalk.Reason.Kind.SLOWER:
+			return [r.kind]
+		GuestWalk.Reason.Kind.NOT_NEAR:
+			return [r.kind, 0, r.at_start]
+	return [r.kind, r.gap_yd, r.at_start, r.near_tile]
+
+
+## E18-S5 (D71): on E3-S15's lattice, one cart path piece over the whole map, `why` answers by a
+## search from one end's path tile toward the other's, not a flood of the piece (15.4 ms on
+## 256 x 160, which failed the D52 gate), and on pieces apart, a gap or a lattice cut in two it
+## gives the flood's reason every time.
+func test_why_on_a_lattice_answers_as_the_flood_without_flooding() -> void:
+	var c := CourseData.create(128, 80, Surface.Type.ROUGH, 0)
+	var cells := []
+	for y: int in c.height:
+		for x: int in c.width:
+			if (x % 3 == 0 or y % 3 == 0) and not (x >= 60 and x <= 64 and y >= 20):
+				cells.append(Vector2i(x, y))
+	_paint(c, cells, Surface.Type.CART_PATH)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 18
+	var spent: Array[float] = []
+	var kinds := {}
+	for k: int in 40:
+		var from := Vector2(rng.randf_range(5, 635), rng.randf_range(5, 395))
+		var to := Vector2(rng.randf_range(5, 635), rng.randf_range(5, 395))
+		var t0 := Time.get_ticks_usec()
+		var r := GuestWalk.why(c, from, to, tuning)
+		spent.append((Time.get_ticks_usec() - t0) / 1000.0)
+		assert_eq(_reason_of(r), _why_by_flood(c, from, to), "%s to %s" % [from, to])
+		kinds[r.kind] = true
+	assert_true(kinds.has(GuestWalk.Reason.Kind.SLOWER), "walks on one piece")
+	spent.sort()
+	gut.p("E18-S5: why on a 128 x 80 lattice, median %.2f ms, worst %.2f" % [spent[20], spent[-1]])
+	# Two pieces, a gap and none in reach, as the flood answers them.
+	var two := _strip()
+	_paint(two, _row(3, 3, 12) + _row(3, 15, 35), Surface.Type.CART_PATH)
+	assert_eq(_reason_of(GuestWalk.why(two, WHY_FROM, WHY_TO, tuning)), _why_by_flood(two, WHY_FROM, WHY_TO))
+	assert_false(GuestWalk._joins(GuestWalk.path_grid(two), two.width + 2, Vector2i(3, 3), Vector2i(35, 3)),
+			"no search joins two pieces")
+	assert_true(GuestWalk._joins(GuestWalk.path_grid(two), two.width + 2, Vector2i(15, 3), Vector2i(35, 3)))
+
+
+func test_the_path_grid_marks_every_cart_path_and_bridge_tile() -> void:
+	var c := LandGenerator.generate(7)
+	_paint(c, _row(5, 2, 40) + _row(9, 30, 90), Surface.Type.CART_PATH)
+	var grid := GuestWalk.path_grid(c)
+	var w: int = c.width + 2
+	var bad: int = 0
+	for y: int in range(-1, c.height + 1):
+		for x: int in range(-1, c.width + 1):
+			var want: int = 1 if GuestWalk._is_path(c, Vector2i(x, y)) else 0
+			if grid[(y + 1) * w + x + 1] != want:
+				bad += 1
+	assert_eq(bad, 0)
+
 func test_a_path_edit_reaches_a_walk_on_its_piece_or_within_reach_of_its_ends() -> void:
 	var c := _strip()
 	_paint(c, _row(3, 3, 20), Surface.Type.CART_PATH)

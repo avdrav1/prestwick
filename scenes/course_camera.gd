@@ -1,7 +1,7 @@
 class_name CourseCamera
 extends Camera2D
-## The course camera: pan with WASD or a middle-mouse drag, zoom in steps (0.175x, 0.5x, 1x,
-## 2x by default; D45) with the wheel or +/-. Numbers come from CameraTuning (scenes/camera_tuning.tres).
+## The course camera: pan with WASD or a middle-mouse drag, zoom in steps (0.1x, 0.175x, 0.5x,
+## 1x, 2x by default; D45, E18-S5) with the wheel or +/-. Numbers come from CameraTuning (scenes/camera_tuning.tres).
 ## The center is kept inside `bounds` grown by the edge margin, so the course never gets lost.
 ##
 ## Play (E2-S8): Main gives the camera a focus, the ball, when a shot starts, while it moves
@@ -291,13 +291,26 @@ func set_zoom_level(z: float) -> void:
 
 
 ## The zoom level frame_points frames world points `a` and `b` at inside an area `area` px in
-## size: the player's own level, stepped out until both fit, never past the farthest (0, 0.175x:
-## unlike the aim fit, hole framing reaches it, D45).
+## size: the player's own level, stepped out until both fit, never past frame_floor_index
+## (0.175x: unlike the aim fit, hole framing reaches it, D45; the 0.1x step past it only by the
+## zoom keys, E18-S5).
 func frame_zoom_index(a: Vector2, b: Vector2, area: Vector2) -> int:
 	var i: int = clampi(_player_zoom_index, 0, tuning.zoom_levels.size() - 1)
-	while i > 0 and not fits(a, b, tuning.zoom_levels[i], area):
+	var floor_i: int = frame_floor_index()
+	while i > floor_i and not fits(a, b, tuning.zoom_levels[i], area):
 		i -= 1
 	return i
+
+
+## E18-S5: the farthest level hole framing steps out to: the first at or nearer than
+## CameraTuning frame_farthest_zoom, or the player's own level when that is farther (a fit
+## never zooms in).
+func frame_floor_index() -> int:
+	var player: int = clampi(_player_zoom_index, 0, tuning.zoom_levels.size() - 1)
+	for i: int in tuning.zoom_levels.size():
+		if tuning.zoom_levels[i] >= tuning.frame_farthest_zoom - 0.0001:
+			return mini(i, player)
+	return player
 
 
 ## Frames world points `a` and `b` (a hole's tee and cup, E3-S2) inside `safe`, the part of

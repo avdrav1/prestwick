@@ -104,15 +104,22 @@ class Reach:
 	var _visited := PackedInt32Array()
 	var _head := PackedInt32Array()
 	var _stamp: int = 0
+	## E18-S5: earlier crossings and what was found on them, newest first, at most KEPT:
+	## [passable, labels, next label, joined pairs].
+	const KEPT: int = 3
+	var _kept: Array = []
 
 	func _init(course: CourseData) -> void:
 		_w = course.width
 		_h = course.height
-		var grid: PackedByteArray = course.surface_grid()
-		_passable.resize(grid.size())
-		for i in grid.size():
-			var s: int = grid[i]
-			_passable[i] = 0 if s == Surface.Type.WATER or s == Surface.Type.OOB else 1
+		# E18-S5: every tile crossable, then water and OB cleared by their packed bytes
+		# (surface_indices), not a GDScript pass over every tile.
+		var tiles: PackedByteArray = course.packed_tiles()
+		_passable.resize(tiles.size())
+		_passable.fill(1)
+		for s: int in [Surface.Type.WATER, Surface.Type.OOB]:
+			for i: int in CourseValidator.surface_indices(tiles, s):
+				_passable[i] = 0
 		# E14-S1 (D69): a bridge crosses its water.
 		for b: Vector2i in course.bridge_cells():
 			_passable[b.y * _w + b.x] = 1
@@ -125,29 +132,56 @@ class Reach:
 				for y: int in range(r.position.y, r.end.y):
 					for x: int in range(r.position.x, r.end.x):
 						_passable[y * _w + x] = 0
-		_label.resize(grid.size())
-		_seen.resize(grid.size())
-		_next.resize(grid.size())
-		_visited.resize(grid.size())
+		_label.resize(tiles.size())
+		_seen.resize(tiles.size())
+		_next.resize(tiles.size())
+		_visited.resize(tiles.size())
 		_head.resize(_w + _h)
 
-	## Rereads `cells` of `course` (the tiles an edit wrote). True, dropping every label, when
-	## any of them changed whether it can be crossed.
+	## Rereads `cells` of `course` (the tiles an edit wrote). True when any of them changed
+	## whether it can be crossed, and what was found is dropped, except (E18-S5):
+	## - the crossings as they were go into KEPT, so an undo that puts them back finds its labels
+	##   and joined pairs again (an undone drag over water searched every hole afresh);
+	## - when tiles only became crossable, the joined pairs stand (a path stays a path) and only
+	##   the labels go (a labelled component may have grown).
 	func update(course: CourseData, cells: Array[Vector2i]) -> bool:
-		var changed: bool = false
+		var at := PackedInt32Array()
+		var to := PackedByteArray()
+		var tiles: PackedByteArray = course.packed_tiles()
+		var water: int = Surface.Type.WATER
+		var oob: int = Surface.Type.OOB
 		for c: Vector2i in cells:
 			var i: int = _index(c)
 			if i < 0:
 				continue
-			var p: int = 1 if CourseValidator._crossable(course, c) else 0
+			# CourseValidator._crossable, read from the packed tile.
+			var s: int = tiles[i] & 0x0F
+			var ok: bool = s != oob and (s != water or course.is_bridge(c.x, c.y)) \
+					and course.is_owned(c.x, c.y)
+			var p: int = 1 if ok else 0
 			if p != _passable[i]:
-				_passable[i] = p
-				changed = true
-		if changed:
-			_label.fill(0)
-			_next_label = 1
+				at.append(i)
+				to.append(p)
+		if at.is_empty():
+			return false
+		_kept.push_front([_passable.duplicate(), _label.duplicate(), _next_label, _joined.duplicate()])
+		if _kept.size() > KEPT:
+			_kept.resize(KEPT)
+		var closed: bool = false
+		for k: int in at.size():
+			_passable[at[k]] = to[k]
+			closed = closed or to[k] == 0
+		for e: Array in _kept:
+			if e[0] == _passable:
+				_label = (e[1] as PackedInt32Array).duplicate()
+				_next_label = e[2]
+				_joined = (e[3] as Dictionary).duplicate()
+				return true
+		_label.fill(0)
+		_next_label = 1
+		if closed:
 			_joined.clear()
-		return changed
+		return true
 
 	## A 4-neighbour path of crossable tiles joins `a` and `b` (heights ignored).
 	func connected(a: Vector2i, b: Vector2i) -> bool:
@@ -297,8 +331,9 @@ func check_slots(course: CourseData, reach: Reach = null, yards: Array[int] = []
 	if reach == null:
 		reach = Reach.new(course)
 	turns.assign(known_turns if known_turns.size() == course.holes.size() else _all_turns(course))
+	var zones: Array = _all_zones(course, turns)
 	for i: int in course.holes.size():
-		out.append(_check(course, course.holes[i], i, reach, turns))
+		out.append(_check(course, course.holes[i], i, reach, turns, zones))
 		yards.append(_rule4_yards)
 	return out
 
@@ -345,14 +380,16 @@ class Walk:
 		_label.resize(ok.size())
 
 	## 1 on each walkable tile of `course`, row by row.
+	## E18-S5: filled with 1 and the water tiles cleared, found by their packed bytes (one per
+	## height, PackedByteArray.find), so the cost is the map's water, not the map: 1.3 ms a
+	## rebuild on 192 x 192 in GDScript's loop over every tile, about 0.1 ms this way.
 	static func walkable_tiles(course: CourseData) -> PackedByteArray:
 		var tiles: PackedByteArray = course.packed_tiles()
 		var ok := PackedByteArray()
 		ok.resize(tiles.size())
-		var water: int = Surface.Type.WATER
-		for i: int in tiles.size():
-			if (tiles[i] & 0x0F) != water:
-				ok[i] = 1
+		ok.fill(1)
+		for i: int in CourseValidator.surface_indices(tiles, Surface.Type.WATER):
+			ok[i] = 0
 		for b: Vector2i in course.bridge_cells():
 			ok[b.y * course.width + b.x] = 1
 		return ok
@@ -441,12 +478,16 @@ class Walk:
 ## `reach` lets callers checking several holes on an unchanged course share rule 3's flood.
 func check_hole(course: CourseData, hole: HoleData, reach: Reach = null) -> Array[Issue]:
 	var own: int = _own_index(course, hole)
-	return _check(course, hole, own, reach if reach != null else Reach.new(course), _all_turns(course))
+	var turns: Array = _all_turns(course)
+	return _check(course, hole, own, reach if reach != null else Reach.new(course), turns,
+			_all_zones(course, turns))
 
 
 ## check_hole for `hole` at index `own` of course.holes (-1: not in it), with `turns` each
-## entry's turn_point, read once per check (rule 5 reads every other hole's zone).
-func _check(course: CourseData, hole: HoleData, own: int, reach: Reach, turns: Array) -> Array[Issue]:
+## entry's turn_point and `zones` each entry's rule 5 zone (_all_zones), read once per check
+## (rule 5 reads every other hole's zone).
+func _check(course: CourseData, hole: HoleData, own: int, reach: Reach, turns: Array,
+		zones: Array) -> Array[Issue]:
 	var issues: Array[Issue] = []
 	_rule4_yards = 0
 	var has_tee: bool = _placed(course, hole.tee)
@@ -464,10 +505,21 @@ func _check(course: CourseData, hole: HoleData, own: int, reach: Reach, turns: A
 	_rule2(course, hole, issues)
 	_rule3(course, hole, reach, issues)
 	_rule4(hole, turn, issues)
-	_rule5(course, hole, own, turn, turns, issues)
+	_rule5(course, hole, own, turn, zones, issues)
 	_rule6(course, hole, issues)
 	_rule7(course, hole, turn, issues)
 	return issues
+
+
+## E18-S5: rule 5's zone (_zone) of every entry of course.holes whose tee and cup are placed, in
+## order, its turn from `turns`; null when it has none or is not placed. Read once per check,
+## not once for each pair of holes (324 zones a check at 18 holes).
+func _all_zones(course: CourseData, turns: Array) -> Array:
+	var out: Array = []
+	for i: int in course.holes.size():
+		var h: HoleData = course.holes[i]
+		out.append(_zone(h, turns[i]) if _placed(course, h.tee) and _placed(course, h.cup) else null)
+	return out
 
 
 ## turn_point of every entry of course.holes, in order (null when straight or not placed).
@@ -689,14 +741,18 @@ func hint_slots(course: CourseData) -> Array:
 	for i: int in n:
 		out.append([] as Array[Issue])
 	var reach: float = tuning.approach_hint_yd
+	# E18-S5: whether each hole is placed, read once, not once for each pair.
+	var placed: Array[bool] = []
+	for h: HoleData in course.holes:
+		placed.append(_placed(course, h.tee) and _placed(course, h.cup))
 	for i: int in n:
 		var h: HoleData = course.holes[i]
-		if not _placed(course, h.tee) or not _placed(course, h.cup):
+		if not placed[i]:
 			continue
 		for j: int in n:
-			var o: HoleData = course.holes[j]
-			if j == i or not _placed(course, o.tee) or not _placed(course, o.cup):
+			if j == i or not placed[j]:
 				continue
+			var o: HoleData = course.holes[j]
 			var d: float = _yards_between(Vector2(h.cup), Vector2(o.tee))
 			if d > reach:
 				continue
@@ -753,9 +809,9 @@ func _rule4(hole: HoleData, turn: Variant, issues: Array[Issue]) -> void:
 			yards, played, want, hole.par, bands]))
 
 
-func _rule5(course: CourseData, hole: HoleData, own: int, turn: Variant, turns: Array,
+func _rule5(course: CourseData, hole: HoleData, own: int, turn: Variant, zones: Array,
 		issues: Array[Issue]) -> void:
-	var own_zone: Variant = _zone(hole, turn)
+	var own_zone: Variant = zones[own] if own >= 0 else _zone(hole, turn)
 	for i in course.holes.size():
 		var other: HoleData = course.holes[i]
 		if i == own or not _placed(course, other.tee):
@@ -770,7 +826,7 @@ func _rule5(course: CourseData, hole: HoleData, own: int, turn: Variant, turns: 
 		# This hole's tee in another hole's zone: that zone is built from its cup.
 		if not _placed(course, other.cup):
 			continue
-		var zone: Variant = _zone(other, turns[i])
+		var zone: Variant = zones[i]
 		if zone != null:
 			var d: float = _yards_between(zone as Vector2, Vector2(hole.tee))
 			if d <= tuning.zone_radius_yd:
@@ -882,6 +938,21 @@ static func _own_index(course: CourseData, hole: HoleData) -> int:
 		if course.holes[i].to_dict() == want:
 			return i
 	return -1
+
+
+## E18-S5: the index of every tile of `tiles` (CourseData.packed_tiles) whose surface is `s`,
+## ascending. Each height packs `s` into one byte value, so a native find per height walks the
+## array instead of a GDScript loop over every tile.
+static func surface_indices(tiles: PackedByteArray, s: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	for h: int in CourseData.MAX_HEIGHT + 1:
+		var v: int = (h << 4) | s
+		var i: int = tiles.find(v)
+		while i >= 0:
+			out.append(i)
+			i = tiles.find(v, i + 1)
+	out.sort()
+	return out
 
 
 static func _placed(course: CourseData, tile: Vector2i) -> bool:

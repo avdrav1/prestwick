@@ -1,6 +1,7 @@
 extends GutTest
 ## E1-S4: the course camera pans with WASD and a middle-mouse drag, and zooms 0.5x, 1x, 2x;
-## E3-S9 (D45) adds a farthest step, 0.175x.
+## E3-S9 (D45) adds a farthest step, 0.175x; E18-S5 (D71) one farther, 0.1x, that the zoom keys
+## reach and hole framing does not.
 
 var _cam: CourseCamera
 
@@ -17,8 +18,9 @@ func after_each() -> void:
 
 func test_tuning_comes_from_the_resource() -> void:
 	assert_not_null(_cam.tuning)
-	assert_eq(_cam.tuning.zoom_levels, PackedFloat32Array([0.175, 0.5, 1.0, 2.0]))
+	assert_eq(_cam.tuning.zoom_levels, PackedFloat32Array([0.1, 0.175, 0.5, 1.0, 2.0]))
 	assert_eq(_cam.zoom, Vector2.ONE, "starts at 1x")
+	assert_almost_eq(_cam.tuning.frame_farthest_zoom, 0.175, 0.0001, "hole framing stops at 0.175x")
 	assert_eq(_cam.tuning.aim_farthest_zoom, 0.5, "the aim fit stops at 0.5x")
 
 
@@ -31,14 +33,34 @@ func test_zoom_steps_and_stops_at_the_ends() -> void:
 	_cam.step_zoom(-1)
 	assert_eq(_cam.zoom, Vector2(0.5, 0.5))
 	_cam.step_zoom(-1)
-	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the player reaches the farthest step, 0.175x (D45)")
-	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001)
+	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001, "the player reaches 0.175x (D45)")
 	_cam.step_zoom(-1)
-	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "0.175x is the farthest")
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "and the farthest step, 0.1x (E18-S5)")
+	assert_almost_eq(_cam.zoom.x, 0.1, 0.0001)
+	_cam.step_zoom(-1)
+	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "0.1x is the farthest")
+
+
+## E18-S5 (D71): the 0.1x step is the zoom keys' alone. From 1x a hole too long for every level
+## frames at 0.175x, as before; from the player's own 0.1x a hole is framed there, never nearer.
+func test_hole_framing_stops_at_0_175x_and_never_zooms_in_from_0_1x() -> void:
+	_cam.view_size_override = Vector2(1280, 720)
+	_cam.frame(Rect2(-20000, -20000, 40000, 40000))
+	var tee := Vector2(300, -200)
+	var cup: Vector2 = tee + Vector2(2, 1) * 4000.0
+	_cam.frame_points(tee, cup)
+	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001, "from 1x: no farther than 0.175x")
+	assert_eq(_cam.frame_floor_index(), _cam.zoom_index_of(0.175))
+	for i: int in 3:
+		_cam.step_zoom(-1)
+	assert_almost_eq(_cam.zoom.x, 0.1, 0.0001, "the player steps out to 0.1x")
+	assert_eq(_cam.frame_floor_index(), 0, "the player's own level is the floor")
+	_cam.frame_points(tee, tee + Vector2(64, 32))
+	assert_almost_eq(_cam.zoom.x, 0.1, 0.0001, "a short hole framed from 0.1x stays at 0.1x")
 
 
 func test_a_zoom_is_named_by_its_value() -> void:
-	for z: float in [0.175, 0.5, 1.0, 2.0]:
+	for z: float in [0.1, 0.175, 0.5, 1.0, 2.0]:
 		_cam.set_zoom_level(z)
 		assert_almost_eq(_cam.zoom.x, z, 0.0001, "%sx" % z)
 	assert_eq(_cam.zoom_index_of(0.6), _cam.zoom_index_of(0.5), "the nearest level")
@@ -237,9 +259,9 @@ func test_from_the_farthest_step_the_aim_keeps_the_players_zoom() -> void:
 	_cam.step_zoom(-1)
 	_cam.step_zoom(-1)
 	_cam.centre_on(Vector2.ZERO, true)
-	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the player's own 0.175x")
+	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001, "the player's own 0.175x")
 	_cam.set_lead(Vector2(1568, 784))
-	assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "the fit never zooms in")
+	assert_almost_eq(_cam.zoom.x, 0.175, 0.0001, "the fit never zooms in")
 
 
 func test_a_zoom_key_wins_over_the_fit() -> void:
@@ -283,7 +305,7 @@ func test_a_long_hole_keeps_its_tee_inside_the_safe_area_in_every_direction() ->
 		var tee := Vector2(300, -200)
 		var cup: Vector2 = tee + dir * 4000.0
 		_cam.frame_points(tee, cup, safe)
-		assert_eq(_cam.zoom.x, _cam.tuning.zoom_levels[0], "%s: the farthest zoom" % dir)
+		assert_almost_eq(_cam.zoom.x, _cam.tuning.frame_farthest_zoom, 0.0001, "%s: the farthest framing zoom" % dir)
 		assert_false(_cam.fits(tee, cup, _cam.zoom.x, safe.size), "%s: too long even there" % dir)
 		var t: Vector2 = _cam.screen_point(tee)
 		assert_true(inner.has_point(t), "%s: the tee %s shows inside %s" % [dir, t, safe])
@@ -343,7 +365,7 @@ func test_every_nine_holes_hole_frames_clear_of_the_hud() -> void:
 	for n: int in [2, 4, 7]:
 		assert_eq(framed_at[n], 0.5, "par 3 hole %d fits at 0.5x" % n)
 	for n: int in [1, 3, 5, 6, 8, 9]:
-		assert_eq(framed_at[n], levels[0], "hole %d needs the farthest step" % n)
+		assert_almost_eq(framed_at[n], cam.tuning.frame_farthest_zoom, 0.0001, "hole %d needs the farthest framing step" % n)
 	var h3: HoleData = c.holes[2]
 	assert_eq(h3.number, 3)
 	var free3: Rect2 = m.free_view_rect_for(m.tile_world(h3.tee), m.tile_world(h3.cup))
@@ -407,7 +429,8 @@ func test_a_hole_just_over_the_fit_keeps_its_cup_clear_of_every_control() -> voi
 	for steps: int in [56, 64, 72, 80, 100]:
 		var long_m := _across_main(steps)
 		_assert_framed_clear(long_m, 9, "%d steps" % steps)
-		assert_eq(long_m.camera.zoom.x, long_m.camera.tuning.zoom_levels[0], "%d steps: the farthest step" % steps)
+		assert_almost_eq(long_m.camera.zoom.x, long_m.camera.tuning.frame_farthest_zoom, 0.0001,
+				"%d steps: the farthest framing step" % steps)
 
 
 ## E3-S26 Accept: when no strip fits a hole, the one that shows more of the tee-to-cup line wins.
@@ -426,7 +449,7 @@ func test_when_no_strip_fits_the_one_showing_more_of_the_line_wins() -> void:
 	gut.p("E3-S26: frame_hole on a hole too long for both strips took %.2f ms" % [(Time.get_ticks_usec() - t0) / 1000.0])
 	var strips: Array[Rect2] = m.free_view_rects()
 	for s: Rect2 in strips:
-		assert_false(cam.fits(tee_w, cup_w, cam.tuning.zoom_levels[0], s.size), "%s does not fit it" % s)
+		assert_false(cam.fits(tee_w, cup_w, cam.tuning.frame_farthest_zoom, s.size), "%s does not fit it" % s)
 	assert_gt(strips[0].get_area(), strips[1].get_area(), "the strip beside the panel is the larger")
 	var beside: CourseCamera.Framing = cam.frame_placement(tee_w, cup_w, strips[0], strips)
 	var under: CourseCamera.Framing = cam.frame_placement(tee_w, cup_w, strips[1], strips)

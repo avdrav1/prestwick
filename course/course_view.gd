@@ -248,10 +248,13 @@ func show_course(c: CourseData) -> void:
 	if c != null:
 		_heights_seen.resize(c.width * c.height)
 		_heights_marked.resize(c.width * c.height)
-		for y: int in c.height:
-			for x: int in c.width:
-				_heights_seen[y * c.width + x] = c.get_height(x, y)
-				_heights_marked[y * c.width + x] = _marked_shape(c, x, y)
+		# E18-S5: the packed tiles read in place (get_height, _marked_shape), not calls a tile.
+		var tiles: PackedByteArray = c.packed_tiles()
+		var water: int = Surface.Type.WATER
+		for i: int in tiles.size():
+			var t: int = tiles[i]
+			_heights_seen[i] = t >> 4
+			_heights_marked[i] = (t >> 4) | (WATER_MARK if (t & 0x0F) == water else 0)
 		terrain.sync()
 		for key: Vector2i in terrain.all_chunk_keys():
 			var ch := terrain.make_chunk(key)
@@ -952,6 +955,26 @@ func screen_bounds() -> Rect2:
 static func land_frame(c: CourseData, x: int, y: int) -> int:
 	if c.is_owned(x, y):
 		return -1
+	# E18-S5: a tile beside another parcel or the map's edge, by its place in its parcel (an
+	# unowned tile is on the map: is_owned is false off it, and the caller draws on-map tiles).
+	# The same as parcel_of on each neighbour, without four calls a tile.
+	if not c.in_bounds(x, y):
+		return _land_frame_off_map(c, x, y)
+	var n: int = CourseData.PARCEL_TILES
+	var mask: int = 0
+	if x % n == 0:
+		mask |= LAND_EDGE_W
+	if y % n == 0:
+		mask |= LAND_EDGE_N
+	if x % n == n - 1 or x == c.width - 1:
+		mask |= LAND_EDGE_E
+	if y % n == n - 1 or y == c.height - 1:
+		mask |= LAND_EDGE_S
+	return mask
+
+
+## land_frame's edges of an off-map tile, by parcel_of as before E18-S5.
+static func _land_frame_off_map(c: CourseData, x: int, y: int) -> int:
 	var p: Vector2i = c.parcel_of(x, y)
 	var mask: int = 0
 	if c.parcel_of(x - 1, y) != p or not c.in_bounds(x - 1, y):

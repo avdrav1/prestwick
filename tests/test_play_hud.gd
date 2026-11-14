@@ -55,7 +55,7 @@ func test_an_off_screen_cup_gets_an_edge_marker_that_points_at_it() -> void:
 	assert_true(pointer.visible)
 	assert_gt(pointer.direction.dot((cup - pointer.at).normalized()), 0.999, "still at the cup")
 	# The cup on screen: no marker.
-	_look_at(m, h.cup, 2)
+	_look_at(m, h.cup, m.camera.zoom_index_of(1.0))
 	m.update_cup_pointer()
 	assert_true(m.free_view_rect().has_point(m.camera.screen_point(m.tile_world(h.cup))))
 	assert_false(pointer.visible, "hidden with the cup in view")
