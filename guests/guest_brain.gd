@@ -339,14 +339,19 @@ func serve_second(threads: bool = true) -> int:
 ## E7-S4: fills `batch` and `gives` with the guests from `_cursor` on that have Ball work this
 ## second and the rest of their own budget for it, while those budgets all fit in what the sim
 ## has left; passes over guests with none. Returns the index it stopped at: the first guest
-## whose budget did not fit, or the end.
+## whose budget did not fit, or the end. E18-S5: a guest with no Ball work to do (its play READY
+## to strike or FINISHED: GuestHole.advance spends nothing then) is passed over too, as serve
+## passes it, instead of taking a budget's room it cannot use; before, such guests filled the
+## sim's cap with nothing and pushed guests with work into a later batch (on the 18-hole day,
+## 1,029 batches of 6.2 guests a skip against 513 of 5.1).
 func _gather(batch: Array[Guest], gives: PackedInt32Array) -> int:
 	var room := tuning.sim_ticks_per_s - _sim_used
 	var i := _cursor
 	while i < guests.size():
 		var g := guests[i]
 		var give := tuning.guest_ticks_per_s - g.second_ticks
-		if g.is_done() or g.hole == null or g.hole.is_finished() or give <= 0:
+		if g.is_done() or g.hole == null or give <= 0 or (g.hole.state != GuestHole.State.PLANNING
+				and g.hole.state != GuestHole.State.FLYING):
 			i += 1
 			continue
 		if give > room:

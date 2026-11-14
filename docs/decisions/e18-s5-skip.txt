@@ -1,0 +1,145 @@
+E18-S5 item 2: skip to morning at eighteen holes. Provisional figures: the machine was shared with other lanes (E18-S4, E18-S6) running tests and sims, so the final measurement is to be rerun alone on a quiet machine.
+
+Course: tests/fixtures/eighteen_holes.gd (192 x 192, all eighteen open, so an eighteen-hole day of eighteen_day_s 1020 s, D72), 24 guests (D58's most), the window at 60 Hz:
+  scripts/skip_perf.gd -- --fixture eighteen --runs 3 [--mode play]
+The nine: courses/playtest_nine.json (E7-S4's course), scripts/skip_perf.gd -- --runs 3 [--mode play].
+Run with XDG_DATA_HOME set to a scratch folder. (These runs wrote the fixture to user://skip_perf_eighteen.json in that folder; the committed script writes it to the system temp folder instead, never user://.)
+
+== summary, best of 3 (real s), window ==
+                                  before         after          before        after
+                                  (load ~1)      (load ~1.2)    (load 7 to 8) (load 4 to 5)
+eighteen-hole day, Build          3.50           2.40           4.11 / 3.89   2.62 / 2.72
+eighteen-hole day, Play           -              -              3.09          2.07
+playtest nine, Build              2.94           1.90           3.24          2.07
+playtest nine, Play               -              -              3.07          1.81
+(before: the tree at a6fa10f. The first pair ran back to back at load about 1; the second pair interleaved before then after, five configurations each, while the other lanes ran; seed 1 and 2 give the same day in skip_perf, so the eighteen's two Build figures are two samples. Every run: "PASS: the skipped day ends as the day run alone (every guest's records and ticks)". E18-S1's 4.55 s was its own 18-hole test course, not this fixture.)
+Headless, the brain alone through advance_skip-style seconds (serve_second then step), day seeds 1001 and 1002, load about 1: eighteen 2.91 / 3.11 s -> 1.91 / 2.05 s; the playtest nine 2.51 / 2.60 s -> 1.60 / 1.62 s. tests/test_day_clock.gd's new timed test: the eighteen-hole day skipped headless in 1.75 s over 74 frames.
+
+== where a skip's time went (headless, timing probes, eighteen-hole day, seed 1001, 933,469 Ball ticks) ==
+before: total 3.02 s = serving the seconds' Ball work 2.17 s + the steps on the main thread 0.85 s
+  Ball work: 1,029 batches of 6.2 guests (6,378 guest serves) over 600 seconds with work. The sum of each batch's busiest guest was 397,380 ticks against 265,612 for each second's busiest guest: a second ran in two or three batches one after another.
+    Cause: _gather filled each batch's room under the sim's cap (sim_ticks_per_s 4,800 = ten guests' 480) with every guest on a hole, including those with no Ball work (a play READY to strike, waiting its turn, or FINISHED). Those spend 0 ticks, but each took 480 of the room, so guests with work were pushed into a later batch that waited for the first.
+  Steps: 0.85 s, of which GuestWalk.route 0.52 s (1,720 walks, 0.30 ms each).
+    Cause: route asks _path_route for the cart path tile nearest each end within cart_path_reach_yd (40 yd: a 19 x 19 square), read tile by tile through CourseData.in_bounds and get_surface: 0.21 ms an end. On a course whose path is not near a walk (the fixture has none) that was nearly the whole cost of a walk's route. On the playtest nine the steps went 0.82 -> 0.39 s with both fixes.
+after: total 1.91 s = Ball work 1.49 s + steps 0.42 s
+  Ball work: 513 batches of 5.1 guests (2,615 guest serves); the sum of each batch's busiest guest 237,856 ticks, at about each second's busiest guest (D63's floor).
+  Steps: route 0.10 s (0.06 ms a walk). What is left in a step: the guests' strikes 0.09 s, hold_for 0.06 s, the reactions' statics 0.02 s, the rest the moves themselves.
+
+== the fix ==
+1. GuestBrain._gather passes over a guest whose play has no Ball work (GuestHole.State not PLANNING or FLYING), as serve already does. GuestHole.advance spends nothing in READY or FINISHED and nothing but a step changes that state, so every guest still gets what it would in turn: the same day bit for bit (skip_perf's PASS; tests/test_day_clock.gd compares every guest's state every 20 s of the eighteen-hole day's first 420 s, threaded and with serve_ahead, against one thread).
+2. GuestWalk._nearest_path_tile reads the square round a walk's end from the cache's path grid (path_grid: every cart path and bridge tile, the same tiles _is_path reads), a row at a time (PackedByteArray.slice and find), in the same order, so ties go the same way; _path_route and why pass the grid. tests/test_guest_walk.gd compares it with the tile-by-tile read at 606 points each on a generated course with scattered path and bridges, by every edge and corner and off the map, and on a course with no path.
+No target moved: 3 s a day holds at 18 holes, so no decision. The spare threads (24 logical cores, at most ten guests' budgets under the cap at once) were not needed; the step's moves (about 0.3 s a day) stay on the main thread.
+
+== the runs ==
+-- back to back, load about 1 (eighteen then nine, Build) --
+before: eighteen best of 3 3.50 s (3.52, 3.50, 3.55; 114, 112, 114 frames; brain alone 3.71 s; PASS); nine 2.94 s (2.95, 3.01, 2.94; 97 frames; PASS)
+after:  eighteen best of 3 2.40 s (2.40, 2.42, 2.45; 75, 76, 75 frames; brain alone 3.49 s; PASS); nine 1.90 s (1.90, 1.93, 1.93; 60, 61, 61 frames; PASS)
+
+-- interleaved, other lanes running: before --
+== skip_perf.gd -- --fixture eighteen --runs 3 ==
+skip perf: user://skip_perf_eighteen.json, seed 1, 24 guests, Build mode, window, load 8.04
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 4.20 real s, 128 frames, longest frame 51.1 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 4.25 real s, 134 frames, longest frame 39.6 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 4.11 real s, 131 frames, longest frame 40.1 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 4.04 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 4.11 s (target under 3.0 s); load 7.64
+  FAIL: a full day skipped in under 3.0 s
+== skip_perf.gd -- --fixture eighteen --runs 3 --seed 2 ==
+skip perf: user://skip_perf_eighteen.json, seed 2, 24 guests, Build mode, window, load 7.43
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 3.89 real s, 122 frames, longest frame 46.0 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 4.16 real s, 130 frames, longest frame 41.7 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 4.10 real s, 127 frames, longest frame 41.7 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 3.97 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 3.89 s (target under 3.0 s); load 6.85
+  FAIL: a full day skipped in under 3.0 s
+== skip_perf.gd -- --fixture eighteen --runs 3 --mode play ==
+skip perf: user://skip_perf_eighteen.json, seed 1, 24 guests, Play mode, window, load 6.85
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 3.28 real s, 116 frames, longest frame 42.6 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 3.18 real s, 112 frames, longest frame 38.7 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 3.09 real s, 111 frames, longest frame 34.0 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 3.90 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 3.09 s (target under 3.0 s); load 6.84
+  FAIL: a full day skipped in under 3.0 s
+== skip_perf.gd -- --runs 3 ==
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, window, load 6.38
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 822599 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 3.26 real s, 108 frames, longest frame 37.5 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 2: day 1 skipped in 3.24 real s, 106 frames, longest frame 36.5 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 3: day 1 skipped in 3.36 real s, 109 frames, longest frame 41.6 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  the same day run by the brain alone: 4.19 s, 822599 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 3.24 s (target under 3.0 s); load 5.78
+  FAIL: a full day skipped in under 3.0 s
+== skip_perf.gd -- --runs 3 --mode play ==
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Play mode, window, load 5.78
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 822599 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 3.08 real s, 104 frames, longest frame 59.8 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 2: day 1 skipped in 3.07 real s, 104 frames, longest frame 87.2 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 3: day 1 skipped in 3.11 real s, 102 frames, longest frame 89.6 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  the same day run by the brain alone: 3.92 s, 822599 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 3.07 s (target under 3.0 s); load 5.54
+  FAIL: a full day skipped in under 3.0 s
+
+-- interleaved, other lanes running: after --
+== skip_perf.gd -- --fixture eighteen --runs 3 ==
+skip perf: user://skip_perf_eighteen.json, seed 1, 24 guests, Build mode, window, load 5.42
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 2.62 real s, 81 frames, longest frame 41.5 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 2.68 real s, 82 frames, longest frame 42.1 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 2.74 real s, 82 frames, longest frame 41.7 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 3.64 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.62 s (target under 3.0 s); load 5.03
+== skip_perf.gd -- --fixture eighteen --runs 3 --seed 2 ==
+skip perf: user://skip_perf_eighteen.json, seed 2, 24 guests, Build mode, window, load 5.03
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 2.72 real s, 80 frames, longest frame 81.9 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 2.75 real s, 83 frames, longest frame 46.3 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 2.80 real s, 83 frames, longest frame 99.6 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 3.65 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.72 s (target under 3.0 s); load 4.65
+== skip_perf.gd -- --fixture eighteen --runs 3 --mode play ==
+skip perf: user://skip_perf_eighteen.json, seed 1, 24 guests, Play mode, window, load 4.60
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 2.08 real s, 72 frames, longest frame 39.2 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 2: day 1 skipped in 2.07 real s, 71 frames, longest frame 37.1 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  run 3: day 1 skipped in 2.10 real s, 73 frames, longest frame 36.6 ms, now "Day 2  0:00 / 17:00  0 guests out"
+  the same day run by the brain alone: 3.45 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.07 s (target under 3.0 s); load 4.25
+== skip_perf.gd -- --runs 3 ==
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, window, load 4.25
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 822599 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 2.26 real s, 69 frames, longest frame 62.2 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 2: day 1 skipped in 2.17 real s, 67 frames, longest frame 57.2 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 3: day 1 skipped in 2.07 real s, 65 frames, longest frame 36.0 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  the same day run by the brain alone: 3.40 s, 822599 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.07 s (target under 3.0 s); load 4.05
+== skip_perf.gd -- --runs 3 --mode play ==
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Play mode, window, load 3.89
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 822599 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 1.81 real s, 60 frames, longest frame 33.9 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 2: day 1 skipped in 1.96 real s, 63 frames, longest frame 93.9 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  run 3: day 1 skipped in 1.93 real s, 62 frames, longest frame 89.5 ms, now "Day 2  0:00 / 9:00  0 guests out"
+  the same day run by the brain alone: 3.51 s, 822599 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 1.81 s (target under 3.0 s); load 4.19

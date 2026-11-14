@@ -603,3 +603,63 @@ func test_an_eighteen_hole_day_runs_eighteen_day_s_and_a_skip_gives_the_same_day
 	sim.advance(0.0)
 	assert_false(sim.brain.eighteen_day, "the saved morning's day, not the course's now")
 	assert_eq(sim.day_length(), tuning.day_s)
+
+
+# --- E18-S5: skip to morning on the eighteen-hole day ---
+
+## E18-S5: the eighteen-hole day of D58's most guests skips in under E7-S4's 3 s too.
+const EIGHTEEN_SKIP_MAX_S := 3.0
+
+
+func _eighteen_brain() -> GuestBrain:
+	return GuestBrain.new(EighteenHoles.course().course, 1, null, null, [], null, NINE_GUESTS)
+
+
+## E18-S5: a batch passes over guests with no Ball work (a play READY to strike or FINISHED), as
+## serve does, so more guests with work run side by side; every second on the eighteen-hole day,
+## busier than a nine's, is still served as one thread serves it, with and without serve_ahead.
+func test_threads_serve_the_eighteen_hole_day_as_one_thread_does() -> void:
+	var one := _eighteen_brain()
+	var threaded := _eighteen_brain()
+	var ahead := _eighteen_brain()
+	assert_true(one.eighteen_day)
+	var busiest := 0
+	while one.second < 420:
+		one.serve(-1)
+		var working := 0
+		for g: Guest in one.guests:
+			if g.second_ticks > 0:
+				working += 1
+		busiest = maxi(busiest, working)
+		one.step()
+		threaded.advance_skip(1, -1, true)
+		ahead.serve_ahead()
+		ahead.settle()
+		ahead.advance_skip(1, -1, true)
+		if one.second % 20 == 0:
+			assert_eq(_brain_state(threaded), _brain_state(one), "threads, second %d" % one.second)
+			assert_eq(_brain_state(ahead), _brain_state(one), "served ahead, second %d" % one.second)
+	assert_eq(one.guests.size(), NINE_GUESTS, "every guest is out")
+	gut.p("the busiest second had %d guests at Ball work" % busiest)
+	assert_gt(busiest, 4, "seconds with many guests at work")
+
+
+func test_a_full_eighteen_hole_day_skips_in_under_3_s() -> void:
+	if BestTime.later(self):
+		return
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(EighteenHoles.course().course, 0)
+	sim.resume_at(1, NINE_GUESTS)
+	sim.running = true
+	var ends := _ended_states(sim)
+	var t0 := Time.get_ticks_usec()
+	var frames := _skip(sim)
+	var real_s := (Time.get_ticks_usec() - t0) / 1e6
+	assert_eq(ends.size(), 1, "the day ended")
+	assert_eq((ends[0][1][2] as Array).size(), NINE_GUESTS, "with all its guests")
+	gut.p("a %d-guest eighteen-hole day (%d s): skipped in %.2f s over %d frames (headless)" % [
+			NINE_GUESTS, roundi(GuestTuning.load_default().eighteen_day_s), real_s, frames])
+	assert_lt(real_s, EIGHTEEN_SKIP_MAX_S, "a full eighteen-hole day skips in under %.0f s%s" % [
+			EIGHTEEN_SKIP_MAX_S, BestTime.load_note()])

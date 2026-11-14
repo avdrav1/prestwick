@@ -18,9 +18,15 @@ extends SceneTree
 ## scripts/big_map_perf.gd out= writes them) in place of the playtest nine; --max-holes sets
 ## BuilderTuning's `max_holes` in the loaded resource for the run (the file is not touched), so
 ## an 18-hole test course loads.
+##
+## E18-S5: --fixture eighteen plays tests/fixtures/eighteen_holes.gd (192 x 192, all eighteen
+## open, so an eighteen-hole day of `eighteen_day_s`, D72): it is built and written to the
+## system's temp folder (prestwick_skip_perf_eighteen.json, never user://) and opened from there. Each run prints the simulated length of the day it skipped.
 
 const MAIN_SCENE := "res://scenes/main.tscn"
 const NINE_PATH := "res://courses/playtest_nine.json"
+const EighteenHoles := preload("res://tests/fixtures/eighteen_holes.gd")
+const EIGHTEEN_FILE := "prestwick_skip_perf_eighteen.json"
 const ARRIVALS := 24
 ## E7-S4's Accept: a full 24-guest day skipped in under this many real seconds.
 const TARGET_S := 3.0
@@ -62,6 +68,10 @@ func _initialize() -> void:
 	if i >= 0 and i + 1 < argv.size():
 		_builder_tuning = BuilderTuning.load_default()
 		_builder_tuning.max_holes = argv[i + 1].to_int()
+	i = argv.find("--fixture")
+	if i >= 0 and i + 1 < argv.size() and argv[i + 1] == "eighteen":
+		_path = OS.get_temp_dir().path_join(EIGHTEEN_FILE)
+		CourseSave.save_file(EighteenHoles.course()["course"], _path)
 	print("skip perf: %s, seed %d, %d guests, %s mode, %s, load %s" % [_path, _seed, ARRIVALS,
 			"Play" if _play else "Build", "headless" if DisplayServer.get_name() == "headless" else "window",
 			_load()])
@@ -132,8 +142,9 @@ func _on_day_ended(d: int, b: GuestBrain) -> void:
 	if d == 1 and _run == 0:
 		_ends.append(_end_state(b))
 		_day_seed = b.day_seed
-		print("    day 1: %d guests, %d Ball ticks, %d reactions in the feed" % [b.guests.size(), b.ticks,
-				_main.guest_sim.feed.total])
+		print("    day 1: %d s simulated (%s), %d guests, %d Ball ticks, %d reactions in the feed" % [
+				roundi(b.day_s), "an eighteen-hole day" if b.eighteen_day else "a nine-hole day",
+				b.guests.size(), b.ticks, _main.guest_sim.feed.total])
 
 
 func _finish() -> bool:

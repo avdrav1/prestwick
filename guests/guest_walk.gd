@@ -367,10 +367,17 @@ static func _polyline_length(p: PackedVector2Array) -> float:
 ## costs the tiles inside the bound, not its whole component.
 static func _path_route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestTuning,
 		ypt: float, limit_s: float, cache: Cache = null) -> PackedVector2Array:
-	var a := _nearest_path_tile(course, from, tuning.cart_path_reach_yd, ypt)
+	# E18-S5: with a cache, the nearest path tiles are read from its path grid (the same tiles).
+	var grid := PackedByteArray()
+	if cache != null:
+		cache.follow(course)
+		if cache.grid.is_empty():
+			cache.grid = path_grid(course)
+		grid = cache.grid
+	var a := _nearest_path_tile(course, from, tuning.cart_path_reach_yd, ypt, grid)
 	if a.x < 0:
 		return PackedVector2Array()
-	var b := _nearest_path_tile(course, to, tuning.cart_path_reach_yd, ypt)
+	var b := _nearest_path_tile(course, to, tuning.cart_path_reach_yd, ypt, grid)
 	if b.x < 0 or a == b:
 		return PackedVector2Array()
 	var legs := from.distance_to(_center(a, ypt)) + _center(b, ypt).distance_to(to)
@@ -498,13 +505,34 @@ static func _center(t: Vector2i, ypt: float) -> Vector2:
 
 
 ## The cart path tile whose centre is nearest `at` within `reach` yards; (-1, -1) if none.
-## Ties go to the first in row order.
+## Ties go to the first in row order. E18-S5: `grid`, when given, is path_grid(course), and the
+## square round `at` is read from its bytes, a row at a time, instead of tile by tile through
+## CourseData (the same tiles, in the same order; on the 18-hole fixture, with no path near, a
+## walk's route went from 0.30 to 0.06 ms, and the routes were most of a skipped day's steps).
 static func _nearest_path_tile(course: CourseData, at: Vector2, reach: float,
-		ypt: float) -> Vector2i:
+		ypt: float, grid: PackedByteArray = PackedByteArray()) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var best_d := INF
 	var r := ceili(reach / ypt) + 1
 	var c := Vector2i(floori(at.x / ypt), floori(at.y / ypt))
+	if not grid.is_empty():
+		var w := course.width + 2
+		var x0 := maxi(c.x - r, 0)
+		var x1 := mini(c.x + r, course.width - 1)
+		if x0 > x1:
+			return best
+		for y in range(maxi(c.y - r, 0), mini(c.y + r, course.height - 1) + 1):
+			var row := (y + 1) * w + 1
+			var span := grid.slice(row + x0, row + x1 + 1)
+			var k := span.find(1)
+			while k >= 0:
+				var t := Vector2i(x0 + k, y)
+				var d := ((Vector2(t) + Vector2(0.5, 0.5)) * ypt).distance_to(at)
+				if d <= reach and d < best_d:
+					best_d = d
+					best = t
+				k = span.find(1, k + 1)
+		return best
 	for y in range(c.y - r, c.y + r + 1):
 		for x in range(c.x - r, c.x + r + 1):
 			var t := Vector2i(x, y)
@@ -556,8 +584,8 @@ static func _why(course: CourseData, grid: PackedByteArray, from: Vector2, to: V
 	var r := Reason.new()
 	if grid.find(1) < 0:
 		return r
-	var a := _nearest_path_tile(course, from, reach, ypt)
-	var b := _nearest_path_tile(course, to, reach, ypt)
+	var a := _nearest_path_tile(course, from, reach, ypt, grid)
+	var b := _nearest_path_tile(course, to, reach, ypt, grid)
 	if a.x < 0 and b.x < 0:
 		r.kind = Reason.Kind.NOT_NEAR
 		r.at_start = true

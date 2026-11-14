@@ -320,6 +320,46 @@ func test_the_path_grid_marks_every_cart_path_and_bridge_tile() -> void:
 				bad += 1
 	assert_eq(bad, 0)
 
+
+## E18-S5: the nearest path tile read from the path grid's bytes (a route through a cache) is the
+## one read tile by tile through CourseData, ties and all: scattered path tiles, bridges, points
+## by every edge and corner of the map and off it, and a course with no path at all.
+func test_the_nearest_path_tile_from_the_grid_is_the_one_read_tile_by_tile() -> void:
+	var c := LandGenerator.generate(7)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var cells := []
+	for k: int in 400:
+		cells.append(Vector2i(rng.randi_range(0, c.width - 1), rng.randi_range(0, c.height - 1)))
+	cells.append_array(_row(0, 0, 20) + _row(c.height - 1, c.width - 20, c.width - 1))
+	_paint(c, cells, Surface.Type.CART_PATH)
+	var bridges := 0
+	for i: int in CourseValidator.surface_indices(c.packed_tiles(), Surface.Type.WATER):
+		if i % 7 == 0:
+			@warning_ignore("integer_division")
+			c.set_bridge(Vector2i(i % c.width, i / c.width), true)
+			bridges += 1
+	assert_gt(bridges, 0, "some water bridged")
+	var reach: float = tuning.cart_path_reach_yd
+	var side: float = c.width * 5.0
+	var points: Array[Vector2] = [Vector2(0, 0), Vector2(side, side), Vector2(-30, 40),
+			Vector2(side + 30, 7), Vector2(2.5, side - 2.5), Vector2(-60, -60)]
+	for k: int in 600:
+		points.append(Vector2(rng.randf_range(-50, side + 50), rng.randf_range(-50, side + 50)))
+	var found := 0
+	var bad: Array = []
+	for course: CourseData in [c, CourseData.create(60, 40, Surface.Type.ROUGH, 2)]:
+		var grid := GuestWalk.path_grid(course)
+		for at: Vector2 in points:
+			var want := GuestWalk._nearest_path_tile(course, at, reach, 5.0)
+			if GuestWalk._nearest_path_tile(course, at, reach, 5.0, grid) != want:
+				bad.append(at)
+			if want.x >= 0:
+				found += 1
+	assert_eq(bad, [], "points where the two differ")
+	assert_gt(found, 100, "many points have a path tile in reach")
+
+
 func test_a_path_edit_reaches_a_walk_on_its_piece_or_within_reach_of_its_ends() -> void:
 	var c := _strip()
 	_paint(c, _row(3, 3, 20), Surface.Type.CART_PATH)
