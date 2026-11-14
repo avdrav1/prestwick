@@ -1642,7 +1642,7 @@ Done when: a player can build and run an 18-hole course on a bigger map, guests 
   - Touches: `docs/`
   - Done 2026-11-14: `/ship-it` cut 0.7.0 (tag `v0.7.0`): tests 1405/1405, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub release (latest), itch channels linux and windows, the download page, `docs/how-to-play.md`, `docs/itch-page.md` and `docs/itch-devlog-03.md` say eighteen holes.
 
-## E19: Dogleg Hollow eighteen — active
+## E19: Dogleg Hollow eighteen — done
 
 From the user (2026-11-14): "what about 18 holes with dog legs? All the holes on the current 18 holes are dead straight." Old Grey Links (Championship) is links, which runs mostly straight. The user chose to extend Dogleg Hollow to a full eighteen: its nine famous doglegs as the front, plus a new back nine of nine more famous doglegs. Ships as 0.7.1.
 
@@ -1654,10 +1654,11 @@ Done when: the course is built in and 0.7.1 ships.
   - Accept: listed on Famous courses; all 18 open with no validator issue; every hole's turn reads at 0.175x and the test checks each angle; an 18-hole 24-arrival day finishes before dusk; the bridge audit flags nothing; rating at least 3.5 stars; rows in `scripts/guest_day.gd -- examples` and `/balance reactions`.
   - Test: `tests/test_example_courses.gd`, `tests/test_famous_courses.gd` (seven courses); screenshots at 0.1x and 0.175x and of three back-nine doglegs at 0.5x.
   - Touches: `tests/`, `courses/`, `course/`, `scripts/`, `docs/`
-- [ ] E19-S2 Ship 0.7.1.
+- [x] E19-S2 Ship 0.7.1.
   - Accept: `/ship-it` with the itch push; the ship-it course list, download page, `docs/how-to-play.md` and `docs/itch-page.md` name seven courses.
   - Test: every check `/ship-it` runs.
   - Touches: `docs/`, `.claude/skills/ship-it/`
+  - Done 2026-11-14: `/ship-it` cut 0.7.1 (tag `v0.7.1`) with E19-S1: tests 1408/1408, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub release (latest), itch channels linux and windows, the download page naming seven courses. Open: the Famous courses page's Back button now sits just above the Build toolbar with seven courses listed.
 
 ## Icebox
 
