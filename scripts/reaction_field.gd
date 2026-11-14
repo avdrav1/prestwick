@@ -70,6 +70,15 @@ const EPS := 0.001
 ## targets (the user, 2026-11-13).
 const EXAMPLE_DAYS: int = 5
 const EXAMPLE_ARRIVALS: int = 24
+## E18-S3 (D72): the eighteen-hole field: tests/fixtures/eighteen_holes.gd (two copies of the
+## nine's layout with nine_holes_hazards' bunkers on 192 x 192, the clubhouse between the 1st and
+## 10th tees), its first EIGHTEEN_DAYS days as a New sandbox course plays them, at
+## EXAMPLE_ARRIVALS guests a day with data/guests.json's mix of nines and eighteens. Targets:
+## every group that tees off finishes its round before dusk on every day, and at most
+## WALK_FAIL_MAX of its hole records fail the walk (the walk out from the clubhouse at the turn
+## included); the mix, the reactions, their rating and pace are reported.
+const EIGHTEEN_DAYS: int = 5
+const EighteenHoles := preload("res://tests/fixtures/eighteen_holes.gd")
 
 var model: Variant
 
@@ -106,21 +115,25 @@ static func _row(row_name: String, measured: float, target: Vector2, note: Strin
 ## (the first `n` records of a field are the field of `n`), and each nine-hole day once.
 ## E13-S5: before the edges, a row per example course (example_row; its first `example_days`
 ## days at EXAMPLE_ARRIVALS guests), reported, with no target.
+## E18-S3: after the example courses, the eighteen-hole field's rows (eighteen_rows; its first
+## `eighteen_days` days).
 func measure(runs: int, rng_seed: int, nine_days: int = NINE_DAYS, edges: bool = true,
 		pace_field: int = PACE_FIELD, pace_days: int = PACE_DAYS, workers: int = 1,
-		example_days: int = EXAMPLE_DAYS) -> Array[Dictionary]:
+		example_days: int = EXAMPLE_DAYS, eighteen_days: int = EIGHTEEN_DAYS) -> Array[Dictionary]:
 	var n := maxi(runs, 1)
 	var pf := maxi(pace_field, 1)
 	var nd := maxi(nine_days, 1)
 	var pd := maxi(pace_days, 1)
-	var jobs := jobs_for(n, rng_seed, nd, pd, edges, pf, example_days)
-	return rows_from(n, rng_seed, nd, pd, edges, pf, jobs, run_jobs(jobs, workers), example_days)
+	var jobs := jobs_for(n, rng_seed, nd, pd, edges, pf, example_days, eighteen_days)
+	return rows_from(n, rng_seed, nd, pd, edges, pf, jobs, run_jobs(jobs, workers), example_days,
+			eighteen_days)
 
 
 ## measure's rows from the `results` of its `jobs` (jobs_for with the same arguments; a test
 ## may run them in one batch with others).
 func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
-		jobs: Array[Dictionary], results: Array[Dictionary], example_days: int = 0) -> Array[Dictionary]:
+		jobs: Array[Dictionary], results: Array[Dictionary], example_days: int = 0,
+		eighteen_days: int = 0) -> Array[Dictionary]:
 	var by := {}
 	for i: int in jobs.size():
 		by[job_key(jobs[i])] = results[i]
@@ -219,6 +232,12 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 			for d: int in range(1, example_days + 1):
 				days.append(by[job_key(example_job(file, d))])
 			rows.append(example_row(file, days))
+	# E18-S3 (D72): the eighteen-hole field.
+	if eighteen_days > 0:
+		var days18: Array[Dictionary] = []
+		for d: int in range(1, eighteen_days + 1):
+			days18.append(by[job_key(eighteen_job(d))])
+		rows.append_array(eighteen_rows(days18, pace_nine))
 	if edges:
 		var edge_results: Array[Dictionary] = []
 		for i: int in jobs.size():
@@ -233,8 +252,11 @@ func rows_from(n: int, rng_seed: int, nd: int, pd: int, edges: bool, pf: int,
 ## largest size, cut at the sizes measure reads; each nine-hole day of each fixture once; the
 ## edges' jobs (ScoringEdges.jobs).
 func jobs_for(n: int, rng_seed: int, nine_days: int, pace_days: int, edges: bool,
-		pf: int, example_days: int = 0) -> Array[Dictionary]:
+		pf: int, example_days: int = 0, eighteen_days: int = 0) -> Array[Dictionary]:
 	var jobs: Array[Dictionary] = []
+	# E18-S3: the eighteen-hole days, longer still.
+	for d: int in range(1, eighteen_days + 1):
+		jobs.append(eighteen_job(d))
 	# E13-S5: the example courses' days first, the longest jobs of all.
 	for file: String in FamousCourses.files():
 		for d: int in range(1, example_days + 1):
@@ -376,6 +398,8 @@ func run_job(job: Dictionary) -> Dictionary:
 			return nine_day(String(job.fixture), int(job.day))
 		"example_day":
 			return example_day(String(job.file), int(job.day), int(job.arrivals))
+		"eighteen_day":
+			return eighteen_day(int(job.day), int(job.arrivals))
 		_:
 			return ScoringEdges.new(model).run_job(job)
 
@@ -633,7 +657,7 @@ func example_day(file: String, day_seed: int, arrivals: int,
 		if all:
 			nine += 1
 	return {"name": course.course_name, "kinds": kinds, "fails": fails, "records": records,
-		"groups": brain.groups.size(), "nine": nine, "latest": latest, "day_s": t.day_s}
+		"groups": brain.groups.size(), "nine": nine, "latest": latest, "day_s": brain.day_s}
 
 
 ## E13-S5: an example course's row from its days (example_day's results, in day order):
@@ -681,3 +705,136 @@ static func example_row(file: String, days: Array[Dictionary],
 				kinds[0] / n, kinds[1] / n, kinds[2] / n, records, EconomyTuning.stars_of(rating),
 				", ".join(fail_text), full_days, days.size(), latest, day_s, days.size(),
 				"/".join(latest_by_day)])
+
+
+## E18-S3 (D72): the job of day `d` of the eighteen-hole field (EighteenHoles), at
+## EXAMPLE_ARRIVALS guests.
+static func eighteen_job(d: int) -> Dictionary:
+	return {"kind": "eighteen_day", "day": d, "arrivals": EXAMPLE_ARRIVALS}
+
+
+## E18-S3 (D72): day `d` of tests/fixtures/eighteen_holes.gd as a New sandbox course plays it
+## (GuestSim.day_seed(0, d)) with `arrivals` guests, run to dusk: {open: the holes open, eighteen:
+## an eighteen-hole day, day_s, groups, teed: the groups that teed off, finished: of those, the
+## groups whose every guest played its whole round and left before dusk, rounds: {"9": groups,
+## "18": groups}, back: the nine-hole groups sent to the back nine, latest: the last guest's
+## leaving second, kinds, fails (a count per GuestReaction.Check), records, turn_walks: the
+## records of the walk out to the 10th from the clubhouse at the turn, turn_walk_fails}.
+func eighteen_day(d: int, arrivals: int = EXAMPLE_ARRIVALS, tuning: GuestTuning = null) -> Dictionary:
+	var built: Dictionary = EighteenHoles.course()
+	var course: CourseData = built.course
+	var t := tuning if tuning != null else GuestTuning.load_default()
+	var brain := GuestBrain.new(course, GuestSim.day_seed(0, d), t, model, [], null, arrivals)
+	brain.run_day()
+	var kinds := [0, 0, 0]
+	var fails := []
+	fails.resize(GuestReaction.Check.size())
+	fails.fill(0)
+	var records := 0
+	var latest := 0
+	var turn_walks := 0
+	var turn_walk_fails := 0
+	for g: Guest in brain.guests:
+		latest = maxi(latest, g.left_s)
+		for r: Guest.HoleRecord in g.records:
+			records += 1
+			kinds[r.reaction.kind] += 1
+			for c: int in GuestReaction.Check.size():
+				if not r.reaction.passed[c]:
+					fails[c] += 1
+			if g.round_holes == 18 and r.number == 10:
+				turn_walks += 1
+				if not r.reaction.passed[GuestReaction.Check.WALK]:
+					turn_walk_fails += 1
+	var teed := 0
+	var finished := 0
+	var rounds := {"9": 0, "18": 0}
+	var back := 0
+	for gr: GuestGroup in brain.groups:
+		if not brain.guests.has(gr.guests[0]):
+			continue
+		teed += 1
+		rounds[str(gr.round_holes)] = int(rounds.get(str(gr.round_holes), 0)) + 1
+		if gr.round_holes == 9 and gr.round_from > GuestBrain.NINE:
+			back += 1
+		var all := true
+		for g: Guest in gr.guests:
+			all = all and g.records.size() == gr.round_holes and not g.left_at_dusk
+		if all:
+			finished += 1
+	return {"open": (built.opened as Array).size(), "eighteen": brain.eighteen_day,
+		"day_s": brain.day_s, "groups": brain.groups.size(), "teed": teed, "finished": finished,
+		"rounds": rounds, "back": back, "latest": latest, "kinds": kinds, "fails": fails,
+		"records": records, "turn_walks": turn_walks, "turn_walk_fails": turn_walk_fails}
+
+
+## E18-S3 (D72): the eighteen-hole field's rows from its days (eighteen_day's results, in day
+## order), with the bare nine's days (`pace_nine`, combine_days) to read its pace against.
+static func eighteen_rows(days: Array[Dictionary], pace_nine: Dictionary = {}) -> Array[Dictionary]:
+	var points := EconomyTuning.load_default().rating_points
+	var kinds := [0, 0, 0]
+	var fails := []
+	fails.resize(GuestReaction.Check.size())
+	fails.fill(0)
+	var records := 0
+	var full_days := 0
+	var latest := 0
+	var day_s := 0
+	var groups := 0
+	var eighteens := 0
+	var back := 0
+	var turn_walks := 0
+	var turn_fails := 0
+	var all_open := true
+	var per_day := PackedStringArray()
+	for day: Dictionary in days:
+		all_open = all_open and int(day.open) == 18 and bool(day.eighteen)
+		day_s = int(day.day_s)
+		records += int(day.records)
+		for k: int in kinds.size():
+			kinds[k] += int(day.kinds[k])
+		for c: int in GuestReaction.Check.size():
+			fails[c] += int(day.fails[c])
+		latest = maxi(latest, int(day.latest))
+		groups += int(day.teed)
+		eighteens += int(day.rounds.get("18", 0))
+		back += int(day.back)
+		turn_walks += int(day.turn_walks)
+		turn_fails += int(day.turn_walk_fails)
+		if int(day.finished) == int(day.teed) and int(day.teed) == int(day.groups):
+			full_days += 1
+		per_day.append("%d/%d" % [int(day.rounds.get("18", 0)), int(day.latest)])
+	var nd := float(maxi(days.size(), 1))
+	var n := float(maxi(records, 1))
+	var rating := 0.0
+	for k: int in kinds.size():
+		rating += points[k] * kinds[k] / n
+	var fail_text := PackedStringArray()
+	for c: int in GuestReaction.Check.size():
+		fail_text.append("%s %.2f" % [GuestReaction.CHECK_NAMES[c], fails[c] / n])
+	var rows: Array[Dictionary] = []
+	rows.append(_row("eighteen holes (%d arrivals): days every group finished its round before dusk" % EXAMPLE_ARRIVALS,
+			full_days / nd if all_open else 0.0, Vector2(1.0, 1.0),
+			"%d of %d days%s; latest finish %d s of %d; eighteens and latest finish by day %s" % [
+				full_days, days.size(), "" if all_open else ", NOT ALL EIGHTEEN OPEN", latest, day_s,
+				" ".join(per_day)]))
+	rows.append(_row("eighteen holes: groups playing eighteen (share)", eighteens / float(maxi(groups, 1)),
+			Vector2(-INF, INF), "%d of %d groups; %d of the nines sent to the back nine" % [
+				eighteens, groups, back]))
+	rows.append(_row("eighteen holes: rating of its reaction mix (reported)", rating, Vector2(-INF, INF),
+			"praise %.2f, neutral %.2f, complaint %.2f of %d reactions, %.1f stars; fails: %s" % [
+				kinds[0] / n, kinds[1] / n, kinds[2] / n, records, EconomyTuning.stars_of(rating),
+				", ".join(fail_text)]))
+	var nine_pace := -1.0
+	if pace_nine.has("pace_by_hole"):
+		var sum := 0.0
+		for num: int in pace_nine.pace_by_hole:
+			sum += float(pace_nine.pace_by_hole[num])
+		nine_pace = sum / maxf(float((pace_nine.pace_by_hole as Dictionary).size()), 1.0)
+	rows.append(_row("eighteen holes: pace fails (share of records; reported)",
+			fails[GuestReaction.Check.PACE] / n, Vector2(-INF, INF),
+			"the bare nine's mean over its holes %s" % (("%.2f" % nine_pace) if nine_pace >= 0.0 else "not run")))
+	rows.append(_row("eighteen holes: walk fails (share of records)", fails[GuestReaction.Check.WALK] / n,
+			Vector2(0.0, WALK_FAIL_MAX), "the turn's walk out from the clubhouse to the 10th: %d of %d eighteens' records fail it" % [
+				turn_fails, turn_walks]))
+	return rows

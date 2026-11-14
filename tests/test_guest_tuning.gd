@@ -65,7 +65,8 @@ func test_every_check_names_its_key_and_the_bad_value() -> void:
 		["praise_passes", 6], ["complaint_fails", 0], ["sight_step_yd", 0.0],
 		["guest_putt_max_runs", 1], ["group_size_min", 0], ["day_s", 0.0], ["stroke_s", -1.0],
 		["arrival_window_s", -1.0], ["arrivals_per_day", -1], ["guest_min_power", 2.0],
-		["day_round_holes", 0],
+		["day_round_holes", 0], ["eighteen_day_s", 0.0], ["eighteen_arrival_window_s", -1.0],
+		["eighteen_share", 1.5], ["back_nine_queue", -1], ["turn_stop_s", -1.0],
 		["swing_impact_share", 1.0], ["swing_address_share", 0.9], ["walk_yd_per_s", 0.0],
 	]
 	for c: Array in cases:

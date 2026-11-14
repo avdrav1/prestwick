@@ -186,3 +186,68 @@ func test_building_before_a_save_stays_paid_for_after_the_load() -> void:
 	assert_eq(m.build_tool.builder.balance(), START - spent,
 			"the morning's balance less what was built since; the fee comes again as the day replays")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+
+
+# --- E18-S3 (D72): a round of nine or eighteen ---
+
+const EighteenHoles := preload("res://tests/fixtures/eighteen_holes.gd")
+
+
+func _eighteen_main() -> Main:
+	var m := MAIN_SCENE.instantiate() as Main
+	m.course_path = "res://tests/fixtures/flat_20x20.json"
+	add_child_autofree(m)
+	m.land_seed = 0
+	m.show_course(EighteenHoles.course().course)
+	m.guest_sim.set_process(false)
+	return m
+
+
+## [round, fee] of each guest of day 1 as it pays at the first tee (DayLedger.paid's last).
+func _round_fees(m: Main) -> Array:
+	var out: Array = []
+	m.guest_sim.day_started.connect(func(d: int) -> void:
+		if d == m.guest_sim.day and d == 1:
+			m.guest_sim.brain.reached_first_tee.connect(func(g: Guest) -> void:
+				out.append([g.round_holes, m.ledger.paid[-1]])))
+	return out
+
+
+func test_the_eighteen_fee_is_a_multiple_of_the_nines() -> void:
+	assert_eq(_econ.eighteen_fee_multiple, 1.75, "D72")
+	assert_eq(_econ.round_fee(60, 9), 60, "a nine pays the slider's fee")
+	assert_eq(_econ.round_fee(60, 18), 105, "eighteen pay 1.75 times it")
+	assert_eq(_econ.round_fee(45, 18), 78, "whole dollars down")
+	assert_eq(_econ.round_fee(60, 0), 60, "a round before E18-S3 is a nine")
+	var bad := JSON.parse_string(FileAccess.get_file_as_string(EconomyTuning.PATH)) as Dictionary
+	bad["eighteen_fee_multiple"] = 0.5
+	assert_eq(EconomyTuning.from_dict(bad).errors.size(), 1, "a multiple under 1 is refused")
+
+
+## On an eighteen each guest pays its round's fee at the first tee, and a load that replays the
+## day keeps it an eighteen-hole day and takes the same fees.
+func test_guests_pay_their_rounds_fee_and_a_load_replays_the_eighteen_hole_day() -> void:
+	var m := _eighteen_main()
+	var paid := _round_fees(m)
+	m.guest_sim.advance(0.0)
+	assert_true(m.guest_sim.brain.eighteen_day)
+	while paid.size() < 6 and m.guest_sim.day == 1:
+		m.guest_sim.advance(1.0)
+	assert_eq(m.save_game(SAVE_PATH), OK)
+	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	assert_eq(saved.get("eighteen_day"), true, "the save keeps the eighteen-hole morning")
+	_skip(m)
+	var rounds := {}
+	for p: Array in paid:
+		rounds[p[0]] = true
+		assert_eq(p[1], 105 if p[0] == 18 else 60, "a round of %d pays %s" % [p[0], p[1]])
+	assert_true(rounds.has(9) and rounds.has(18), "the day had both: %s" % [rounds.keys()])
+	var n := _eighteen_main()
+	var again := _round_fees(n)
+	assert_true(n.load_game(SAVE_PATH))
+	n.guest_sim.set_process(false)
+	n.guest_sim.advance(0.0)
+	assert_true(n.guest_sim.brain.eighteen_day, "the replay is an eighteen-hole day")
+	_skip(n)
+	assert_eq(again, paid, "the replay's guests play and pay the same rounds")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))

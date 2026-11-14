@@ -261,7 +261,7 @@ static func assign_shirts(brain: GuestBrain, shirts: Dictionary, count: int) -> 
 			if o == g or not shirts.has(o.index):
 				continue
 			if o.phase != GuestGroup.Phase.TO_TEE and o.phase != GuestGroup.Phase.ON_HOLE \
-					and not fresh.has(o.index):
+					and o.phase != GuestGroup.Phase.TURN and not fresh.has(o.index):
 				continue
 			var s: int = shirts[o.index]
 			lowest[s] = mini(lowest.get(s, o.hole_number), o.hole_number)

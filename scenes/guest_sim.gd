@@ -100,6 +100,9 @@ var fee: int = -1
 var _resume_arrivals: int = -1
 ## E8-S2: the late starts of a loaded day (resume_at), for its first brain.
 var _resume_late_starts: Array[Vector3i] = []
+## E18-S3 (D72): whether a loaded day's morning was an eighteen-hole day (resume_at; -1: read the
+## course when the day is built).
+var _resume_eighteen: int = -1
 ## E4-S13: the stars shown (stars()), set at dusk (D59). 3 until a course's first dusk.
 var _stars: float = 3.0
 
@@ -234,6 +237,31 @@ func morning_arrivals() -> int:
 	return _resume_arrivals if brain == null else day_arrivals
 
 
+## E18-S3 (D72): whether the day a save made now resumes at is an eighteen-hole day
+## (GuestBrain.eighteen_day: all eighteen holes were open that morning), so its replay keeps the
+## day's length and rounds whatever was edited since; -1 before a day is built (its morning reads
+## the course). Read after morning_day().
+func morning_eighteen() -> int:
+	if brain == null:
+		return _resume_eighteen
+	return 1 if brain.eighteen_day else 0
+
+
+## E18-S3 (D72): the green fee of a round of `holes` holes at the fee now: the fee slider's
+## setting for nine (every round before E18-S3), `eighteen_fee_multiple` times it, whole dollars
+## down, for eighteen (EconomyTuning.round_fee).
+func round_fee(holes: int) -> int:
+	_ensure_feed()
+	return economy.round_fee(maxi(fee, 0), holes)
+
+
+## E18-S3 (D72): the day's length, simulated seconds: the day under way's (GuestBrain.day_s),
+## else `day_s`.
+func day_length() -> float:
+	_ensure_feed()
+	return tuning.day_s if brain == null else brain.day_s
+
+
 ## E8-S2 (D64): the late starts of the day a save made now resumes at (GuestBrain.late_starts:
 ## the groups a closed course sent home and the first hole's opening sent out again), so its
 ## replay sends them at the same seconds. Read after morning_day().
@@ -268,6 +296,7 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 	feed.clear()
 	_resume_arrivals = -1
 	_resume_late_starts.clear()
+	_resume_eighteen = -1
 	_show_stars(rating())
 	set_fee(economy.start_fee)
 
@@ -276,7 +305,9 @@ func start(c: CourseData, p_base_seed: int = 0) -> void:
 ## from its own seed, as if the days before it had run. Guests out at the save are not kept.
 ## E4-S11: `arrivals` are the guests day `d`'s morning drew (morning_arrivals; -1: draw them).
 ## E8-S2: `late_starts` are that day's late starts (morning_late_starts), replayed as made.
-func resume_at(d: int, arrivals: int = -1, late_starts: Array[Vector3i] = []) -> void:
+## E18-S3: `eighteen` is whether it was an eighteen-hole day (morning_eighteen; -1: read the course).
+func resume_at(d: int, arrivals: int = -1, late_starts: Array[Vector3i] = [],
+		eighteen: int = -1) -> void:
 	_settle()
 	brain = null
 	_set_skipping(false)
@@ -286,6 +317,7 @@ func resume_at(d: int, arrivals: int = -1, late_starts: Array[Vector3i] = []) ->
 	_walk_stale.clear()
 	_resume_arrivals = arrivals
 	_resume_late_starts = late_starts.duplicate()
+	_resume_eighteen = eighteen
 
 
 ## E4-S7: the day a save made now resumes at the morning of: the day under way, or 1 (or a
@@ -491,7 +523,7 @@ func _end_day() -> void:
 
 ## The simulated time of the day now, seconds (with the share of the second gone by).
 func clock_s() -> float:
-	return 0.0 if brain == null else minf(brain.second + brain.step_fraction(), tuning.day_s)
+	return 0.0 if brain == null else minf(brain.second + brain.step_fraction(), brain.day_s)
 
 
 func guests_on_course() -> int:
@@ -506,11 +538,15 @@ func _new_day(d: int) -> void:
 	var resumed := _resume_arrivals >= 0 and d == _first_day
 	day_arrivals = _resume_arrivals if resumed else arrivals_today()
 	var late: Array[Vector3i] = []
+	var eighteen := -1
 	if d == _first_day:
 		late.assign(_resume_late_starts)
+		eighteen = _resume_eighteen
 	_resume_arrivals = -1
 	_resume_late_starts.clear()
-	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals, late)
+	_resume_eighteen = -1
+	brain = GuestBrain.new(course, day_seed(base_seed, d), tuning, null, [], null, day_arrivals, late,
+			eighteen)
 	brain.reacted.connect(_on_reacted.bind(brain))
 	brain.reached_first_tee.connect(func(g: Guest) -> void: guest_arrived.emit(g))
 	day_started.emit(day)

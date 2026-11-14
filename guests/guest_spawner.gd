@@ -10,12 +10,20 @@ extends RefCounted
 ##   whatever `day_s` is);
 ## - then, guest by guest in arrival order: skill (`skill_min` to `skill_max`), patience
 ##   (`patience_min` to `patience_max`), each whole value equally likely; taste by
-##   `taste_weights`; and a seed of its own for its holes.
+##   `taste_weights`; and a seed of its own for its holes;
+## - E18-S3 (D72): last, group by group, whether it wants eighteen holes (`eighteen_share`),
+##   from a second generator of its own seed (ROUND_SEED_SALT), so every draw above is the same
+##   as before it.
+
+## E18-S3: added to the day's seed for the rounds' generator.
+const ROUND_SEED_SALT: int = 0x18180018
 
 
 ## The groups of the day of `day_seed`, in arrival order, every guest numbered: `arrivals`
-## guests, or `arrivals_per_day` when it is below 0.
-static func day(tuning: GuestTuning, day_seed: int, arrivals: int = -1) -> Array[GuestGroup]:
+## guests, or `arrivals_per_day` when it is below 0; arriving over `window_s` seconds, or
+## `arrival_window_s` when it is below 0 (E18-S3: GuestBrain's eighteen-hole day).
+static func day(tuning: GuestTuning, day_seed: int, arrivals: int = -1,
+		window_s: float = -1.0) -> Array[GuestGroup]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = day_seed
 	var sizes: Array[int] = []
@@ -25,7 +33,8 @@ static func day(tuning: GuestTuning, day_seed: int, arrivals: int = -1) -> Array
 		sizes.append(n)
 		left -= n
 	var groups: Array[GuestGroup] = []
-	var gap := tuning.arrival_window_s / maxf(sizes.size(), 1.0)
+	var window := tuning.arrival_window_s if window_s < 0.0 else window_s
+	var gap := window / maxf(sizes.size(), 1.0)
 	var id := 0
 	for i in sizes.size():
 		var g := GuestGroup.new()
@@ -39,6 +48,10 @@ static func day(tuning: GuestTuning, day_seed: int, arrivals: int = -1) -> Array
 			id += 1
 			g.guests.append(guest)
 		groups.append(g)
+	var rounds := RandomNumberGenerator.new()
+	rounds.seed = day_seed + ROUND_SEED_SALT
+	for g: GuestGroup in groups:
+		g.wants_eighteen = rounds.randf() < tuning.eighteen_share
 	return groups
 
 

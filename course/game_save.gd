@@ -59,6 +59,11 @@ class State:
 	## Vector3i(first group, second, groups sent), so the replay sends the groups a closed
 	## course turned away at the seconds the uninterrupted day did. Empty in a save without them.
 	var late_starts: Array[Vector3i] = []
+	## E18-S3 (D72): whether the saved day's morning was an eighteen-hole day
+	## (GuestSim.morning_eighteen): 1 or 0, so the replay keeps the day's length and rounds; -1
+	## when the day had not been built, or in a save from before it: the load's morning reads the
+	## course. In the file, the optional "eighteen_day" (true or false).
+	var eighteen_day: int = -1
 	## The feed as ReactionFeed.to_save keeps it; on load, a ReactionFeed (from_save).
 	var feed_data: Dictionary = {}
 	var feed: ReactionFeed
@@ -122,6 +127,8 @@ static func to_json(state: State, dropped: Array[int] = []) -> String:
 		for ls: Vector3i in state.late_starts:
 			late.append([ls.x, ls.y, ls.z])
 		data["late_starts"] = late
+	if state.eighteen_day >= 0:
+		data["eighteen_day"] = state.eighteen_day > 0
 	if state.goals_on:
 		data["goals"] = {"done": Array(state.goals_done), "collapsed": state.goals_collapsed}
 	return JSON.stringify(data, "  ", false)
@@ -213,6 +220,12 @@ static func from_json(text: String, errors: Array[String] = [], feed_window: int
 					errors.append("late_starts must hold [group, second, count], whole numbers 0 or more")
 					break
 				s.late_starts.append(Vector3i(int(v[0]), int(v[1]), int(v[2])))
+	# E18-S3: a new field with a default, as `fee`.
+	if data.has("eighteen_day"):
+		if typeof(data["eighteen_day"]) != TYPE_BOOL:
+			errors.append("eighteen_day must be true or false")
+		else:
+			s.eighteen_day = 1 if data["eighteen_day"] else 0
 	# E8-S4: new fields with defaults, as `fee`.
 	if data.has("save_id"):
 		if typeof(data["save_id"]) != TYPE_STRING:

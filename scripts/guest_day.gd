@@ -28,8 +28,12 @@ extends SceneTree
 ## E13-S5: `examples` plays the example courses (res://courses/, FamousCourses.files()) instead,
 ## at 24 arrivals unless `arrivals=N` is given, and prints a row per course (_examples).
 ##
+## E18-S3 (D72): `eighteen` plays tests/fixtures/eighteen_holes.gd (192 x 192, all eighteen open)
+## instead, as New sandbox days 1 on (seeds= picks them), at 24 arrivals unless `arrivals=N`, a
+## line a day (ReactionField.eighteen_day) and /balance reactions' eighteen-hole rows.
+##
 ##   godot --headless --path . -s res://scripts/guest_day.gd [-- seeds=1,2,3] [fixture=hazards]
-##       [day_s=540] [arrival_window_s=90] [arrivals=24] [quick] [--lines] [examples]
+##       [day_s=540] [arrival_window_s=90] [arrivals=24] [quick] [--lines] [examples] [eighteen]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const NineHolesHazards := preload("res://tests/fixtures/nine_holes_hazards.gd")
@@ -71,6 +75,11 @@ func _initialize() -> void:
 			lines = true
 		elif arg == "frames":
 			frames_only = true
+	if OS.get_cmdline_user_args().has("eighteen"):
+		_eighteen(seeds, tuning, model, Array(OS.get_cmdline_user_args()).any(
+				func(a: String) -> bool: return a.begins_with("arrivals=")))
+		quit(0)
+		return
 	if OS.get_cmdline_user_args().has("examples"):
 		_examples(seeds, tuning, model, Array(OS.get_cmdline_user_args()).any(
 				func(a: String) -> bool: return a.begins_with("arrivals=")))
@@ -174,6 +183,24 @@ func _examples(seeds: Array[int], tuning: GuestTuning, model: ShotModel, own_arr
 		rows.append(ReactionField.example_row(file, days, arrivals))
 	for r: Dictionary in rows:
 		print("%s: %.2f; %s" % [r.name, r.measured, r.note])
+
+
+## E18-S3 `eighteen`: the eighteen-hole fixture's days `seeds` (New sandbox day numbers), a line
+## each, then ReactionField.eighteen_rows over them.
+func _eighteen(seeds: Array[int], tuning: GuestTuning, model: ShotModel, own_arrivals: bool) -> void:
+	var arrivals := tuning.arrivals_per_day if own_arrivals else ReactionField.EXAMPLE_ARRIVALS
+	var field := ReactionField.new(model)
+	var days: Array[Dictionary] = []
+	for d: int in seeds:
+		var day := field.eighteen_day(d, arrivals, tuning)
+		days.append(day)
+		print("eighteen holes day %d (%d open, %s): %d groups, %d eighteens, %d nines (%d on the back), %d of %d that teed off finished their round, latest finish %d s of %d; praise %d, neutral %d, complaint %d of %d; turn walks %d, %d fail" % [
+				d, day.open, "an eighteen-hole day" if day.eighteen else "NOT an eighteen-hole day",
+				day.groups, day.rounds.get("18", 0), day.rounds.get("9", 0), day.back, day.finished,
+				day.teed, day.latest, day.day_s, day.kinds[0], day.kinds[1], day.kinds[2],
+				day.records, day.turn_walks, day.turn_walk_fails])
+	for r: Dictionary in ReactionField.eighteen_rows(days):
+		print("%s: %.3f%s; %s" % [r.name, r.measured, "" if r.ok else " (MISS)", r.note])
 
 
 ## Returns whether every group that teed off finished its nine before dusk. `p_groups`

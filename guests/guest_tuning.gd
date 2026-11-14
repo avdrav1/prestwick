@@ -18,6 +18,21 @@ var arrival_window_s: float = 0.0
 ## open hole `day_s` less `arrival_window_s` over this, so a late group's need is the same on a
 ## nine and on the front nine of an eighteen (it read BuilderTuning.max_holes before, 9 then).
 var day_round_holes: int = 0
+## E18-S3 (D72): rounds of nine or eighteen. On a course with all eighteen holes open (Out 1 to
+## 9 and In 10 to 18), a day runs `eighteen_day_s` seconds with its groups arriving over the first
+## `eighteen_arrival_window_s` (GuestBrain.day_s and arrival_window_s; any other course keeps
+## `day_s` and `arrival_window_s`, so a nine plays as before), and each group plays eighteen
+## with the share `eighteen_share` (drawn per group from the day's seed, GuestSpawner), else
+## nine. A nine-hole group starts on the back nine when at least `back_nine_queue` groups are
+## heading for or standing on the front's first tee and fewer on the back's (0: always the
+## front, unless it has no open hole). An eighteen-hole group turns at the clubhouse: from the
+## 9th green it walks to the door, stops `turn_stop_s` seconds (a halfway stop), and walks out
+## to the 10th tee as from the clubhouse.
+var eighteen_share: float = 0.0
+var back_nine_queue: int = 0
+var turn_stop_s: float = 0.0
+var eighteen_day_s: float = 0.0
+var eighteen_arrival_window_s: float = 0.0
 
 ## E9-S1 (D65): the base walking speed, yards a simulated second, over fairway, rough, green,
 ## tee and painted out of bounds; `walk_surface_speed` times it on each surface (by
@@ -186,6 +201,11 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
 	t.arrival_window_s = _float(d, "arrival_window_s", errors)
 	t.day_round_holes = CourseData.read_int(d, "day_round_holes", errors)
+	t.eighteen_share = _float(d, "eighteen_share", errors)
+	t.back_nine_queue = CourseData.read_int(d, "back_nine_queue", errors)
+	t.turn_stop_s = _float(d, "turn_stop_s", errors)
+	t.eighteen_day_s = _float(d, "eighteen_day_s", errors)
+	t.eighteen_arrival_window_s = _float(d, "eighteen_arrival_window_s", errors)
 	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
 	t.walk_surface_speed.resize(Surface.COUNT)
 	var speeds: Variant = d.get("walk_surface_speed")
@@ -327,6 +347,16 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_positive(errors, "stroke_s", t.stroke_s)
 	if t.arrival_window_s < 0.0 or (t.day_s > 0.0 and t.arrival_window_s > t.day_s):
 		errors.append("arrival_window_s (%s) must be 0 to day_s (%s)" % [t.arrival_window_s, t.day_s])
+	# E18-S3 (D72): the eighteen-hole day and its rounds.
+	_positive(errors, "eighteen_day_s", t.eighteen_day_s)
+	if t.eighteen_arrival_window_s < 0.0 or (t.eighteen_day_s > 0.0
+			and t.eighteen_arrival_window_s > t.eighteen_day_s):
+		errors.append("eighteen_arrival_window_s (%s) must be 0 to eighteen_day_s (%s)" % [
+				t.eighteen_arrival_window_s, t.eighteen_day_s])
+	if t.eighteen_share < 0.0 or t.eighteen_share > 1.0:
+		errors.append("eighteen_share (%s) must be 0 to 1" % t.eighteen_share)
+	_at_least(errors, "back_nine_queue", t.back_nine_queue, 0)
+	_at_least(errors, "turn_stop_s", t.turn_stop_s, 0.0)
 	if t.arrivals_per_day < 0:
 		errors.append("arrivals_per_day (%s) must be 0 or more" % t.arrivals_per_day)
 	_positive(errors, "walk_yd_per_s", t.walk_yd_per_s)

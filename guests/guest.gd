@@ -112,6 +112,9 @@ var second_ticks: int = 0
 var ticks: int = 0
 ## Second it arrived and left (-1 while on the course).
 var arrived_s: int = 0
+## E18-S3 (D72): the holes of its group's round, 9 or 18 (0 before it arrives): what its green
+## fee is for (GuestSim.round_fee).
+var round_holes: int = 0
 var left_s: int = -1
 var left_at_dusk: bool = false
 

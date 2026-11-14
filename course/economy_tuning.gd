@@ -28,6 +28,9 @@ var upkeep_per_open_hole: int = 0
 var fee_ceiling_per_star: int = 0
 ## E4-S6: the fee slider's setting on a new course, dollars a round.
 var start_fee: int = 0
+## E18-S3 (D72): a round of eighteen costs this many times the fee (the slider's, a nine's), whole
+## dollars down (round_fee). At least 1.
+var eighteen_fee_multiple: float = 1.0
 var arrivals_base: int = 0
 var arrivals_per_star: int = 0
 var arrivals_max: int = 0
@@ -68,6 +71,11 @@ static func from_dict(data: Dictionary) -> EconomyTuning:
 	t.upkeep_per_open_hole = CourseData.read_int(data, "upkeep_per_open_hole", e)
 	t.fee_ceiling_per_star = CourseData.read_int(data, "fee_ceiling_per_star", e)
 	t.start_fee = CourseData.read_int(data, "start_fee", e)
+	var mult: Variant = data.get("eighteen_fee_multiple")
+	if typeof(mult) not in [TYPE_INT, TYPE_FLOAT] or float(mult) < 1.0:
+		e.append("eighteen_fee_multiple must be a number of 1 or more, got %s" % [mult])
+	else:
+		t.eighteen_fee_multiple = float(mult)
 	t.arrivals_base = CourseData.read_int(data, "arrivals_base", e)
 	t.arrivals_per_star = CourseData.read_int(data, "arrivals_per_star", e)
 	t.arrivals_max = CourseData.read_int(data, "arrivals_max", e)
@@ -114,6 +122,15 @@ func price_of(surface: int) -> int:
 ## half star, 1 to 5. Arrivals and the fee ceiling go by these, as the economy sim runs them.
 static func stars_of(rating: float) -> float:
 	return clampf(roundf(rating / STAR_STEP) * STAR_STEP, STARS_MIN, STARS_MAX)
+
+
+## E18-S3 (D72): the green fee of a round of `holes` holes when the fee (the slider's) is `fee`:
+## `fee` for nine (or any round short of eighteen), eighteen_fee_multiple x `fee`, whole dollars
+## down, for eighteen.
+func round_fee(fee: int, holes: int) -> int:
+	if holes >= 18:
+		return floori(fee * eighteen_fee_multiple + 1e-6)
+	return fee
 
 
 ## The fee ceiling per round at `stars`.

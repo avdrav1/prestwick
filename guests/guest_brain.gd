@@ -71,6 +71,13 @@ extends RefCounted
 ## out or picked up, with the guest's reaction to it (E3-S6, D39: `reacted`, the four checks,
 ## GuestReaction). The hole's static checks (blind, interesting) are measured once per hole
 ## and kept while its tee, cup and the course's terrain stay the same (HoleChecks).
+##
+## Rounds (E18-S3, D72): a group plays a nine or eighteen (_choose_round, as it arrives): on a
+## course with all eighteen holes open the day is an eighteen-hole day (`eighteen_day`, its own
+## length and arrival window) and a group that wants eighteen (GuestSpawner) plays 1 to 18,
+## turning at the clubhouse door between the 9th and the 10th (Phase.TURN); a nine plays the
+## front (1 to 9) or, when the front's first tee is busy, the back (10 to 18). A course with no
+## open hole past 9 plays every open hole in number order, as before.
 
 signal guest_arrived(guest: Guest)
 ## E5-S11: a guest reached the first tee of its round, having walked from the clubhouse door:
@@ -87,12 +94,23 @@ enum Hold { CLEAR, SAME_HOLE, CROSSING }
 
 ## A step is due when the clock is this close to a whole second (float sums of frame deltas).
 const CLOCK_EPS: float = 1e-6
+## E18-S3 (D72): the holes of a nine: the front nine is holes 1 to NINE (Out), the back nine
+## NINE + 1 to 2 x NINE (In), as the hole list groups them (E18-S2).
+const NINE: int = 9
 
 var course: CourseData
 var tuning: GuestTuning
 var model: ShotModel
 var field: HeightField
 var day_seed: int = 0
+## E18-S3 (D72): true when this is an eighteen-hole day: the course had all eighteen holes open
+## when the day was built (or a loaded day's morning had, `p_eighteen_day`). Its day is then
+## `eighteen_day_s` long with arrivals over `eighteen_arrival_window_s`, and groups may play
+## eighteen; else `day_s` and `arrival_window_s`, as before E18-S3.
+var eighteen_day: bool = false
+## The day's length and its arrival window, seconds (set with `eighteen_day`).
+var day_s: float = 0.0
+var arrival_window_s: float = 0.0
 ## Every group of the day, in arrival order.
 var groups: Array[GuestGroup] = []
 ## Every guest that has arrived, in arrival order (Ball work's fixed order).
@@ -164,7 +182,7 @@ var _terrain_key: String = ""
 func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 		p_model: ShotModel = null, p_groups: Array[GuestGroup] = [],
 		p_swing_tuning: SwingTuning = null, p_arrivals: int = -1,
-		p_late_starts: Array[Vector3i] = []) -> void:
+		p_late_starts: Array[Vector3i] = [], p_eighteen_day: int = -1) -> void:
 	course = p_course
 	day_seed = p_day_seed
 	tuning = p_tuning if p_tuning != null else GuestTuning.load_default()
@@ -172,7 +190,13 @@ func _init(p_course: CourseData, p_day_seed: int, p_tuning: GuestTuning = null,
 	_swing_tuning = p_swing_tuning if p_swing_tuning != null else SwingTuning.load_default()
 	field = HeightField.new(course, model.params)
 	checks = HoleChecks.new(tuning, model.params)
-	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed, p_arrivals)
+	# E18-S3 (D72): the day's length, from the course as the day starts (or as a loaded day's
+	# morning had it, `p_eighteen_day` 0 or 1).
+	eighteen_day = all_eighteen_open() if p_eighteen_day < 0 else p_eighteen_day > 0
+	day_s = tuning.eighteen_day_s if eighteen_day else tuning.day_s
+	arrival_window_s = tuning.eighteen_arrival_window_s if eighteen_day else tuning.arrival_window_s
+	groups = p_groups if not p_groups.is_empty() else GuestSpawner.day(tuning, day_seed, p_arrivals,
+			arrival_window_s)
 	# E8-S2: a loaded day's late starts, replayed as the day under way made them.
 	for ls: Vector3i in p_late_starts:
 		_send_late(ls.x, ls.y, ls.z)
@@ -386,7 +410,7 @@ func _served(g: Guest, n: int) -> int:
 ## True when every second of the day has been played and only dusk is left (E4-S3): it is
 ## due at once (advance_real's next frame), so a day at 1x takes `day_s` real seconds, not one more.
 func dusk_due() -> bool:
-	return not day_over and second >= tuning.day_s
+	return not day_over and second >= day_s
 
 
 ## One simulated second: finishes the second's Ball work, then moves every guest. Past the
@@ -511,7 +535,7 @@ func group_of(guest: Guest) -> GuestGroup:
 # --- the step ---
 
 func _update(t: int) -> void:
-	if t >= tuning.day_s:
+	if t >= day_s:
 		_dusk(t)
 		return
 	for guest: Guest in guests:
@@ -527,6 +551,8 @@ func _update(t: int) -> void:
 			_update_on_hole(g, t)
 		elif g.phase == GuestGroup.Phase.TO_CLUBHOUSE:
 			_update_to_clubhouse(g, t)
+		elif g.phase == GuestGroup.Phase.TURN:
+			_update_turn(g, t)
 
 
 ## The middle of the clubhouse's door tile, yards (E5-S11): where guests appear and leave.
@@ -536,7 +562,7 @@ func door() -> Vector2:
 
 
 func _arrive(g: GuestGroup, t: int) -> void:
-	var n := next_open_hole(0)
+	var n := _choose_round(g)
 	if n == 0 or not course.has_clubhouse():
 		g.phase = GuestGroup.Phase.DONE
 		g.turned_away = true
@@ -551,6 +577,7 @@ func _arrive(g: GuestGroup, t: int) -> void:
 		guest.position = at
 		guest.state = Guest.State.WAITING
 		guest.arrived_s = t
+		guest.round_holes = g.round_holes
 		guests.append(guest)
 	guests.sort_custom(func(a: Guest, b: Guest) -> bool: return a.id < b.id)
 	for guest: Guest in g.guests:
@@ -558,21 +585,96 @@ func _arrive(g: GuestGroup, t: int) -> void:
 	_head_for(g, n, t, false)  # the step's group pass moves it
 
 
+## E18-S3 (D72): the round group `g` plays, chosen as it arrives: eighteen (holes 1 to 18) when
+## it wants eighteen (GuestSpawner, `eighteen_share`) on an eighteen-hole day with all eighteen
+## holes open now; else a nine: the front (the open holes 1 to NINE), or the back (NINE + 1 to
+## 2 x NINE) when the front has none open or is busy (front_busy). A course with no open hole
+## past NINE (every course before E18) so plays every open hole in number order, as before.
+## Sets the group's round_holes, round_from and round_to; returns its first hole (0: none open).
+func _choose_round(g: GuestGroup) -> int:
+	var front := _first_open(1, NINE)
+	var back := _first_open(NINE + 1, 2 * NINE)
+	if front == 0 and back == 0:
+		return 0
+	if g.wants_eighteen and eighteen_day and all_eighteen_open():
+		_set_round(g, 2 * NINE, 1, 2 * NINE)
+		return front
+	if front != 0 and (back == 0 or not front_busy(front, back)):
+		_set_round(g, NINE, 1, NINE)
+		return front
+	_set_round(g, NINE, NINE + 1, 2 * NINE)
+	return back
+
+
+func _set_round(g: GuestGroup, holes: int, from: int, to: int) -> void:
+	g.round_holes = holes
+	g.round_from = from
+	g.round_to = to
+
+
+## The open hole with the lowest number from `from` to `to`; 0 if none.
+func _first_open(from: int, to: int) -> int:
+	var n := next_open_hole(from - 1)
+	return n if n != 0 and n <= to else 0
+
+
+## E18-S3 (D72): true when the front nine's first tee (hole `front`) is busy for a nine-hole group
+## arriving: at least `back_nine_queue` groups are heading for or standing on it, and fewer on
+## the back nine's first tee (hole `back`). 0 turns it off.
+func front_busy(front: int, back: int) -> bool:
+	if tuning.back_nine_queue <= 0:
+		return false
+	var at_front := _heading_for(front)
+	return at_front >= tuning.back_nine_queue and _heading_for(back) < at_front
+
+
+## Groups heading for, or standing on, hole `n`'s tee (in its queue, not yet on the hole).
+func _heading_for(n: int) -> int:
+	var count := 0
+	for o: GuestGroup in _queues.get(n, []):
+		if o.phase == GuestGroup.Phase.TO_TEE:
+			count += 1
+	return count
+
+
+## E18-S3 (D72): true when holes 1 to 18 are all there and open.
+func all_eighteen_open() -> bool:
+	for n: int in range(1, 2 * NINE + 1):
+		if not _playable(n):
+			return false
+	return true
+
+
+## The next hole of group `g`'s round after hole `after`: the open hole with the lowest number
+## above it, if the round goes that far (round_to; 0 before it arrives: no end); 0 if none.
+func _next_hole(g: GuestGroup, after: int) -> int:
+	var n := next_open_hole(after)
+	if g.round_to > 0 and n > g.round_to:
+		return 0
+	return n
+
+
 ## E8-S2 (D64): the seconds of day a late group needs before dusk to play the course's open
 ## holes by the normal day's finish rule: the last group of a normal morning arrives at
 ## `arrival_window_s` with `day_s` less that left, which D46 sized for a round of
 ## `day_round_holes` (data/guests.json: 9, the nine D46 sized the day for; E18-S2 parted it from
-## BuilderTuning.max_holes, now 18), so each open hole asks for that share. E18-S3 retunes the
-## day for eighteen.
+## BuilderTuning.max_holes, now 18), so each open hole asks for that share. E18-S3 (D72): the holes
+## of the longest round open, the larger nine's open holes (on a nine, every open hole, as
+## before), or the whole eighteen-hole day less its arrival window on an eighteen-hole day with
+## all eighteen open.
 func late_round_s() -> float:
-	var open := 0
-	var seen := {}
+	if eighteen_day and all_eighteen_open():
+		return day_s - arrival_window_s
+	var front := {}
+	var back := {}
 	for h: HoleData in course.holes:
-		if not seen.has(h.number) and _playable(h.number):
-			open += 1
-		seen[h.number] = true
-	var per_hole := (tuning.day_s - tuning.arrival_window_s) / float(maxi(tuning.day_round_holes, 1))
-	return open * per_hole
+		if _playable(h.number):
+			if h.number > NINE:
+				back[h.number] = true
+			else:
+				front[h.number] = true
+	var per_hole := (day_s - arrival_window_s) / float(maxi(tuning.day_round_holes, 1))
+	return maxi(front.size(), back.size()) * per_hole
 
 
 ## E8-S2: at second `t`, when groups went home to a closed course (turned away, not cut) and a
@@ -588,10 +690,10 @@ func _start_late(t: int) -> void:
 			break
 	if from < 0 or next_open_hole(0) == 0 or not course.has_clubhouse():
 		return
-	var gap := tuning.arrival_window_s / maxf(groups.size(), 1.0)
+	var gap := arrival_window_s / maxf(groups.size(), 1.0)
 	var need := late_round_s()
 	var count := 0
-	while from + count < groups.size() and tuning.day_s - (t + count * gap) >= need:
+	while from + count < groups.size() and day_s - (t + count * gap) >= need:
 		count += 1
 	_send_late(from, t, count)
 
@@ -600,7 +702,7 @@ func _start_late(t: int) -> void:
 ## `arrival_window_s` / groups seconds, the rest cut (they do not come today). Kept in
 ## `late_starts`.
 func _send_late(from: int, t: int, count: int) -> void:
-	var gap := tuning.arrival_window_s / maxf(groups.size(), 1.0)
+	var gap := arrival_window_s / maxf(groups.size(), 1.0)
 	for i: int in range(maxi(from, 0), groups.size()):
 		var g := groups[i]
 		if g.turned_away:
@@ -905,7 +1007,7 @@ func tee_clear(g: GuestGroup, _h: HoleData) -> bool:
 func next_tee_free(g: GuestGroup) -> bool:
 	if tuning.next_tee_queue_max <= 0:
 		return true
-	var m := next_open_hole(g.hole_number)
+	var m := _next_hole(g, g.hole_number)
 	if m == 0 or not _queues.has(m):
 		return true
 	var heading := 0
@@ -959,7 +1061,7 @@ func hold_for(guest: Guest, g: GuestGroup) -> Hold:
 		if other == g or other.left_hole != g.hole_number:
 			continue
 		if other.phase != GuestGroup.Phase.TO_CLUBHOUSE and other.phase != GuestGroup.Phase.TO_TEE \
-				and other.left_s < second - 1:
+				and other.phase != GuestGroup.Phase.TURN and other.left_s < second - 1:
 			continue
 		for o: Guest in other.guests:
 			if o.is_done():
@@ -1101,11 +1203,59 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 ## hole's queue and heads for the next open number, or walks back to the clubhouse (E5-S11).
 func _move_on(g: GuestGroup, t: int) -> void:
 	(_queues[g.hole_number] as Array).erase(g)
-	var n := next_open_hole(g.hole_number)
+	var n := _next_hole(g, g.hole_number)
 	if n == 0:
 		_head_home(g, t)
 		return
+	# E18-S3 (D72): an eighteen turns at the clubhouse between the nines.
+	if g.round_holes == 2 * NINE and g.hole_number <= NINE and n > NINE and course.has_clubhouse():
+		_head_turn(g, n, t)
+		return
 	_head_for(g, n, t)
+
+
+## E18-S3 (D72): group `g`, an eighteen done with the front nine, turns: it walks to the
+## clubhouse door from this second, stops there `turn_stop_s` seconds, then walks out to hole
+## `n`'s tee as from the clubhouse (its pace walk is the walk from the door, like the first
+## hole's). It is in no hole's queue while it turns.
+func _head_turn(g: GuestGroup, n: int, t: int) -> void:
+	g.phase = GuestGroup.Phase.TURN
+	g.turn_to = n
+	g.turn_stopped_s = 0
+	for guest: Guest in g.guests:
+		guest.hole = null
+		guest.ball_moved = false
+		guest.waiting_for = Guest.Wait.NONE
+	_update_turn(g, t)
+
+
+## One second of the turn: each guest walks to the door (as it is when its walk starts); once all
+## stand there, the group stops `turn_stop_s` seconds and heads for its hole from the door. With
+## no clubhouse (removed under it) it heads straight there from its last green.
+func _update_turn(g: GuestGroup, t: int) -> void:
+	if not course.has_clubhouse():
+		_head_for(g, g.turn_to, t)
+		return
+	var to := door()
+	var all_there := true
+	for guest: Guest in g.guests:
+		if guest.is_walking() and guest.walk.goal != to:
+			guest.walk = null  # the clubhouse moved under it
+			guest.state = Guest.State.WAITING
+		if not guest.is_walking() and guest.position != to:
+			_start_walk(guest, to)
+		if guest.is_walking():
+			_walk(guest, t)
+		all_there = all_there and not guest.is_walking()
+	if not all_there:
+		return
+	if g.turn_stopped_s < tuning.turn_stop_s:
+		g.turn_stopped_s += 1
+		return
+	g.prev_cup = to
+	g.has_prev_cup = true
+	g.from_clubhouse = true
+	_head_for(g, g.turn_to, t)
 
 
 ## E5-S11: group `g` has played its last hole and walks back to the clubhouse door, starting

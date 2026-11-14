@@ -15,6 +15,10 @@ enum Phase {
 	TO_CLUBHOUSE,
 	## Gone home.
 	DONE,
+	## E18-S3 (D72): an eighteen-hole group at the turn: done with the front nine, walking from
+	## its last green to the clubhouse door and stopping there (`turn_stop_s`) before it walks
+	## out to `turn_to`'s tee.
+	TURN,
 }
 
 ## Arrival order over the day, from 0.
@@ -50,6 +54,18 @@ var cross_held_s: int = 0
 ## `cut`: a late start found no time left for it before dusk, and it does not come today.
 var turned_away: bool = false
 var cut: bool = false
+## E18-S3 (D72): drawn with the day (GuestSpawner, the share `eighteen_share`): it plays eighteen
+## when it arrives to a course with all eighteen holes open on an eighteen-hole day.
+var wants_eighteen: bool = false
+## The round it chose on arriving: 9 or 18 holes (0 before it arrives), over the open holes
+## numbered `round_from` to `round_to` (the front nine 1 to 9, the back nine 10 to 18, or both).
+var round_holes: int = 0
+var round_from: int = 0
+var round_to: int = 0
+## At the turn (Phase.TURN): the hole it walks out to from the clubhouse, and the seconds it has
+## stopped at the door so far.
+var turn_to: int = 0
+var turn_stopped_s: int = 0
 
 
 func size() -> int:

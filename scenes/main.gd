@@ -603,6 +603,7 @@ func save_state() -> GameSave.State:
 	s.arrivals = guest_sim.morning_arrivals()
 	# E8-S2: and when groups a closed course turned away were sent out again.
 	s.late_starts = guest_sim.morning_late_starts()
+	s.eighteen_day = guest_sim.morning_eighteen()
 	economy_to_save(s)
 	s.save_id = save_id
 	s.saved_at = int(Time.get_unix_time_from_system())
@@ -725,7 +726,7 @@ func load_game(path: String = "") -> bool:
 	# E8-S4: the game the file is of goes on (a save from before it stays a new game).
 	if not s.save_id.is_empty():
 		save_id = s.save_id
-	guest_sim.resume_at(s.day, s.arrivals, s.late_starts)
+	guest_sim.resume_at(s.day, s.arrivals, s.late_starts, s.eighteen_day)
 	guest_sim.feed.copy_from(s.feed)
 	economy_from_save(s)
 	# E10-S1: the goals as saved (done ones stay done); a save without them has none.
@@ -839,15 +840,18 @@ func economy_from_save(s: GameSave.State) -> void:
 
 
 ## The green fee a guest pays at the first tee (E4-S4): the fee slider's setting (E4-S6,
-## GuestSim.fee, at most the ceiling at the stars shown). The one place the fee is read; a
-## loaded day's replayed guests pay what they paid instead (E4-S11, _on_guest_arrived).
-func green_fee() -> int:
-	return maxi(guest_sim.fee, 0)
+## GuestSim.fee, at most the ceiling at the stars shown) for a round of nine, and E18-S3's (D72)
+## `eighteen_fee_multiple` times it for eighteen (GuestSim.round_fee; `holes` 0 is a nine). The
+## one place the fee is read; a loaded day's replayed guests pay what they paid instead (E4-S11,
+## _on_guest_arrived).
+func green_fee(holes: int = 9) -> int:
+	return guest_sim.round_fee(holes)
 
 
-## A guest arrived at the first tee (E4-S4): it pays the green fee.
-func _on_guest_arrived(_guest: Guest) -> void:
-	var fee: int = green_fee() if _replay_fees.is_empty() else _replay_fees.pop_front()
+## A guest arrived at the first tee (E4-S4): it pays the green fee of its round (E18-S3).
+func _on_guest_arrived(guest: Guest) -> void:
+	var fee: int = green_fee(guest.round_holes if guest != null else 9) if _replay_fees.is_empty() \
+			else _replay_fees.pop_front()
 	build_tool.builder.credit(fee)
 	ledger.add_fee(fee)
 	if goals != null:

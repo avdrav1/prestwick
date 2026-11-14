@@ -74,7 +74,7 @@ func _process(_delta: float) -> void:
 ## "Day 2  4:12 / 9:00  skipping".
 func status_text() -> String:
 	var t := int(sim.clock_s())
-	var day_s := int(sim.tuning.day_s) if sim.tuning != null else 540
+	var day_s := int(sim.day_length())
 	var n := sim.guests_on_course()
 	var tail := "skipping" if sim.skipping else "%d guest%s out" % [n, "" if n == 1 else "s"]
 	return "Day %d  %d:%02d / %d:%02d  %s" % [maxi(sim.day, 1), t / 60, t % 60,

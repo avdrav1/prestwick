@@ -1748,3 +1748,157 @@ func test_no_guest_stands_on_open_water_at_any_frame_of_a_day() -> void:
 		assert_eq(wet, [] as Array[String], "%s: no guest on open water" % c.course_name)
 		assert_gt(brain.guests.size(), 0)
 	assert_gt(searched[0], 0, "some walks went round water")
+
+
+# --- E18-S3 (D72): rounds of nine or eighteen ---
+
+const EighteenHoles := preload("res://tests/fixtures/eighteen_holes.gd")
+
+## The eighteen-hole fixture's day 1 at 24 arrivals, run to dusk once for the tests below.
+var _eighteen: GuestBrain
+## {guest id: [hole numbers in the order recorded]}, and the ids seen standing at the clubhouse
+## door while their group turned.
+var _eighteen_order: Dictionary = {}
+var _at_door_in_turn: Dictionary = {}
+
+
+func _eighteen_day() -> GuestBrain:
+	if _eighteen != null:
+		return _eighteen
+	var c: CourseData = EighteenHoles.course().course
+	_eighteen = GuestBrain.new(c, GuestSim.day_seed(0, 1), tuning, model, [], null, 24)
+	var b := _eighteen
+	b.hole_finished.connect(func(g: Guest, r: Guest.HoleRecord) -> void:
+		var list: Array = _eighteen_order.get(g.id, [])
+		list.append(r.number)
+		_eighteen_order[g.id] = list)
+	while not b.day_over:
+		b.step()
+		for gr: GuestGroup in b.groups:
+			if gr.phase == GuestGroup.Phase.TURN:
+				for g: Guest in gr.guests:
+					if g.position == b.door():
+						_at_door_in_turn[g.id] = true
+	return b
+
+
+func test_the_rounds_are_drawn_apart_from_the_days_other_draws() -> void:
+	var none := GuestSpawner.day(_tuning({"eighteen_share": 0.0}), 21, 24)
+	var half := GuestSpawner.day(_tuning({"eighteen_share": 0.5}), 21, 24)
+	var all := GuestSpawner.day(_tuning({"eighteen_share": 1.0}), 21, 24)
+	assert_eq(_draws(half), _draws(none), "the sizes, arrivals and guests are the same at any share")
+	assert_eq(_draws(all), _draws(none))
+	assert_true(none.all(func(g: GuestGroup) -> bool: return not g.wants_eighteen))
+	assert_true(all.all(func(g: GuestGroup) -> bool: return g.wants_eighteen))
+	var wants := half.filter(func(g: GuestGroup) -> bool: return g.wants_eighteen).size()
+	assert_between(wants, 1, half.size() - 1, "at a half share some want eighteen, some nine")
+	var again := GuestSpawner.day(_tuning({"eighteen_share": 0.5}), 21, 24)
+	for i: int in half.size():
+		assert_eq(again[i].wants_eighteen, half[i].wants_eighteen, "the same seed, the same rounds")
+
+
+func test_a_nine_plays_as_before_whatever_the_share() -> void:
+	var c := NineHoles.land(7)
+	NineHoles.build(CourseBuilder.new(c))
+	var logs: Array = []
+	for share: float in [0.0, 1.0]:
+		var t := _tuning({"eighteen_share": share, "eighteen_day_s": 2000.0})
+		var brain := GuestBrain.new(c, 2, t, model)
+		assert_false(brain.eighteen_day, "nine holes: not an eighteen-hole day")
+		assert_eq(brain.day_s, t.day_s, "the nine's day_s")
+		assert_eq(brain.arrival_window_s, t.arrival_window_s)
+		var log := PackedStringArray()
+		while not brain.day_over:
+			brain.step()
+			log.append(_snapshot(brain))
+		for g: GuestGroup in brain.groups:
+			if brain.guests.has(g.guests[0]):
+				assert_eq([g.round_holes, g.round_from, g.round_to], [9, 1, 9], "a nine of the front")
+		logs.append(log)
+	assert_eq(logs[0], logs[1], "the same day step for step")
+
+
+func test_an_eighteen_hole_day_is_longer_and_every_round_finishes_before_dusk() -> void:
+	var b := _eighteen_day()
+	assert_true(b.eighteen_day, "all eighteen open: an eighteen-hole day")
+	assert_eq(b.day_s, tuning.eighteen_day_s)
+	assert_eq(b.arrival_window_s, tuning.eighteen_arrival_window_s)
+	assert_eq(b.guests.size(), 24, "every guest came")
+	var rounds := {}
+	var latest := 0
+	for gr: GuestGroup in b.groups:
+		rounds[gr.round_holes] = int(rounds.get(gr.round_holes, 0)) + 1
+		assert_eq(gr.round_holes == 18, gr.wants_eighteen, "an eighteen when it wants one")
+		for g: Guest in gr.guests:
+			assert_false(g.left_at_dusk, "guest %d finished its round" % g.id)
+			assert_eq(g.records.size(), gr.round_holes, "guest %d played all %d" % [g.id, gr.round_holes])
+			assert_eq(g.round_holes, gr.round_holes)
+			latest = maxi(latest, g.left_s)
+	assert_true(rounds.has(9) and rounds.has(18), "the day has both: %s" % rounds)
+	assert_lt(latest, int(b.day_s), "the last guest left before dusk")
+
+
+func test_eighteens_play_in_order_and_turn_at_the_clubhouse() -> void:
+	var b := _eighteen_day()
+	var front: Array = range(1, 10)
+	var back: Array = range(10, 19)
+	var eighteens := 0
+	for gr: GuestGroup in b.groups:
+		for g: Guest in gr.guests:
+			var order: Array = _eighteen_order.get(g.id, [])
+			if gr.round_holes == 18:
+				assert_eq(order, front + back, "guest %d played 1 to 18 in order" % g.id)
+				assert_true(_at_door_in_turn.has(g.id), "guest %d stood at the door at the turn" % g.id)
+				var tenth: Guest.HoleRecord = g.records[9]
+				assert_eq(tenth.number, 10)
+				assert_true(tenth.walk_from_clubhouse, "the 10th's walk is out from the clubhouse")
+				assert_eq(tenth.walk_from_hole, 0)
+				eighteens += 1
+			else:
+				assert_true(order == front or order == back, "a nine: the front or the back, %s" % [order])
+				assert_false(_at_door_in_turn.has(g.id), "a nine does not turn")
+				assert_true(g.records[0].walk_from_clubhouse, "its first hole's walk is from the clubhouse")
+	assert_gt(eighteens, 0)
+
+
+func test_a_busy_front_sends_a_nine_to_the_back() -> void:
+	var c: CourseData = EighteenHoles.course().course
+	var specs := [[5, 5, Guest.Taste.CASUAL, 501], [5, 5, Guest.Taste.CASUAL, 502]]
+	var groups: Array[GuestGroup] = [GuestSpawner.group(0, 0.0, specs, 0),
+			GuestSpawner.group(1, 0.0, specs, 2), GuestSpawner.group(2, 0.0, specs, 4)]
+	var brain := GuestBrain.new(c, 1, tuning, model, groups)
+	brain.step()
+	assert_eq(tuning.back_nine_queue, 1)
+	assert_eq([groups[0].round_from, groups[1].round_from, groups[2].round_from], [1, 10, 1],
+			"the first takes the front; the second finds it busy and takes the back; the third finds both equal and takes the front")
+	assert_eq([groups[0].hole_number, groups[1].hole_number], [1, 10])
+	# Off: every nine plays the front.
+	var off := _tuning({"back_nine_queue": 0})
+	var g2: Array[GuestGroup] = [GuestSpawner.group(0, 0.0, specs, 0),
+			GuestSpawner.group(1, 0.0, specs, 2)]
+	var brain2 := GuestBrain.new(c, 1, off, model, g2)
+	brain2.step()
+	assert_eq([g2[0].round_from, g2[1].round_from], [1, 1], "back_nine_queue 0: the front always")
+
+
+func test_an_eighteen_needs_all_eighteen_open() -> void:
+	var c: CourseData = EighteenHoles.course().course
+	var b := CourseBuilder.new(c)
+	b.close_hole(14)
+	var specs := [[5, 5, Guest.Taste.CASUAL, 601]]
+	var g := GuestSpawner.group(0, 0.0, specs, 0)
+	g.wants_eighteen = true
+	var brain := GuestBrain.new(c, 1, tuning, model, [g] as Array[GuestGroup])
+	assert_false(brain.eighteen_day, "seventeen open: not an eighteen-hole day")
+	assert_eq(brain.day_s, tuning.day_s)
+	brain.step()
+	assert_eq([g.round_holes, g.round_from, g.round_to], [9, 1, 9], "a nine, wanting eighteen or not")
+	assert_almost_eq(brain.late_round_s(), tuning.day_s - tuning.arrival_window_s, 0.001,
+			"a late group needs the larger nine's time")
+	# A loaded eighteen-hole morning keeps its day, whatever was edited since (GuestSim.resume_at).
+	var kept := GuestBrain.new(c, 1, tuning, model, [], null, -1, [], 1)
+	assert_true(kept.eighteen_day)
+	assert_eq(kept.day_s, tuning.eighteen_day_s)
+	var full := GuestBrain.new(EighteenHoles.course().course, 1, tuning, model)
+	assert_almost_eq(full.late_round_s(), tuning.eighteen_day_s - tuning.eighteen_arrival_window_s,
+			0.001, "on an eighteen-hole day a late group needs the whole round")

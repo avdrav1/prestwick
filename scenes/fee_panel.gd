@@ -65,9 +65,11 @@ func refresh() -> void:
 	ceiling_label.text = "of %s" % LandPrices.money(ceiling)
 	var e := sim.economy
 	var full := floori(ceiling * e.fee_full_arrivals_share)
-	var tip := ("Green fee a round. Up to %s every guest comes; above it fewer, %d%% of them at the " +
+	var tip := ("Green fee for nine holes. Up to %s every guest comes; above it fewer, %d%% of them at the " +
 			"%s ceiling (%s a star). %d guests tomorrow at this fee, if the stars hold at dusk.") % [LandPrices.money(full),
 			roundi(e.ceiling_arrivals_share * 100.0), LandPrices.money(ceiling),
 			LandPrices.money(e.fee_ceiling_per_star), sim.arrivals_today()]
+	# E18-S3 (D72): the fee is a nine's; eighteen costs eighteen_fee_multiple times it.
+	tip += " Eighteen holes: %s." % LandPrices.money(sim.round_fee(18))
 	for c: Control in [fee_label, ceiling_label, slider]:
 		c.tooltip_text = tip

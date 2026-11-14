@@ -565,7 +565,8 @@ static func parcel_tally(c: CourseData, parcel: Vector2i) -> Dictionary:
 func measure_reactions(runs: int, rng_seed: int, nine_days: int = ReactionField.NINE_DAYS,
 		workers: int = 1) -> Array[Dictionary]:
 	return ReactionField.new(model).measure(runs, rng_seed, nine_days, true,
-			ReactionField.PACE_FIELD, ReactionField.PACE_DAYS, workers)
+			ReactionField.PACE_FIELD, ReactionField.PACE_DAYS, workers, ReactionField.EXAMPLE_DAYS,
+			ReactionField.EIGHTEEN_DAYS)
 
 
 # --- putting (E3-S51) ---

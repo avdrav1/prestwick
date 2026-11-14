@@ -547,3 +547,59 @@ func test_a_day_of_walks_round_water_skips_as_it_runs() -> void:
 	assert_eq((ends[1] as Array).size(), 1)
 	assert_gt(((ends[1] as Array)[0][1][0] as Array).size(), 0, "the day gave feed lines")
 	assert_eq((ends[1] as Array)[0][1], (ends[0] as Array)[0][1], "the same day, skipped or run")
+
+
+# --- E18-S3 (D72): the eighteen-hole day ---
+
+const EighteenHoles := preload("res://tests/fixtures/eighteen_holes.gd")
+
+
+func _eighteen_sim() -> GuestSim:
+	var sim := GuestSim.new()
+	add_child_autofree(sim)
+	sim.set_process(false)
+	sim.start(EighteenHoles.course().course, 0)
+	sim.running = true
+	return sim
+
+
+## On a course with all eighteen open the day is eighteen_day_s long, the clock reads it, a skip
+## ends it at that dusk with every round finished, and the skipped day is the day stepped.
+func test_an_eighteen_hole_day_runs_eighteen_day_s_and_a_skip_gives_the_same_day() -> void:
+	var tuning := GuestTuning.load_default()
+	assert_eq(tuning.eighteen_day_s, 1020.0, "D72: 17 minutes at 1x")
+	var sim := _eighteen_sim()
+	var ends := _ended_states(sim)
+	sim.advance(0.0)
+	assert_true(sim.brain.eighteen_day)
+	assert_eq(sim.day_length(), tuning.eighteen_day_s)
+	assert_eq(sim.morning_eighteen(), 1, "a save now keeps the eighteen-hole day")
+	var panel := SimSpeedPanel.new()
+	panel.sim = sim
+	assert_string_contains(panel.status_text(), "0:00 / 17:00", "the clock counts to 17:00")
+	panel.free()
+	var stepped := GuestBrain.new(sim.course, GuestSim.day_seed(0, 1), tuning, null, [], null,
+			sim.day_arrivals)
+	stepped.run_day()
+	_skip(sim)
+	assert_eq(ends.size(), 1)
+	assert_eq(stepped.second, int(tuning.eighteen_day_s) + 1, "dusk at eighteen_day_s")
+	var gone := 0
+	for g: Guest in stepped.guests:
+		assert_false(g.left_at_dusk, "guest %d finished its round of %d" % [g.id, g.round_holes])
+		gone += 1
+	assert_gt(gone, 0)
+	var feed: Array = ends[0][1][2]
+	var mine: Array = []
+	for g: Guest in stepped.guests:
+		var recs: Array = []
+		for r: Guest.HoleRecord in g.records:
+			recs.append([r.number, r.score, r.holed, r.picked_up, r.wait_s, r.walk_yd, r.start_s,
+					r.end_s, r.reaction.kind if r.reaction != null else -1])
+		mine.append([g.id, g.skill, g.state, g.arrived_s, g.left_s, g.left_at_dusk, g.ticks, recs])
+	assert_eq(feed, mine, "the skipped day is the day stepped, guest for guest")
+	# A loaded nine-hole morning stays a nine whatever was opened since (E4-S11's replay).
+	sim.resume_at(1, sim.day_arrivals, [], 0)
+	sim.advance(0.0)
+	assert_false(sim.brain.eighteen_day, "the saved morning's day, not the course's now")
+	assert_eq(sim.day_length(), tuning.day_s)
