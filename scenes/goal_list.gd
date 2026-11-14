@@ -19,9 +19,13 @@ const GUESTS: String = "guests"
 const PARCEL: String = "parcel"
 const HOLE2: String = "hole2"
 const STARS: String = "stars"
+const BACK_NINE: String = "back_nine"
 ## Every goal's id, in the checklist's order. D67: hole 2 before the parcel, since the 4 x 4
-## starting block holds several holes and a par 5 is what first needs more land.
-const ORDER: PackedStringArray = [TEE, CUP, GREEN, OPEN, GUESTS, HOLE2, PARCEL, STARS]
+## starting block holds several holes and a par 5 is what first needs more land. E18-S2 (D71):
+## last, the back nine's first hole (hole 10 open), the goal of a course past its nine.
+const ORDER: PackedStringArray = [TEE, CUP, GREEN, OPEN, GUESTS, HOLE2, PARCEL, STARS, BACK_NINE]
+## E18-S2: the first hole of the back nine (In, holes 10 to 18; the front nine is Out, 1 to 9).
+const BACK_NINE_FIRST: int = 10
 
 
 ## One goal: its id, what to do and how.
@@ -68,6 +72,9 @@ func _init(p_tuning: GoalsTuning = null) -> void:
 				"touching your land, then Buy (Enter)."),
 		Goal.new(STARS, "Reach %d stars" % stars,
 				"Guests rate each hole they play: end a day at %d stars or more (top left)." % stars),
+		Goal.new(BACK_NINE, "Start the back nine",
+				"A course holds 18 holes: after hole 9, New hole starts hole 10, the first of " +
+				"the In nine (the hole list's In group). Open it."),
 	]
 
 
@@ -110,7 +117,7 @@ func mark(id: String) -> bool:
 
 
 ## Ticks every goal course `c`'s holes now meet: a tee placed, a hole with its tee and cup, a cup
-## on green, an open hole, two open holes. Never unticks one.
+## on green, an open hole, two open holes, an open hole on the back nine. Never unticks one.
 func refresh(c: CourseData) -> void:
 	if c == null:
 		return
@@ -128,6 +135,7 @@ static func meets(c: CourseData) -> PackedStringArray:
 	var cup: bool = false
 	var green: bool = false
 	var open: int = 0
+	var back: bool = false
 	for h: HoleData in c.holes:
 		var has_tee: bool = c.in_bounds(h.tee.x, h.tee.y)
 		var has_cup: bool = c.in_bounds(h.cup.x, h.cup.y)
@@ -138,6 +146,7 @@ static func meets(c: CourseData) -> PackedStringArray:
 				green = true
 			if h.open:
 				open += 1
+				back = back or h.number >= BACK_NINE_FIRST
 	if tee:
 		out.append(TEE)
 	if cup:
@@ -148,6 +157,8 @@ static func meets(c: CourseData) -> PackedStringArray:
 		out.append(OPEN)
 	if open >= 2:
 		out.append(HOLE2)
+	if back:
+		out.append(BACK_NINE)
 	return out
 
 

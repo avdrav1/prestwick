@@ -504,3 +504,73 @@ func test_a_famous_course_save_keeps_its_id_and_version_and_notes_a_newer_one() 
 	assert_eq(e.label(), "Saved game: Day 3, $300, %s" % GameSave.date_text(s.saved_at),
 			"the line itself is as before")
 	assert_eq(GameSave.read_entry(V1_SAVE, false).newer_note(), "", "a save on any other course")
+
+
+# --- eighteen holes (E18-S2, D71) ---
+
+## D71: the map size is per file, so every shipped course (the famous ones and the example and
+## playtest nines, 128 x 128 or their own size) and a version 1 save load at the size their file
+## gives, with their holes as written, and save back to the same course.
+func test_nine_hole_files_and_famous_courses_load_as_they_were() -> void:
+	var paths: Array[String] = []
+	for f: String in DirAccess.get_files_at("res://courses"):
+		if f.ends_with(".json"):
+			paths.append("res://courses".path_join(f))
+	assert_gte(paths.size(), 8, "the shipped course files")
+	for path: String in paths:
+		var raw: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		var errors: Array[String] = []
+		var c := CourseSave.load_file(path, errors)
+		assert_not_null(c, "%s loads: %s" % [path, errors])
+		if c == null:
+			continue
+		assert_eq(Vector2i(c.width, c.height), Vector2i(int(raw["width"]), int(raw["height"])),
+				"%s keeps its own size" % path)
+		assert_eq(c.holes.size(), (raw["holes"] as Array).size(), "%s keeps its holes" % path)
+		assert_lte(c.holes.size(), 9, "%s is a nine" % path)
+		var again := CourseSave.from_json(CourseSave.to_json(c), errors)
+		assert_eq(again.content_hash(), c.content_hash(), "%s saves back as the same course" % path)
+	for id: String in FamousCourses.ids():
+		var famous := CourseSave.load_file(FamousCourses.path(id))
+		assert_eq(Vector2i(famous.width, famous.height), Vector2i(128, 128), "%s stays 128 x 128" % id)
+	# A game save from before D71 (format 1 course inside) loads at its own size too.
+	var raw_save: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(V1_SAVE))
+	var old := GameSave.load_file(V1_SAVE)
+	assert_not_null(old, "the old game save loads")
+	var size := Vector2i(int(raw_save["course"]["width"]), int(raw_save["course"]["height"]))
+	assert_eq(Vector2i(old.course.width, old.course.height), size, "at its course's own size")
+
+
+## An eighteen-hole game, on D71's 192 x 192 plot, saves and loads whole.
+func test_an_eighteen_hole_game_round_trips() -> void:
+	var c := CourseBuilder.new_sandbox()
+	var b := CourseBuilder.new(c)
+	for k: int in 18:
+		@warning_ignore("integer_division")
+		var tee := Vector2i(40 + 70 * (k / 9), 40 + 10 * (k % 9))
+		b.paint(tee + Vector2i(25, 0), Surface.Type.GREEN, 3)
+		b.place_tee(k + 1, tee, 3)
+		b.place_cup(k + 1, tee + Vector2i(25, 0))
+	assert_eq(c.holes.size(), 18)
+	var s := GameSave.State.new()
+	s.course = c
+	s.unlimited_money = true
+	s.feed_data = ReactionFeed.new().to_save(1)
+	assert_eq(GameSave.save_file(s, PATH), OK)
+	var errors: Array[String] = []
+	var back := GameSave.load_file(PATH, errors)
+	assert_not_null(back, "it loads: %s" % [errors])
+	if back == null:
+		return
+	assert_eq(back.course.content_hash(), c.content_hash(), "the same eighteen")
+	assert_eq(Vector2i(back.course.width, back.course.height), Vector2i(192, 192))
+	var numbers: Array = back.course.holes.map(func(h: HoleData) -> int: return h.number)
+	assert_eq(numbers, range(1, 19))
+	assert_true(back.course.holes.all(func(h: HoleData) -> bool: return h.open), "all eighteen open")
+	# Export and import carry the eighteen too (E7-S2's course file).
+	var text := CourseExport.export_json(c)
+	var imported := CourseExport.read_text(text, errors)
+	assert_not_null(imported, "an exported eighteen imports: %s" % [errors])
+	assert_eq(imported.content_hash(), c.content_hash(), "as it was exported")
+	assert_eq(CourseExport.summary(imported), "18 holes, par 54, %s yd" % CourseExport.group_digits(
+			CourseExport.yards(c)))

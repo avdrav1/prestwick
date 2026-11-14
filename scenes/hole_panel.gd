@@ -46,6 +46,14 @@ extends PanelContainer
 ## "+2 !1", which picks and frames the hole as a click on the map tag does (tag_requested), so a
 ## tag drawn under this panel is still in reach. A hole with no tag shows none.
 ##
+## Out and In (E18-S2, D71): a course holds eighteen holes, the front nine (Out, 1 to 9) and the
+## back nine (In, 10 to 18). Once a hole is numbered 10 or more (or the pick is), the list
+## groups its rows under an Out and an In header (group_buttons: "Out 1 to 9: 9 holes, par 36"),
+## and one group is open at a time, so eighteen rows never pass a 1280 x 720 window: the
+## picked hole's group opens whenever the pick moves (to another hole or another number), and
+## a click on the other header opens that group (the pick stays). A course of holes 1 to 9 alone shows no
+## headers, as before. Collapsed, the list shows only the picked row, as ever.
+##
 ## E8-S5: on a course with no cup yet, a first-hole hint (first_hole_text, from BuilderTuning's
 ## first_par3 range and the tile size) says how long to make a first par 3, until the first cup
 ## is placed. Under the par buttons, par_note_label says when a par picked by hand and the par
@@ -55,6 +63,12 @@ extends PanelContainer
 ## E8-S1 (D64): the Open and Close buttons' tooltips.
 const OPEN_TIP: String = "Open the hole to guests again (it opens itself once every rule passes, unless you closed it)"
 const CLOSE_TIP: String = "Close the hole to guests: it stays closed until you open it"
+
+## E18-S2: the hole list's groups, and the first number of the back nine (In).
+const OUT: int = 0
+const IN: int = 1
+const IN_FIRST: int = 10
+const GROUP_NAMES: PackedStringArray = ["Out", "In"]
 
 signal play_requested(number: int, slot: int)
 ## Emitted when a row's tag is pressed (E3-S43): Main picks and frames the hole, as a click on
@@ -134,6 +148,11 @@ var new_hole_button: Button
 var rows: Array[HoleRow] = []
 ## Collapses or expands the list in one click (set_collapsed).
 var collapse_button: Button
+## E18-S2: the Out and In headers (index OUT and IN), shown when the list is grouped; a click
+## opens that group (open_group_at).
+var group_buttons: Array[Button] = []
+## E18-S2: the group whose rows show while grouped (OUT or IN).
+var open_group: int = OUT
 ## True while the list shows only the picked hole's row.
 var collapsed: bool = false
 ## The picked hole's latest praise or complaint, led by its failed check (E3-S18); hidden when
@@ -165,6 +184,9 @@ var _tool: BuildTool
 var _par_group := ButtonGroup.new()
 var _list: VBoxContainer
 var _shown: int = 0
+## E18-S2: the picked hole's number the list last showed, so a new pick (or the pick's hole
+## renumbered) opens its group, and a header click keeps its group open while the pick stays.
+var _pick_number: int = -1
 
 
 func _ready() -> void:
@@ -178,6 +200,14 @@ func _ready() -> void:
 	_list = VBoxContainer.new()
 	_list.add_theme_constant_override("separation", 2)
 	box.add_child(_list)
+	for g: int in [OUT, IN]:
+		var header := Button.new()
+		header.focus_mode = Control.FOCUS_NONE
+		header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		header.visible = false
+		header.pressed.connect(func() -> void: open_group_at(g))
+		_list.add_child(header)
+		group_buttons.append(header)
 	var list_row := HBoxContainer.new()
 	box.add_child(list_row)
 	new_hole_button = Button.new()
@@ -492,6 +522,44 @@ func listed_rows() -> Array[HoleRow]:
 	return shown_rows().filter(func(r: HoleRow) -> bool: return r.visible)
 
 
+## E18-S2: the group of hole number `number`: OUT for 1 to 9, IN for 10 and on.
+static func group_of(number: int) -> int:
+	return IN if number >= IN_FIRST else OUT
+
+
+## E18-S2: true while the list groups its rows under Out and In: some hole, or the pick, is on
+## the back nine.
+func is_grouped() -> bool:
+	if _tool != null and group_of(_tool.hole_number) == IN:
+		return true
+	for r: HoleRow in shown_rows():
+		if group_of(r.number) == IN:
+			return true
+	return false
+
+
+## E18-S2: opens group `g` (OUT or IN) and folds the other; the pick stays.
+func open_group_at(g: int) -> void:
+	open_group = g
+	refresh()
+
+
+## E18-S2: a group header's text: its name, its numbers, and its holes and their par once it
+## has any ("Out 1 to 9: 9 holes, par 36"; "In 10 to 18: no holes yet").
+static func group_text(g: int, holes: Array[HoleData], max_holes: int) -> String:
+	var first: int = IN_FIRST if g == IN else 1
+	var last: int = max_holes if g == IN else mini(IN_FIRST - 1, max_holes)
+	var count: int = 0
+	var par: int = 0
+	for h: HoleData in holes:
+		if group_of(h.number) == g:
+			count += 1
+			par += h.par
+	var said: String = "no holes yet" if count == 0 \
+			else "%d hole%s, par %d" % [count, "" if count == 1 else "s", par]
+	return "%s %d to %d: %s" % [GROUP_NAMES[g], first, last, said]
+
+
 ## Collapses the list to the picked hole's row, or expands it to every hole (E3-S10). The pick
 ## stays. The panel shrinks at once, so Main.free_view_rects sees its new height.
 func set_collapsed(value: bool) -> void:
@@ -549,10 +617,22 @@ func _refresh_list(b: CourseBuilder) -> void:
 	_shown = slots.size()
 	var picked: int = _tool.picked_slot()
 	var tallies: Dictionary = tag_tallies(b.course if b != null else null)
+	# E18-S2: the groups. The pick's group opens when the pick moves into it.
+	var grouped: bool = false
+	for i: int in _shown:
+		grouped = grouped or group_of(b.hole_at(slots[i]).number) == IN
+	grouped = grouped or group_of(_tool.hole_number) == IN
+	if _tool.hole_number != _pick_number:
+		open_group = group_of(_tool.hole_number)
+		_pick_number = _tool.hole_number
+	var in_at: int = -1
 	for i: int in rows.size():
 		var r: HoleRow = rows[i]
 		var h: HoleData = b.hole_at(slots[i]) if i < _shown else null
-		r.visible = h != null and (not collapsed or slots[i] == picked)
+		if h != null and in_at < 0 and group_of(h.number) == IN:
+			in_at = i
+		var folded: bool = h != null and grouped and group_of(h.number) != open_group
+		r.visible = h != null and (not collapsed or slots[i] == picked) and (collapsed or not folded)
 		r.duplicate = h != null and b.is_duplicate(slots[i])
 		r.duplicate_label.visible = r.visible and r.duplicate
 		r.duplicate_label.text = duplicate_text(b, slots[i]) if r.duplicate else ""
@@ -574,10 +654,37 @@ func _refresh_list(b: CourseBuilder) -> void:
 		else:
 			r.up_button.disabled = h.number <= 1
 			r.down_button.disabled = i == _shown - 1
+	_refresh_groups(b, grouped, in_at)
 	collapse_button.text = ("Show all %d holes" if collapsed else "Hide the list (%d holes)") % _shown
 	collapse_button.tooltip_text = "Show every hole in the list" if collapsed \
 			else "Show only the picked hole, to free the map"
 	collapse_button.visible = _shown > 0 or collapsed
+
+
+## E18-S2: shows the Out and In headers while the list is `grouped` and not collapsed, Out at the
+## top and In before row `in_at` (the first back-nine row; -1, after every row), each with its
+## holes and par, the open one marked.
+func _refresh_groups(b: CourseBuilder, grouped: bool, in_at: int) -> void:
+	var holes: Array[HoleData] = []
+	var max_holes: int = BuilderTuning.load_default().max_holes
+	if b != null:
+		holes = b.course.holes
+		max_holes = b.tuning.max_holes
+	for g: int in [OUT, IN]:
+		var header: Button = group_buttons[g]
+		header.visible = grouped and not collapsed
+		var is_open: bool = g == open_group
+		header.text = ("▾ " if is_open else "▸ ") + group_text(g, holes, max_holes)
+		header.tooltip_text = "The %s nine" % ("front" if g == OUT else "back") + \
+				("" if is_open else ": show its holes (the other nine folds)")
+	_list.move_child(group_buttons[OUT], 0)
+	if in_at < 0:
+		_list.move_child(group_buttons[IN], -1)
+		return
+	var before: int = rows[in_at].get_index()
+	if group_buttons[IN].get_index() < before:
+		before -= 1
+	_list.move_child(group_buttons[IN], before)
 
 
 ## {slot: Vector2i(praise, complaints)} for every hole the map tags (ReactionTags.tag_slots in

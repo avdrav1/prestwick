@@ -22,17 +22,20 @@ func _at(c: CourseData, cell: Vector2i) -> Vector2:
 
 # --- new sandbox ---
 
-func test_tuning_holds_the_d10_plot() -> void:
+func test_tuning_holds_the_d71_plot() -> void:
 	var t := BuilderTuning.load_default()
-	assert_eq(t.plot_size, Vector2i(128, 128), "D10: 128 x 128 tiles")
+	assert_eq(t.plot_size, Vector2i(192, 192), "D71: 192 x 192 tiles (D10's 128 x 128 before)")
+	assert_eq(BuilderTuning.D10_PLOT_SIZE, Vector2i(128, 128), "D10's, which the fixtures keep")
+	assert_eq(t.max_holes, 18, "E18-S2: eighteen holes")
 	assert_eq(t.plot_surface, Surface.Type.ROUGH, "D10: every tile rough")
 	assert_eq(t.plot_ground, 2, "D10: height 2")
 	assert_true(t.default_par in [3, 4, 5])
 
 
-func test_new_sandbox_is_the_d10_plot() -> void:
+func test_new_sandbox_is_the_d71_plot() -> void:
 	var c := CourseBuilder.new_sandbox()
-	assert_eq(Vector2i(c.width, c.height), Vector2i(128, 128))
+	assert_eq(Vector2i(c.width, c.height), Vector2i(192, 192))
+	assert_eq(Vector2i(c.parcels_wide, c.parcels_high), Vector2i(12, 12), "D71: 144 parcels")
 	var wrong: int = 0
 	for y: int in c.height:
 		for x: int in c.width:
@@ -46,10 +49,10 @@ func test_main_new_sandbox_shows_a_blank_plot_with_a_fresh_builder() -> void:
 	var m := _main()
 	m.build_tool.builder.raise(Vector2i(2, 2), 1)
 	m.new_sandbox()
-	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(128, 128))
+	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(192, 192))
 	assert_same(m.build_tool.builder.course, m.course, "the tool builds the new plot")
 	assert_false(m.build_tool.builder.can_undo(), "a new sandbox starts with an empty undo stack")
-	assert_true(m.course_view.chunk_at(Vector2i(127, 127)).parts.has(Vector2i(127, 127)),
+	assert_true(m.course_view.chunk_at(Vector2i(191, 191)).parts.has(Vector2i(191, 191)),
 			"the view shows the whole plot")
 	assert_true(m.new_sandbox_button.visible, "New sandbox is on the Build HUD")
 
@@ -57,8 +60,8 @@ func test_main_new_sandbox_shows_a_blank_plot_with_a_fresh_builder() -> void:
 func test_new_sandbox_button_starts_the_plot_and_hides_in_play() -> void:
 	var m := _main()
 	m.new_sandbox_button.pressed.emit()
-	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(128, 128))
-	assert_eq(m.course.get_height(64, 64), 2)
+	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(192, 192))
+	assert_eq(m.course.get_height(96, 96), 2)
 	m.set_mode(Main.Mode.PLAY)
 	assert_false(m.new_sandbox_button.visible, "Build only")
 
@@ -70,9 +73,82 @@ func test_main_starts_on_a_new_course_not_the_blank_plot() -> void:
 	m.start_seed = 3
 	assert_eq(m.course_path, "", "no startup course file")
 	add_child_autofree(m)
-	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(128, 128))
+	assert_eq(Vector2i(m.course.width, m.course.height), Vector2i(192, 192), "D71's map")
 	assert_eq(m.course.content_hash(), CourseBuilder.new_course(3).content_hash(), "generated land")
 	assert_ne(m.course.content_hash(), CourseBuilder.new_sandbox().content_hash(), "not the blank plot")
+
+
+# --- eighteen holes (E18-S2, D71) ---
+
+## Hole k of 18's par 3 on the D71 plot: two columns of nine rows, 10 tiles (50 yd) apart, so no
+## footprint (30 yd) reaches another; the tee 25 tiles (125 yd) from the cup.
+func _tee18(k: int) -> Vector2i:
+	@warning_ignore("integer_division")
+	return Vector2i(40 + 70 * (k / 9), 40 + 10 * (k % 9))
+
+
+func _cup18(k: int) -> Vector2i:
+	return _tee18(k) + Vector2i(25, 0)
+
+
+## Builds eighteen open par 3s through `b`, numbered as the builder picks (next_hole_number).
+func _build18(b: CourseBuilder) -> Array[int]:
+	var out: Array[int] = []
+	for k: int in 18:
+		var n: int = b.next_hole_number()
+		b.paint(_cup18(k), Surface.Type.GREEN, 3)
+		assert_true(b.place_tee(n, _tee18(k), 3), "hole %d's tee" % n)
+		assert_true(b.place_cup(n, _cup18(k)), "hole %d's cup" % n)
+		out.append(n)
+	return out
+
+
+func test_a_player_builds_eighteen_holes_on_the_new_plot() -> void:
+	var c := CourseBuilder.new_sandbox()
+	var b := CourseBuilder.new(c)
+	var numbers: Array[int] = _build18(b)
+	var want: Array[int] = []
+	for n: int in range(1, 19):
+		want.append(n)
+	assert_eq(numbers, want, "numbered 1 to 18 in build order")
+	for n: int in want:
+		assert_true(b.hole(n).open, "hole %d opens itself: %s" % [n, b.issues_for(n).map(
+				func(i: CourseValidator.Issue) -> String: return i.reason)])
+	assert_eq(b.next_hole_number(), 0, "no nineteenth")
+	watch_signals(b)
+	assert_false(b.place_tee(19, Vector2i(10, 150)), "hole 19 is refused")
+	assert_signal_emitted_with_parameters(b, "refused", [CourseBuilder.TOO_MANY_HOLES % 18])
+	# Renumbering reaches across the nines: 9 and 10 swap, and back.
+	var nine_tee: Vector2i = b.hole(9).tee
+	assert_true(b.renumber_hole(9, 10))
+	assert_eq(b.hole(10).tee, nine_tee, "hole 9 is now 10, the first of the back nine")
+	assert_true(b.renumber_hole(10, 9))
+	assert_eq(b.hole(9).tee, nine_tee)
+	assert_false(b.renumber_hole(18, 19), "no number past 18")
+	# Eighteen holes round-trip through a save, at the plot's size.
+	var errors: Array[String] = []
+	var back := CourseSave.from_json(CourseSave.to_json(c), errors)
+	assert_not_null(back, "an eighteen loads: %s" % [errors])
+	assert_eq(Vector2i(back.width, back.height), Vector2i(192, 192))
+	assert_eq(back.holes.size(), 18)
+	for i: int in 18:
+		assert_eq(back.holes[i].number, c.holes[i].number)
+		assert_eq(back.holes[i].tee, c.holes[i].tee)
+		assert_eq(back.holes[i].open, c.holes[i].open)
+
+
+func test_a_new_course_is_d71s_map_with_its_block_and_clubhouse() -> void:
+	var c := CourseBuilder.new_course(1)
+	assert_eq(Vector2i(c.width, c.height), Vector2i(192, 192), "D71: 192 x 192")
+	assert_eq(LandGenerator.start_block(c.width, c.height), Rect2i(64, 64, 64, 64),
+			"D71: the 4 x 4 block at parcels 4 to 7, tiles 64 to 127")
+	var owned := 0
+	for q: int in c.parcels_high:
+		for p: int in c.parcels_wide:
+			if c.is_parcel_owned(Vector2i(p, q)):
+				owned += 1
+				assert_true(p >= 4 and p <= 7 and q >= 4 and q <= 7, "parcel (%d, %d) is the block's" % [p, q])
+	assert_eq(owned, 16, "the block's 16 of 144 parcels")
 
 
 # --- tee, cup and par ---

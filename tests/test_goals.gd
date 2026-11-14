@@ -7,9 +7,10 @@ extends GutTest
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const SAVE_PATH := "user://test_goals_save.json"
-## A par 3 on seed 7's starting block (D67: tiles 32 to 95 each way), as test_economy_build's.
-const TEE := Vector2i(51, 60)
-const CUP := Vector2i(76, 60)
+## A par 3 on seed 7's starting block (D71: tiles 64 to 127 each way on the 192 x 192 map; D67's
+## 32 to 95 on 128 x 128 before, where it was (51, 60) to (76, 60)).
+const TEE := Vector2i(83, 92)
+const CUP := Vector2i(108, 92)
 const ROW2 := 10
 
 
@@ -50,7 +51,8 @@ func _names(list: GoalList) -> PackedStringArray:
 
 func test_the_list_names_each_step_with_a_how_that_teaches_the_controls() -> void:
 	var list := GoalList.new()
-	assert_eq(_names(list), GoalList.ORDER, "tee, cup, green, open, guests, hole 2, parcel, stars (D67)")
+	assert_eq(_names(list), GoalList.ORDER,
+			"tee, cup, green, open, guests, hole 2, parcel, stars (D67), the back nine (E18-S2)")
 	assert_eq(list.done_count(), 0)
 	assert_eq(list.next_goal().id, GoalList.TEE, "a new course starts at its tee")
 	for g: GoalList.Goal in list.goals():
@@ -72,6 +74,30 @@ func test_the_list_names_each_step_with_a_how_that_teaches_the_controls() -> voi
 	assert_string_contains(money, "first tee")
 	assert_string_contains(money, "upkeep at dusk")
 	assert_eq(list.goal(GoalList.STARS).title, "Reach %d stars" % roundi(list.tuning.target_stars))
+	assert_eq(GoalList.ORDER[GoalList.ORDER.size() - 1], GoalList.BACK_NINE, "the last goal")
+	assert_string_contains(list.goal(GoalList.BACK_NINE).how, "hole 10")
+	assert_string_contains(list.goal(GoalList.BACK_NINE).how, "New hole")
+
+
+## E18-S2: the back nine's goal ticks once a hole numbered 10 or more is open, not before.
+func test_the_back_nine_ticks_when_hole_ten_opens() -> void:
+	var c := CourseData.create(60, 60, Surface.Type.ROUGH, 2)
+	var holes: Array[HoleData] = []
+	for k: int in 9:
+		c.set_tile(30, 3 + 6 * k, 2, Surface.Type.GREEN)
+		holes.append(HoleData.new(k + 1, 3, Vector2i(5, 3 + 6 * k), Vector2i(30, 3 + 6 * k), true))
+	c.set_holes(holes)
+	assert_false(GoalList.meets(c).has(GoalList.BACK_NINE), "nine open holes: the front nine")
+	c.set_tile(55, 3, 2, Surface.Type.GREEN)
+	holes.append(HoleData.new(10, 3, Vector2i(35, 3), Vector2i(55, 3), false))
+	c.set_holes(holes)
+	assert_false(GoalList.meets(c).has(GoalList.BACK_NINE), "hole 10 built but closed")
+	holes[9].open = true
+	c.set_holes(holes)
+	assert_true(GoalList.meets(c).has(GoalList.BACK_NINE), "hole 10 open")
+	var list := GoalList.new()
+	list.refresh(c)
+	assert_true(list.is_done(GoalList.BACK_NINE))
 
 
 func test_the_course_ticks_tee_cup_green_open_and_hole_two() -> void:
@@ -202,7 +228,7 @@ func test_the_goals_tick_from_the_game() -> void:
 	m.guest_sim.guest_arrived.emit(null)
 	assert_true(m.goals.is_done(GoalList.GUESTS), "a guest arrives and pays")
 	assert_gt(m.ledger.fees, 0, "the green fee")
-	assert_true(b.buy_parcel(Vector2i(6, 3)), "a parcel next to the block")
+	assert_true(b.buy_parcel(Vector2i(8, 5)), "a parcel next to the block (D71: parcels 4 to 7)")
 	assert_true(m.goals.is_done(GoalList.PARCEL))
 	m.guest_sim.day_ended.emit(1, null)
 	assert_true(m.goals.is_done(GoalList.STARS), "a day with guests at %s stars" % m.goals.tuning.target_stars)

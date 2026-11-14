@@ -18,8 +18,9 @@ extends SceneTree
 ## - With a display: Main.show_course of a New course (seed 1 to 3) and of the test course, the
 ##   call and the frame after it (the view's chunks, trees and decor built).
 ##
-## `counts=area` scales the land's count bounds (hills, tree stands, ponds; min and max) by the
-## map's area over 128 x 128's, rounded, the rule D71 proposes for E18-S2; sizes and shares stay.
+## `counts=area` prints the land's count bounds (hills, tree stands, ponds; min and max), which
+## since E18-S2 the generator scales by the map's area over 128 x 128's itself (D71,
+## LandTuning.count); in E18-S1 the flag did the scaling, and runs without it kept 128's counts.
 ##
 ##   XDG_DATA_HOME=$(mktemp -d) godot [--headless] --path . -s res://scripts/big_map_perf.gd \
 ##       [-- map=192x192 copies=2 out=/abs/dir]
@@ -65,13 +66,12 @@ func _initialize() -> void:
 		_land_tuning.map_size = _map
 		_builder_tuning.plot_size = _map
 	if _scale_counts:
-		var k: float = _land_tuning.map_size.x * _land_tuning.map_size.y / 16384.0
-		for f: String in ["hill_count_min", "hill_count_max", "tree_stands_min", "tree_stands_max",
-				"ponds_min", "ponds_max"]:
-			_land_tuning.set(f, roundi(int(_land_tuning.get(f)) * k))
-		print("counts scaled by %.3f: hills %d to %d, stands %d to %d, ponds %d to %d" % [k,
-				_land_tuning.hill_count_min, _land_tuning.hill_count_max, _land_tuning.tree_stands_min,
-				_land_tuning.tree_stands_max, _land_tuning.ponds_min, _land_tuning.ponds_max])
+		# E18-S2 (D71): the generator scales the counts by area itself (LandTuning.count), so
+		# counts=area only prints them.
+		var t := _land_tuning
+		print("counts by area: hills %d to %d, stands %d to %d, ponds %d to %d" % [
+				t.count(t.hill_count_min), t.count(t.hill_count_max), t.count(t.tree_stands_min),
+				t.count(t.tree_stands_max), t.count(t.ponds_min), t.count(t.ponds_max)])
 	if _copies > 1:
 		if not COPY_OFFSETS.has(_map):
 			push_error("copies=2 needs map= one of %s" % [COPY_OFFSETS.keys()])

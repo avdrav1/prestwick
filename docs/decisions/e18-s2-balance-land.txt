@@ -1,0 +1,34 @@
+E18-S2 (D71): /balance land, seeds 1 to 200, before and after the bigger map.
+The default run measures New courses on D10's 128 x 128 (LandTuning.load_d67), pinned:
+its rows are identical to docs/decisions/e11-s1-balance-land.txt.
+--map 192 measures D71's 192 x 192 New course (counts scaled by area: hills 9 to 18,
+stands 34 to 79, ponds 9 to 23). The share targets (trees 12%, water 4%, high ground 15%)
+are held at 192 x 192 over seeds 1 to 20 by tests/test_land_generator.gd.
+
+$ godot --headless --path . -s res://scripts/sim.gd -- --table land --runs 200 --seed 1
+== /balance land, 200 runs, seed 1
+land: starting block alone, seeds with room for a par 3 and a par 4     1.000   target 1.000 to 1.000     ok   D67: 16 parcels, mean span 445.5 yd, before any purchase
+land: starting block alone, seeds with room for a par 5        0.000   target 0.000 to 0.000     ok   a 471 yd par 5 needs 4.98 parcels and 471 yd of span: the first purchase's reason
+land: seeds with room for a par 3 and a par 4                  1.000   target 1.000 to 1.000     ok   160 + 320 yd need 5.62 parcels and 320 yd of owned span; mean span 667.9 yd
+land: seeds with room for nine holes                           0.000   target 0.000 to 0.000     ok   nine holes need 33.6 parcels; the block is 16
+land: parcels the budget buys, cheapest first                  9.295   target -                       7 to 11; $304 left on average, of $5,000
+land: parcels at the price clamp (share)                       0.000   target 0.000 to 0.000     ok   $1,550 guards tuned values only
+land: parcels at the price floor (share)                       0.132   target -                       $400, the wettest parcels (D57)
+land: median parcel price ($)                                800.000   target -                       $400 to $1,250; 10th to 90th percentile $400 to $1,000
+land: trees and water take off a parcel ($, mean)            173.328   target -                       at most $955
+land: dearest minus cheapest neighbour of the block ($)      634.000   target -                       mean over seeds
+== land: every target hit
+
+$ godot --headless --path . -s res://scripts/sim.gd -- --table land --runs 200 --seed 1 --map 192
+== /balance land, 200 runs, seed 1, map 192 x 192
+land: starting block alone, seeds with room for a par 3 and a par 4     1.000   target 1.000 to 1.000     ok   D67: 16 parcels, mean span 445.5 yd, before any purchase
+land: starting block alone, seeds with room for a par 5        0.000   target 0.000 to 0.000     ok   a 471 yd par 5 needs 4.98 parcels and 471 yd of span: the first purchase's reason
+land: seeds with room for a par 3 and a par 4                  1.000   target 1.000 to 1.000     ok   160 + 320 yd need 5.62 parcels and 320 yd of owned span; mean span 711.7 yd
+land: seeds with room for nine holes                           0.000   target 0.000 to 0.000     ok   nine holes need 33.6 parcels; the block is 16
+land: parcels the budget buys, cheapest first                  9.275   target -                       7 to 12; $292 left on average, of $5,000
+land: parcels at the price clamp (share)                       0.000   target 0.000 to 0.000     ok   $1,550 guards tuned values only
+land: parcels at the price floor (share)                       0.106   target -                       $400, the wettest parcels (D57)
+land: median parcel price ($)                                800.000   target -                       $400 to $1,250; 10th to 90th percentile $400 to $1,000
+land: trees and water take off a parcel ($, mean)            155.017   target -                       at most $955
+land: dearest minus cheapest neighbour of the block ($)      607.250   target -                       mean over seeds
+== land: every target hit

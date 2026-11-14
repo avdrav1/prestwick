@@ -1662,8 +1662,10 @@ func test_near_dusk_a_late_start_sends_only_the_groups_with_time_for_a_round() -
 	var brain := GuestBrain.new(b.course, 3, tuning, model)
 	var n := brain.groups.size()
 	var gap := tuning.arrival_window_s / n
-	var per_hole := (tuning.day_s - tuning.arrival_window_s) / BuilderTuning.load_default().max_holes
+	var per_hole := (tuning.day_s - tuning.arrival_window_s) / tuning.day_round_holes
 	assert_almost_eq(per_hole, 50.0, 0.001, "D46's 450 s for nine holes: 50 s a hole")
+	assert_eq(tuning.day_round_holes, 9, "E18-S2: the day's round is nine holes, not max_holes")
+	assert_eq(BuilderTuning.load_default().max_holes, 18, "while a course holds eighteen (D71)")
 	# Three holes ask for 150 s; at 360 s that leaves 30 s of sends.
 	_step_to(brain, 360)
 	for h: int in [1, 2, 3]:

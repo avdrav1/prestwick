@@ -1,14 +1,15 @@
 extends GutTest
 ## E6-S6: a New course starts on generated land (D19, D26, D28), owning only the starting
-## block with the full land budget; New sandbox stays the D10 plot, every parcel owned, an
-## unlimited budget, and buying hidden. The main scene starts on a New course.
+## block with the full land budget; New sandbox stays a blank plot, every parcel owned, an
+## unlimited budget, and buying hidden. The main scene starts on a New course. Since E18-S2
+## (D71) both are 192 x 192, 12 x 12 parcels, with the 4 x 4 block at parcels 4 to 7.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
-## The starting block of the 8 x 8 parcel map (D67, 4 x 4; D26's was 2 x 2): parcels 2 to 5 on
-## each axis.
-const BLOCK: Rect2i = Rect2i(2, 2, 4, 4)
-## Its tiles: 32 to 95 on each axis.
-const BLOCK_TILES: Rect2i = Rect2i(32, 32, 64, 64)
+## The starting block of the 12 x 12 parcel map (D71; D67's 4 x 4, D26's was 2 x 2): parcels 4
+## to 7 on each axis (2 to 5 on 128 x 128's 8 x 8 before D71).
+const BLOCK: Rect2i = Rect2i(4, 4, 4, 4)
+## Its tiles: 64 to 127 on each axis.
+const BLOCK_TILES: Rect2i = Rect2i(64, 64, 64, 64)
 
 
 func _owned(c: CourseData) -> Array[Vector2i]:
@@ -39,8 +40,8 @@ func _main(seed_value: int = 7) -> Main:
 
 func test_new_course_owns_only_the_starting_block_with_the_full_budget() -> void:
 	var c := CourseBuilder.new_course(7)
-	assert_eq(Vector2i(c.width, c.height), Vector2i(128, 128))
-	assert_eq(_owned(c), _block_parcels(), "only the 4 x 4 block at the centre (D67)")
+	assert_eq(Vector2i(c.width, c.height), Vector2i(192, 192), "D71")
+	assert_eq(_owned(c), _block_parcels(), "only the 4 x 4 block at the centre (D67, D71)")
 	assert_false(c.has_unlimited_budget())
 	assert_eq(c.land_budget, LandPrices.load_default().land_budget, "the full budget (D28)")
 	assert_eq(c.land_budget, 5000)
@@ -48,10 +49,10 @@ func test_new_course_owns_only_the_starting_block_with_the_full_budget() -> void
 
 
 func test_new_course_block_is_rough_and_dry_with_the_clubhouse_by_its_rule() -> void:
-	# D67: tiles 32 to 95 each way, no water, at least start_block_min_rough rough (the rest tree
+	# D71: tiles 64 to 127 each way (D67's 32 to 95 on 128 x 128), no water, at least start_block_min_rough rough (the rest tree
 	# stands), on every seed; the clubhouse against the middle of its +y edge (D60).
 	var t := LandTuning.load_default()
-	assert_eq(LandGenerator.start_block(128, 128), BLOCK_TILES)
+	assert_eq(LandGenerator.start_block(192, 192), BLOCK_TILES)
 	for land_seed: int in [1, 7, 42]:
 		var c := CourseBuilder.new_course(land_seed)
 		var rough := 0
@@ -67,10 +68,10 @@ func test_new_course_block_is_rough_and_dry_with_the_clubhouse_by_its_rule() -> 
 		assert_eq(water, 0, "seed %d: no water in the block" % land_seed)
 		assert_gte(rough, ceili(t.start_block_min_rough * BLOCK_TILES.get_area()),
 				"seed %d: the block is mostly rough" % land_seed)
-		assert_false(c.is_owned(31, 64), "seed %d: one tile west of the block is not owned" % land_seed)
-		assert_false(c.is_owned(64, 96), "seed %d: one tile south of it" % land_seed)
-		assert_eq(c.clubhouse, Vector2i(64, 93), "seed %d: the clubhouse by its rule" % land_seed)
-		assert_eq(c.clubhouse_door(), Vector2i(64, 95), "its door on the block's last row")
+		assert_false(c.is_owned(63, 96), "seed %d: one tile west of the block is not owned" % land_seed)
+		assert_false(c.is_owned(96, 128), "seed %d: one tile south of it" % land_seed)
+		assert_eq(c.clubhouse, Vector2i(96, 125), "seed %d: the clubhouse by its rule (D71)" % land_seed)
+		assert_eq(c.clubhouse_door(), Vector2i(96, 127), "its door on the block's last row")
 
 
 func test_new_course_block_holds_a_long_par_3_and_a_par_4_but_no_par_5() -> void:
@@ -114,7 +115,7 @@ func test_new_course_is_not_flat() -> void:
 
 func test_new_course_buys_next_to_the_block() -> void:
 	var b := CourseBuilder.new(CourseBuilder.new_course(7))
-	assert_eq(b.buy_refusal(Vector2i(1, 3)), "", "a parcel beside the block is for sale")
+	assert_eq(b.buy_refusal(Vector2i(3, 5)), "", "a parcel beside the block is for sale")
 	assert_eq(b.buy_refusal(Vector2i(0, 0)), "not next to your land")
 	assert_false(b.can_undo(), "a fresh course has nothing to undo")
 
@@ -122,7 +123,7 @@ func test_new_course_buys_next_to_the_block() -> void:
 func test_new_sandbox_owns_everything_with_no_limit() -> void:
 	var c := CourseBuilder.new_sandbox()
 	assert_eq(_owned(c).size(), c.parcels_wide * c.parcels_high, "every parcel")
-	assert_eq(c.parcels_wide * c.parcels_high, 64)
+	assert_eq(c.parcels_wide * c.parcels_high, 144, "D71: 12 x 12")
 	assert_true(c.has_unlimited_budget())
 	var wrong: int = 0
 	for y: int in c.height:
@@ -157,7 +158,7 @@ func test_main_start_seed_picks_one_when_unset() -> void:
 func test_new_course_button_starts_fresh_land() -> void:
 	var m := _main(7)
 	assert_true(m.new_course_button.visible, "New course is on the Build HUD")
-	assert_true(m.build_tool.builder.buy_parcel(Vector2i(1, 3)))
+	assert_true(m.build_tool.builder.buy_parcel(Vector2i(3, 5)))
 	m.new_course(11)
 	assert_eq(m.land_seed, 11)
 	assert_eq(m.course.content_hash(), CourseBuilder.new_course(11).content_hash())
@@ -174,7 +175,7 @@ func test_main_new_sandbox_hides_buying() -> void:
 	m.build_tool.select_tool(BuildTool.Tool.BUY)
 	m.new_sandbox()
 	assert_true(m.course.has_unlimited_budget())
-	assert_eq(_owned(m.course).size(), 64, "every parcel owned")
+	assert_eq(_owned(m.course).size(), 144, "every parcel owned")
 	assert_false(m.build_palette.buy_button.visible, "no Buy land tool in New sandbox")
 	assert_ne(m.build_tool.tool, BuildTool.Tool.BUY, "a selected Buy land tool steps back to paint")
 	assert_eq(m.money_panel.balance_label.text, "Balance: unlimited")
@@ -190,7 +191,7 @@ func test_play_on_a_new_course_rests_the_ball_on_owned_land() -> void:
 		var ypt: float = m.swing_control.field.yards_per_tile
 		var tile := Vector2i(floori(at.x / ypt), floori(at.y / ypt))
 		assert_true(m.course.is_owned(tile.x, tile.y), "seed %d: the ball sits on the player's land" % seed_value)
-		assert_eq(tile, Vector2i(64, 64), "seed %d: the centre of the starting block" % seed_value)
+		assert_eq(tile, Vector2i(96, 96), "seed %d: the centre of the starting block" % seed_value)
 		assert_eq(m.score_card.title_label.text, "No hole")
 
 

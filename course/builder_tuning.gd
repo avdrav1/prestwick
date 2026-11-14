@@ -8,15 +8,16 @@ const PATH: String = "res://course/builder_tuning.tres"
 @export var brush_sizes: PackedInt32Array = PackedInt32Array([1, 3, 5])
 ## Undo steps kept; the oldest falls off past this.
 @export var undo_limit: int = 200
-## The blank plot a New sandbox starts on (D10): its size in tiles, and the surface and whole
-## height of every tile.
-@export var plot_size: Vector2i = Vector2i(128, 128)
+## The blank plot a New sandbox starts on (D10): its size in tiles (D71: 192 x 192, as a New
+## course's land; D10_PLOT_SIZE before), and the surface and whole height of every tile.
+@export var plot_size: Vector2i = Vector2i(192, 192)
 @export var plot_surface: Surface.Type = Surface.Type.ROUGH
 @export_range(0, 7) var plot_ground: int = 2
 ## The par the tee and cup tools give a new hole until the player picks another (3, 4 or 5).
 @export_range(3, 5) var default_par: int = 3
-## The most holes a course may have; holes are numbered 1 to this (E3-S2, a nine-hole course).
-@export_range(1, 18) var max_holes: int = 9
+## The most holes a course may have; holes are numbered 1 to this (E3-S2's nine; E18-S2, D71:
+## eighteen, the front nine 1 to 9 and the back nine 10 to 18).
+@export_range(1, 18) var max_holes: int = 18
 ## The clubhouse rule's fallback (D60, E5-S9, course/clubhouse_rule.gd): when the starting
 ## block has no room, the clubhouse goes on the allowed spot nearest the first tee within this
 ## many tiles of it (along x and along y).
@@ -104,3 +105,8 @@ const PATH: String = "res://course/builder_tuning.tres"
 
 static func load_default() -> BuilderTuning:
 	return load(PATH) as BuilderTuning
+
+
+## D71: the blank plot before D71 (D10), 128 x 128. Fixtures laid on the plot before D71 (Pine
+## Ridge, Dogleg Hollow) keep it, so their holes and every table measured on them stay put.
+const D10_PLOT_SIZE: Vector2i = Vector2i(128, 128)

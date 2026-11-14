@@ -28,7 +28,8 @@ extends RefCounted
 ## hole that passes and was not closed by hand (every file from before D64) has it opened
 ## (no undo step, no signal: nothing is connected yet; closed_on_load and opened_on_load).
 ##
-## The hole list (E3-S2): a course holds at most BuilderTuning.max_holes holes (9), numbered 1
+## The hole list (E3-S2): a course holds at most BuilderTuning.max_holes holes (18 since E18-S2,
+## D71: the front nine 1 to 9 and the back nine 10 to 18; 9 before), numbered 1
 ## to that. A tee or cup for a number with no hole creates it; next_hole_number gives the
 ## lowest free number, so holes are numbered in build order. A number outside 1 to max_holes,
 ## or a new hole past max_holes, is refused (TOO_MANY_HOLES). renumber_hole moves a hole to

@@ -100,7 +100,7 @@ func test_hilly_lays_the_hole_over_generated_land() -> void:
 	_assert_hilly(c, flat, "par 4 dry")
 	# The heights are LandGenerator's, in the window centred on its map, away from the
 	# levelled parts: most tiles keep the land's height exactly.
-	var land := LandGenerator.generate(CourseGenerator.HILLY_LAND_SEED)
+	var land := LandGenerator.generate(CourseGenerator.HILLY_LAND_SEED, LandTuning.load_d26())
 	var x0: int = (land.width - c.width) / 2
 	var y0: int = (land.height - c.height) / 2
 	var same: int = 0

@@ -89,9 +89,10 @@ static func from_json(text: String, errors: Array[String] = []) -> CourseData:
 
 ## Migrates `data` (version 1 to 3) and parses it; a file from before version 3 gets its
 ## clubhouse by rule (place_clubhouse). Returns null and appends reasons to
-## `errors` on failure. A file may hold at most BuilderTuning.max_holes holes (9), numbered 1 to
-## that (E3-S2, docs/design.md Hole list): the builder cannot make any other, so a file that has
-## one is refused. Two holes sharing a number load, and validator rule 1 fails them.
+## `errors` on failure. A file may hold at most BuilderTuning.max_holes holes (18 since
+## E18-S2, D71; 9 before), numbered 1 to that (E3-S2, docs/design.md Hole list): the builder
+## cannot make any other, so a file that has one is refused. A nine-hole file loads as it was,
+## at its own map size (width and height are per file, so a 128 x 128 course stays 128 x 128). Two holes sharing a number load, and validator rule 1 fails them.
 static func from_dict(data: Dictionary, errors: Array[String] = []) -> CourseData:
 	var ignored: Array[String] = []
 	var older: bool = data.has("version") and CourseData.read_int(data, "version", ignored) < 3 \

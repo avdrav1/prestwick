@@ -196,7 +196,8 @@ func test_tree_water_and_high_ground_shares_within_tolerance() -> void:
 func test_trees_grow_in_separate_stands_of_the_set_size() -> void:
 	for s: int in SEEDS:
 		var stands := _patches(_maps[s], Surface.Type.TREES)
-		assert_between(stands.size(), _t.tree_stands_min, _t.tree_stands_max, "seed %d stands" % (s + 1))
+		assert_between(stands.size(), _t.count(_t.tree_stands_min), _t.count(_t.tree_stands_max),
+				"seed %d stands" % (s + 1))
 		for stand: Array in stands:
 			assert_between(stand.size(), _t.tree_stand_min_tiles, _t.tree_stand_max_tiles,
 					"seed %d stand at %s" % [s + 1, stand[0]])
@@ -206,7 +207,7 @@ func test_ponds_of_the_set_size_flat_and_one_step_below_their_shore() -> void:
 	for s: int in SEEDS:
 		var c := _maps[s]
 		var ponds := _patches(c, Surface.Type.WATER)
-		assert_between(ponds.size(), _t.ponds_min, _t.ponds_max, "seed %d ponds" % (s + 1))
+		assert_between(ponds.size(), _t.count(_t.ponds_min), _t.count(_t.ponds_max), "seed %d ponds" % (s + 1))
 		for pond: Array in ponds:
 			var at: Vector2i = pond[0]
 			assert_between(pond.size(), _t.pond_min_tiles, _t.pond_max_tiles, "seed %d pond at %s" % [s + 1, at])
@@ -242,8 +243,9 @@ func test_every_parcel_keeps_its_rough_floor_and_is_never_all_water() -> void:
 
 
 func test_the_starting_block_is_mostly_rough_and_dry() -> void:
-	var block := LandGenerator.start_block(128, 128)
-	assert_eq(block, Rect2i(32, 32, 64, 64), "D67: parcels 2 to 5 on each axis")
+	assert_eq(LandGenerator.start_block(128, 128), Rect2i(32, 32, 64, 64), "D67: parcels 2 to 5 on each axis")
+	var block := LandGenerator.start_block(_t.map_size.x, _t.map_size.y)
+	assert_eq(block, Rect2i(64, 64, 64, 64), "D71: parcels 4 to 7 of 192 x 192's 12 x 12")
 	assert_eq(LandGenerator.start_block(128, 128, LandTuning.D26_BLOCK_PARCELS), Rect2i(48, 48, 32, 32),
 			"D26's 2 x 2: parcels 3 and 4")
 	for s: int in SEEDS:
@@ -252,6 +254,30 @@ func test_the_starting_block_is_mostly_rough_and_dry() -> void:
 		assert_true(rough >= _t.start_block_min_rough * block.get_area(),
 				"seed %d block: %d of %d rough" % [s + 1, rough, block.get_area()])
 		assert_eq(_count(c, Surface.Type.WATER, block), 0, "seed %d block has no water" % (s + 1))
+
+
+## D71: a New course's land is 192 x 192, and the hill, stand and pond count bounds scale with its
+## area over 128 x 128's, rounded (shares and sizes as they were); D67's tuning on D10's map
+## (LandTuning.load_d67, which the fixtures' land keeps) has the counts as written.
+func test_d71_map_and_counts_scaled_by_area() -> void:
+	assert_eq(_t.map_size, Vector2i(192, 192))
+	assert_eq(_t.count_map_size, Vector2i(128, 128))
+	assert_eq([_t.count(_t.hill_count_min), _t.count(_t.hill_count_max)], [9, 18], "hills")
+	assert_eq([_t.count(_t.tree_stands_min), _t.count(_t.tree_stands_max)], [34, 79], "stands")
+	assert_eq([_t.count(_t.ponds_min), _t.count(_t.ponds_max)], [9, 23], "ponds")
+	var d67 := LandTuning.load_d67()
+	assert_eq(d67.map_size, LandTuning.D10_MAP_SIZE)
+	assert_eq(LandTuning.D10_MAP_SIZE, Vector2i(128, 128))
+	assert_eq(d67.start_block_parcels, 4)
+	for n: int in [d67.hill_count_min, d67.hill_count_max, d67.tree_stands_min, d67.tree_stands_max,
+			d67.ponds_min, d67.ponds_max]:
+		assert_eq(d67.count(n), n, "128 x 128 keeps the count %d" % n)
+	assert_eq(LandTuning.load_d26().map_size, Vector2i(128, 128), "D26's land is on D10's map too")
+	assert_eq(LandTuning.load_default().map_size, Vector2i(192, 192), "the copies leave the default")
+	var c := LandGenerator.generate(7, d67)
+	assert_eq(Vector2i(c.width, c.height), Vector2i(128, 128))
+	assert_eq(Vector2i(c.parcels_wide, c.parcels_high), Vector2i(8, 8))
+	assert_eq(Vector2i(_maps[0].parcels_wide, _maps[0].parcels_high), Vector2i(12, 12), "D71: 144 parcels")
 
 
 ## D67: D26's tuning (LandTuning.load_d26) keeps the pre-D67 land, whose starting block is

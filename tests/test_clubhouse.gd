@@ -11,10 +11,14 @@ extends GutTest
 const BLOCK := Rect2i(48, 48, 32, 32)
 ## The rule's spot in that block: the middle of its +y edge, the door on its last row.
 const BLOCK_SPOT := Vector2i(64, 77)
-## A New course's and New sandbox's starting block since D67, 4 x 4: tiles 32 to 95.
+## The 4 x 4 starting block (D67) on a 128 x 128 map: tiles 32 to 95.
 const START_BLOCK := Rect2i(32, 32, 64, 64)
 ## The rule's spot in it, the door at (64, 95).
 const START_SPOT := Vector2i(64, 93)
+## D71: a New course's and New sandbox's map is 192 x 192, its 4 x 4 block parcels 4 to 7, tiles
+## 64 to 127, and the rule's spot the middle of its +y edge, the door at (96, 127).
+const NEW_BLOCK := Rect2i(64, 64, 64, 64)
+const NEW_SPOT := Vector2i(96, 125)
 const PLUS_Y: int = 1
 const TMP_PATH := "user://test_clubhouse_%d.json"
 const V1_SAVE := "res://tests/fixtures/save_v1_short_par4.json"
@@ -68,9 +72,9 @@ func test_the_format_is_version_3_and_saves_the_clubhouse() -> void:
 func test_a_new_sandbox_gets_one_at_the_middle_of_the_blocks_near_edge() -> void:
 	var c := CourseBuilder.new_sandbox()
 	assert_true(c.has_clubhouse())
-	assert_eq(c.clubhouse, START_SPOT, "D67: the 4 x 4 block's")
+	assert_eq(c.clubhouse, NEW_SPOT, "D71: the 4 x 4 block's on 192 x 192")
 	assert_eq(c.clubhouse_facing, PLUS_Y)
-	assert_eq(c.clubhouse_door(), Vector2i(64, 95), "the door on the block's last row")
+	assert_eq(c.clubhouse_door(), Vector2i(96, 127), "the door on the block's last row")
 	assert_eq(c.clubhouse_cells().size(), 9)
 
 
@@ -79,9 +83,9 @@ func test_a_new_course_gets_one_in_its_starting_block_on_allowed_ground() -> voi
 		var c := CourseBuilder.new_course(land_seed)
 		assert_true(c.has_clubhouse(), "seed %d has a clubhouse" % land_seed)
 		for cell: Vector2i in c.clubhouse_cells():
-			assert_true(START_BLOCK.has_point(cell), "seed %d: %s in the starting block" % [land_seed, cell])
+			assert_true(NEW_BLOCK.has_point(cell), "seed %d: %s in the starting block" % [land_seed, cell])
 			assert_true(c.is_owned(cell.x, cell.y))
-		assert_true(START_BLOCK.has_point(c.clubhouse_door()), "its door too")
+		assert_true(NEW_BLOCK.has_point(c.clubhouse_door()), "its door too")
 		assert_eq(ClubhouseRule.refusal(c, c.clubhouse, c.clubhouse_facing, []), "")
 
 

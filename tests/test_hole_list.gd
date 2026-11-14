@@ -1,5 +1,6 @@
 extends GutTest
-## E3-S2: the hole list. Up to nine holes (BuilderTuning.max_holes), numbered in build order
+## E3-S2: the hole list. Up to eighteen holes (BuilderTuning.max_holes; nine before E18-S2),
+## numbered in build order
 ## and renumberable through course/builder.gd (undo steps); picking a hole in the list points
 ## the tee and cup tools at it, the list opens or closes it and plays it in one click, and a
 ## course loaded with holes frames hole 1. Numbers and order round-trip through course/save.gd.
@@ -9,19 +10,21 @@ const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
 const DottedReaction := preload("res://tests/fixtures/dotted_reaction.gd")
 
 
-## A 40 x 70 rough plot at height 2.
-func _plot() -> CourseData:
-	return CourseData.create(40, 70, Surface.Type.ROUGH, 2)
+## A `w` x 70 rough plot at height 2 (80 wide holds eighteen of _tee's holes).
+func _plot(w: int = 40) -> CourseData:
+	return CourseData.create(w, 70, Surface.Type.ROUGH, 2)
 
 
 ## Row k's par 3: tee (2, 3 + 7k), cup (22, 3 + 7k), 100 yd. Rows 7 tiles (35 yd) apart sit
-## outside each other's footprints (30 yd), so building one never closes another.
+## outside each other's footprints (30 yd), so building one never closes another. Holes 10 to
+## 18 (k 9 to 17) take a second column 40 tiles over, on _plot(80).
 func _tee(k: int) -> Vector2i:
-	return Vector2i(2, 3 + 7 * k)
+	@warning_ignore("integer_division")
+	return Vector2i(2 + 40 * (k / 9), 3 + 7 * (k % 9))
 
 
 func _cup(k: int) -> Vector2i:
-	return Vector2i(22, 3 + 7 * k)
+	return _tee(k) + Vector2i(20, 0)
 
 
 ## Builds `count` par 3s through `b`, numbered as the builder picks (next_hole_number), each
@@ -52,7 +55,7 @@ func _main_with(c: CourseData) -> Main:
 
 ## A course with `count` open par 3s, made through a builder of its own.
 func _course_with(count: int) -> CourseData:
-	var c := _plot()
+	var c := _plot(40 if count <= 9 else 80)
 	_build(CourseBuilder.new(c), count)
 	return c
 
@@ -68,8 +71,8 @@ func _click(m: Main, cell: Vector2i) -> void:
 
 # --- numbering ---
 
-func test_tuning_allows_nine_holes() -> void:
-	assert_eq(BuilderTuning.load_default().max_holes, 9, "a nine-hole course (E3)")
+func test_tuning_allows_eighteen_holes() -> void:
+	assert_eq(BuilderTuning.load_default().max_holes, 18, "E18-S2 (D71): eighteen (nine in E3)")
 
 
 func test_holes_are_numbered_in_build_order() -> void:
@@ -83,29 +86,31 @@ func test_holes_are_numbered_in_build_order() -> void:
 	assert_eq(b.hole(2).tee, _tee(1), "the second hole built is hole 2")
 
 
-func test_a_course_holds_at_most_nine_holes() -> void:
-	var c := _plot()
+func test_a_course_holds_at_most_eighteen_holes() -> void:
+	var c := _plot(80)
 	var b := CourseBuilder.new(c)
-	assert_eq(_build(b, 9).size(), 9)
-	assert_eq(c.holes.size(), 9)
-	assert_eq(b.next_hole_number(), 0, "no tenth hole")
+	assert_eq(_build(b, 18).size(), 18)
+	assert_eq(c.holes.size(), 18)
+	assert_eq(b.next_hole_number(), 0, "no nineteenth hole")
 	watch_signals(b)
 	var depth: int = b.undo_depth()
-	assert_false(b.place_tee(10, Vector2i(30, 5)), "hole 10 is refused")
-	assert_signal_emitted_with_parameters(b, "refused", [CourseBuilder.TOO_MANY_HOLES % 9])
-	assert_false(b.place_cup(10, Vector2i(30, 5)))
-	assert_eq(c.holes.size(), 9)
+	assert_false(b.place_tee(19, Vector2i(30, 5)), "hole 19 is refused")
+	assert_signal_emitted_with_parameters(b, "refused", [CourseBuilder.TOO_MANY_HOLES % 18])
+	assert_false(b.place_cup(19, Vector2i(30, 5)))
+	assert_eq(c.holes.size(), 18)
 	assert_eq(b.undo_depth(), depth, "a refused hole is not an undo step")
-	assert_true(b.place_tee(9, Vector2i(30, 60)), "an existing hole still moves")
+	assert_true(b.place_tee(18, Vector2i(70, 66)), "an existing hole still moves")
 	for n: int in b.hole_numbers():
-		assert_true(n >= 1 and n <= 9)
+		assert_true(n >= 1 and n <= 18)
 
 
-func test_a_number_past_nine_is_refused_even_with_room() -> void:
+func test_a_number_past_eighteen_is_refused_even_with_room() -> void:
 	var b := CourseBuilder.new(_plot())
 	assert_false(b.place_tee(0, _tee(0)), "no hole 0")
-	assert_false(b.place_tee(12, _tee(0)), "no hole 12")
+	assert_false(b.place_tee(19, _tee(0)), "no hole 19")
 	assert_eq(b.course.holes.size(), 0)
+	assert_true(b.place_tee(12, _tee(0)), "hole 12 may come first")
+	assert_eq(b.hole(12).tee, _tee(0))
 
 
 func test_the_lowest_free_number_comes_next() -> void:
@@ -153,7 +158,7 @@ func test_renumbering_refuses_what_it_cannot_do() -> void:
 	assert_false(b.renumber_hole(1, 1), "the same number")
 	assert_false(b.renumber_hole(4, 1), "no hole 4")
 	assert_false(b.renumber_hole(1, 0), "no hole 0")
-	assert_false(b.renumber_hole(1, 10), "past nine")
+	assert_false(b.renumber_hole(1, 19), "past eighteen")
 	assert_eq(b.undo_depth(), depth)
 
 
@@ -225,15 +230,117 @@ func test_new_hole_picks_the_next_number_and_the_tee_tool() -> void:
 	assert_eq(m.build_tool.builder.hole(3).tee, _tee(2))
 
 
-func test_new_hole_is_disabled_at_nine() -> void:
-	var m := _main_with(_course_with(8))
+func test_new_hole_is_disabled_at_eighteen() -> void:
+	var m := _main_with(_course_with(17))
 	assert_false(m.hole_panel.new_hole_button.disabled)
 	m.hole_panel.new_hole_button.pressed.emit()
-	_click(m, _tee(8))
-	assert_eq(m.build_tool.builder.hole(9).tee, _tee(8), "the ninth hole")
-	assert_true(m.hole_panel.new_hole_button.disabled, "nine holes: no tenth")
+	assert_eq(m.build_tool.hole_number, 18)
+	_click(m, _tee(17))
+	assert_eq(m.build_tool.builder.hole(18).tee, _tee(17), "the eighteenth hole")
+	assert_true(m.hole_panel.new_hole_button.disabled, "eighteen holes: no nineteenth")
 	m.build_tool.undo()
 	assert_false(m.hole_panel.new_hole_button.disabled, "undo frees a number")
+
+
+# --- Out and In (E18-S2) ---
+
+## The hole panel's bottom edge at 1280 x 720 against the top of the bottom bar.
+func _assert_fits_720(m: Main, why: String) -> void:
+	var panel: Rect2 = m._hud_rect(m.hole_panel)
+	var bar: Rect2 = m._hud_rect(m.build_palette)
+	assert_lte(panel.end.y, bar.position.y, "%s: the panel (%.0f px tall, to %.0f) clears the bar at %.0f"
+			% [why, panel.size.y, panel.end.y, bar.position.y])
+
+
+func _numbers(rows: Array[HolePanel.HoleRow]) -> Array:
+	return rows.map(func(r: HolePanel.HoleRow) -> int: return r.number)
+
+
+func test_nine_holes_show_no_groups() -> void:
+	var m := _main_with(_course_with(9))
+	var panel: HolePanel = m.hole_panel
+	assert_false(panel.is_grouped(), "holes 1 to 9 alone: one list, as before")
+	for header: Button in panel.group_buttons:
+		assert_false(header.visible)
+	assert_eq(panel.listed_rows().size(), 9)
+
+
+func test_eighteen_holes_group_into_out_and_in_one_open_at_a_time() -> void:
+	var m := _main_with(_course_with(18))
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	assert_true(panel.is_grouped())
+	var out_h: Button = panel.group_buttons[HolePanel.OUT]
+	var in_h: Button = panel.group_buttons[HolePanel.IN]
+	assert_true(out_h.visible and in_h.visible, "both headers")
+	assert_string_contains(out_h.text, "Out 1 to 9: 9 holes, par 27")
+	assert_string_contains(in_h.text, "In 10 to 18: 9 holes, par 27")
+	assert_eq(panel.shown_rows().size(), 18, "a row for every hole")
+	# Hole 1 is picked on load: Out is open, In folded to its header.
+	assert_eq(m.build_tool.hole_number, 1)
+	assert_eq(panel.open_group, HolePanel.OUT)
+	assert_eq(_numbers(panel.listed_rows()), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+	assert_lt(out_h.get_index(), panel.rows_for(1)[0].get_index(), "Out heads the list")
+	assert_lt(panel.rows_for(9)[0].get_index(), in_h.get_index(), "In comes after hole 9")
+	assert_lt(in_h.get_index(), panel.rows_for(10)[0].get_index(), "and before hole 10")
+	_assert_fits_720(m, "Out open")
+	# A click on In opens it and folds Out; the pick stays.
+	in_h.pressed.emit()
+	assert_eq(panel.open_group, HolePanel.IN)
+	assert_eq(_numbers(panel.listed_rows()), [10, 11, 12, 13, 14, 15, 16, 17, 18])
+	assert_eq(m.build_tool.hole_number, 1, "the pick stays on hole 1")
+	_assert_fits_720(m, "In open")
+	# Picking a hole of the folded nine (from the map, say) opens its group.
+	m.build_tool.select_hole(4)
+	assert_eq(panel.open_group, HolePanel.OUT, "hole 4 picked: Out opens")
+	m.build_tool.select_hole(15)
+	assert_eq(panel.open_group, HolePanel.IN, "hole 15 picked: In opens")
+	_assert_fits_720(m, "hole 15 picked")
+	panel.rows_for(15)[0].play_button.pressed.emit()
+	assert_eq(m.swing_control.hole.number, 15, "a back-nine row plays its hole")
+	gut.p("E18-S2: hole panel with 18 holes, %.0f px tall" % m._hud_rect(panel).size.y)
+
+
+func test_new_hole_ten_starts_the_in_group() -> void:
+	var c := _plot(80)
+	_build(CourseBuilder.new(c), 9)
+	var m := _main_with(c)
+	var panel: HolePanel = m.hole_panel
+	panel.new_hole_button.pressed.emit()
+	assert_eq(m.build_tool.hole_number, 10, "the tenth hole in build order")
+	assert_true(panel.is_grouped(), "the pick is on the back nine")
+	assert_eq(panel.open_group, HolePanel.IN)
+	assert_string_contains(panel.group_buttons[HolePanel.IN].text, "In 10 to 18: no holes yet")
+	assert_eq(panel.listed_rows().size(), 0, "Out is folded and hole 10 has no row yet")
+	m.build_tool.builder.paint(_cup(9), Surface.Type.GREEN, 1)
+	_click(m, _tee(9))
+	assert_eq(m.build_tool.builder.hole(10).tee, _tee(9))
+	assert_eq(_numbers(panel.listed_rows()), [10])
+
+
+func test_renumbering_across_the_turn_follows_the_hole() -> void:
+	var m := _main_with(_course_with(10))
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(9)
+	assert_eq(panel.open_group, HolePanel.OUT)
+	assert_false(panel.rows_for(9)[0].down_button.disabled, "9 may go down to 10")
+	panel.rows_for(9)[0].down_button.pressed.emit()
+	assert_eq(m.build_tool.builder.hole(10).tee, _tee(8), "hole 9 swapped with 10")
+	assert_eq(m.build_tool.hole_number, 10, "the pick follows its hole")
+	assert_eq(panel.open_group, HolePanel.IN, "into the In group")
+
+
+func test_collapsed_with_eighteen_shows_only_the_picked_row() -> void:
+	var m := _main_with(_course_with(18))
+	m.camera.view_size_override = Vector2(1280, 720)
+	var panel: HolePanel = m.hole_panel
+	m.build_tool.select_hole(12)
+	panel.collapse_button.pressed.emit()
+	assert_eq(_numbers(panel.listed_rows()), [12])
+	for header: Button in panel.group_buttons:
+		assert_false(header.visible, "no headers collapsed")
+	assert_string_contains(panel.collapse_button.text, "18")
+	assert_lte(m._hud_rect(panel).size.y, panel.tuning.max_height)
 
 
 # --- the list in the hole panel ---
@@ -810,18 +917,21 @@ func test_on_a_new_course_the_list_works_with_owned_land() -> void:
 
 ## A course JSON text holding holes numbered `numbers`, every one a par 3 on its own row.
 func _file_with(numbers: Array) -> String:
-	var c := _plot()
+	var c := _plot(120)
 	var hs: Array[HoleData] = []
 	for k: int in numbers.size():
-		hs.append(HoleData.new(numbers[k], 3, _tee(k % 9), _cup(k % 9) + Vector2i(0, k / 9), false))
+		hs.append(HoleData.new(numbers[k], 3, _tee(k % 18), _cup(k % 18) + Vector2i(80 * (k / 18), 0), false))
 	c.set_holes(hs)
 	return JSON.stringify(c.to_dict())
 
 
-func test_a_file_must_hold_at_most_nine_holes_numbered_1_to_9() -> void:
+func test_a_file_must_hold_at_most_eighteen_holes_numbered_1_to_18() -> void:
 	var errors: Array[String] = []
 	assert_not_null(CourseSave.from_json(_file_with([1, 2, 3, 4, 5, 6, 7, 8, 9]), errors), "nine load: %s" % [errors])
-	for numbers: Array in [[1, 12], [0, 1], [1, 2, 3, 4, 5, 6, 7, 8, 9, 1]]:
+	var eighteen: Array = range(1, 19)
+	assert_not_null(CourseSave.from_json(_file_with(eighteen), errors), "eighteen load: %s" % [errors])
+	assert_not_null(CourseSave.from_json(_file_with([1, 12]), errors), "1 and 12 load: %s" % [errors])
+	for numbers: Array in [[1, 19], [0, 1], eighteen + [1]]:
 		errors.clear()
 		assert_null(CourseSave.from_json(_file_with(numbers), errors), "%s is refused" % [numbers])
 		assert_string_contains(" ".join(errors), "holes", "and says why")

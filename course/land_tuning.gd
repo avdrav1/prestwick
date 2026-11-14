@@ -7,8 +7,14 @@ extends Resource
 
 const PATH: String = "res://course/land_tuning.tres"
 
-## Map size in tiles (D10's 128 x 128).
-@export var map_size: Vector2i = Vector2i(128, 128)
+## Map size in tiles: a New course's (D71: 192 x 192; D10's 128 x 128 before, D10_MAP_SIZE).
+## The size is per course file, so a course made on 128 x 128 stays that size.
+@export var map_size: Vector2i = Vector2i(192, 192)
+## D71: the map the hill, stand and pond count bounds below are given for (D10's 128 x 128).
+## The generator scales each bound by map_size's area over this one's, rounded (count), so a
+## bigger map gets more hills, stands and ponds at the same shares and sizes: 192 x 192 has
+## hills 9 to 18, stands 34 to 79 and ponds 9 to 23. On a map this size they are as written.
+@export var count_map_size: Vector2i = Vector2i(128, 128)
 ## The lowland every hill rises from (D10's plot height).
 @export_range(0, 7) var base_height: int = 2
 
@@ -72,14 +78,36 @@ static func load_default() -> LandTuning:
 	return load(PATH) as LandTuning
 
 
+## D71: count bound `n` (hill_count_min and so on, given for count_map_size) scaled to
+## map_size by area, rounded half away from zero.
+func count(n: int) -> int:
+	var base: float = maxf(count_map_size.x * count_map_size.y, 1.0)
+	return roundi(n * (map_size.x * map_size.y) / base)
+
+
+## D71: the map before D71 (D10), 128 x 128, which every fixture laid on generated land keeps.
+const D10_MAP_SIZE: Vector2i = Vector2i(128, 128)
+
+
+## The default tuning on D10's 128 x 128 map (a copy): the land every seed generated after D67
+## and before D71, with its starting block (4 x 4 parcels) and its counts. Fixtures, scripts and
+## tests that were measured on that land (the balance tables, the economy sim) pin it, so
+## nothing measured moves with D71's bigger map.
+static func load_d67() -> LandTuning:
+	var t := load_default().duplicate() as LandTuning
+	t.map_size = D10_MAP_SIZE
+	return t
+
+
 ## D67: the starting block before D67 (D26), 2 x 2 parcels.
 const D26_BLOCK_PARCELS: int = 2
 
 
-## The default tuning with D26's 2 x 2 starting block (a copy): the land every seed generated
-## before D67, which the fixtures laid on it (PlaytestNine, NineHoles, ReactionHoles,
-## CourseGenerator's hilly land) keep, so their holes and every balance table stay as they are.
+## The default tuning with D26's 2 x 2 starting block on D10's 128 x 128 map (a copy,
+## load_d67 with the old block): the land every seed generated before D67, which the fixtures
+## laid on it (PlaytestNine, NineHoles, ReactionHoles, CourseGenerator's hilly land) keep, so
+## their holes and every balance table stay as they are.
 static func load_d26() -> LandTuning:
-	var t := load_default().duplicate() as LandTuning
+	var t := load_d67()
 	t.start_block_parcels = D26_BLOCK_PARCELS
 	return t

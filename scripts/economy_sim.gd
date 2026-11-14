@@ -312,13 +312,14 @@ func parcels_price(c: CourseData, parcels: Array[Vector2i], lp: LandPrices = nul
 
 
 ## The median price of every parcel outside the starting block on New courses of `seeds`
-## seeds from 1.
+## seeds from 1, on D67's 128 x 128 land (LandTuning.load_d67: D71 pins the economy's
+## measures until E18-S4 paces the bigger map).
 func median_parcel(seeds: int, lp: LandPrices = null) -> int:
 	if lp == null:
 		lp = land
 	var prices: Array[int] = []
 	for s in range(1, seeds + 1):
-		var c := CourseBuilder.new_course(s, lp)
+		var c := CourseBuilder.new_course(s, lp, LandTuning.load_d67())
 		var b := CourseBuilder.new(c, null, null, lp)
 		for q: int in c.parcels_high:
 			for p: int in c.parcels_wide:

@@ -560,8 +560,10 @@ func _arrive(g: GuestGroup, t: int) -> void:
 
 ## E8-S2 (D64): the seconds of day a late group needs before dusk to play the course's open
 ## holes by the normal day's finish rule: the last group of a normal morning arrives at
-## `arrival_window_s` with `day_s` less that left, which D46 sized for a round of the most holes
-## a course holds (BuilderTuning.max_holes), so each open hole asks for that share.
+## `arrival_window_s` with `day_s` less that left, which D46 sized for a round of
+## `day_round_holes` (data/guests.json: 9, the nine D46 sized the day for; E18-S2 parted it from
+## BuilderTuning.max_holes, now 18), so each open hole asks for that share. E18-S3 retunes the
+## day for eighteen.
 func late_round_s() -> float:
 	var open := 0
 	var seen := {}
@@ -569,12 +571,8 @@ func late_round_s() -> float:
 		if not seen.has(h.number) and _playable(h.number):
 			open += 1
 		seen[h.number] = true
-	var per_hole := (tuning.day_s - tuning.arrival_window_s) / float(maxi(_max_holes(), 1))
+	var per_hole := (tuning.day_s - tuning.arrival_window_s) / float(maxi(tuning.day_round_holes, 1))
 	return open * per_hole
-
-
-static func _max_holes() -> int:
-	return BuilderTuning.load_default().max_holes
 
 
 ## E8-S2: at second `t`, when groups went home to a closed course (turned away, not cut) and a

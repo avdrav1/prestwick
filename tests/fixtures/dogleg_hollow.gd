@@ -184,11 +184,13 @@ const HOLES: Array = [
 ]
 
 
-## The blank plot the course is laid on: BuilderTuning's size, surface and ground, every
-## parcel owned, an unlimited budget (New sandbox), no clubhouse yet.
+## The blank plot the course is laid on: D10's 128 x 128 (BuilderTuning.D10_PLOT_SIZE, pinned
+## by D71 so the course stays as built), BuilderTuning's surface and ground, every parcel owned,
+## an unlimited budget (New sandbox), no clubhouse yet.
 static func land() -> CourseData:
 	var t := BuilderTuning.load_default()
-	return CourseData.create(t.plot_size.x, t.plot_size.y, t.plot_surface, t.plot_ground)
+	var size: Vector2i = BuilderTuning.D10_PLOT_SIZE
+	return CourseData.create(size.x, size.y, t.plot_surface, t.plot_ground)
 
 
 ## The finished course as `courses/dogleg_hollow.json` holds it: land() built by build(), then

@@ -19,6 +19,8 @@ extends SceneTree
 ## guests' measured reaction mix on PlaytestNine (--runs guest days for each of its nine
 ## stages, 1 unless --runs is given) and each candidate economy's day and 40-day run; `--log`
 ## adds each run's day-by-day lines. The candidates are proposals, so some rows miss by design.
+## D71 (E18-S2): land measures New courses on D10's 128 x 128 (LandTuning.load_d67) unless
+## `--map N` gives an N x N map (192 is a New course's since D71), its counts scaled by area.
 
 const TABLES: PackedStringArray = ["clubs", "lies", "surfaces", "land", "reactions", "putting",
 		"economy"]
@@ -28,7 +30,7 @@ const DEFAULT_JOBS_MAX: int = 16
 func _initialize() -> void:
 	var args := _parse(OS.get_cmdline_user_args())
 	if args.is_empty():
-		print("usage: sim.gd -- --table clubs|lies|surfaces|land|reactions|putting|economy [--runs N] [--seed S] [--jobs N]")
+		print("usage: sim.gd -- --table clubs|lies|surfaces|land|reactions|putting|economy [--runs N] [--seed S] [--jobs N] [--map N]")
 		quit(2)
 		return
 	var sim := BalanceSim.new()
@@ -42,7 +44,11 @@ func _initialize() -> void:
 		"lies":
 			rows = sim.measure_lies(runs, rng_seed)
 		"land":
-			rows = sim.measure_land(runs, rng_seed)
+			var lt: LandTuning = null
+			if args.map > 0:
+				lt = LandTuning.load_d67()
+				lt.map_size = Vector2i(args.map, args.map)
+			rows = sim.measure_land(runs, rng_seed, lt)
 		"reactions":
 			rows = sim.measure_reactions(runs, rng_seed, ReactionField.NINE_DAYS, args.jobs)
 		"putting":
@@ -57,7 +63,8 @@ func _initialize() -> void:
 						print(line)
 		_:
 			rows = sim.measure_surfaces(runs, rng_seed)
-	print("== /balance %s, %d runs, seed %d" % [table, runs, rng_seed])
+	print("== /balance %s, %d runs, seed %d%s" % [table, runs, rng_seed,
+			", map %d x %d" % [args.map, args.map] if args.map > 0 else ""])
 	for line in BalanceSim.format(rows):
 		print(line)
 	var missed := BalanceSim.misses(rows)
@@ -68,7 +75,7 @@ func _initialize() -> void:
 ## {table, runs, seed}, or {} when the table is missing or unknown.
 static func _parse(argv: PackedStringArray) -> Dictionary:
 	var out := {"table": "", "runs": 200, "seed": 1, "runs_given": false, "log": false,
-		"jobs": mini(OS.get_processor_count(), DEFAULT_JOBS_MAX)}
+		"jobs": mini(OS.get_processor_count(), DEFAULT_JOBS_MAX), "map": 0}
 	var i := 0
 	while i < argv.size():
 		var key := argv[i]
@@ -87,6 +94,8 @@ static func _parse(argv: PackedStringArray) -> Dictionary:
 				out.seed = value.to_int()
 			"--jobs":
 				out.jobs = maxi(1, value.to_int())
+			"--map":
+				out.map = maxi(0, value.to_int())
 			_:
 				i += 1
 				continue

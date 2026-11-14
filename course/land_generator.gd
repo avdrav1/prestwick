@@ -20,6 +20,8 @@ extends RefCounted
 ## - Floors: every parcel keeps parcel_min_rough of its tiles rough (so it is never all water),
 ##   and the starting block (D26; start_block_parcels on a side, 4 since D67)
 ##   start_block_min_rough, with no water at all.
+## - Counts (D71): the hill, pond and stand count bounds scale with the map's area
+##   (LandTuning.count), so a 192 x 192 map meets the same shares as 128 x 128.
 ## - Land: every parcel owned and no land budget (CourseData.all_owned_rows). Parcels are
 ##   CourseData.PARCEL_TILES square, the format's one parcel size.
 
@@ -68,8 +70,8 @@ static func generate(land_seed: int, tuning: LandTuning = null, errors: Array[St
 ## The starting block (D26, D67): `parcels` x `parcels` parcels at the centre of a `w` x `h`
 ## map, clipped to it; `parcels` 0 reads LandTuning.start_block_parcels (4 since D67, 2 before).
 ## The builder's New course (CourseBuilder.new_course) owns exactly this block.
-## On the 128 x 128 map, parcels 2 to 5 on each axis: tiles 32 to 95 (D26's 2 x 2: parcels 3
-## and 4, tiles 48 to 79).
+## On the 192 x 192 map (D71), parcels 4 to 7 on each axis: tiles 64 to 127; on 128 x 128,
+## parcels 2 to 5: tiles 32 to 95 (D26's 2 x 2: parcels 3 and 4, tiles 48 to 79).
 static func start_block(w: int, h: int, parcels: int = 0) -> Rect2i:
 	if parcels <= 0:
 		parcels = LandTuning.load_default().start_block_parcels
@@ -137,7 +139,7 @@ class _Run:
 		# Each lobe: [centre, peak, radius]. A hill is a main lobe and up to hill_lobes_max smaller
 		# ones round it, which make it irregular.
 		var lobes: Array = []
-		var count: int = _rng.randi_range(_t.hill_count_min, _t.hill_count_max)
+		var count: int = _rng.randi_range(_t.count(_t.hill_count_min), _t.count(_t.hill_count_max))
 		for _i: int in count:
 			var peak := float(_rng.randi_range(_t.hill_peak_min, _t.hill_peak_max))
 			var radius: float = peak * _rng.randf_range(_t.hill_radius_per_step_min, _t.hill_radius_per_step_max)
@@ -231,8 +233,9 @@ class _Run:
 
 	func _ponds() -> void:
 		var target: int = roundi(_t.water_share * w * h)
-		var n_lo: int = mini(maxi(_t.ponds_min, ceili(target / float(_t.pond_max_tiles))), _t.ponds_max)
-		var n: int = _rng.randi_range(n_lo, _t.ponds_max)
+		var n_lo: int = mini(maxi(_t.count(_t.ponds_min), ceili(target / float(_t.pond_max_tiles))),
+				_t.count(_t.ponds_max))
+		var n: int = _rng.randi_range(n_lo, _t.count(_t.ponds_max))
 		var placed: int = 0
 		var total: int = 0
 		var tries: int = 0
@@ -339,8 +342,9 @@ class _Run:
 
 	func _trees() -> void:
 		var target: int = roundi(_t.tree_share * w * h)
-		var n_lo: int = maxi(_t.tree_stands_min, ceili(target / float(_t.tree_stand_max_tiles)))
-		var n_hi: int = maxi(n_lo, mini(_t.tree_stands_max, floori(target / float(_t.tree_stand_min_tiles))))
+		var n_lo: int = maxi(_t.count(_t.tree_stands_min), ceili(target / float(_t.tree_stand_max_tiles)))
+		var n_hi: int = maxi(n_lo, mini(_t.count(_t.tree_stands_max),
+				floori(target / float(_t.tree_stand_min_tiles))))
 		var n: int = _rng.randi_range(n_lo, n_hi)
 		var placed: int = 0
 		var total: int = 0

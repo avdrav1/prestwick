@@ -14,6 +14,10 @@ var group_size_max: int = 0
 ## D46: the groups arrive over the first `arrival_window_s` seconds of the day (seconds, not a
 ## share of `day_s`, so a longer day keeps the morning rush the pace check was tuned on).
 var arrival_window_s: float = 0.0
+## E18-S2: the holes of the round D46 sized `day_s` for (9): GuestBrain.late_round_s gives each
+## open hole `day_s` less `arrival_window_s` over this, so a late group's need is the same on a
+## nine and on the front nine of an eighteen (it read BuilderTuning.max_holes before, 9 then).
+var day_round_holes: int = 0
 
 ## E9-S1 (D65): the base walking speed, yards a simulated second, over fairway, rough, green,
 ## tee and painted out of bounds; `walk_surface_speed` times it on each surface (by
@@ -181,6 +185,7 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.group_size_min = CourseData.read_int(d, "group_size_min", errors)
 	t.group_size_max = CourseData.read_int(d, "group_size_max", errors)
 	t.arrival_window_s = _float(d, "arrival_window_s", errors)
+	t.day_round_holes = CourseData.read_int(d, "day_round_holes", errors)
 	t.walk_yd_per_s = _float(d, "walk_yd_per_s", errors)
 	t.walk_surface_speed.resize(Surface.COUNT)
 	var speeds: Variant = d.get("walk_surface_speed")
@@ -311,6 +316,7 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_at_most(errors, "putt_power_sigma_best", t.putt_power_sigma_best,
 			"putt_power_sigma_worst", t.putt_power_sigma_worst)
 	_at_least(errors, "group_size_min", t.group_size_min, 1)
+	_at_least(errors, "day_round_holes", t.day_round_holes, 1)
 	_at_most(errors, "group_size_min", t.group_size_min, "group_size_max", t.group_size_max)
 	if t.skill_max <= t.skill_min:
 		errors.append("skill_min (%s) must be below skill_max (%s)" % [t.skill_min, t.skill_max])

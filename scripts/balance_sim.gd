@@ -351,7 +351,11 @@ func _green_rows(rng_seed: int) -> Array[Dictionary]:
 ## Prices and the budget come from `land`. D67: before any purchase, the starting block alone
 ## (4 x 4 parcels) is checked the same way for the par 3 and par 4, and for a shortest par 5
 ## (rule 4's `par5_min_yd`), which it must not hold, so the first purchase still has a reason.
-func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
+## D71: the New courses are on `lt`'s land, by default D67's on D10's 128 x 128
+## (LandTuning.load_d67), so the table stays as measured; sim.gd's `--map 192` reads D71's map.
+func measure_land(runs: int, rng_seed: int, lt: LandTuning = null) -> Array[Dictionary]:
+	if lt == null:
+		lt = LandTuning.load_d67()
 	var lp: LandPrices = land
 	var vt := ValidatorTuning.load_default()
 	var par4_yd := float(vt.par4_min_yd)
@@ -379,7 +383,7 @@ func measure_land(runs: int, rng_seed: int) -> Array[Dictionary]:
 	var cut_max := 0
 	var spread := 0.0
 	for i in n:
-		var c := CourseBuilder.new_course(rng_seed + i, lp)
+		var c := CourseBuilder.new_course(rng_seed + i, lp, lt)
 		var b := CourseBuilder.new(c, null, null, lp)
 		var start_owned := owned_parcels(c)
 		var start_span := owned_span_yd(c)

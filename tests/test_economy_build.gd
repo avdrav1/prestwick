@@ -13,6 +13,10 @@ const BLOCK: Rect2i = Rect2i(2, 2, 4, 4)
 ## A parcel next to the block, and a tile inside the block.
 const NEXT_PARCEL := Vector2i(1, 3)
 const AT := Vector2i(60, 60)
+## D71: a New course's map is 12 x 12 parcels, its block parcels 4 to 7 (tiles 64 to 127): a
+## parcel next to it and a tile inside it.
+const NEW_NEXT_PARCEL := Vector2i(3, 5)
+const NEW_AT := Vector2i(92, 92)
 const SAVE_PATH: String = "user://test_economy_build_save.json"
 
 var _refusals: Array[String] = []
@@ -56,9 +60,9 @@ func test_a_new_course_starts_with_the_one_balance_and_parcels_come_out_of_it() 
 	var c := CourseBuilder.new_course(7)
 	var b := _builder(c)
 	assert_eq(b.balance(), 5000)
-	var price: int = b.parcel_price(NEXT_PARCEL)
-	assert_true(b.buy_parcel(NEXT_PARCEL))
-	assert_true(b.paint(AT, Surface.Type.GREEN, 1))
+	var price: int = b.parcel_price(NEW_NEXT_PARCEL)
+	assert_true(b.buy_parcel(NEW_NEXT_PARCEL))
+	assert_true(b.paint(NEW_AT, Surface.Type.GREEN, 1))
 	assert_eq(b.balance(), 5000 - price - _econ.price_of(Surface.Type.GREEN),
 			"land and building come out of the same balance")
 
@@ -280,7 +284,7 @@ func test_the_balance_is_on_the_hud_in_build_and_play() -> void:
 	await wait_process_frames(2)
 	assert_true(m.money_panel.visible)
 	assert_eq(m.money_panel.balance_label.text, "Balance: $5,000")
-	m.build_tool.builder.paint(AT, Surface.Type.GREEN, 1)
+	m.build_tool.builder.paint(NEW_AT, Surface.Type.GREEN, 1)
 	assert_eq(m.money_panel.balance_label.text, "Balance: %s" % LandPrices.money(5000 - _econ.price_of(Surface.Type.GREEN)))
 	for c: Control in [m.mode_button, m.new_course_button, m.new_sandbox_button, m.land_panel, m.sim_speed_panel]:
 		if c.visible:
@@ -305,10 +309,11 @@ func test_a_save_carries_the_balance() -> void:
 	var m := MAIN_SCENE.instantiate() as Main
 	m.start_seed = 7
 	add_child_autofree(m)
-	m.build_tool.builder.paint(AT, Surface.Type.GREEN, 1)
+	assert_true(m.build_tool.builder.paint(NEW_AT, Surface.Type.GREEN, 1))
 	var balance: int = m.build_tool.builder.balance()
+	assert_lt(balance, 5000, "the green was charged")
 	assert_eq(m.save_game(SAVE_PATH), OK)
-	m.build_tool.builder.paint(AT + Vector2i(2, 0), Surface.Type.WATER, 3)
+	m.build_tool.builder.paint(NEW_AT + Vector2i(2, 0), Surface.Type.WATER, 3)
 	assert_true(m.load_game(SAVE_PATH))
 	assert_eq(m.build_tool.builder.balance(), balance)
 	assert_eq(m.money_panel.balance_label.text, "Balance: %s" % LandPrices.money(balance))
