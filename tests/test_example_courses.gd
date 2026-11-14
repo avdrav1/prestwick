@@ -300,6 +300,89 @@ func test_dogleg_hollow() -> void:
 			"courses/dogleg_hollow.json is out of date: rerun scripts/save_dogleg_hollow.gd")
 
 
+## E18-S6: Old Grey Links (Championship) (OldGreyChampionship), the first famous eighteen on
+## D71's 192 x 192 map. Beyond _check_holes for all eighteen: every parcel owned; the front nine
+## is Old Grey Links' nine as it ships (tees, cups, pars, yardages); par 70; every hole's tee
+## shot seen and a hazard on its line with a dry way round, and a contoured green; the turn: the
+## clubhouse door within the least patient guest's walk of the 1st and 10th tees and near the
+## 9th and 18th greens; no walk of a round a guest would complain of (D65, D68), each of the
+## back nine's paths serving its walk; the file is the fixture rebuilt.
+const TURN_GREEN_TILES: float = 25.0
+
+
+func test_old_grey_championship() -> void:
+	var c := _load(OldGreyChampionship.PATH)
+	if c == null:
+		return
+	assert_eq(c.course_name, OldGreyChampionship.COURSE_NAME)
+	assert_eq(c.author, OldGreyChampionship.COURSE_AUTHOR)
+	assert_eq([c.width, c.height], [192, 192], "D71's map")
+	assert_true(c.has_unlimited_budget(), "New sandbox land")
+	for py: int in c.parcels_high:
+		for px: int in c.parcels_wide:
+			assert_true(c.is_parcel_owned(Vector2i(px, py)), "parcel %d, %d owned" % [px, py])
+	assert_true(c.has_clubhouse(), "the clubhouse")
+	_check_holes(c, OldGreyChampionship.holes())
+	var nine := _load(OldGreyLinks.PATH)
+	var v := CourseValidator.new()
+	for h: HoleData in nine.holes:
+		var e: HoleData = c.holes[h.number - 1]
+		assert_eq([e.number, e.tee, e.cup, e.par], [h.number, h.tee, h.cup, h.par],
+				"front nine hole %d is Old Grey Links'" % h.number)
+		assert_eq(v.hole_yardage(c, e), v.hole_yardage(nine, h), "hole %d's yardage" % h.number)
+	var checks := HoleChecks.new()
+	var par := 0
+	for h: HoleData in c.holes:
+		par += h.par
+		var st := checks.measure(c, h)
+		assert_true(st.fair(), "hole %d tee shot seen (blind at %s)" % [h.number, st.blind_at])
+		assert_true(st.interesting(), "hole %d: a hazard on the line and a dry way round" % h.number)
+		# The 8th, Old Grey Links' Penny Stamp, keeps its tiny green (21 tiles, the Postage Stamp's).
+		if h.number != 8:
+			_assert_contoured(c, h)
+	assert_eq(par, OldGreyChampionship.PAR, "par of the eighteen")
+	# The turn (D72): out from the door to the 1st and the 10th, in to it from the 9th and 18th.
+	var tuning := GuestTuning.load_default()
+	var limit := tuning.walk_base_s + tuning.walk_per_patience_s * tuning.patience_min
+	var door_tile := c.clubhouse_door()
+	var door := (Vector2(door_tile) + Vector2(0.5, 0.5)) * 5.0
+	for n: int in [1, 10]:
+		var tee: Vector2i = c.holes[n - 1].tee
+		var r := GuestWalk.route(c, door, (Vector2(tee) + Vector2(0.5, 0.5)) * 5.0, tuning)
+		assert_true(r.on_path or r.duration <= limit, "door to the %d tee: %.2f s" % [n, r.duration])
+	for n: int in [9, 18]:
+		var cup: Vector2i = c.holes[n - 1].cup
+		assert_lte(Vector2(cup).distance_to(Vector2(door_tile)), TURN_GREEN_TILES,
+				"the %d green near the door" % n)
+	# Every other walk of a round (an eighteen walks 9th green, door, 10th tee, never 9 to 10).
+	for wk: Dictionary in GuestWalk.round_walks(c):
+		if int(wk["to_hole"]) == 10:
+			continue
+		var r := GuestWalk.route(c, wk["from"], wk["to"], tuning)
+		assert_true(r.on_path or r.duration <= limit,
+				"walk to hole %d: %.2f s, on a path %s" % [wk["to_hole"], r.duration, r.on_path])
+		for p: Array in OldGreyChampionship.PATHS:
+			if int(p[1]) == int(wk["to_hole"]):
+				assert_true(r.on_path, "the %d-%d walk follows its path" % [p[0], p[1]])
+	assert_eq(c.content_hash(), OldGreyChampionship.course().content_hash(),
+			"courses/old_grey_championship.json is out of date: rerun scripts/save_old_grey_championship.gd")
+
+
+## E18-S6: a 24-arrival day on the eighteen (as /balance reactions plays it) is an eighteen-hole
+## day, and every group that tees off finishes its round, nine or eighteen, before dusk.
+func test_old_grey_championship_day_finishes_before_dusk() -> void:
+	var day := ReactionField.new().example_day("old_grey_championship.json", 1,
+			ReactionField.EXAMPLE_ARRIVALS)
+	assert_false(day.is_empty(), "the day ran")
+	if day.is_empty():
+		return
+	assert_eq(int(day.holes), 18, "all eighteen open")
+	assert_eq(int(day.day_s), int(GuestTuning.load_default().eighteen_day_s), "an eighteen-hole day")
+	assert_gt(int(day.eighteens), 0, "some groups play eighteen")
+	assert_eq(int(day.nine), int(day.groups), "every group finished its round")
+	assert_lt(int(day.latest), int(day.day_s), "before dusk")
+
+
 # --- E13-S5: the examples ship; E15-S1 (D70): as the famous courses, versioned ---
 
 ## Each example's famous course page line (CourseExport.summary): holes, par, yardage.
@@ -307,6 +390,7 @@ const SUMMARIES := {
 	"cliffside": "9 holes, par 36, 3,353 yd",
 	"dogleg_hollow": "9 holes, par 37, 3,545 yd",
 	"harbor_links": "9 holes, par 35, 3,200 yd",
+	"old_grey_championship": "18 holes, par 70, 6,533 yd",
 	"old_grey_links": "9 holes, par 34, 3,023 yd",
 	"pine_ridge": "9 holes, par 34, 2,935 yd",
 }
@@ -318,6 +402,7 @@ func _fixture_ids() -> Dictionary:
 		"pine_ridge": [PineRidge.COURSE_ID, PineRidge.COURSE_VERSION],
 		"cliffside": [Cliffside.COURSE_ID, Cliffside.COURSE_VERSION],
 		"dogleg_hollow": [DoglegHollow.COURSE_ID, DoglegHollow.COURSE_VERSION],
+		"old_grey_championship": [OldGreyChampionship.COURSE_ID, OldGreyChampionship.COURSE_VERSION],
 	}
 
 
@@ -326,7 +411,7 @@ func test_the_famous_courses_are_the_shipped_files() -> void:
 	ids.sort()
 	var want := SUMMARIES.keys()
 	want.sort()
-	assert_eq(ids, want, "FamousCourses names the five famous courses")
+	assert_eq(ids, want, "FamousCourses names the six famous courses")
 	for id: String in FamousCourses.ids():
 		assert_eq(FamousCourses.spec(id)["file"], "%s.json" % id)
 		assert_true(FileAccess.file_exists(FamousCourses.path(id)), FamousCourses.path(id))
@@ -412,6 +497,12 @@ func test_the_example_courses_have_their_bridges() -> void:
 				[Vector2i(9, 87), Vector2i(9, 97)], [Vector2i(32, 86), Vector2i(40, 86)]]],
 		# E16-S1: Dogleg Hollow needs none (scripts/bridge_audit.gd: no walk or ball detour).
 		["res://courses/dogleg_hollow.json", 0, []],
+		# E18-S6: the eighteen keeps Old Grey Links' four and gains one over the 11th's burn and
+		# one over the 12th's, each on its line (the audit: every walk and ball spot dry, near
+		# the straight line, and every bridge walked).
+		["res://courses/old_grey_championship.json", 15, [[Vector2i(118, 50), Vector2i(118, 70)],
+				[Vector2i(70, 56), Vector2i(74, 56)], [Vector2i(130, 181), Vector2i(146, 181)],
+				[Vector2i(182, 110), Vector2i(182, 98)]]],
 	]
 	var v := CourseValidator.new()
 	for k: Array in cases:

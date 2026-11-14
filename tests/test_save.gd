@@ -527,11 +527,17 @@ func test_nine_hole_files_and_famous_courses_load_as_they_were() -> void:
 		assert_eq(Vector2i(c.width, c.height), Vector2i(int(raw["width"]), int(raw["height"])),
 				"%s keeps its own size" % path)
 		assert_eq(c.holes.size(), (raw["holes"] as Array).size(), "%s keeps its holes" % path)
-		assert_lte(c.holes.size(), 9, "%s is a nine" % path)
+		# E18-S6: the famous eighteen is the one shipped file past nine holes.
+		if path != OldGreyChampionship.PATH:
+			assert_lte(c.holes.size(), 9, "%s is a nine" % path)
 		var again := CourseSave.from_json(CourseSave.to_json(c), errors)
 		assert_eq(again.content_hash(), c.content_hash(), "%s saves back as the same course" % path)
 	for id: String in FamousCourses.ids():
 		var famous := CourseSave.load_file(FamousCourses.path(id))
+		if id == OldGreyChampionship.COURSE_ID:
+			assert_eq([famous.width, famous.height, famous.holes.size()], [192, 192, 18],
+					"%s is an eighteen on D71's map" % id)
+			continue
 		assert_eq(Vector2i(famous.width, famous.height), Vector2i(128, 128), "%s stays 128 x 128" % id)
 	# A game save from before D71 (format 1 course inside) loads at its own size too.
 	var raw_save: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(V1_SAVE))

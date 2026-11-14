@@ -617,8 +617,10 @@ static func example_job(file: String, d: int) -> Dictionary:
 ## `arrivals` guests (GuestBrain's p_arrivals; -1 for `tuning`'s arrivals_per_day), run to
 ## dusk through GuestBrain as scripts/guest_day.gd runs it: {name, kinds: [praise, neutral,
 ## complaint], fails: a count per GuestReaction.Check, records, groups, nine: the groups that
-## teed off and all finished every open hole before dusk, latest: the last guest's leaving
-## second, day_s}. {} when the file does not load. `tuning` null reads data/guests.json.
+## teed off and all finished every open hole before dusk (E18-S6: their round, nine or
+## eighteen), latest: the last guest's leaving second, day_s, holes: the holes open,
+## eighteens: the groups that teed off for eighteen}. {} when the file does not load. `tuning`
+## null reads data/guests.json.
 func example_day(file: String, day_seed: int, arrivals: int,
 		tuning: GuestTuning = null) -> Dictionary:
 	var errors: Array[String] = []
@@ -649,15 +651,22 @@ func example_day(file: String, day_seed: int, arrivals: int,
 			for c: int in GuestReaction.Check.size():
 				if not r.reaction.passed[c]:
 					fails[c] += 1
+	# E18-S6: each group against its own round, an eighteen's eighteen holes or a nine's nine (on
+	# a nine-hole course every group's round is the open holes, as before).
 	var nine := 0
+	var eighteens := 0
 	for gr: GuestGroup in brain.groups:
 		var all := brain.guests.has(gr.guests[0])
+		var want := mini(gr.round_holes, holes) if gr.round_holes > 0 else holes
+		if all and gr.round_holes == 2 * GuestBrain.NINE:
+			eighteens += 1
 		for g: Guest in gr.guests:
-			all = all and g.records.size() == holes and not g.left_at_dusk
+			all = all and g.records.size() == want and not g.left_at_dusk
 		if all:
 			nine += 1
 	return {"name": course.course_name, "kinds": kinds, "fails": fails, "records": records,
-		"groups": brain.groups.size(), "nine": nine, "latest": latest, "day_s": brain.day_s}
+		"groups": brain.groups.size(), "nine": nine, "latest": latest, "day_s": brain.day_s,
+		"holes": holes, "eighteens": eighteens}
 
 
 ## E13-S5: an example course's row from its days (example_day's results, in day order):
@@ -678,11 +687,17 @@ static func example_row(file: String, days: Array[Dictionary],
 	var latest_by_day := PackedStringArray()
 	var course_name := file
 	var day_s := 0
+	var holes := 0
+	var eighteens := 0
+	var groups := 0
 	for day: Dictionary in days:
 		if day.is_empty():
 			continue
 		course_name = String(day.name)
 		day_s = int(day.day_s)
+		holes = int(day.get("holes", 0))
+		eighteens += int(day.get("eighteens", 0))
+		groups += int(day.groups)
 		records += int(day.records)
 		for k: int in kinds.size():
 			kinds[k] += int(day.kinds[k])
@@ -699,11 +714,14 @@ static func example_row(file: String, days: Array[Dictionary],
 	var fail_text := PackedStringArray()
 	for c: int in GuestReaction.Check.size():
 		fail_text.append("%s %.2f" % [GuestReaction.CHECK_NAMES[c], fails[c] / n])
+	# E18-S6: an eighteen's groups finish their round, nine or eighteen.
+	var finished := "finished nine" if holes <= GuestBrain.NINE else (
+			"finished its round (%d of %d groups played eighteen)" % [eighteens, groups])
 	return _row("example course %s: rating of its reaction mix (%d arrivals; reported)" % [
 			course_name, arrivals], rating, Vector2(-INF, INF),
-			"praise %.2f, neutral %.2f, complaint %.2f of %d reactions, %.1f stars; fails: %s; every group finished nine on %d of %d days, latest finish %d s of %d (days 1 to %d: %s)" % [
+			"praise %.2f, neutral %.2f, complaint %.2f of %d reactions, %.1f stars; fails: %s; every group %s on %d of %d days, latest finish %d s of %d (days 1 to %d: %s)" % [
 				kinds[0] / n, kinds[1] / n, kinds[2] / n, records, EconomyTuning.stars_of(rating),
-				", ".join(fail_text), full_days, days.size(), latest, day_s, days.size(),
+				", ".join(fail_text), finished, full_days, days.size(), latest, day_s, days.size(),
 				"/".join(latest_by_day)])
 
 

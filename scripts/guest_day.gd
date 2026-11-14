@@ -176,10 +176,14 @@ func _examples(seeds: Array[int], tuning: GuestTuning, model: ShotModel, own_arr
 		for s: int in seeds:
 			var day := field.example_day(file, s, arrivals, tuning)
 			days.append(day)
-			if not day.is_empty():
-				print("%s day %d: %d of %d groups finished nine, latest finish %d s; praise %d, neutral %d, complaint %d of %d" % [
-						day.name, s, day.nine, day.groups, day.latest, day.kinds[0], day.kinds[1],
-						day.kinds[2], day.records])
+			if day.is_empty():
+				continue
+			# E18-S6: an eighteen's day (dusk at its own day_s) names its eighteens.
+			var round_text := "finished nine" if int(day.holes) <= GuestBrain.NINE else (
+					"finished their round (%d eighteens), dusk at %d s" % [day.eighteens, day.day_s])
+			print("%s day %d: %d of %d groups %s, latest finish %d s; praise %d, neutral %d, complaint %d of %d" % [
+					day.name, s, day.nine, day.groups, round_text, day.latest, day.kinds[0], day.kinds[1],
+					day.kinds[2], day.records])
 		rows.append(ReactionField.example_row(file, days, arrivals))
 	for r: Dictionary in rows:
 		print("%s: %.2f; %s" % [r.name, r.measured, r.note])

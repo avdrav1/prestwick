@@ -1,0 +1,57 @@
+Godot Engine v4.7.2.stable.arch_linux.ed1daf0bf (2026-08-17 01:18:38 UTC) - https://godotengine.org
+
+
+=== Old Grey Links (Championship): 15 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1       65 yd straight, walked   65 yd (1.00x, +0 yd),    2 s against    2 s
+  green 1 to tee 2         54 yd straight, walked   54 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3         64 yd straight, walked   64 yd (1.00x, +0 yd),    2 s against    2 s
+  green 3 to tee 4         51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 4 to tee 5         81 yd straight, walked   92 yd (1.13x, +10 yd),    2 s against    2 s
+  green 5 to tee 6         35 yd straight, walked   35 yd (1.00x, +0 yd),    1 s against    1 s
+  green 6 to tee 7         35 yd straight, walked   35 yd (1.00x, +0 yd),    1 s against    1 s
+  green 7 to tee 8         39 yd straight, walked   39 yd (1.00x, +0 yd),    2 s against    2 s
+  green 8 to tee 9         71 yd straight, walked   77 yd (1.09x, +7 yd),    2 s against    2 s
+  green 9 to tee 10       144 yd straight, walked  144 yd (1.00x, +0 yd),    4 s against    4 s
+  green 10 to tee 11       67 yd straight, walked   67 yd (1.00x, +0 yd),    2 s against    2 s
+  green 11 to tee 12       81 yd straight, walked   85 yd (1.05x, +4 yd),    2 s against    2 s
+  green 12 to tee 13       51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 13 to tee 14       78 yd straight, walked   82 yd (1.05x, +4 yd),    2 s against    2 s
+  green 14 to tee 15       39 yd straight, walked   39 yd (1.00x, +0 yd),    1 s against    1 s
+  green 15 to tee 16       58 yd straight, walked   58 yd (1.00x, +0 yd),    2 s against    2 s
+  green 16 to tee 17       50 yd straight, walked   50 yd (1.00x, +0 yd),    2 s against    2 s
+  green 17 to tee 18       71 yd straight, walked   75 yd (1.07x, +5 yd),    2 s against    2 s
+  green 18 to clubhouse   117 yd straight, walked  117 yd (1.00x, +0 yd),    3 s against    3 s
+  0 of 19 walks with a detour
+day 1: latest finish 563 s
+  last home: arrived 82 s; 1: 107-126 (19 s, wait 24), 2: 144-172 (28 s, wait 22), 3: 180-213 (33 s, wait 11), 4: 215-236 (21 s, wait 0), 5: 241-258 (17 s, wait 4), 6: 275-291 (16 s, wait 14), 7: 294-304 (10 s, wait 2), 8: 311-322 (11 s, wait 5), 9: 333-350 (17 s, wait 9), 10: 366-382 (16 s, wait 0), 11: 386-411 (25 s, wait 0), 12: 414-434 (20 s, wait 0), 13: 437-453 (16 s, wait 0), 14: 455-472 (17 s, wait 0), 15: 474-498 (24 s, wait 0), 16: 500-523 (23 s, wait 0), 17: 526-537 (11 s, wait 0), 18: 539-559 (20 s, wait 0)
+day 2: latest finish 592 s
+  last home: arrived 72 s; 1: 112-132 (20 s, wait 39), 2: 143-165 (22 s, wait 13), 3: 180-210 (30 s, wait 17), 4: 219-243 (24 s, wait 13), 5: 253-271 (18 s, wait 11), 6: 288-305 (17 s, wait 14), 7: 307-320 (13 s, wait 0), 8: 325-334 (9 s, wait 3), 9: 361-381 (20 s, wait 25), 10: 397-420 (23 s, wait 0), 11: 423-446 (23 s, wait 0), 12: 449-470 (21 s, wait 0), 13: 473-491 (18 s, wait 0), 14: 494-505 (11 s, wait 0), 15: 508-530 (22 s, wait 0), 16: 533-553 (20 s, wait 0), 17: 557-569 (12 s, wait 0), 18: 572-588 (16 s, wait 0)
+day 3: latest finish 671 s
+  last home: arrived 80 s; 1: 112-130 (18 s, wait 31), 2: 157-193 (36 s, wait 25), 3: 200-218 (18 s, wait 5), 4: 242-264 (22 s, wait 13), 5: 266-283 (17 s, wait 0), 6: 298-311 (13 s, wait 9), 7: 316-328 (12 s, wait 2), 8: 337-345 (8 s, wait 7), 9: 366-382 (16 s, wait 18), 10: 400-417 (17 s, wait 3), 11: 420-451 (31 s, wait 4), 12: 457-480 (23 s, wait 3), 13: 485-502 (17 s, wait 3), 14: 511-526 (15 s, wait 7), 15: 535-562 (27 s, wait 8), 16: 571-620 (49 s, wait 36), 17: 626-641 (15 s, wait 0), 18: 645-667 (22 s, wait 2)
+ball spots (3036 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 198 balls, 0 with a detour
+  hole 2: 209 balls, 0 with a detour
+  hole 3: 217 balls, 0 with a detour
+  hole 4: 199 balls, 0 with a detour
+  hole 5: 190 balls, 0 with a detour
+  hole 6: 166 balls, 0 with a detour
+  hole 7: 149 balls, 0 with a detour
+  hole 8: 126 balls, 0 with a detour
+  hole 9: 156 balls, 0 with a detour
+  hole 10: 137 balls, 0 with a detour
+  hole 11: 203 balls, 0 with a detour
+  hole 12: 168 balls, 0 with a detour
+  hole 13: 144 balls, 0 with a detour
+  hole 14: 135 balls, 0 with a detour
+  hole 15: 182 balls, 0 with a detour
+  hole 16: 165 balls, 0 with a detour
+  hole 17: 119 balls, 0 with a detour
+  hole 18: 173 balls, 0 with a detour
+bridges:
+  bridge 1: 2 tiles (10 yd), tiles (10, 36)..(10, 37), banks FAIRWAY, beside -, on the line of holes [1]; walks over it 54 { "on 1": 54 }
+  bridge 2: 3 tiles (15 yd), tiles (71, 56)..(73, 56), banks FAIRWAY,ROUGH, beside -, on the line of holes [9]; walks over it 49 { "on 9": 49 }
+  bridge 3: 3 tiles (15 yd), tiles (118, 59)..(118, 61), banks FAIRWAY, beside -, on the line of holes [3]; walks over it 34 { "on 3": 31, "on 6": 3 }
+  bridge 4: 3 tiles (15 yd), tiles (117, 79)..(117, 81), banks FAIRWAY, beside -, on the line of holes [3]; walks over it 35 { "on 3": 35 }
+  bridge 5: 2 tiles (10 yd), tiles (182, 102)..(182, 103), banks FAIRWAY, beside -, on the line of holes [12]; walks over it 46 { "on 12": 46 }
+  bridge 6: 2 tiles (10 yd), tiles (137, 181)..(138, 181), banks FAIRWAY, beside -, on the line of holes [11]; walks over it 41 { "on 11": 41 }

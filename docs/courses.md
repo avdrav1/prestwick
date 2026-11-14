@@ -205,3 +205,60 @@ cliff behind the Portrush green, Harbour Town's boards (sand only), Royal Melbou
 bunkering at its scale, Cypress Point's dunes (bunkers), Oakland Hills' willows as willows, and the
 water across the whole front of the Belfry green (here front-left, on the bold line, so the
 fairway runs to the green).
+
+## Old Grey Links (Championship) (E18-S6)
+
+`courses/old_grey_championship.json`, built by `tests/fixtures/old_grey_championship.gd`
+(OldGreyChampionship) and saved by `scripts/save_old_grey_championship.gd`. The first famous
+eighteen, on D71's 192 x 192 map with every parcel owned: par 70, 6,533 yd. Old Grey Links'
+nine is the front nine (Out), hole for hole where it lies on its own course (the same tees,
+cups, pars and yardages; its dunes, burns, bridges, gorse and cart paths), and nine more famous
+links holes are the back nine (In), on the L of new ground the bigger map adds to the south and
+east, built the same way: valleys between rolling dunes, wide fairways running into contoured
+greens, pot bunkers sunk a step, burns with footbridges, gorse, and the sea and beach along the
+whole north edge. Old Grey Links stays a famous course of its own; this is the sixth.
+
+The back nine goes out the way the front came in and comes home beside it, as the Old Course
+does: the 10th leaves the clubhouse south-south-east beside its railway, the 11th runs east along
+the south edge, the 12th and 13th north up the east edge to a green above the beach, the 14th
+turns back south-west over a chasm, the 15th runs south down the middle, and the 16th to 18th
+come west, the home hole ending in front of the clubhouse. The clubhouse stands behind the 4th
+green (Old Grey Links' nine has it beside the 1st tee), so its door is a short walk from the 1st
+tee (65 yd) and the 10th (36 yd), with the 9th and 18th greens either side of it (110 and 117 yd
+from the door): an eighteen turns there (D72).
+
+| Hole | Name | Par | Yards | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- |
+| 1 to 9 | Old Grey Links' nine | 34 | 3,023 | See Old Grey Links above | As there. |
+| 10 | The Line | 4 | 342 | Prestwick 1st, "Railway", par 4, 346 yd | A straight drive with the railway all down the right: a cart path on a one-step embankment beside the fairway; a pot at the drive and one short of the green. |
+| 11 | Long Alley | 5 | 580 | Carnoustie (Championship) 6th, "Hogan's Alley", par 5, about 578 yd (approximate) | Two bunkers in the middle of the fairway at the drive, leaving a narrow alley left of them; a burn across the fairway short of the green, with a footbridge. |
+| 12 | Wee Water | 4 | 450 | Turnberry (Ailsa) 16th, "Wee Burn", par 4, about 455 yd (approximate) | A burn crossing just short of the green, dug a step into its gully, with a footbridge. |
+| 13 | The Wall | 4 | 370 | North Berwick (West Links) 13th, "Pit", par 4, about 365 yd (approximate) | A wall right across the front of the green (a one-step ridge across the fairway), the green sunk a step in its pit behind it, the beach and sea just beyond. |
+| 14 | Misfortune | 3 | 234 | Royal Portrush (Dunluce) 16th, "Calamity Corner", par 3, about 236 yd (approximate) | A long par 3 to a green raised a step, perched over a chasm two steps deep on its right; a pot short on the line. |
+| 15 | The Goggles | 5 | 511 | Carnoustie (Championship) 14th, "Spectacles", par 5, about 514 yd (approximate) | Two pot bunkers side by side, cut into a ridge across the fairway about 50 yd short of the green. |
+| 16 | The Nose | 4 | 421 | St Andrews (Old Course) 16th, "Corner of the Dyke", par 4, about 418 yd (approximate) | A cluster of bunkers (the "Principal's Nose") in the middle of the fairway at the drive and one more (the "Deacon Sime") beyond. |
+| 17 | Sandhill Hollow | 3 | 191 | Muirfield 13th, par 3, about 191 yd (approximate) | A long, narrow green sunk a step in a hollow between dunes, a deep bunker either side and a pot short. |
+| 18 | Home Rows | 4 | 411 | Royal Lytham & St Annes 18th, par 4, about 413 yd (approximate) | Bunkers across the fairway on a diagonal at the drive and either side of the green's front, the clubhouse right behind the green. |
+
+The back nine is par 36, 3,510 yd. Yards are the line of play the validator measures (rule 4),
+each within 5 yd of the real hole's. White Rocks (Royal Portrush's 5th) was the first pick for
+the 13th, the hole to the sea; Dogleg Hollow already models it, so the 13th is the Pit.
+
+Walks: three of the back nine's are longer than the least patient guest walks and follow cart
+paths (11-12, 13-14, 17-18), as the front nine's 4-5 and 8-9 do; the walk out from the door to
+the 10th is short, and no eighteen walks from the 9th green straight to the 10th tee (it turns at
+the door). Bridges (D69): Old Grey Links' four, and one each over the 11th's and the 12th's burns
+on their lines. `scripts/bridge_audit.gd` flags nothing: no walk of a round is over 1.13 times its
+straight line, no hole sends a ball round water, and every bridge is walked
+(`docs/decisions/e18-s6-bridge-audit.txt`). With all eighteen open its guests have an
+eighteen-hole day (D72: dusk at 1,020 s, about half the groups playing eighteen and the rest a
+nine). At 24 arrivals, five days (`scripts/guest_day.gd -- examples`, `/balance reactions`;
+`docs/decisions/e18-s6-guest-day-examples.txt`, `e18-s6-balance-reactions.txt`): 26 of 48 groups
+played eighteen, every group finished its round on every day, the latest at 699 s of 1,020;
+praise 0.84, neutral 0.15, complaint 0.01 of 1,638 reactions, a rating of 4.66 (4.5 stars), fair,
+interesting and walk never fail.
+
+Not modelled: the out of bounds of the real holes (Prestwick's railway is a cart path here, and
+Hogan's Alley's fence left is open rough), North Berwick's stone wall as stone, Calamity's real
+drop (about 50 ft), Lytham's other bunkers (it has well over a dozen on the 18th; five here), and
+the Old Course's shared fairways and double greens.

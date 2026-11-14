@@ -1,5 +1,6 @@
 extends GutTest
-## E15-S1 (D70): the famous courses. The built-in courses (four, and E16-S1's Dogleg Hollow) carry their id and version, the
+## E15-S1 (D70): the famous courses. The built-in courses (four, E16-S1's Dogleg Hollow and
+## E18-S6's Old Grey Links (Championship), the first eighteen) carry their id and version, the
 ## main menu's Famous courses page lists them and starts a new game on the shipped version (the
 ## starting balance, Day 1, no goals; it asks first over a game under way), E13-S5's copies in the
 ## course folder are tidied away once (unchanged ones removed by their bytes against every
@@ -76,9 +77,9 @@ func _cliffside_at(version: int) -> CourseData:
 
 # --- the courses ---
 
-func test_the_five_ship_with_their_id_and_latest_version() -> void:
+func test_the_six_ship_with_their_id_and_latest_version() -> void:
 	assert_eq(FamousCourses.ids(), PackedStringArray(["harbor_links", "old_grey_links",
-			"pine_ridge", "cliffside", "dogleg_hollow"]))
+			"pine_ridge", "cliffside", "dogleg_hollow", "old_grey_championship"]))
 	for id: String in FamousCourses.ids():
 		var errors: Array[String] = []
 		var c := FamousCourses.load_course(id, errors)
@@ -291,9 +292,11 @@ func test_the_menu_lists_the_famous_courses_and_esc_comes_back_to_the_button() -
 	assert_eq(texts, ["Harbor Links: 9 holes, par 35, 3,200 yd",
 			"Old Grey Links: 9 holes, par 34, 3,023 yd", "Pine Ridge: 9 holes, par 34, 2,935 yd",
 			"Cliffside: 9 holes, par 36, 3,353 yd",
-			"Dogleg Hollow: 9 holes, par 37, 3,545 yd"] as Array[String])
+			"Dogleg Hollow: 9 holes, par 37, 3,545 yd",
+			"Old Grey Links (Championship): 18 holes, par 70, 6,533 yd"] as Array[String])
 	assert_eq(picks[3].text.get_slice("\n", 1), FamousCourses.spec("cliffside")["style"])
 	assert_eq(picks[4].text.get_slice("\n", 1), FamousCourses.spec("dogleg_hollow")["style"])
+	assert_eq(picks[5].text.get_slice("\n", 1), FamousCourses.spec("old_grey_championship")["style"])
 	assert_same(m.get_viewport().gui_get_focus_owner(), picks[0], "focus on the first")
 	assert_eq(m.main_menu.famous_notes(), {}, "no save, no note")
 	var ev := InputEventKey.new()
@@ -329,6 +332,39 @@ func test_dogleg_hollow_starts_from_the_page() -> void:
 	assert_eq(m.course.holes.size(), 9)
 	for h: HoleData in m.course.holes:
 		assert_true(h.open, "hole %d open" % h.number)
+
+
+## E18-S6: six picks and Back still fit the 1280 x 720 window.
+func test_six_picks_fit_the_window() -> void:
+	var m := _main()
+	m.open_menu()
+	m.main_menu.show_famous()
+	await wait_frames(2)
+	var bottom := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
+	var picks := m.main_menu.famous_buttons()
+	assert_eq(picks.size(), 6)
+	for b: Button in picks:
+		assert_lte(b.get_global_rect().end.y, bottom, "%s on screen" % b.text.get_slice(":", 0))
+	assert_lte(m.main_menu.famous_back_button.get_global_rect().end.y, bottom, "Back on screen")
+
+
+## E18-S6: Old Grey Links (Championship), the sixth, is on the page and starts a game on the
+## shipped file: 192 x 192 with all eighteen open, so its guests have an eighteen-hole day (D72).
+func test_the_famous_eighteen_starts_from_the_page() -> void:
+	var m := _main()
+	m.open_menu()
+	m.main_menu.show_famous()
+	m.main_menu.famous_buttons()[5].pressed.emit()
+	assert_false(m.main_menu.visible, "the menu closes")
+	assert_eq(m.course.course_id, "old_grey_championship")
+	assert_eq(m.course.course_version, FamousCourses.latest_version("old_grey_championship"))
+	assert_eq(m.course.content_hash(), _shipped_with_start_balance("old_grey_championship").content_hash())
+	assert_eq([m.course.width, m.course.height], [192, 192])
+	assert_eq(m.course.holes.size(), 18)
+	for h: HoleData in m.course.holes:
+		assert_true(h.open, "hole %d open" % h.number)
+	assert_string_starts_with(m.save_notice.label.text,
+			"New game on \"Old Grey Links (Championship)\" by Prestwick: 18 holes, par 70, 6,533 yd.")
 
 
 func test_a_save_on_an_older_version_loads_as_saved_and_both_pages_say_a_newer_one_ships() -> void:
