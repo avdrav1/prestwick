@@ -164,6 +164,8 @@ var _clock: float = 0.0
 ## (E3-S74; before, any tile or parcel write; GuestWalk.Cache.follow). A cached route is the one
 ## a fresh search finds, so the day is the same with or without it.
 var _route_cache := GuestWalk.Cache.new()
+## E18-S5: {Guest: the position its next walk's dry route was searched from} (_prefetch_early).
+var _prefetched: Dictionary = {}
 ## E7-S4: the batch serve_ahead left running on the pool (-1: none), its guests, their ticks
 ## before it and the index after them, until `settle` counts it.
 var _ahead_task: int = -1
@@ -761,6 +763,7 @@ func _update_to_tee(g: GuestGroup, t: int) -> void:
 	var tee := field.tile_center(h.tee)
 	# D54: the hole's dogleg turn, measured once for the group as its first guest starts the hole.
 	var turn: Variant = GuestHole.FIND_TURN
+	_prefetch_walks(g, tee)
 	for guest: Guest in g.guests:
 		if guest.hole != null and not guest.hole.hole_still_stands():
 			guest.hole = null  # the tee moved, or the par changed: plan afresh
@@ -869,6 +872,7 @@ func _update_on_hole(g: GuestGroup, t: int) -> void:
 		g.left_s = t
 		_move_on(g, t)
 		return
+	_prefetch_early(g)
 	var away: Guest = null
 	var away_d := -1.0
 	if not busy:
@@ -1243,6 +1247,7 @@ func _update_turn(g: GuestGroup, t: int) -> void:
 		return
 	var to := door()
 	var all_there := true
+	_prefetch_walks(g, to)
 	for guest: Guest in g.guests:
 		if guest.is_walking() and guest.walk.goal != to:
 			guest.walk = null  # the clubhouse moved under it
@@ -1278,6 +1283,8 @@ func _head_home(g: GuestGroup, t: int) -> void:
 ## starts) and leaves there; the group is done once all of it has left.
 func _update_to_clubhouse(g: GuestGroup, t: int) -> void:
 	var all_gone := true
+	if course.has_clubhouse():
+		_prefetch_walks(g, door())
 	for guest: Guest in g.guests:
 		if guest.is_done():
 			continue
@@ -1323,6 +1330,56 @@ func _leave(guest: Guest, t: int, at_dusk: bool) -> void:
 	guest.hole = null
 	guest.walk = null
 	guest_left.emit(guest)
+
+
+## E18-S5: the dry routes of the walks to `to` that `g`'s guests are about to start this second
+## (each not walking there and not standing there), searched side by side
+## (GuestWalk.prefetch_dry) so the walks that follow read them from the route cache: the same
+## walks, the step's long searches at once instead of one after another.
+func _prefetch_walks(g: GuestGroup, to: Vector2) -> void:
+	var froms := PackedVector2Array()
+	for guest: Guest in g.guests:
+		if guest.is_done() or guest.position == to or (guest.is_walking() and guest.walk.goal == to):
+			continue
+		froms.append(guest.position)
+	if froms.size() >= 2:
+		GuestWalk.prefetch_dry(course, froms, to, tuning, field.yards_per_tile, _route_cache)
+
+
+## E18-S5: a guest done with its hole ahead of its group stands where it will start its next
+## walk, so that walk's dry route (GuestWalk.prefetch_dry) is searched in the second it is done,
+## once, instead of in the second the whole group moves on, where its partners' searches pile up
+## (the 18th green's walk home on E18-S1's eighteen: two of about 6 ms in one step). Only the
+## cache is filled; the walk itself starts as before, so the day is the same.
+func _prefetch_early(g: GuestGroup) -> void:
+	var froms := PackedVector2Array()
+	for guest: Guest in g.guests:
+		if guest.is_done() or not guest.hole.is_finished() or guest.ball_moved \
+				or guest.state != Guest.State.WAITING or guest.is_walking() \
+				or _prefetched.get(guest, Vector2.INF) == guest.position:
+			continue
+		_prefetched[guest] = guest.position
+		froms.append(guest.position)
+	if froms.is_empty():
+		return
+	var to: Variant = _walk_goal_after(g)
+	if to != null:
+		GuestWalk.prefetch_dry(course, froms, to, tuning, field.yards_per_tile, _route_cache, 1)
+
+
+## E18-S5: where group `g` walks when it moves on from its hole (as _move_on sends it): the
+## clubhouse door going home or at the turn, else the next hole's tee; null when it walks
+## nowhere (home with no clubhouse).
+func _walk_goal_after(g: GuestGroup) -> Variant:
+	var n := _next_hole(g, g.hole_number)
+	var turn: bool = n != 0 and g.round_holes == 2 * NINE and g.hole_number <= NINE and n > NINE
+	if n == 0 or turn:
+		if course.has_clubhouse():
+			return door()
+		if n == 0:
+			return null
+	var h := hole_numbered(n)
+	return field.tile_center(h.tee) if h != null else null
 
 
 ## Starts `guest`'s walk to `to`, its first leg setting off `start_share` of the way into the

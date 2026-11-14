@@ -438,13 +438,15 @@ func cells_edited(c: CourseData, cells: Array[Vector2i], validator: CourseValida
 ## (GuestWalk.round_walks) the change can reach (GuestWalk.path_edit_reaches: a tile within
 ## `cart_path_reach_yd` of its ends, or on or beside a path piece that is) has its walk
 ## complaints cleared from the tally of the hole it leads to (clear_walk), so the next guests'
-## verdict on the walk shows. Returns the slots cleared.
+## verdict on the walk shows. Returns the slots cleared. E18-S5: `grid`, when given, is
+## GuestWalk.path_grid(c) as it is now (GuestSim has just read it), else it is read here.
 func walks_edited(c: CourseData, cells: Array[Vector2i], tuning: GuestTuning,
-		ypt: float = 5.0) -> Array[int]:
+		ypt: float = 5.0, grid: PackedByteArray = PackedByteArray()) -> Array[int]:
 	var out: Array[int] = []
 	if cells.is_empty():
 		return out
-	var grid := GuestWalk.path_grid(c)
+	if grid.is_empty():
+		grid = GuestWalk.path_grid(c)
 	for w: Dictionary in GuestWalk.round_walks(c, ypt):
 		if GuestWalk.path_edit_reaches(c, w.from, w.to, cells, tuning, ypt, grid):
 			clear_walk(c.holes, int(w.to_slot))

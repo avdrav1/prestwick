@@ -65,6 +65,11 @@ extends SceneTree
 ##
 ##   godot --path . -s res://scripts/nine_holes_perf.gd -- map=192x192 copies=2 [farthest=0.1]
 ##
+## E18-S5: `course=PATH` plays a course file (res:// or absolute; for example
+## res://courses/old_grey_championship.json) in place of a fixture, at its own size, with its
+## own holes, clubhouse and land; click edits take free tiles off every footprint, and the
+## off-line drag is skipped (its row crosses the course's holes).
+##
 ## E3-S32 (D52): the script prints the 1-minute load average at its start and end. Its gate (the
 ## guest frames past `frame_guest_ms_max` on the lattice and flooded days, the 60 fps headless
 ## days and Play at 3x) fails the run when GATE_FRAMES_MAX or more of them pass it, or one passes
@@ -132,6 +137,8 @@ var _course: CourseData
 ## E3-S33: the fixture played ("nine", "hazards" or "doglegs"), its holes as [number, par, tee,
 ## cup] in number order, and the tiles its click edits paint (off every footprint).
 var _fixture: String = "nine"
+## E18-S5: `course=PATH` (res:// or absolute) plays a course file, as `fixture=file`.
+var _course_path: String = ""
 var _holes: Array = []
 var _edit_tiles: Array[Vector2i] = []
 var _brain: GuestBrain
@@ -179,6 +186,9 @@ func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("fixture="):
 			_fixture = arg.substr(8)
+		elif arg.begins_with("course="):
+			_fixture = "file"
+			_course_path = arg.substr(7)
 		elif arg.begins_with("map="):
 			var wh: PackedStringArray = arg.substr(4).split("x")
 			_map = Vector2i(wh[0].to_int(), wh[1].to_int())
@@ -211,9 +221,20 @@ func _initialize() -> void:
 			_course = PlaytestNine.land()
 			b = CourseBuilder.new(_course)
 			opened = PlaytestNine.build(b)
+		"file":
+			_course = CourseSave.load_file(_course_path)
+			if _course == null:
+				push_error("course=%s did not load" % _course_path)
+				quit(2)
+				return
+			b = CourseBuilder.new(_course)
+			for h: HoleData in _course.holes:
+				if h.open:
+					opened.append(h.number)
 		_:
 			_fixture = "nine"
-			_course = NineHoles.land(7)
+			_course = NineHoles.land(7) if _map == Vector2i.ZERO \
+					else LandGenerator.generate(7, nine_land(_map))
 			b = CourseBuilder.new(_course)
 			opened = NineHoles.build(b)
 			if _copies > 1:
@@ -223,7 +244,8 @@ func _initialize() -> void:
 		_holes.append([h.number, h.par, h.tee, h.cup])
 	_holes.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
 	_drag_cycle = maxi(DRAG_CYCLE, _holes.size() + 7)
-	_edit_tiles = EDIT_TILES if _fixture != "doglegs" else _free_tiles(b, EDIT_TILES.size())
+	_edit_tiles = EDIT_TILES if _fixture != "doglegs" and _fixture != "file" \
+			else _free_tiles(b, EDIT_TILES.size())
 	print("nine holes (fixture %s): %d open %s, issues %s; click edits paint %s" % [
 		_fixture, opened.size(), opened, _failing(b), _edit_tiles])
 	_time_statics_per_hole(b)
@@ -234,7 +256,7 @@ func _initialize() -> void:
 	_time_searches()
 	if DisplayServer.get_name() == "headless":
 		_time_guest_frames()
-		_finish(opened.size() == 9 * _copies)
+		_finish(opened.size() == (_course.holes.size() if _fixture == "file" else 9 * _copies))
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -250,6 +272,15 @@ func _initialize() -> void:
 	_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
 	for i: int in GUEST_START_S:
 		_brain.step()
+
+
+## E18-S5: NineHoles' land (LandTuning.load_d26, seed 7) at `map`. Since E18-S2 load_d26 pins
+## D10's 128 x 128, so `map=` no longer reached it through the loaded default tuning (the nine
+## was laid on 128 x 128 and holes 10 to 18 fell off the map); the counts scale by area (D71).
+static func nine_land(map: Vector2i) -> LandTuning:
+	var t := LandTuning.load_d26()
+	t.map_size = map
+	return t
 
 
 ## E18-S1: NineHoles.build's nine again, `offset` tiles on, as holes 10 to 18 (no clubhouse
@@ -407,7 +438,8 @@ func _time_guest_frames() -> int:
 			if fps == 60.0:
 				over_60 += over
 				_gate(ms)
-			var on_time: int = ceili((_guest_tuning.day_s + 1.0) * fps / 3.0)
+			# E18-S5: the day's own length (an eighteen-hole day is eighteen_day_s, D72).
+			var on_time: int = ceili((brain.day_s + 1.0) * fps / 3.0)
 			# E3-S35: a frame's tick budget goes with its length (frame_ticks_per_real_s).
 			var frame_budget := mini(ceili(_guest_tuning.frame_ticks_per_real_s / fps - 1e-6),
 					_guest_tuning.frame_ticks_max)

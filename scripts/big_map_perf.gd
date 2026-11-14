@@ -26,6 +26,7 @@ extends SceneTree
 ##       [-- map=192x192 copies=2 out=/abs/dir]
 
 const NineHoles := preload("res://tests/fixtures/nine_holes.gd")
+const NinePerf := preload("res://scripts/nine_holes_perf.gd")
 const MAIN_SCENE := "res://scenes/main.tscn"
 const SEEDS: int = 10
 const RUNS: int = 20
@@ -151,7 +152,8 @@ func _time_new_course() -> void:
 
 
 func _build_test_course() -> void:
-	_course = NineHoles.land(7)
+	_course = NineHoles.land(7) if _map == Vector2i.ZERO \
+			else LandGenerator.generate(7, NinePerf.nine_land(_map))
 	var b := CourseBuilder.new(_course)
 	var opened: Array[int] = NineHoles.build(b)
 	if _copies > 1:

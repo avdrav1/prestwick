@@ -397,7 +397,7 @@ func _flush_paths(cells: Array[Vector2i]) -> void:
 			continue
 		if before.size() != _path_grid.size() or before[i] != _path_grid[i]:
 			changed.append(cell)
-	feed.walks_edited(c, changed, tuning)
+	feed.walks_edited(c, changed, tuning, 5.0, _path_grid)
 
 
 ## The watched course's cart path tiles and revision as they are now (_path_grid).

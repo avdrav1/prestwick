@@ -201,6 +201,55 @@ static func route(course: CourseData, from: Vector2, to: Vector2, tuning: GuestT
 	return w
 
 
+## E18-S5: searches side by side, on WorkerThreadPool's threads, the dry routes that `route`
+## would search one after another for walks from each of `froms` to `to` (those whose straight
+## line wades and whose route `cache` does not hold yet), and puts them in `cache`, so the
+## routes that follow read them: a group heading home from the 18th green across the map's
+## water searched one about 6 ms a guest in one step (12 ms for two, past D52's gate on
+## E18-S1's eighteen). `route` gives the same walk either way (the search reads only the course
+## and the cache's DryGrid, which nothing writes meanwhile); a route that then takes a cart path
+## leaves its searched dry route unused in the cache. Fewer than `least` to search: nothing done
+## (GuestBrain passes 1 for a guest done with its hole ahead of its group, 2 for a group about to
+## walk: one search alone gains nothing then). Returns how many it searched.
+static func prefetch_dry(course: CourseData, froms: PackedVector2Array, to: Vector2,
+		tuning: GuestTuning, ypt: float, cache: Cache, least: int = 2) -> int:
+	if cache == null or froms.size() < least:
+		return 0
+	cache.follow_dry(course)
+	var todo := PackedVector2Array()
+	var ends := PackedVector2Array()
+	var times := PackedFloat64Array()
+	for from: Vector2 in froms:
+		if from == to or todo.has(from) or cache.dry.has(Vector4(from.x, from.y, to.x, to.y)):
+			continue
+		var on := PackedFloat64Array([0.0, 0.0, 0.0])
+		ends.clear()
+		times.clear()
+		time_pieces(course, PackedVector2Array([from, to]), tuning, ypt, ends, times, on)
+		if on[2] > 0.0:
+			todo.append(from)
+	if todo.is_empty() or todo.size() < least:
+		return 0
+	if cache.dry_grid == null:
+		cache.dry_grid = DryGrid.new(course, tuning)
+	var grid: DryGrid = cache.dry_grid
+	var out: Array[PackedVector2Array] = []
+	out.resize(todo.size())
+	var lock := Mutex.new()
+	# The pool's threads take all but the first; this thread, which would only wait, the first.
+	var task := WorkerThreadPool.add_group_task(func(k: int) -> void:
+		var pts := _dry_route(course, todo[k + 1], to, tuning, ypt, grid)
+		lock.lock()
+		out[k + 1] = pts
+		lock.unlock(), todo.size() - 1, -1, true)
+	var first := _dry_route(course, todo[0], to, tuning, ypt, grid)
+	WorkerThreadPool.wait_for_group_task_completion(task)
+	out[0] = first
+	for k: int in todo.size():
+		cache.dry[Vector4(todo[k].x, todo[k].y, to.x, to.y)] = out[k]
+	return todo.size()
+
+
 ## E14-S2: gives `w` the quickest dry route from `from` to `to` (_dry_route), its time and its
 ## path yards; it follows a path when it walks any cart path or bridge.
 static func _take_dry_route(w: GuestWalk, course: CourseData, from: Vector2, to: Vector2,
@@ -726,13 +775,18 @@ static func path_edit_reaches(course: CourseData, from: Vector2, to: Vector2,
 	var w := course.width + 2
 	var seeds: Array = []
 	var r := ceili(reach / ypt) + 1
+	# E18-S5: the square round each end read from `grid` (path_grid: the tiles _is_path reads),
+	# not tile by tile through the course: 18 walks' squares cost 6 ms a cart path paint at 18
+	# holes (GuestSim's flush, every frame of a drag).
+	var cw: int = course.width
+	var ch: int = course.height
 	for end: Vector2 in [from, to]:
 		var at := Vector2i(floori(end.x / ypt), floori(end.y / ypt))
-		for y in range(at.y - r, at.y + r + 1):
-			for x in range(at.x - r, at.x + r + 1):
-				var t := Vector2i(x, y)
-				if _is_path(course, t) and _center(t, ypt).distance_to(end) <= reach:
-					seeds.append((y + 1) * w + x + 1)
+		for y in range(maxi(at.y - r, 0), mini(at.y + r, ch - 1) + 1):
+			var row: int = (y + 1) * w + 1
+			for x in range(maxi(at.x - r, 0), mini(at.x + r, cw - 1) + 1):
+				if grid[row + x] != 0 and _center(Vector2i(x, y), ypt).distance_to(end) <= reach:
+					seeds.append(row + x)
 	if seeds.is_empty():
 		return false
 	var mark := {}

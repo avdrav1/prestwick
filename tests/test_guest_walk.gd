@@ -522,3 +522,99 @@ func test_a_diagonal_never_cuts_a_corner_of_water() -> void:
 	assert_true(_dry(c, w, 0.002), "through the one gap, round the corner tile: %s" % w.points)
 	for i: int in range(1, w.points.size()):
 		assert_true(GuestWalk._segment_dry(c, w.points[i - 1], w.points[i], 5.0), "segment %d of %s" % [i, w.points])
+
+
+## E18-S5: the dry routes searched side by side (GuestWalk.prefetch_dry) are the ones route
+## searches one at a time, and a route after them reads them and gives the same walk.
+func test_prefetched_dry_routes_are_the_routes_searched_alone() -> void:
+	var c := _pond()
+	var to := Vector2(172.5, 62.5)
+	var froms := PackedVector2Array([Vector2(27.5, 62.5), Vector2(31.2, 55.7), Vector2(22.5, 82.5),
+			Vector2(172.5, 12.5), Vector2(27.5, 62.5)])
+	var cache := GuestWalk.Cache.new()
+	var n := GuestWalk.prefetch_dry(c, froms, to, tuning, 5.0, cache)
+	assert_eq(n, 3, "three wade (one dry straight walk, one twice): searched once each")
+	assert_eq(cache.dry.size(), 3)
+	for from: Vector2 in froms:
+		var alone := GuestWalk.route(c, from, to, tuning)
+		var kept := GuestWalk.route(c, from, to, tuning, 5.0, cache)
+		assert_eq(kept.points, alone.points, "from %s: the same route" % from)
+		assert_eq(kept.duration, alone.duration)
+		assert_eq(kept.searched, alone.searched)
+		assert_eq(kept.path_yd, alone.path_yd)
+	assert_eq(cache.dry.size(), 3, "every searched walk read its prefetched route")
+	assert_eq(GuestWalk.prefetch_dry(c, froms, to, tuning, 5.0, cache), 0, "nothing left to search")
+	var one := GuestWalk.Cache.new()
+	assert_eq(GuestWalk.prefetch_dry(c, PackedVector2Array([froms[0]]), to, tuning, 5.0, one), 0,
+			"one alone waits for its walk by default")
+	assert_eq(GuestWalk.prefetch_dry(c, PackedVector2Array([froms[0]]), to, tuning, 5.0, one, 1), 1)
+	assert_eq(one.dry[Vector4(froms[0].x, froms[0].y, to.x, to.y)],
+			GuestWalk.route(c, froms[0], to, tuning).points)
+
+
+## E18-S5: path_edit_reaches reads the squares round a walk's ends from the path grid; its
+## answer is the one the tile-by-tile reading (_is_path through CourseData, as before) gives, on
+## scattered path pieces, bridges and points by every edge of the map and off it.
+func test_path_edit_reaches_from_the_grid_answers_as_tile_by_tile() -> void:
+	var c := LandGenerator.generate(7)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var cells := []
+	for k: int in 60:
+		var at := Vector2i(rng.randi_range(0, c.width - 1), rng.randi_range(0, c.height - 1))
+		for d: int in rng.randi_range(1, 12):
+			cells.append(at + Vector2i(d, 0))
+	cells.append_array(_row(0, 0, 20) + _row(c.height - 1, c.width - 20, c.width - 1))
+	_paint(c, cells, Surface.Type.CART_PATH)
+	for i: int in CourseValidator.surface_indices(c.packed_tiles(), Surface.Type.WATER):
+		if i % 5 == 0:
+			@warning_ignore("integer_division")
+			c.set_bridge(Vector2i(i % c.width, i / c.width), true)
+	var side: float = c.width * 5.0
+	var grid := GuestWalk.path_grid(c)
+	var yes := 0
+	for k: int in 300:
+		var from := Vector2(rng.randf_range(-40, side + 40), rng.randf_range(-40, side + 40))
+		var to := Vector2(rng.randf_range(-40, side + 40), rng.randf_range(-40, side + 40))
+		var edit: Array[Vector2i] = [Vector2i(rng.randi_range(0, c.width - 1), rng.randi_range(0, c.height - 1))]
+		edit.append(cells[rng.randi_range(0, cells.size() - 1)] + Vector2i(rng.randi_range(-1, 1), 1))
+		var want := _reaches_tile_by_tile(c, from, to, edit, grid)
+		yes += 1 if want else 0
+		assert_eq(GuestWalk.path_edit_reaches(c, from, to, edit, tuning, 5.0, grid), want,
+				"%s to %s, %s" % [from, to, edit])
+		assert_eq(GuestWalk.path_edit_reaches(c, from, to, edit, tuning), want)
+	assert_gt(yes, 5, "some edits reach their walk")
+	assert_lt(yes, 280, "and some do not")
+
+
+## path_edit_reaches as it read the course before E18-S5 (tile by tile through _is_path).
+func _reaches_tile_by_tile(course: CourseData, from: Vector2, to: Vector2, cells: Array[Vector2i],
+		grid: PackedByteArray) -> bool:
+	var reach := tuning.cart_path_reach_yd
+	for cell: Vector2i in cells:
+		var cc := (Vector2(cell) + Vector2(0.5, 0.5)) * 5.0
+		if cc.distance_to(from) <= reach or cc.distance_to(to) <= reach:
+			return true
+	var w := course.width + 2
+	var seeds: Array = []
+	var r := ceili(reach / 5.0) + 1
+	for end: Vector2 in [from, to]:
+		var at := Vector2i(floori(end.x / 5.0), floori(end.y / 5.0))
+		for y in range(at.y - r, at.y + r + 1):
+			for x in range(at.x - r, at.x + r + 1):
+				var t := Vector2i(x, y)
+				if GuestWalk._is_path(course, t) and ((Vector2(t) + Vector2(0.5, 0.5)) * 5.0).distance_to(end) <= reach:
+					seeds.append((y + 1) * w + x + 1)
+	if seeds.is_empty():
+		return false
+	var mark := {}
+	for i: int in GuestWalk._piece(grid, w, seeds):
+		mark[i] = true
+	for cell: Vector2i in cells:
+		var i := (cell.y + 1) * w + cell.x + 1
+		if mark.has(i):
+			return true
+		for d: Vector2i in GuestWalk.NEIGHBOURS:
+			if mark.has(i + d.y * w + d.x):
+				return true
+	return false
