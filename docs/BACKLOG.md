@@ -1588,7 +1588,7 @@ The people-only checks 0.6.0 shipped without (user, 2026-11-13: "ship 0.6.0 now"
   - Test: the answers in `docs/playtests/`.
   - Touches: `docs/`
 
-## E18: Eighteen holes — planned
+## E18: Eighteen holes — active
 
 The first epic after 0.6.0 (user, 2026-11-13: "finish 0.6.0 first, then write an epic for 18 holes"). Today a course holds at most nine holes (`BuilderTuning.max_holes` 9, the MVP's "9 holes"), on a 128 x 128 map (640 yd square, about 85 acres; `map_size` and `plot_size`), with a guest day (`day_s` 540) and an economy (D56, D59, D67: a 3-star course opens its nine around day 30) tuned for nine. A real eighteen needs 150 to 200 acres and most of a day. The user chose a bigger map with an 18-hole limit, guests who play 9 or 18 holes, and a perf spike first. Ships as 0.7.0.
 
