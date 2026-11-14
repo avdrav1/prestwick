@@ -7,12 +7,17 @@ extends SceneTree
 ## with the skipped one, so a fast skip is still the same day.
 ##
 ##   godot --path . -s res://scripts/skip_perf.gd [-- --seed N --mode build|play --runs N
-##       --frame-ms MS]
+##       --frame-ms MS --course PATH --max-holes N]
 ##
 ## With a window the frames are real (vsync, drawing); --headless times the work alone.
 ## --frame-ms tries another `skip_frame_ms`. Prints the 1-minute load average at the start and
 ## end (D52): other jobs on the machine slow it. Exits 1 when the day differs from the brain's
 ## own or the best run is not under TARGET_S.
+##
+## E18-S1 (D71): --course opens another course file (an absolute path, as
+## scripts/big_map_perf.gd out= writes them) in place of the playtest nine; --max-holes sets
+## BuilderTuning's `max_holes` in the loaded resource for the run (the file is not touched), so
+## an 18-hole test course loads.
 
 const MAIN_SCENE := "res://scenes/main.tscn"
 const NINE_PATH := "res://courses/playtest_nine.json"
@@ -35,6 +40,8 @@ var _ends: Array = []
 var _times: Array[float] = []
 var _failed := false
 var _day_seed := 0
+var _path := NINE_PATH
+var _builder_tuning: BuilderTuning
 
 
 func _initialize() -> void:
@@ -48,7 +55,14 @@ func _initialize() -> void:
 	i = argv.find("--runs")
 	if i >= 0 and i + 1 < argv.size():
 		_runs = maxi(argv[i + 1].to_int(), 1)
-	print("skip perf: %s, seed %d, %d guests, %s mode, %s, load %s" % [NINE_PATH, _seed, ARRIVALS,
+	i = argv.find("--course")
+	if i >= 0 and i + 1 < argv.size():
+		_path = argv[i + 1]
+	i = argv.find("--max-holes")
+	if i >= 0 and i + 1 < argv.size():
+		_builder_tuning = BuilderTuning.load_default()
+		_builder_tuning.max_holes = argv[i + 1].to_int()
+	print("skip perf: %s, seed %d, %d guests, %s mode, %s, load %s" % [_path, _seed, ARRIVALS,
 			"Play" if _play else "Build", "headless" if DisplayServer.get_name() == "headless" else "window",
 			_load()])
 	_open()
@@ -56,7 +70,7 @@ func _initialize() -> void:
 
 func _open() -> void:
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate() as Main
-	_main.course_path = NINE_PATH
+	_main.course_path = _path
 	_main.start_seed = _seed
 	root.add_child(_main)
 	_phase = 0
@@ -71,6 +85,9 @@ func _process(_delta: float) -> bool:
 			# for it to settle, then Morning.
 			_frames += 1
 			if _frames == 1:
+				if _run == 0:
+					print("  the course: %d x %d, %d holes" % [_main.course.width, _main.course.height,
+							_main.course.holes.size()])
 				_main.guest_sim.resume_at(1, ARRIVALS)
 				_main.guest_sim.day_ended.connect(_on_day_ended)
 				if _play:
@@ -121,7 +138,7 @@ func _on_day_ended(d: int, b: GuestBrain) -> void:
 
 func _finish() -> bool:
 	# The same day by the brain alone, one second after another on this thread.
-	var c := CourseSave.load_file(NINE_PATH)
+	var c := CourseSave.load_file(_path)
 	var b := GuestBrain.new(c, _day_seed, GuestTuning.load_default(), null, [], null, ARRIVALS)
 	var t0 := Time.get_ticks_usec()
 	b.run_day()

@@ -54,6 +54,17 @@ extends SceneTree
 ##
 ##   godot [--headless] --path . -s res://scripts/nine_holes_perf.gd [-- fixture=hazards|doglegs]
 ##
+## E18-S1 (D71): `map=WxH` plays the bare nine on generated land of that size (seed 7), by
+## changing LandTuning's `map_size` and BuilderTuning's `plot_size` in the loaded resources for
+## this run only (the files are not touched); the nine sits in the map's top-left 128 x 80 tiles
+## as on 128 x 128. `copies=2` lays the nine a second time as holes 10 to 18 (COPY_OFFSETS), with
+## `max_holes` 18 for the run, so the drags cross 18 cups and the field plays 18 holes.
+##
+## `farthest=Z` sets the camera's farthest zoom step to Z in the loaded CameraTuning for the run
+## (a step that shows the whole of a bigger map), so the 0.175x phases run at Z.
+##
+##   godot --path . -s res://scripts/nine_holes_perf.gd -- map=192x192 copies=2 [farthest=0.1]
+##
 ## E3-S32 (D52): the script prints the 1-minute load average at its start and end. Its gate (the
 ## guest frames past `frame_guest_ms_max` on the lattice and flooded days, the 60 fps headless
 ## days and Play at 3x) fails the run when GATE_FRAMES_MAX or more of them pass it, or one passes
@@ -97,6 +108,10 @@ const PLAY_FRAMES: int = 600
 const PLAY_START_S: int = 92
 ## Frames one breaking-drag cycle takes: press, 8 drag frames, release, undo, settle.
 const DRAG_CYCLE: int = 16
+## E18-S1: where the second copy of the nine goes (copies=2), by map size: below the first on a
+## square map, to its right and down on a wide one, clear of OFF_LINE_ROW and EDIT_TILES.
+const COPY_OFFSETS: Dictionary = {Vector2i(192, 192): Vector2i(64, 100),
+		Vector2i(256, 160): Vector2i(128, 80)}
 const WARMUP_FRAMES: int = 60
 ## E3-S15: the flooded map's trees walls (columns), and how often its guest days get a click edit.
 const SEARCH_WALL_X: Array[int] = [37, 106]
@@ -148,6 +163,14 @@ var _search_over: int = 0
 var _gated: Array[float] = []
 var _load_start := PackedFloat64Array()
 var _guest_stepped: Array[bool] = []
+## E18-S1: the map size (zero: the tuning's own), the copies of the nine, the tunings changed for
+## the run (held, so the loaded resources keep the change), and the drag cycle for the holes.
+var _map := Vector2i.ZERO
+var _copies: int = 1
+var _land_tuning: LandTuning
+var _builder_tuning: BuilderTuning
+var _drag_cycle: int = DRAG_CYCLE
+var _camera_tuning: CameraTuning
 
 
 func _initialize() -> void:
@@ -156,6 +179,27 @@ func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("fixture="):
 			_fixture = arg.substr(8)
+		elif arg.begins_with("map="):
+			var wh: PackedStringArray = arg.substr(4).split("x")
+			_map = Vector2i(wh[0].to_int(), wh[1].to_int())
+		elif arg.begins_with("copies="):
+			_copies = clampi(arg.substr(7).to_int(), 1, 2)
+		elif arg.begins_with("farthest="):
+			_camera_tuning = CameraTuning.load_default()
+			var levels := _camera_tuning.zoom_levels.duplicate()
+			levels[0] = arg.substr(9).to_float()
+			_camera_tuning.zoom_levels = levels
+	if _map != Vector2i.ZERO:
+		_land_tuning = LandTuning.load_default()
+		_land_tuning.map_size = _map
+		_builder_tuning = BuilderTuning.load_default()
+		_builder_tuning.plot_size = _map
+	if _copies > 1:
+		if not COPY_OFFSETS.has(_map):
+			push_error("copies=2 needs map= one of %s" % [COPY_OFFSETS.keys()])
+			quit(2)
+			return
+		_builder_tuning.max_holes = 9 * _copies
 	var b: CourseBuilder
 	var opened: Array[int] = []
 	match _fixture:
@@ -172,9 +216,13 @@ func _initialize() -> void:
 			_course = NineHoles.land(7)
 			b = CourseBuilder.new(_course)
 			opened = NineHoles.build(b)
+			if _copies > 1:
+				opened.append_array(_build_copy(b, COPY_OFFSETS[_map]))
+	print("map %d x %d, %d holes (E18-S1)" % [_course.width, _course.height, _course.holes.size()])
 	for h: HoleData in _course.holes:
 		_holes.append([h.number, h.par, h.tee, h.cup])
 	_holes.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
+	_drag_cycle = maxi(DRAG_CYCLE, _holes.size() + 7)
 	_edit_tiles = EDIT_TILES if _fixture != "doglegs" else _free_tiles(b, EDIT_TILES.size())
 	print("nine holes (fixture %s): %d open %s, issues %s; click edits paint %s" % [
 		_fixture, opened.size(), opened, _failing(b), _edit_tiles])
@@ -186,7 +234,7 @@ func _initialize() -> void:
 	_time_searches()
 	if DisplayServer.get_name() == "headless":
 		_time_guest_frames()
-		_finish(opened.size() == 9)
+		_finish(opened.size() == 9 * _copies)
 		return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
@@ -202,6 +250,28 @@ func _initialize() -> void:
 	_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
 	for i: int in GUEST_START_S:
 		_brain.step()
+
+
+## E18-S1: NineHoles.build's nine again, `offset` tiles on, as holes 10 to 18 (no clubhouse
+## move). Returns the numbers that opened.
+func _build_copy(b: CourseBuilder, offset: Vector2i) -> Array[int]:
+	var opened: Array[int] = []
+	for spec: Array in NineHoles.HOLES:
+		var n: int = spec[0] + 9
+		var tee: Vector2i = spec[2] + offset
+		var cup: Vector2i = spec[3] + offset
+		b.begin_stroke()
+		for cell: Vector2i in BuildTool.grid_line(tee, cup):
+			b.paint(cell, Surface.Type.FAIRWAY, 3)
+		b.end_stroke()
+		b.paint(tee, Surface.Type.TEE, 3)
+		b.paint(cup, Surface.Type.GREEN, 5)
+		b.place_tee(n, tee, spec[1])
+		b.place_cup(n, cup)
+		b.set_par(n, spec[1])
+		if b.hole(n).open:
+			opened.append(n)
+	return opened
 
 
 ## E3-S61: the Build phases other than the 0.175x field pass run the script's own guest day
@@ -274,8 +344,8 @@ func _time_validator(b: CourseBuilder) -> void:
 	var still_open: int = 0
 	for h: HoleData in _course.holes:
 		still_open += 1 if h.open else 0
-	print("check_course, 9 holes: %s" % _stats(check))
-	print("click edit (paint 1 tile, validator rerun), 9 holes: %s; %d holes still open" % [_stats(edit), still_open])
+	print("check_course, %d holes: %s" % [_holes.size(), _stats(check)])
+	print("click edit (paint 1 tile, validator rerun), %d holes: %s; %d holes still open" % [_holes.size(), _stats(edit), still_open])
 
 
 ## A drag of rough through every cup, 1 tile wide (rule 2 fails for all nine holes), as one
@@ -792,16 +862,16 @@ func _process(_delta: float) -> bool:
 			# release (9: the check, nine new issue boxes), undo (12); time the frames holding
 			# the release and the undo; a fresh guest day stepped to GUEST_REFRESH_S after the
 			# undo (14, untimed), so guests are out at every release
-			var f: int = _frames % DRAG_CYCLE
+			var f: int = _frames % _drag_cycle
 			var n: int = _holes.size()
-			if _frames > DRAG_CYCLE:
+			if _frames > _drag_cycle:
 				if f == n + 1:
 					_edit_samples.append(frame_ms)
 				elif f == n + 4:
 					_undo_samples.append(frame_ms)
 				elif f >= 1 and f < n:
 					_samples.append(frame_ms)
-			if _frames < DRAG_CYCLE:
+			if _frames < _drag_cycle:
 				pass
 			elif f == 0:
 				_main.build_tool.select_surface(Surface.Type.ROUGH)
@@ -854,18 +924,18 @@ func _process(_delta: float) -> bool:
 			# undo (12)), so every hole stays open and guests stay out through the undo; a fresh
 			# guest day is stepped to GUEST_REFRESH_S in the phase's first frame (untimed), since
 			# phase 7's last release sent every guest home
-			var f: int = _frames % DRAG_CYCLE
+			var f: int = _frames % _drag_cycle
 			var n: int = _holes.size()
 			if _frames == 1:
 				_brain = GuestBrain.new(_course, _day, _guest_tuning, _model)
 				for i: int in GUEST_REFRESH_S:
 					_brain.step()
-			if _frames > DRAG_CYCLE:
+			if _frames > _drag_cycle:
 				if f == n + 4:
 					_undo_samples.append(frame_ms)
 				elif f >= 1 and f < n:
 					_samples.append(frame_ms)
-			if _frames < DRAG_CYCLE:
+			if _frames < _drag_cycle:
 				pass
 			elif f == 0:
 				_main.build_tool.select_surface(Surface.Type.FAIRWAY)
