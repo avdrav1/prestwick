@@ -7,6 +7,10 @@ extends Node2D
 ## the notice a refused (newer format) file gives. E15-S1 (D70): the Famous courses page
 ## (main_menu_shot_famous.tscn), and with a save on an older Cliffside the note on it
 ## (main_menu_shot_famous_newer.tscn) and on the Load page (main_menu_shot_load_newer.tscn).
+## E19-S3: on the Famous courses page FAMOUS_FOCUS=last puts the focus on the last course (the
+## list scrolls to it), FAMOUS_COUNT=12 lists twelve (the seven, then five again) and
+## FAMOUS_PLAY=1 opens it over Play (its taller toolbar).
+##   FAMOUS_FOCUS=last scripts/screenshot.sh tests/fixtures/main_menu_shot_famous.tscn
 ## Run: scripts/screenshot.sh tests/fixtures/main_menu_shot.tscn
 
 enum Page { MENU, EXPORT, IMPORT, IMPORT_NOTICE, REFUSED_NOTICE, FAMOUS, FAMOUS_NEWER, LOAD_NEWER }
@@ -44,14 +48,27 @@ func _ready() -> void:
 			_write("user://future.json", JSON.stringify({"version": CourseData.FORMAT_VERSION + 1}))
 			_main.import_course("user://future.json")
 		Page.FAMOUS:
+			if OS.get_environment("FAMOUS_PLAY") == "1":
+				_main.set_mode(Main.Mode.PLAY)
 			_main.open_menu()
-			_main.main_menu.show_famous()
+			var ids := FamousCourses.ids()
+			if OS.get_environment("FAMOUS_COUNT") == "12":
+				for i: int in 5:
+					ids.append(FamousCourses.ids()[i])
+			_main.main_menu.show_famous(ids)
+			if OS.get_environment("FAMOUS_FOCUS") == "last":
+				# Once the page is laid out, as a key press would, so the list follows it.
+				await get_tree().process_frame
+				await get_tree().process_frame
+				_main.main_menu.famous_buttons()[-1].grab_focus()
 		Page.FAMOUS_NEWER, Page.LOAD_NEWER:
 			_save_older_cliffside()
 			_main.open_menu()
 			if page == Page.FAMOUS_NEWER:
 				_main.main_menu.show_famous()
-				_main.main_menu.famous_buttons()[3].grab_focus()
+				await get_tree().process_frame
+				await get_tree().process_frame
+				_main.main_menu.famous_button("cliffside").grab_focus()
 			else:
 				_main.main_menu.show_load()
 

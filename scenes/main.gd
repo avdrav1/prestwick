@@ -189,6 +189,8 @@ func _ready() -> void:
 			save_notice] as Array[Control],
 			[main_menu, audio_panel, confirm_dialog] as Array[Control])
 	build_tool.cursor_moved.connect(_on_cursor_moved)
+	# E19-S3: the menu stands above whichever toolbar shows.
+	main_menu.bottom_bars = [build_palette, swing_panel] as Array[Control]
 	autosaves = get_tree().current_scene == self
 	# E15-S1 (D70): the game itself (not a test or playtest adding Main to its own tree) tidies
 	# away E13-S5's copies of the famous courses, once: unchanged ones go, edited ones stay as

@@ -7,7 +7,9 @@ extends GutTest
 ## course folder are tidied away once (unchanged ones removed by their bytes against every
 ## shipped version, edited ones kept as "<name> (my copy)"), and a save on an older version loads
 ## as saved with "A newer version of Cliffside is available." on the Load and Famous courses
-## pages.
+## pages. E19-S3: the page groups them ("Eighteen holes", then "Nine holes") in a list that
+## scrolls with keyboard focus, and the page and its Back fit above the toolbar however many
+## courses there are.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 ## A user folder of these tests' own (scripts/run_tests.sh gives each job its own user://).
@@ -291,16 +293,14 @@ func test_the_menu_lists_the_famous_courses_and_esc_comes_back_to_the_button() -
 	for b: Button in picks:
 		texts.append(b.text.get_slice("\n", 0))
 		assert_eq(b.focus_mode, Control.FOCUS_ALL)
-	assert_eq(texts, ["Harbor Links: 9 holes, par 35, 3,200 yd",
+	assert_eq(texts, ["Old Grey Links (Championship): 18 holes, par 70, 6,533 yd",
+			"Dogleg Hollow (Championship): 18 holes, par 74, 7,552 yd",
+			"Harbor Links: 9 holes, par 35, 3,200 yd",
 			"Old Grey Links: 9 holes, par 34, 3,023 yd", "Pine Ridge: 9 holes, par 34, 2,935 yd",
 			"Cliffside: 9 holes, par 36, 3,353 yd",
-			"Dogleg Hollow: 9 holes, par 37, 3,545 yd",
-			"Old Grey Links (Championship): 18 holes, par 70, 6,533 yd",
-			"Dogleg Hollow (Championship): 18 holes, par 74, 7,552 yd"] as Array[String])
-	assert_eq(picks[3].text.get_slice("\n", 1), FamousCourses.spec("cliffside")["style"])
-	assert_eq(picks[4].text.get_slice("\n", 1), FamousCourses.spec("dogleg_hollow")["style"])
-	assert_eq(picks[5].text.get_slice("\n", 1), FamousCourses.spec("old_grey_championship")["style"])
-	assert_eq(picks[6].text.get_slice("\n", 1), FamousCourses.spec("dogleg_hollow_championship")["style"])
+			"Dogleg Hollow: 9 holes, par 37, 3,545 yd"] as Array[String], "E19-S3: eighteens first")
+	for id: String in ["cliffside", "dogleg_hollow", "old_grey_championship", "dogleg_hollow_championship"]:
+		assert_eq(m.main_menu.famous_button(id).text.get_slice("\n", 1), FamousCourses.spec(id)["style"])
 	assert_same(m.get_viewport().gui_get_focus_owner(), picks[0], "focus on the first")
 	assert_eq(m.main_menu.famous_notes(), {}, "no save, no note")
 	var ev := InputEventKey.new()
@@ -317,7 +317,7 @@ func test_picking_a_course_on_the_page_starts_it() -> void:
 	var m := _main()
 	m.open_menu()
 	m.main_menu.show_famous()
-	m.main_menu.famous_buttons()[1].pressed.emit()
+	m.main_menu.famous_button("old_grey_links").pressed.emit()
 	assert_false(m.main_menu.visible, "the menu closes")
 	assert_eq(m.course.course_id, "old_grey_links")
 
@@ -328,7 +328,7 @@ func test_dogleg_hollow_starts_from_the_page() -> void:
 	var m := _main()
 	m.open_menu()
 	m.main_menu.show_famous()
-	m.main_menu.famous_buttons()[4].pressed.emit()
+	m.main_menu.famous_button("dogleg_hollow").pressed.emit()
 	assert_false(m.main_menu.visible, "the menu closes")
 	assert_eq(m.course.course_id, "dogleg_hollow")
 	assert_eq(m.course.course_version, FamousCourses.latest_version("dogleg_hollow"))
@@ -338,18 +338,135 @@ func test_dogleg_hollow_starts_from_the_page() -> void:
 		assert_true(h.open, "hole %d open" % h.number)
 
 
-## E18-S6: six picks and Back still fit the 1280 x 720 window; E19-S1: seven.
-func test_seven_picks_fit_the_window() -> void:
+## E19-S3: the gap the page keeps above the toolbar, px, at least.
+const GUTTER: float = 16.0
+
+
+## Twelve ids: the seven, then five of them again (a game with more famous courses).
+func _twelve() -> PackedStringArray:
+	var ids := FamousCourses.ids()
+	for i: int in 5:
+		ids.append(FamousCourses.ids()[i])
+	return ids
+
+
+## A key pressed and let go (as test_course_export.gd's _tap), then two frames for the list to
+## follow the focus.
+func _key(code: Key) -> void:
+	for pressed: bool in [true, false]:
+		var ev := InputEventKey.new()
+		ev.keycode = code
+		ev.physical_keycode = code
+		ev.pressed = pressed
+		get_tree().root.push_input(ev)
+	await wait_frames(2)
+
+
+## E18-S6, E19-S1: every pick and Back fit the 1280 x 720 window. E19-S3: the whole page lies
+## inside it and clear of the Build toolbar (and the Play toolbar's height), with the seven and
+## with twelve; every course line shows whole (no button narrower than its text).
+func test_the_page_fits_above_the_toolbar_with_seven_and_with_twelve() -> void:
+	var m := _main()
+	var view := m.get_viewport().get_visible_rect()
+	assert_eq(view.size, Vector2(1280, 720), "the window the game opens at")
+	m.open_menu()
+	var toolbar_top := m.build_palette.get_global_rect().position.y
+	for ids: PackedStringArray in [FamousCourses.ids(), _twelve()]:
+		m.main_menu.show_famous(ids)
+		await wait_frames(3)
+		var n := ids.size()
+		var page := m.main_menu.panel.get_global_rect()
+		assert_true(view.encloses(page), "%d: the page %s inside the window" % [n, page])
+		assert_lte(page.end.y, toolbar_top - GUTTER, "%d: a gutter above the toolbar at %.0f" % [n, toolbar_top])
+		var back := m.main_menu.famous_back_button
+		assert_true(back.is_visible_in_tree(), "%d: Back shows" % n)
+		assert_true(page.encloses(back.get_global_rect()), "%d: Back on the page" % n)
+		assert_true(page.encloses(m.main_menu.famous_scroll.get_global_rect()), "%d: the list on the page" % n)
+		var picks := m.main_menu.famous_buttons()
+		assert_eq(picks.size(), n)
+		for b: Button in picks:
+			assert_lte(b.get_combined_minimum_size().x, b.size.x + 0.5,
+					"%d: %s shows whole" % [n, b.text.get_slice(":", 0)])
+			assert_eq(b.text.get_slice_count("\n"), 2, "name, holes, par, yardage, then the style line")
+	assert_gt(m.main_menu.famous_scroll.get_v_scroll_bar().max_value,
+			m.main_menu.famous_scroll.size.y, "twelve scroll")
+	# Play's toolbar (the swing panel, with its practice hint) is taller: the page rises above it.
+	m.main_menu.close()
+	m.start_famous("cliffside")
+	m.set_mode(Main.Mode.PLAY)
+	await wait_frames(3)
+	m.open_menu()
+	m.main_menu.show_famous(_twelve())
+	await wait_frames(3)
+	var play_top := m.swing_panel.get_global_rect().position.y
+	assert_lt(play_top, toolbar_top, "the Play toolbar stands taller")
+	var page := m.main_menu.panel.get_global_rect()
+	assert_true(view.encloses(page), "Play: the page %s inside the window" % page)
+	assert_lte(page.end.y, play_top - GUTTER, "Play: a gutter above the toolbar at %.0f" % play_top)
+	assert_true(m.main_menu.famous_back_button.is_visible_in_tree(), "Play: Back shows")
+
+
+## E19-S3: Up and Down move through the courses in page order and the list scrolls to the focused
+## one; Down from the last reaches Back, Up from Back the last; Enter picks the focused one.
+func test_focus_scrolls_into_view() -> void:
+	var m := _main()
+	m.open_menu()
+	m.main_menu.show_famous(_twelve())
+	await wait_frames(3)
+	var scroll := m.main_menu.famous_scroll
+	var picks := m.main_menu.famous_buttons()
+	var vp := m.get_viewport()
+	assert_same(vp.gui_get_focus_owner(), picks[0], "focus on the first")
+	assert_eq(scroll.scroll_vertical, 0, "the list starts at the top")
+	for i: int in range(1, picks.size()):
+		await _key(KEY_DOWN)
+		assert_same(vp.gui_get_focus_owner(), picks[i], "Down to course %d" % i)
+		assert_true(scroll.get_global_rect().grow(0.5).encloses(picks[i].get_global_rect()),
+				"course %d scrolled into view" % i)
+	assert_gt(scroll.scroll_vertical, 0, "the list scrolled")
+	await _key(KEY_DOWN)
+	assert_same(vp.gui_get_focus_owner(), m.main_menu.famous_back_button, "Down from the last: Back")
+	await _key(KEY_UP)
+	assert_same(vp.gui_get_focus_owner(), picks[-1], "Up from Back: the last")
+	for i: int in range(picks.size() - 2, -1, -1):
+		await _key(KEY_UP)
+		assert_same(vp.gui_get_focus_owner(), picks[i], "Up to course %d" % i)
+		assert_true(scroll.get_global_rect().grow(0.5).encloses(picks[i].get_global_rect()),
+				"course %d scrolled into view" % i)
+	assert_eq(scroll.scroll_vertical, 0, "back at the top")
+	await _key(KEY_UP)
+	assert_same(vp.gui_get_focus_owner(), picks[0], "Up from the first stays")
+	# Enter on the seven: down to the last nine, Dogleg Hollow, and pick it.
+	m.main_menu.show_famous()
+	await wait_frames(3)
+	picks = m.main_menu.famous_buttons()
+	for i: int in range(1, picks.size()):
+		await _key(KEY_DOWN)
+	assert_same(vp.gui_get_focus_owner(), m.main_menu.famous_button("dogleg_hollow"))
+	assert_true(scroll.get_global_rect().grow(0.5).encloses(picks[-1].get_global_rect()), "in view")
+	await _key(KEY_ENTER)
+	assert_false(m.main_menu.visible, "Enter picks: the menu closes")
+	assert_eq(m.course.course_id, "dogleg_hollow")
+
+
+## E19-S3: the eighteens under "Eighteen holes", then the nines under "Nine holes", each in
+## FamousCourses order; a group with no course has no heading.
+func test_the_groups() -> void:
 	var m := _main()
 	m.open_menu()
 	m.main_menu.show_famous()
-	await wait_frames(2)
-	var bottom := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	var picks := m.main_menu.famous_buttons()
-	assert_eq(picks.size(), 7)
-	for b: Button in picks:
-		assert_lte(b.get_global_rect().end.y, bottom, "%s on screen" % b.text.get_slice(":", 0))
-	assert_lte(m.main_menu.famous_back_button.get_global_rect().end.y, bottom, "Back on screen")
+	assert_eq(m.main_menu.famous_groups(), [
+		["Eighteen holes", ["old_grey_championship", "dogleg_hollow_championship"]],
+		["Nine holes", ["harbor_links", "old_grey_links", "pine_ridge", "cliffside", "dogleg_hollow"]],
+	])
+	var order: Array[String] = []
+	for c: Node in m.main_menu.famous_list.get_children():
+		order.append((c as Label).text if c.has_meta(&"heading") else String(c.get_meta(&"course_id")))
+	assert_eq(order[0], "Eighteen holes", "the heading above its courses")
+	assert_eq(order[3], "Nine holes")
+	assert_eq(m.main_menu.famous_buttons()[0].text.get_slice(":", 1).strip_edges().left(8), "18 holes")
+	m.main_menu.show_famous(PackedStringArray(["cliffside", "pine_ridge"]))
+	assert_eq(m.main_menu.famous_groups(), [["Nine holes", ["cliffside", "pine_ridge"]]], "no empty group")
 
 
 ## E18-S6: Old Grey Links (Championship), the sixth, is on the page and starts a game on the
@@ -358,7 +475,7 @@ func test_the_famous_eighteen_starts_from_the_page() -> void:
 	var m := _main()
 	m.open_menu()
 	m.main_menu.show_famous()
-	m.main_menu.famous_buttons()[5].pressed.emit()
+	m.main_menu.famous_button("old_grey_championship").pressed.emit()
 	assert_false(m.main_menu.visible, "the menu closes")
 	assert_eq(m.course.course_id, "old_grey_championship")
 	assert_eq(m.course.course_version, FamousCourses.latest_version("old_grey_championship"))
@@ -377,7 +494,7 @@ func test_the_dogleg_eighteen_starts_from_the_page() -> void:
 	var m := _main()
 	m.open_menu()
 	m.main_menu.show_famous()
-	m.main_menu.famous_buttons()[6].pressed.emit()
+	m.main_menu.famous_button("dogleg_hollow_championship").pressed.emit()
 	assert_false(m.main_menu.visible, "the menu closes")
 	assert_eq(m.course.course_id, "dogleg_hollow_championship")
 	assert_eq(m.course.course_version, FamousCourses.latest_version("dogleg_hollow_championship"))
@@ -411,6 +528,16 @@ func test_a_save_on_an_older_version_loads_as_saved_and_both_pages_say_a_newer_o
 	m.main_menu.show_famous()
 	assert_eq(m.main_menu.famous_notes(), {"cliffside":
 			"A newer version of Cliffside is available. Your saved game from Day 1 keeps the version it was saved with."})
+	# E19-S3: the note scrolls into view with its course.
+	await wait_frames(2)
+	m.main_menu.famous_button("cliffside").grab_focus()
+	await wait_frames(2)
+	var note: Label
+	for c: Node in m.main_menu.famous_list.get_children():
+		if c is Label and c.get_meta(&"course_id", "") == "cliffside":
+			note = c
+	assert_true(m.main_menu.famous_scroll.get_global_rect().grow(0.5).encloses(note.get_global_rect()),
+			"the note in view under its course")
 
 
 func test_a_save_on_the_latest_version_has_no_note() -> void:

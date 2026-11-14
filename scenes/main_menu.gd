@@ -20,6 +20,11 @@ extends Control
 ## name, a style line, its holes, par and yardage, and under it "A newer version of Cliffside is
 ## available" when a save is of an older version of it. Pressing one asks Main for a new game on
 ## it (`famous_requested`), which asks first when a game is under way.
+## E19-S3: the courses stand in two groups, "Eighteen holes" then "Nine holes" (FamousCourses
+## order within each), in a list that scrolls and follows keyboard focus (Up and Down move through
+## the courses, Down from the last reaches Back). The whole menu stands above the toolbar showing
+## (`bottom_bars`, Main's Build and Play toolbars) with a BAR_GUTTER gap, and the list takes only
+## the height the window has left, so the page and its Back fit however many courses there are.
 ##
 ## E8-S4: Load game opens the Load page: the manual save and each autosave (GameSave.list_saves),
 ## each a button with its day, balance and real date and time, or why it cannot be read; pressing
@@ -53,6 +58,21 @@ const BACKDROP := Color(0.0, 0.0, 0.0, 0.55)
 ## The focused control's outline: thick and bright, so it reads over any button state.
 const FOCUS_COLOR := Color(1.0, 0.84, 0.3)
 const FOCUS_WIDTH: int = 3
+## E19-S3: the gap the menu keeps above the toolbar showing, px.
+const BAR_GUTTER: float = 16.0
+## E19-S3: the band at the bottom the menu keeps clear when no toolbar is given (bottom_bars):
+## the Build toolbar (8 px off the bottom, 98 px tall) and the gutter.
+const TOOLBAR_CLEAR: float = 122.0
+## E19-S3: the menu's gap from the top of the window.
+const TOP_CLEAR: float = 16.0
+## E19-S3: the Famous courses page's group headings, and the hole count that makes an eighteen.
+const EIGHTEEN_HEADING: String = "Eighteen holes"
+const NINE_HEADING: String = "Nine holes"
+const EIGHTEEN_HOLES: int = 18
+## E19-S3: the gap between the famous list and its scroll bar, px.
+const SCROLL_GAP: int = 6
+## E19-S3: the group headings' colour, a pale green under the white course lines.
+const HEADING_COLOR := Color(0.75, 0.82, 0.7)
 ## The buttons' places on the menu page (show_main's index): E15-S1's Famous courses third.
 const FAMOUS_INDEX: int = 2
 ## E8-S4: the Load game and Save game buttons' places on the menu page.
@@ -67,6 +87,9 @@ const SOUND_INDEX: int = 7
 var save_path: String = GameSave.PATH
 var autosave_folder: String = GameSave.AUTOSAVE_FOLDER
 var autosave_slots: int = 3
+## E19-S3: the toolbars along the bottom of the window (Main's Build and Play ones); the menu
+## stands above whichever shows.
+var bottom_bars: Array[Control] = []
 
 var main_page: VBoxContainer
 var export_page: VBoxContainer
@@ -90,11 +113,16 @@ var goals_button: Button
 var famous_page: VBoxContainer
 var famous_list: VBoxContainer
 var famous_back_button: Button
+## E19-S3: the scroll round the famous list, and the menu's panel (the page's box on screen).
+var famous_scroll: ScrollContainer
+var panel: PanelContainer
+var _centre: CenterContainer
 
 var _course: CourseData
 ## E15-S1: each famous course's summary line, read from res://courses/ once (the files do not
-## change while the game runs).
+## change while the game runs). E19-S3: and its hole count (0 when it cannot be read).
 var _famous_lines: Dictionary = {}
+var _famous_holes: Dictionary = {}
 var _main_buttons: Array[Button] = []
 var _focus_style: StyleBoxFlat
 
@@ -113,12 +141,15 @@ func _ready() -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
-	var centre := CenterContainer.new()
-	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(centre)
-	var panel := PanelContainer.new()
+	_centre = CenterContainer.new()
+	_centre.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# E19-S3: centred in the window above the toolbar (_fit).
+	_centre.offset_top = TOP_CLEAR
+	_centre.offset_bottom = -TOOLBAR_CLEAR
+	add_child(_centre)
+	panel = PanelContainer.new()
 	panel.custom_minimum_size.x = PANEL_WIDTH
-	centre.add_child(panel)
+	_centre.add_child(panel)
 	var margin := MarginContainer.new()
 	for side: String in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 16)
@@ -136,6 +167,7 @@ func _ready() -> void:
 	_build_load(pages)
 	_build_famous(pages)
 	hide()
+	get_viewport().size_changed.connect(_fit)
 
 
 func _build_main(parent: Control) -> void:
@@ -250,6 +282,8 @@ func _build_load(parent: Control) -> void:
 ## E15-S1: the Famous courses page: a note, the list (show_famous fills it) and Back.
 func _build_famous(parent: Control) -> void:
 	famous_page = VBoxContainer.new()
+	# E19-S3: room between the note, the scrolling list and Back.
+	famous_page.add_theme_constant_override("separation", 8)
 	parent.add_child(famous_page)
 	var head := Label.new()
 	head.text = "Famous courses"
@@ -259,10 +293,21 @@ func _build_famous(parent: Control) -> void:
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size.x = PANEL_WIDTH - 32.0
 	famous_page.add_child(note)
+	# E19-S3: the list scrolls (its height set by _fit) and follows keyboard focus.
+	famous_scroll = ScrollContainer.new()
+	famous_scroll.follow_focus = true
+	famous_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	famous_page.add_child(famous_scroll)
+	# A gap between the courses and the scroll bar.
+	var gap := MarginContainer.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.add_theme_constant_override("margin_right", SCROLL_GAP)
+	famous_scroll.add_child(gap)
 	famous_list = VBoxContainer.new()
 	famous_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	famous_list.add_theme_constant_override("separation", 6)
-	famous_page.add_child(famous_list)
+	gap.add_child(famous_list)
+	famous_list.minimum_size_changed.connect(_fit)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_END
 	famous_page.add_child(row)
@@ -313,12 +358,35 @@ func import_buttons() -> Array[Button]:
 	return out
 
 
-## E15-S1: the Famous courses page's course buttons, in list order (FamousCourses.COURSES).
+## E15-S1: the Famous courses page's course buttons, in page order (E19-S3: the eighteens, then
+## the nines, each group in FamousCourses.COURSES order).
 func famous_buttons() -> Array[Button]:
 	var out: Array[Button] = []
 	for c: Node in famous_list.get_children():
 		if c is Button:
 			out.append(c as Button)
+	return out
+
+
+## E19-S3: the button of famous course `id` on the page; null when it is not listed.
+func famous_button(id: String) -> Button:
+	for b: Button in famous_buttons():
+		if b.get_meta(&"course_id", "") == id:
+			return b
+	return null
+
+
+## E19-S3: the page's groups in order, each [heading, [course ids]]; a group with no course is
+## left out.
+func famous_groups() -> Array:
+	var out: Array = []
+	var group: Array = []
+	for c: Node in famous_list.get_children():
+		if c is Label and c.has_meta(&"heading"):
+			group = [(c as Label).text, []]
+			out.append(group)
+		elif c is Button:
+			group[1].append(c.get_meta(&"course_id"))
 	return out
 
 
@@ -345,6 +413,7 @@ func load_buttons() -> Array[Button]:
 func open(course: CourseData) -> void:
 	_course = course
 	show()
+	_fit()
 	show_main(0)
 
 
@@ -366,7 +435,8 @@ func show_main(index: int = 0) -> void:
 
 ## E15-S1: the Famous courses page: each built-in course, the latest version, with a note under
 ## it when a save (GameSave.list_saves, newest first) is of an older version; focus on the first.
-func show_famous() -> void:
+## E19-S3: grouped, eighteens first; `ids` is FamousCourses.ids() but for a test's longer list.
+func show_famous(ids: PackedStringArray = FamousCourses.ids()) -> void:
 	_show_page(famous_page)
 	for c: Node in famous_list.get_children():
 		famous_list.remove_child(c)
@@ -379,23 +449,81 @@ func show_famous() -> void:
 		var kind: String = "Your autosave" if e.is_autosave else "Your saved game"
 		notes[e.state.course.course_id] = "%s %s from Day %d keeps the version it was saved with." \
 				% [note, kind, e.state.day]
-	for id: String in FamousCourses.ids():
-		var b := _button(famous_list, famous_text(id), _famous.bind(id))
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.tooltip_text = b.text
-		if notes.has(id):
-			var l := Label.new()
-			l.text = notes[id]
-			l.set_meta(&"course_id", id)
-			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			l.custom_minimum_size.x = PANEL_WIDTH - 48.0
-			l.add_theme_color_override("font_color", FOCUS_COLOR)
-			famous_list.add_child(l)
+	var eighteens: Array[String] = []
+	var nines: Array[String] = []
+	for id: String in ids:
+		famous_text(id)
+		(eighteens if int(_famous_holes[id]) >= EIGHTEEN_HOLES else nines).append(id)
+	for group: Array in [[EIGHTEEN_HEADING, eighteens], [NINE_HEADING, nines]]:
+		if (group[1] as Array).is_empty():
+			continue
+		var h := Label.new()
+		h.text = group[0]
+		h.set_meta(&"heading", true)
+		h.add_theme_color_override("font_color", HEADING_COLOR)
+		famous_list.add_child(h)
+		for id: String in group[1]:
+			_add_famous(id, notes.get(id, ""))
+		# The group's first course brings its heading into view with it (Up to the top).
+		var first := famous_list.get_child(h.get_index() + 1) as Control
+		first.focus_entered.connect(func() -> void: famous_scroll.ensure_control_visible.call_deferred(h))
 	var picks := famous_buttons()
+	# Up and Down step through the courses in page order; Down from the last reaches Back.
+	for i: int in picks.size():
+		var b := picks[i]
+		b.focus_neighbor_top = b.get_path_to(picks[i - 1] if i > 0 else b)
+		b.focus_neighbor_bottom = b.get_path_to(picks[i + 1] if i + 1 < picks.size() \
+				else famous_back_button)
+	famous_back_button.focus_neighbor_top = famous_back_button.get_path_to(picks[-1]) \
+			if not picks.is_empty() else NodePath()
+	famous_scroll.scroll_vertical = 0
+	_fit()
 	if picks.is_empty():
 		famous_back_button.grab_focus()
 	else:
 		picks[0].grab_focus()
+
+
+## E19-S3: one course's button on the page, and its newer-version note under it.
+func _add_famous(id: String, note: String) -> void:
+	var b := _button(famous_list, famous_text(id), _famous.bind(id))
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.tooltip_text = b.text
+	b.set_meta(&"course_id", id)
+	if not note.is_empty():
+		var l := Label.new()
+		l.text = note
+		l.set_meta(&"course_id", id)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = PANEL_WIDTH - 48.0
+		l.add_theme_color_override("font_color", FOCUS_COLOR)
+		famous_list.add_child(l)
+		# Focus on the course brings its note into view with it.
+		b.focus_entered.connect(func() -> void: famous_scroll.ensure_control_visible.call_deferred(l))
+
+
+## E19-S3: the band at the bottom the menu keeps clear: from the top of the highest toolbar
+## showing to the window's bottom, and the gutter; TOOLBAR_CLEAR when none is given or shows.
+func bottom_clear() -> float:
+	var bottom := get_viewport_rect().size.y
+	var clear := 0.0
+	for bar: Control in bottom_bars:
+		if is_instance_valid(bar) and bar.is_visible_in_tree():
+			clear = maxf(clear, bottom - bar.get_global_rect().position.y + BAR_GUTTER)
+	return clear if clear > 0.0 else TOOLBAR_CLEAR
+
+
+## E19-S3: the menu above the toolbar, and the famous list's height: all of it when it fits,
+## else what the window leaves once the rest of the panel is laid out; it scrolls the rest.
+func _fit() -> void:
+	if famous_scroll == null or not is_inside_tree():
+		return
+	var clear := bottom_clear()
+	_centre.offset_bottom = -clear
+	var room := get_viewport_rect().size.y - TOP_CLEAR - clear
+	var rest := panel.get_combined_minimum_size().y - famous_scroll.custom_minimum_size.y
+	var want := famous_list.get_combined_minimum_size().y
+	famous_scroll.custom_minimum_size.y = maxf(0.0, minf(want, room - rest))
 
 
 ## E15-S1: a famous course's button text: "Cliffside: 9 holes, par 36, 3,353 yd" and its style
@@ -406,6 +534,7 @@ func famous_text(id: String) -> String:
 		var c := FamousCourses.load_course(id, errors)
 		_famous_lines[id] = CourseExport.summary(c) if c != null else \
 				"can't be read (%s)" % (errors[0] if not errors.is_empty() else "cannot read it")
+		_famous_holes[id] = c.holes.size() if c != null else 0
 	return "%s: %s\n%s" % [FamousCourses.display_name(id), _famous_lines[id],
 			FamousCourses.spec(id).get("style", "")]
 
