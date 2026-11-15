@@ -20,7 +20,7 @@ And it's your course, so play it. Pick a club, aim, and swing with a three-click
 - Up to eighteen holes on a 960-yard map: par 3s, 4s and 5s, doglegs included; guests play nine or the full eighteen, turning at the clubhouse. A ruler shows each hole's length and par as you place it.
 - Guests who play your course, wait their turn, walk your cart paths and footbridges (they never wade: paint cart path over water to bridge it), and comment on every hole.
 - An economy with green fees, upkeep, land to buy, and a star rating set each evening.
-- Play any hole yourself, with a readable swing bar, a landing marker, and a top-down green view for putts.
+- Play any hole yourself, with a readable swing bar, a landing marker, and a top-down green view for putts. Shape your shots: draw, fade, hook or slice the ball round a dogleg, and watch the curved flight in the aim preview.
 - A goal checklist that walks you through your first course.
 - Autosave every morning; F5 and F9 ask before they overwrite.
 - Seven famous courses built in, to play or rebuild, modelled on famous real holes: two full eighteens, Old Grey Links (Championship) (famous links holes) and Dogleg Hollow (Championship) (eighteen famous doglegs), and five nines: Harbor Links (water and an island green), Old Grey Links (seaside links), Pine Ridge (tree-lined parkland), Cliffside (clifftops over the sea) and Dogleg Hollow (nine famous doglegs). Famous courses in the menu starts a new game on one, and each update brings their latest version.
@@ -31,7 +31,7 @@ And it's your course, so play it. Pick a club, aim, and swing with a three-click
 **Controls**
 
 - Build tools are on the bottom bar. Tab switches between Build and Play.
-- Swing: Space or click to start, again for power (distance), again in the green zone for a straight shot. Aim with the mouse or the arrow keys.
+- Swing: Space or click to start, again for power (distance), again in the green zone for a clean strike. Aim with the mouse or the arrow keys; Q and E shape the shot.
 - P pauses the day, 1 and 3 set its speed, and M skips to the next morning.
 - Esc opens the menu: new course, save, load, import and export, and sound.
 
