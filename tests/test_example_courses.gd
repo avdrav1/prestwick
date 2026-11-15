@@ -459,6 +459,97 @@ func test_dogleg_hollow_championship_day_finishes_before_dusk() -> void:
 	assert_lt(int(day.latest), int(day.day_s), "before dusk")
 
 
+## E20-S3: the doglegs retouched for shot shape (docs/courses.md says what changed and which
+## shape each rewards), hole -> [shape, club, power, aim]: a perfect tee shot with that shape,
+## aimed `aim` degrees off the line from the tee to the turn (positive to the right), measured
+## with a 0.5 degree, 5% sweep (docs/decisions/e20-s3-player-lines.txt). Holes 1 to 9 are
+## Dogleg Hollow's, played on the nine (the Championship's front nine is the same holes); 10 to
+## 17 the Championship's back nine. Not retouched: 6 and 14 (no corner layout tried made a shape
+## pay for guests), 8 and 18 (bends of 35 and 40 degrees, which a straight ball plays).
+const SHAPED_LINES := {
+	1: ["hook", "driver", 0.95, -14.5], 2: ["slice", "driver", 0.9, 16.5],
+	3: ["hook", "driver", 0.9, -10.0], 4: ["slice", "driver", 0.9, 0.5],
+	5: ["slice", "driver", 0.95, 2.5], 7: ["hook", "driver", 0.85, -2.0],
+	9: ["slice", "driver", 1.0, 2.5], 10: ["slice", "driver", 1.0, 7.5],
+	11: ["hook", "driver", 1.0, -3.5], 12: ["hook", "driver", 1.0, -12.5],
+	13: ["hook", "driver", 0.95, -1.0], 15: ["hook", "driver", 0.95, -5.0],
+	16: ["fade", "driver", 1.0, 7.0], 17: ["slice", "driver", 1.0, 9.5],
+}
+## The straight sweep: every aim within STRAIGHT_AIM_DEG of the line to the turn in steps of
+## STRAIGHT_AIM_STEP_DEG, the driver and the 3-wood at STRAIGHT_POWERS.
+const STRAIGHT_AIM_DEG: float = 50.0
+const STRAIGHT_AIM_STEP_DEG: float = 1.0
+const STRAIGHT_POWERS: Array[float] = [0.8, 0.85, 0.9, 0.95, 1.0]
+
+
+## The tiles of `spec`'s own fairway (its strip and fairway_add, painted fairway on `c`).
+func _own_fairway(c: CourseData, spec: Dictionary) -> Dictionary:
+	var out := {}
+	var cells := PlaytestNine.fairway_tiles(spec)
+	for e: Array in spec.get("fairway_add", []):
+		cells.append_array(PlaytestNine.ellipse(e))
+	for t: Vector2i in cells:
+		if c.in_bounds(t.x, t.y) and c.get_surface(t.x, t.y) == Surface.Type.FAIRWAY:
+			out[t] = true
+	return out
+
+
+## The yards to the cup a perfect tee shot of `club` at `power` along `aim` with `shape` (null
+## straight) rests at on the hole's own fairway, clear of trees and hazards; INF elsewhere.
+func _tee_rest(c: CourseData, field: HeightField, model: ShotModel, h: HoleData, own: Dictionary,
+		club: Club, power: float, aim: float, shape: ShotShape) -> float:
+	var at := field.tile_center(h.tee)
+	var p := ShotPrediction.run_launch(c, 1, model.full(field, club, power, at, aim, 0.0, true, shape),
+			model.params, null, h.cup)
+	if p.penalty_strokes > 0 or p.scattered or not own.has(p.rest_tile):
+		return INF
+	return Vector2(p.rest.x, p.rest.y).distance_to(field.tile_center(h.cup))
+
+
+## E20-S3 Accept: on each retouched hole a perfect shaped tee shot (SHAPED_LINES, bending the way
+## the hole turns) rests on the hole's fairway nearer the cup than any perfect straight tee shot
+## of the sweep, so the shape reaches a shorter approach.
+func test_a_shaped_tee_shot_beats_the_best_straight_one_on_each_retouched_dogleg() -> void:
+	var model := ShotModel.new()
+	for path: String in [DoglegHollow.PATH, DoglegChampionship.PATH]:
+		var c := _load(path)
+		if c == null:
+			continue
+		var field := HeightField.new(c, model.params)
+		for h: HoleData in c.holes:
+			if not SHAPED_LINES.has(h.number) or (path == DoglegChampionship.PATH and h.number <= 9):
+				continue
+			var line: Array = SHAPED_LINES[h.number]
+			var spec := DoglegChampionship.spec(h.number)
+			var own := _own_fairway(c, spec)
+			var turn: Vector2 = GuestHole.turn_of(c, h)
+			var tee := field.tile_center(h.tee)
+			var cup := field.tile_center(h.cup)
+			var base := rad_to_deg((turn - tee).angle())
+			var shape := model.shapes.shape(line[0])
+			var side := 1 if (turn - tee).angle_to(cup - turn) > 0.0 else -1
+			assert_eq(shape.side, side, "hole %d: the %s bends the way the hole turns" % [h.number, line[0]])
+			var shaped := _tee_rest(c, field, model, h, own, model.clubs.club(line[1]), line[2],
+					base + float(line[3]), shape)
+			assert_lt(shaped, INF, "hole %d: the %s rests on the fairway" % [h.number, line[0]])
+			var best := INF
+			var best_at := ""
+			for id: String in ["driver", "3w"]:
+				var club := model.clubs.club(id)
+				for pw: float in STRAIGHT_POWERS:
+					var steps := roundi(2.0 * STRAIGHT_AIM_DEG / STRAIGHT_AIM_STEP_DEG)
+					for i: int in steps + 1:
+						var off := -STRAIGHT_AIM_DEG + i * STRAIGHT_AIM_STEP_DEG
+						var d := _tee_rest(c, field, model, h, own, club, pw, base + off, null)
+						if d < best:
+							best = d
+							best_at = "%s %.0f%% %+.0f" % [id, pw * 100.0, off]
+			gut.p("%s hole %d: %s %.1f yd, best straight %.1f yd (%s)" % [c.course_name, h.number,
+					line[0], shaped, best, best_at])
+			assert_lt(shaped, best, "hole %d: the %s (%.1f yd) beats every straight tee shot (best %.1f yd, %s)" % [
+					h.number, line[0], shaped, best, best_at])
+
+
 ## E18-S6: a 24-arrival day on the eighteen (as /balance reactions plays it) is an eighteen-hole
 ## day, and every group that tees off finishes its round, nine or eighteen, before dusk.
 func test_old_grey_championship_day_finishes_before_dusk() -> void:
@@ -480,7 +571,7 @@ func test_old_grey_championship_day_finishes_before_dusk() -> void:
 const SUMMARIES := {
 	"cliffside": "9 holes, par 36, 3,353 yd",
 	"dogleg_hollow": "9 holes, par 37, 3,545 yd",
-	"dogleg_hollow_championship": "18 holes, par 74, 7,552 yd",
+	"dogleg_hollow_championship": "18 holes, par 74, 7,550 yd",
 	"harbor_links": "9 holes, par 35, 3,200 yd",
 	"old_grey_championship": "18 holes, par 70, 6,533 yd",
 	"old_grey_links": "9 holes, par 34, 3,023 yd",

@@ -1,0 +1,85 @@
+E20-S3: scripts/bridge_audit.gd on the retouched dogleg courses (XDG_DATA_HOME=$(mktemp -d) godot --headless --path . -s res://scripts/bridge_audit.gd -- course=<file>), 2026-11-15. Nothing flagged on either.
+
+
+
+=== Dogleg Hollow: 0 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1        5 yd straight, walked    5 yd (1.00x, +0 yd),    0 s against    0 s
+  green 1 to tee 2         51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3        158 yd straight, walked  166 yd (1.05x, +8 yd),    3 s against    4 s
+  green 3 to tee 4         92 yd straight, walked   95 yd (1.03x, +3 yd),    2 s against    2 s
+  green 4 to tee 5         63 yd straight, walked   63 yd (1.00x, +0 yd),    2 s against    2 s
+  green 5 to tee 6         55 yd straight, walked   55 yd (1.00x, +0 yd),    2 s against    2 s
+  green 6 to tee 7        128 yd straight, walked  139 yd (1.09x, +11 yd),    3 s against    3 s
+  green 7 to tee 8        105 yd straight, walked  111 yd (1.05x, +5 yd),    2 s against    3 s
+  green 8 to tee 9        141 yd straight, walked  170 yd (1.21x, +29 yd),    3 s against    4 s
+  green 9 to clubhouse    164 yd straight, walked  164 yd (1.00x, +0 yd),    4 s against    4 s
+  0 of 10 walks with a detour
+day 1: latest finish 451 s
+  last home: arrived 82 s; 1: 153-179 (26 s, wait 77), 2: 195-222 (27 s, wait 19), 3: 232-247 (15 s, wait 6), 4: 271-290 (19 s, wait 19), 5: 299-313 (14 s, wait 5), 6: 331-348 (17 s, wait 16), 7: 363-376 (13 s, wait 12), 8: 398-421 (23 s, wait 14), 9: 425-446 (21 s, wait 0)
+day 2: latest finish 447 s
+  last home: arrived 81 s; 1: 148-178 (30 s, wait 70), 2: 187-204 (17 s, wait 7), 3: 222-245 (23 s, wait 11), 4: 254-274 (20 s, wait 1), 5: 283-303 (20 s, wait 4), 6: 312-331 (19 s, wait 7), 7: 337-352 (15 s, wait 3), 8: 387-412 (25 s, wait 31), 9: 419-442 (23 s, wait 1)
+day 3: latest finish 450 s
+  last home: arrived 80 s; 1: 139-167 (28 s, wait 64), 2: 173-198 (25 s, wait 4), 3: 212-227 (15 s, wait 10), 4: 244-279 (35 s, wait 24), 5: 286-303 (17 s, wait 5), 6: 309-333 (24 s, wait 5), 7: 344-361 (17 s, wait 5), 8: 386-417 (31 s, wait 32), 9: 425-445 (20 s, wait 4)
+ball spots (2425 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 289 balls, 0 with a detour
+  hole 2: 261 balls, 0 with a detour
+  hole 3: 248 balls, 0 with a detour
+  hole 4: 297 balls, 0 with a detour
+  hole 5: 238 balls, 0 with a detour
+  hole 6: 259 balls, 0 with a detour
+  hole 7: 251 balls, 0 with a detour
+  hole 8: 334 balls, 0 with a detour
+  hole 9: 248 balls, 0 with a detour
+bridges:
+
+
+
+=== Dogleg Hollow (Championship): 0 bridge tiles ===
+round walks (dry route against the straight line with no water):
+  clubhouse to tee 1      150 yd straight, walked  153 yd (1.02x, +2 yd),    3 s against    3 s
+  green 1 to tee 2         51 yd straight, walked   51 yd (1.00x, +0 yd),    2 s against    2 s
+  green 2 to tee 3        158 yd straight, walked  166 yd (1.05x, +8 yd),    3 s against    4 s
+  green 3 to tee 4         92 yd straight, walked   95 yd (1.03x, +3 yd),    2 s against    2 s
+  green 4 to tee 5         63 yd straight, walked   63 yd (1.00x, +0 yd),    2 s against    2 s
+  green 5 to tee 6         55 yd straight, walked   55 yd (1.00x, +0 yd),    2 s against    2 s
+  green 6 to tee 7        128 yd straight, walked  139 yd (1.09x, +11 yd),    3 s against    3 s
+  green 7 to tee 8        105 yd straight, walked  111 yd (1.05x, +5 yd),    2 s against    3 s
+  green 8 to tee 9        141 yd straight, walked  170 yd (1.21x, +29 yd),    3 s against    4 s
+  green 9 to tee 10       170 yd straight, walked  170 yd (1.00x, +0 yd),    5 s against    5 s
+  green 10 to tee 11      176 yd straight, walked  192 yd (1.09x, +16 yd),    4 s against    4 s
+  green 11 to tee 12       74 yd straight, walked   84 yd (1.14x, +10 yd),    2 s against    2 s
+  green 12 to tee 13       43 yd straight, walked   43 yd (1.00x, +0 yd),    1 s against    1 s
+  green 13 to tee 14       75 yd straight, walked   90 yd (1.20x, +15 yd),    2 s against    2 s
+  green 14 to tee 15       71 yd straight, walked   77 yd (1.08x, +6 yd),    2 s against    2 s
+  green 15 to tee 16      105 yd straight, walked  117 yd (1.12x, +12 yd),    2 s against    3 s
+  green 16 to tee 17       60 yd straight, walked   60 yd (1.00x, +0 yd),    2 s against    2 s
+  green 17 to tee 18       46 yd straight, walked   46 yd (1.00x, +0 yd),    1 s against    1 s
+  green 18 to clubhouse   104 yd straight, walked  104 yd (1.00x, +0 yd),    3 s against    3 s
+  0 of 19 walks with a detour
+day 1: latest finish 649 s
+  last home: arrived 82 s; 1: 107-130 (23 s, wait 27), 2: 143-169 (26 s, wait 14), 3: 179-194 (15 s, wait 2), 4: 215-235 (20 s, wait 15), 5: 246-261 (15 s, wait 5), 6: 273-290 (17 s, wait 10), 7: 293-310 (17 s, wait 0), 8: 318-348 (30 s, wait 8), 9: 359-373 (14 s, wait 3), 10: 398-418 (20 s, wait 0), 11: 422-448 (26 s, wait 0), 12: 450-476 (26 s, wait 0), 13: 482-500 (18 s, wait 0), 14: 511-532 (21 s, wait 0), 15: 534-561 (27 s, wait 0), 16: 564-591 (27 s, wait 0), 17: 593-622 (29 s, wait 0), 18: 624-646 (22 s, wait 0)
+day 2: latest finish 639 s
+  last home: arrived 72 s; 1: 109-142 (33 s, wait 46), 2: 155-174 (19 s, wait 14), 3: 197-213 (16 s, wait 22), 4: 224-251 (27 s, wait 16), 5: 255-272 (17 s, wait 5), 6: 281-300 (19 s, wait 7), 7: 309-333 (24 s, wait 9), 8: 345-377 (32 s, wait 21), 9: 384-401 (17 s, wait 2), 10: 417-440 (23 s, wait 0), 11: 445-464 (19 s, wait 0), 12: 467-489 (22 s, wait 0), 13: 492-515 (23 s, wait 0), 14: 518-539 (21 s, wait 0), 15: 542-557 (15 s, wait 0), 16: 561-580 (19 s, wait 2), 17: 583-608 (25 s, wait 5), 18: 619-636 (17 s, wait 10)
+day 3: latest finish 775 s
+  last home: arrived 80 s; 1: 123-150 (27 s, wait 45), 2: 159-183 (24 s, wait 7), 3: 188-208 (20 s, wait 5), 4: 228-256 (28 s, wait 22), 5: 264-282 (18 s, wait 5), 6: 298-315 (17 s, wait 10), 7: 342-361 (19 s, wait 26), 8: 387-409 (22 s, wait 23), 9: 419-439 (20 s, wait 6), 10: 460-484 (24 s, wait 6), 11: 498-531 (33 s, wait 18), 12: 536-565 (29 s, wait 10), 13: 569-592 (23 s, wait 2), 14: 600-618 (18 s, wait 8), 15: 647-663 (16 s, wait 8), 16: 686-703 (17 s, wait 16), 17: 719-745 (26 s, wait 7), 18: 748-772 (24 s, wait 1)
+ball spots (3589 balls at rest over 3 days; detour: over 1.3x and 30 yd):
+  hole 1: 223 balls, 0 with a detour
+  hole 2: 207 balls, 0 with a detour
+  hole 3: 190 balls, 0 with a detour
+  hole 4: 230 balls, 0 with a detour
+  hole 5: 187 balls, 0 with a detour
+  hole 6: 203 balls, 0 with a detour
+  hole 7: 199 balls, 0 with a detour
+  hole 8: 266 balls, 0 with a detour
+  hole 9: 192 balls, 0 with a detour
+  hole 10: 185 balls, 0 with a detour
+  hole 11: 189 balls, 0 with a detour
+  hole 12: 181 balls, 0 with a detour
+  hole 13: 191 balls, 0 with a detour
+  hole 14: 196 balls, 0 with a detour
+  hole 15: 171 balls, 0 with a detour
+  hole 16: 205 balls, 0 with a detour
+  hole 17: 204 balls, 0 with a detour
+  hole 18: 170 balls, 0 with a detour
+bridges:

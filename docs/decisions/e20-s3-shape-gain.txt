@@ -1,0 +1,100 @@
+E20-S3: scripts/shape_gain.gd --runs 100 after the retouch (XDG_DATA_HOME=$(mktemp -d)), 2026-11-15,
+against E20-S2's run on the old layouts (e20-s2-shape-gain.txt, the same seeds and data/guests.json).
+Skills 7 to 10, 100 guests a skill a hole, alone; "gain" is straight less shaped, strokes a hole.
+Holes 1 to 9 play the same on both courses; the table is the Championship's eighteen.
+
+Course totals:
+  Dogleg Hollow                 before: 2 of 9 holes shaped on most tee shots, 24% shaped, gain -0.006 +/- 0.005
+                                after:  8 of 9, 91% shaped (52% cut the corner), gain +0.071 +/- 0.013 (+0.64 a round)
+  Dogleg Hollow (Championship)  before: 7 of 18, 41% shaped, gain -0.014 +/- 0.005
+                                after:  15 of 18, 84% shaped (54% cut the corner), gain +0.064 +/- 0.009 (+1.16 a round)
+  The 14 retouched holes: gain +0.087 a hole after (-0.014 before), every one shaped on most tee shots.
+
+  hole retouched  before: shaped, gain   after: shaped, gain    straight before -> after   shaped before -> after
+   1 yes    0% none  +0.000    100% draw  +0.110    4.275 -> 4.527   4.275 -> 4.418
+   2 yes    0% none  +0.000    100% fade  +0.033    4.065 -> 4.170   4.065 -> 4.138
+   3 yes    0% none  +0.000    100% draw  +0.120    3.755 -> 3.993   3.755 -> 3.873
+   4 yes    0% none  +0.000    100% fade  +0.033    4.242 -> 4.400   4.242 -> 4.367
+   5 yes    0% none  +0.000    100% fade  +0.070    3.808 -> 4.018   3.808 -> 3.947
+   6 no   100% draw  -0.035    100% draw  -0.035    3.897 -> 3.897   3.933 -> 3.933
+   7 yes   74% draw  +0.010    100% draw  +0.175    3.875 -> 4.018   3.865 -> 3.842
+   8 no    19% slice -0.020     19% slice -0.020    4.860 -> 4.860   4.880 -> 4.880
+   9 yes   25% slice +0.003    100% fade  +0.163    3.808 -> 4.085   3.805 -> 3.922
+  10 yes   28% slice -0.018    100% fade  +0.065    4.395 -> 4.463   4.412 -> 4.397
+  11 yes  100% draw  -0.043    100% draw  +0.087    4.355 -> 4.500   4.397 -> 4.412
+  12 yes   95% draw  -0.035    100% draw  +0.062    4.268 -> 4.372   4.303 -> 4.310
+  13 yes  100% draw  -0.043    100% draw  +0.085    4.360 -> 4.622   4.402 -> 4.537
+  14 no     0% none  +0.000      0% none  +0.000    4.430 -> 4.430   4.430 -> 4.430
+  15 yes   83% draw  -0.013     83% draw  +0.022    3.868 -> 4.035   3.880 -> 4.013
+  16 yes    2% fade  -0.007    100% fade  +0.092    4.303 -> 4.473   4.310 -> 4.380
+  17 yes  100% fade  -0.048    100% fade  +0.095    4.750 -> 4.853   4.798 -> 4.758
+  18 no    12% fade  +0.003     12% fade  +0.003    3.935 -> 3.935   3.933 -> 3.933
+
+Not retouched: 6 (shaped by every skill-10 guest and still a loss, as before), 8 (a 35 degree bend), 14
+(never shaped) and 18 (a 40 degree bend). Straight (skills 7 to 10 with shaping off) is 0.07 to 0.28 a
+hole worse on the retouched holes, the run-through bunker's price; shaped play is 0.03 better to 0.18
+worse than the old straight, so the retouched holes play harder for skilled guests too, by about 0.08 a
+hole (e20-s3-ratings.txt: the ratings hold).
+
+The run itself:
+
+shape gain: skills 7 to 10, 100 guests a skill a hole, seed 1; shape_turn_min_deg 20, cut shares [1.0, 0.5, 0.0], shape_gain_yd 3.0
+Dogleg Hollow
+  hole 1 par 4, turns left 75 deg: shaped 100% (draw), cut the corner 53% of those; mean 4.418 shaped, 4.527 straight, gain +0.110 +/- 0.052
+    tee shot: to the cup 185 / 195 yd, fairway 58% / 60%, shanks 5.2% / 2.8% (shaped / straight)
+  hole 2 par 4, turns right 81 deg: shaped 100% (fade), cut the corner 62% of those; mean 4.138 shaped, 4.170 straight, gain +0.033 +/- 0.043
+    tee shot: to the cup 163 / 171 yd, fairway 68% / 64%, shanks 6.5% / 3.2% (shaped / straight)
+  hole 3 par 4, turns left 70 deg: shaped 100% (draw), cut the corner 58% of those; mean 3.873 shaped, 3.993 straight, gain +0.120 +/- 0.047
+    tee shot: to the cup 110 / 116 yd, fairway 65% / 62%, shanks 7.0% / 3.2% (shaped / straight)
+  hole 4 par 4, turns right 73 deg: shaped 100% (fade), cut the corner 45% of those; mean 4.367 shaped, 4.400 straight, gain +0.033 +/- 0.037
+    tee shot: to the cup 186 / 191 yd, fairway 62% / 56%, shanks 5.8% / 3.0% (shaped / straight)
+  hole 5 par 4, turns right 71 deg: shaped 100% (fade), cut the corner 55% of those; mean 3.947 shaped, 4.018 straight, gain +0.070 +/- 0.042
+    tee shot: to the cup 133 / 136 yd, fairway 69% / 62%, shanks 6.5% / 3.0% (shaped / straight)
+  hole 6 par 4, turns left 69 deg: shaped 100% (draw), cut the corner 31% of those; mean 3.942 shaped, 3.897 straight, gain -0.045 +/- 0.032
+    tee shot: to the cup 136 / 134 yd, fairway 54% / 58%, shanks 6.8% / 3.0% (shaped / straight)
+  hole 7 par 4, turns left 71 deg: shaped 100% (draw), cut the corner 64% of those; mean 3.842 shaped, 4.018 straight, gain +0.175 +/- 0.035
+    tee shot: to the cup 112 / 120 yd, fairway 68% / 64%, shanks 7.8% / 4.8% (shaped / straight)
+  hole 8 par 5, turns right 35 deg: shaped 19% (slice), cut the corner 53% of those; mean 4.880 shaped, 4.860 straight, gain -0.020 +/- 0.022
+    tee shot: to the cup 279 / 276 yd, fairway 74% / 75%, shanks 3.5% / 1.8% (shaped / straight)
+  hole 9 par 4, turns right 51 deg: shaped 100% (fade), cut the corner 44% of those; mean 3.922 shaped, 4.085 straight, gain +0.163 +/- 0.031
+    tee shot: to the cup 125 / 127 yd, fairway 70% / 56%, shanks 7.2% / 4.5% (shaped / straight)
+  Dogleg Hollow: 8 of 9 bending holes shaped on most tee shots; 91% of 3600 tee shots shaped, 52% of those cut the corner; mean 4.148 shaped against 4.219 straight a hole, gain +0.071 +/- 0.013 strokes a hole (+0.64 a round of its bending holes)
+Dogleg Hollow (Championship)
+  hole 1 par 4, turns left 75 deg: shaped 100% (draw), cut the corner 53% of those; mean 4.418 shaped, 4.527 straight, gain +0.110 +/- 0.052
+    tee shot: to the cup 185 / 195 yd, fairway 58% / 60%, shanks 5.2% / 2.8% (shaped / straight)
+  hole 2 par 4, turns right 81 deg: shaped 100% (fade), cut the corner 62% of those; mean 4.138 shaped, 4.170 straight, gain +0.033 +/- 0.043
+    tee shot: to the cup 163 / 171 yd, fairway 68% / 64%, shanks 6.5% / 3.2% (shaped / straight)
+  hole 3 par 4, turns left 70 deg: shaped 100% (draw), cut the corner 58% of those; mean 3.873 shaped, 3.993 straight, gain +0.120 +/- 0.047
+    tee shot: to the cup 110 / 116 yd, fairway 65% / 62%, shanks 7.0% / 3.2% (shaped / straight)
+  hole 4 par 4, turns right 73 deg: shaped 100% (fade), cut the corner 45% of those; mean 4.367 shaped, 4.400 straight, gain +0.033 +/- 0.037
+    tee shot: to the cup 186 / 191 yd, fairway 62% / 56%, shanks 5.8% / 3.0% (shaped / straight)
+  hole 5 par 4, turns right 71 deg: shaped 100% (fade), cut the corner 55% of those; mean 3.947 shaped, 4.018 straight, gain +0.070 +/- 0.042
+    tee shot: to the cup 133 / 136 yd, fairway 69% / 62%, shanks 6.5% / 3.0% (shaped / straight)
+  hole 6 par 4, turns left 69 deg: shaped 100% (draw), cut the corner 31% of those; mean 3.933 shaped, 3.897 straight, gain -0.035 +/- 0.030
+    tee shot: to the cup 136 / 134 yd, fairway 56% / 58%, shanks 6.8% / 3.0% (shaped / straight)
+  hole 7 par 4, turns left 71 deg: shaped 100% (draw), cut the corner 64% of those; mean 3.842 shaped, 4.018 straight, gain +0.175 +/- 0.035
+    tee shot: to the cup 112 / 120 yd, fairway 68% / 64%, shanks 7.8% / 4.8% (shaped / straight)
+  hole 8 par 5, turns right 35 deg: shaped 19% (slice), cut the corner 53% of those; mean 4.880 shaped, 4.860 straight, gain -0.020 +/- 0.022
+    tee shot: to the cup 279 / 276 yd, fairway 74% / 75%, shanks 3.5% / 1.8% (shaped / straight)
+  hole 9 par 4, turns right 51 deg: shaped 100% (fade), cut the corner 44% of those; mean 3.922 shaped, 4.085 straight, gain +0.163 +/- 0.031
+    tee shot: to the cup 125 / 127 yd, fairway 70% / 56%, shanks 7.2% / 4.5% (shaped / straight)
+  hole 10 par 4, turns right 84 deg: shaped 100% (fade), cut the corner 62% of those; mean 4.397 shaped, 4.463 straight, gain +0.065 +/- 0.033
+    tee shot: to the cup 194 / 201 yd, fairway 74% / 68%, shanks 3.5% / 2.0% (shaped / straight)
+  hole 11 par 4, turns left 65 deg: shaped 100% (draw), cut the corner 52% of those; mean 4.412 shaped, 4.500 straight, gain +0.087 +/- 0.029
+    tee shot: to the cup 216 / 222 yd, fairway 69% / 68%, shanks 6.0% / 3.5% (shaped / straight)
+  hole 12 par 4, turns left 85 deg: shaped 100% (draw), cut the corner 56% of those; mean 4.310 shaped, 4.372 straight, gain +0.062 +/- 0.034
+    tee shot: to the cup 191 / 195 yd, fairway 62% / 65%, shanks 9.5% / 4.8% (shaped / straight)
+  hole 13 par 4, turns left 85 deg: shaped 100% (draw), cut the corner 60% of those; mean 4.537 shaped, 4.622 straight, gain +0.085 +/- 0.052
+    tee shot: to the cup 204 / 216 yd, fairway 63% / 58%, shanks 3.8% / 1.8% (shaped / straight)
+  hole 14 par 4, turns left 84 deg: shaped 0% (none), cut the corner 0% of those; mean 4.430 shaped, 4.430 straight, gain +0.000 +/- 0.000
+    tee shot: to the cup 214 / 214 yd, fairway 66% / 66%, shanks 3.5% / 3.5% (shaped / straight)
+  hole 15 par 4, turns left 81 deg: shaped 83% (draw), cut the corner 53% of those; mean 4.013 shaped, 4.035 straight, gain +0.022 +/- 0.031
+    tee shot: to the cup 143 / 144 yd, fairway 71% / 70%, shanks 4.8% / 1.5% (shaped / straight)
+  hole 16 par 4, turns right 83 deg: shaped 100% (fade), cut the corner 58% of those; mean 4.380 shaped, 4.473 straight, gain +0.092 +/- 0.037
+    tee shot: to the cup 199 / 204 yd, fairway 65% / 55%, shanks 5.0% / 2.5% (shaped / straight)
+  hole 17 par 5, turns right 71 deg: shaped 100% (fade), cut the corner 58% of those; mean 4.758 shaped, 4.853 straight, gain +0.095 +/- 0.045
+    tee shot: to the cup 307 / 312 yd, fairway 74% / 65%, shanks 5.2% / 3.0% (shaped / straight)
+  hole 18 par 4, turns right 40 deg: shaped 12% (fade), cut the corner 45% of those; mean 3.933 shaped, 3.935 straight, gain +0.003 +/- 0.011
+    tee shot: to the cup 167 / 166 yd, fairway 75% / 75%, shanks 3.8% / 3.2% (shaped / straight)
+  Dogleg Hollow (Championship): 15 of 18 bending holes shaped on most tee shots; 84% of 7200 tee shots shaped, 54% of those cut the corner; mean 4.249 shaped against 4.314 straight a hole, gain +0.064 +/- 0.009 strokes a hole (+1.16 a round of its bending holes)
+393.4 s

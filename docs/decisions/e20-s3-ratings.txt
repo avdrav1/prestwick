@@ -1,0 +1,16 @@
+E20-S3: ratings before and after the retouch.
+
+Before: docs/decisions/e20-s2-guest-day-examples-after.txt (main after E20-S2, the files as version 1).
+After: e20-s3-guest-day-examples-after.txt (scripts/guest_day.gd -- examples, 24 arrivals, day seeds 1 to 5).
+
+  course                          before  after   stars  pace fails      latest finish
+  Dogleg Hollow                   4.46    4.43    4.5    0.19 -> 0.20   447 -> 457 s of 540
+  Dogleg Hollow (Championship)    4.60    4.59    4.5    0.12 -> 0.13   776 -> 775 s of 1,020 (26 of 48 groups played eighteen)
+  The five other courses are unchanged files and rate as before (Harbor 4.34, Old Grey 4.46,
+  Pine Ridge 4.44, Cliffside 4.26, Old Grey Ch. 4.66).
+
+Every group finished before dusk on every day on both courses. The five-day dips are inside the
+rating's noise (about 0.03 for 1,080 reactions); more days, the same seeds for both versions
+(scratch: the example day loop, days 6 to 20 for the nine and 6 to 15 for the eighteen):
+  Dogleg Hollow, 15 days            version 1 4.520 (pace 0.169, challenge 0.070), version 2 4.522 (0.170, 0.069)
+  Dogleg Hollow (Championship), 10  version 1 4.688 (pace 0.090, challenge 0.066), version 2 4.684 (0.093, 0.065)

@@ -18,6 +18,8 @@ extends RefCounted
 ##   offset], PlaytestNine's contours.
 ## - bunkers, trees, water: ellipses [centre, half length, half width, angle]. The corner of
 ##   every hole holds trees, water or sand, so the bold line over it is a gamble.
+## - fairway_add (E20-S3): ellipses painted fairway after the fairway strip (under the sand,
+##   tees, greens and water), where a hole's landing area is wider than its strip.
 ## - bridge (D69): a polyline of tile points whose water tiles get a footbridge
 ##   (FixtureBridges.lay), laid after the cart paths.
 ## - yd: the yardage the validator measures (rule 4 round the dogleg, D47), the spec the test
@@ -44,6 +46,15 @@ extends RefCounted
 ## corner and turns left; 8, the par 5, plays the whole north from west to east; 9 runs south
 ## inside the 1st's corner, past its lake, and turns right toward home.
 ##
+## E20-S3 (shot shape, D74, D75): holes 1, 2, 3, 4, 5, 7 and 9 are retouched so a tee shot
+## shaped with the bend beats a straight one (docs/courses.md names the shape each rewards). A
+## run-through bunker sits past the corner on its outside, where a straight drive aimed at the
+## turn finishes when it runs on, and a shaped one, curving with the hole, does not; the first
+## leg's fairway is wider on the inside short of the corner (fairway_add), where a shaped drive
+## and its short or pulled misses land; and the corner's own hazard (lake, pond, sand or trees)
+## sits about 10 yd further inside and 5 yd back (not on the 5th), so the bend's carry is still
+## there for the bold line. Every tee, cup, par and turn is unchanged; so is every yardage.
+##
 ## Walks (D65, D68): a lane of rough is cut on every walk (the clubhouse to the 1st tee, each
 ## green to the next tee), and the walks too long for the least patient guest get a cart path
 ## (PATHS), checked with GuestWalk.why. Three of them cross another hole's fairway (path_tiles).
@@ -55,7 +66,7 @@ const COURSE_AUTHOR: String = "Prestwick"
 ## fixture that changes the file needs the next COURSE_VERSION and the new file's hash appended
 ## to FamousCourses (tests/test_example_courses.gd checks both).
 const COURSE_ID: String = "dogleg_hollow"
-const COURSE_VERSION: int = 1
+const COURSE_VERSION: int = 2
 ## The nine's par: no par 3 turns, so eight par 4s and the par 5.
 const PAR: int = 37
 ## The ground's height in steps, everywhere but the ponds, tees and greens.
@@ -95,9 +106,10 @@ const HOLES: Array = [
 		"tee": Vector2i(120, 76), "cup": Vector2i(76, 23), "tee_lift": 1,
 		"fairway": [Vector2(119.5, 71), Vector2(116, 27), Vector2(82, 24)], "width": 5,
 		"green": [Vector2(76, 23), 4.0, 3.2, -173, 0, Vector2(-0.99, -0.13), 1, 1, 0.5],
-		"bunkers": [[Vector2(80.5, 19.5), 1.2, 2, -143]],
+		"bunkers": [[Vector2(80.5, 19.5), 1.2, 2, -143], [Vector2(114.8, 24.3), 1.5, 2.5, -97]],
 		"trees": [],
-		"water": [[Vector2(109, 43), 12, 5, -96]],
+		"water": [[Vector2(107.1, 44.1), 12, 5, -96]],
+		"fairway_add": [[Vector2(113.3, 35.6), 8, 1.8, -97]],
 	},
 	{
 		# Sharp right round a pond, willows on the corner; the bold line carries both.
@@ -105,9 +117,10 @@ const HOLES: Array = [
 		"tee": Vector2i(67, 28), "cup": Vector2i(75, 90), "tee_lift": 1,
 		"fairway": [Vector2(70, 32), Vector2(99.5, 66.5), Vector2(79, 85.5)], "width": 5,
 		"green": [Vector2(75, 90), 4.0, 3.2, 134, 0, Vector2(-0.69, 0.72), 1, 1, 0.5],
-		"bunkers": [[Vector2(75, 84.5), 1.2, 2, 164]],
+		"bunkers": [[Vector2(75, 84.5), 1.2, 2, 164], [Vector2(100.7, 67.6), 1.5, 2.5, 51]],
 		"trees": [],
-		"water": [[Vector2(90, 66), 4.5, 3.5, -87]],
+		"water": [[Vector2(87.8, 66.5), 4.5, 3.5, -87]],
+		"fairway_add": [[Vector2(91.5, 60.9), 8, 1.8, 51]],
 	},
 	{
 		# Short, left round one great bunker; a big drive carries it toward the green.
@@ -115,9 +128,10 @@ const HOLES: Array = [
 		"tee": Vector2i(49, 72), "cup": Vector2i(24, 120), "tee_lift": 1,
 		"fairway": [Vector2(45, 75), Vector2(14.5, 97.5), Vector2(22, 114.5)], "width": 5,
 		"green": [Vector2(24, 120), 4.0, 3.2, 70, 0, Vector2(0.34, 0.94), 1, 1, 0.5],
-		"bunkers": [[Vector2(23.5, 100), 4.5, 2.5, 105], [Vector2(19, 117.5), 1.2, 2, 100]],
+		"bunkers": [[Vector2(25.5, 101), 4.5, 2.5, 105], [Vector2(19, 117.5), 1.2, 2, 100], [Vector2(12.8, 100.6), 1.5, 2.5, 141]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(23.1, 95.8), 8, 1.8, 141]],
 	},
 	{
 		# Right round a sand-filled shoulder; the green sits on a slope beyond.
@@ -125,9 +139,10 @@ const HOLES: Array = [
 		"tee": Vector2i(7, 113), "cup": Vector2i(45, 55), "tee_lift": 1,
 		"fairway": [Vector2(7, 108), Vector2(5.5, 64.5), Vector2(39, 56.5)], "width": 5,
 		"green": [Vector2(45, 55), 4.0, 3.2, -15, 0, Vector2(0.97, -0.26), 1, 1, 0.5],
-		"bunkers": [[Vector2(13, 70), 3, 1.5, 127], [Vector2(42, 60), 1.2, 2, 15]],
+		"bunkers": [[Vector2(14.9, 71), 3, 1.5, 127], [Vector2(42, 60), 1.2, 2, 15], [Vector2(7.8, 61), 1.5, 2.5, -88]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(10.3, 72.1), 8, 1.8, -88]],
 	},
 	{
 		# Right round bunkers on the corner to a green set out on its own.
@@ -135,9 +150,10 @@ const HOLES: Array = [
 		"tee": Vector2i(57, 51), "cup": Vector2i(35, 109), "tee_lift": 1,
 		"fairway": [Vector2(57.5, 56), Vector2(61.5, 99.5), Vector2(40.5, 107)], "width": 5,
 		"green": [Vector2(35, 109), 4.0, 3.2, 158, 0, Vector2(-0.93, 0.37), 1, 1, 0.5],
-		"bunkers": [[Vector2(53.5, 94.5), 3, 1.5, -57], [Vector2(34, 104), 2, 1, 158], [Vector2(38, 113.5), 2, 1, 158]],
+		"bunkers": [[Vector2(53.5, 94.5), 3, 1.5, -57], [Vector2(34, 104), 2, 1, 158], [Vector2(38, 113.5), 2, 1, 158], [Vector2(60.5, 103), 1.5, 2.5, 87]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(57.1, 92.1), 8, 1.8, 87]],
 	},
 	{
 		# Left round tall trees to a small green held in a horseshoe of sand.
@@ -156,9 +172,10 @@ const HOLES: Array = [
 		"tee": Vector2i(82, 68), "cup": Vector2i(36, 40), "tee_lift": 1,
 		"fairway": [Vector2(79, 64), Vector2(58.5, 32.5), Vector2(42, 38.5)], "width": 5,
 		"green": [Vector2(36, 40), 4.0, 3.2, 165, 0, Vector2(-0.96, 0.26), 1, 1, 0.5],
-		"bunkers": [],
-		"trees": [[Vector2(55.5, 41.5), 5.5, 3, 199]],
+		"bunkers": [[Vector2(56.5, 30), 1.5, 2.5, -125]],
+		"trees": [[Vector2(54.4, 43.5), 5.5, 3, 199]],
 		"water": [[Vector2(44.5, 42.5), 2.5, 3, 165]],
+		"fairway_add": [[Vector2(60.5, 40.7), 8, 1.8, -125]],
 	},
 	{
 		# The par 5 bends twice: right round a waste bunker, then back left past a pond
@@ -177,9 +194,10 @@ const HOLES: Array = [
 		"tee": Vector2i(101, 36), "cup": Vector2i(99, 102), "tee_lift": 1,
 		"fairway": [Vector2(102, 41), Vector2(114, 82.5), Vector2(102.5, 97)], "width": 5,
 		"green": [Vector2(99, 102), 4.0, 3.2, 124, 0, Vector2(-0.56, 0.83), 1, 1, 0.5],
-		"bunkers": [[Vector2(104.5, 81), 3, 1.5, -80], [Vector2(95.5, 98.5), 2, 1, 124], [Vector2(103.5, 104), 2, 1, 124]],
+		"bunkers": [[Vector2(102.3, 80.6), 3, 1.5, -80], [Vector2(95.5, 98.5), 2, 1, 124], [Vector2(103.5, 104), 2, 1, 124], [Vector2(115.3, 86), 1.5, 2.5, 75]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(109.7, 76.1), 8, 1.8, 75]],
 	},
 ]
 
@@ -256,6 +274,8 @@ static func lay(b: CourseBuilder, specs: Array, walk_lines: Array, paths: Array)
 			_paint(b, course, PlaytestNine.ellipse(e), Surface.Type.TREES)
 	for spec: Dictionary in specs:
 		_paint(b, course, PlaytestNine.fairway_tiles(spec), Surface.Type.FAIRWAY)
+		for e: Array in spec.get("fairway_add", []):
+			_paint(b, course, PlaytestNine.ellipse(e), Surface.Type.FAIRWAY)
 	for spec: Dictionary in specs:
 		for e: Array in spec["bunkers"]:
 			_paint(b, course, PlaytestNine.ellipse(e), Surface.Type.BUNKER)

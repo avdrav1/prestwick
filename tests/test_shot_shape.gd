@@ -388,12 +388,13 @@ func test_the_key_map_lists_the_shapes() -> void:
 
 ## E20-S1 Accept: on Dogleg Hollow's corner holes a shaped drive finishes in the fairway past
 ## the corner (nearer the cup than the turn) from a line a straight drive puts in the trees.
-## Holes 1 (left) and 2 (right) at the aims measured for D74; E20-S3 retouches the rest.
+## Holes 1 (left) and 2 (right) at the aims measured for D74 (E20-S3's retouch moved the 2nd's
+## fade line from 11 to 10.5 degrees); tests/test_example_courses.gd measures the retouched holes.
 func test_a_shaped_drive_cuts_a_dogleg_a_straight_one_puts_in_the_trees() -> void:
 	var course := CourseSave.load_file(DoglegHollow.PATH)
 	var field := HeightField.new(course, _model.params)
 	var driver := _model.clubs.club("driver")
-	for case: Array in [[1, "draw", -39.0], [1, "hook", -37.0], [2, "fade", 11.0], [2, "slice", 10.0]]:
+	for case: Array in [[1, "draw", -39.0], [1, "hook", -37.0], [2, "fade", 10.5], [2, "slice", 10.0]]:
 		var h: HoleData = null
 		for hole: HoleData in course.holes:
 			if hole.number == case[0]:

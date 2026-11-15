@@ -24,6 +24,12 @@ extends RefCounted
 ## for nine L shapes that keep clear of each other and the front nine and chain green to tee, then
 ## placed by hand; each corner hazard sits on the inside of its bend, by the fairway.
 ##
+## E20-S3 (shot shape): holes 10, 11, 12, 13, 15, 16 and 17 are retouched as Dogleg Hollow's
+## nine is (its header): a run-through bunker past the corner's outside, the first leg wider on
+## the inside short of the corner (fairway_add), the corner hazard eased further inside (not on
+## the 15th), and on the 13th a small stand of trees behind its two bunkers, so the straight line
+## over the corner is shut and a hook round it is not. The 17th measures 551 yd (553 before).
+##
 ## The turn (D72): the clubhouse stands south-east of the 9th green (23 tiles), a cart path's walk
 ## from the 1st tee, with the 10th tee (69 yd) and the 18th green (105 yd) beside it, so an
 ## eighteen turns at its door. Walks: a lane of rough on every walk of a round (the door to the 1st and 10th tees, the
@@ -35,7 +41,7 @@ const COURSE_NAME: String = "Dogleg Hollow (Championship)"
 const COURSE_AUTHOR: String = "Prestwick"
 ## D70: the famous course's id and version, written into the file (FamousCourses).
 const COURSE_ID: String = "dogleg_hollow_championship"
-const COURSE_VERSION: int = 1
+const COURSE_VERSION: int = 2
 ## D71's map.
 const SIZE: int = 192
 ## The clubhouse and the way its door faces (CourseData.FACINGS).
@@ -65,9 +71,10 @@ const BACK: Array = [
 		"tee": Vector2i(129, 118), "cup": Vector2i(89, 170), "tee_lift": 1,
 		"fairway": [Vector2(129.0, 123.0), Vector2(129.5, 168.7), Vector2(94.5, 169.8)], "width": 5,
 		"green": [Vector2(89, 170), 4.0, 3.2, 178.0, 0, Vector2(-1.0, 0.03), 1, 1, 0.5],
-		"bunkers": [[Vector2(123.7, 161.8), 4, 2, 89.0], [Vector2(95.5, 169.9), 1.2, 2, 178.0]],
+		"bunkers": [[Vector2(121.6, 160.8), 4, 2, 89], [Vector2(95.5, 169.9), 1.2, 2, 178], [Vector2(130.2, 171.2), 1.5, 2.5, 90]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(127, 159), 8, 1.8, 90]],
 	},
 	{
 		# Harbour Town's 18th: left along water down the inside of the bend.
@@ -75,9 +82,10 @@ const BACK: Array = [
 		"tee": Vector2i(85, 135), "cup": Vector2i(15, 169), "tee_lift": 1,
 		"fairway": [Vector2(80.0, 134.6), Vector2(34.1, 131.0), Vector2(17.5, 164.1)], "width": 5,
 		"green": [Vector2(15, 169), 4.0, 3.2, 117.0, 0, Vector2(-0.45, 0.89), 1, 1, 0.5],
-		"bunkers": [[Vector2(16.3, 162.7), 1.2, 2, 117.0]],
+		"bunkers": [[Vector2(16.3, 162.7), 1.2, 2, 117], [Vector2(31.9, 129.4), 1.5, 2.5, -175]],
 		"trees": [],
-		"water": [[Vector2(40.5, 139.0), 7, 3.5, -176.0]],
+		"water": [[Vector2(41.4, 141), 7, 3.5, -176]],
+		"fairway_add": [[Vector2(43.8, 133.6), 8, 1.8, -175]],
 	},
 	{
 		# Machrihanish's 1st: left, the drive carrying as much water (the beach) as it dares.
@@ -85,9 +93,10 @@ const BACK: Array = [
 		"tee": Vector2i(8, 182), "cup": Vector2i(59, 144), "tee_lift": 1,
 		"fairway": [Vector2(13.0, 182.0), Vector2(58.8, 181.6), Vector2(59.0, 149.5)], "width": 5,
 		"green": [Vector2(59, 144), 4.0, 3.2, -90.0, 0, Vector2(0.01, -1.0), 1, 1, 0.5],
-		"bunkers": [[Vector2(59.0, 150.5), 1.2, 2, -90.0]],
+		"bunkers": [[Vector2(59, 150.5), 1.2, 2, -90], [Vector2(60.4, 183.6), 1.2, 2, 0]],
 		"trees": [],
-		"water": [[Vector2(51.7, 174.2), 7, 3.5, -0.0]],
+		"water": [[Vector2(50.8, 172.2), 7, 3.5, 0]],
+		"fairway_add": [[Vector2(49, 180), 8, 1.8, 0]],
 	},
 	{
 		# Augusta's 5th: left round two deep bunkers in the corner, to a green by the clubhouse.
@@ -95,9 +104,10 @@ const BACK: Array = [
 		"tee": Vector2i(67, 147), "cup": Vector2i(117, 102), "tee_lift": 1,
 		"fairway": [Vector2(72.0, 146.8), Vector2(118.1, 144.8), Vector2(117.1, 107.5)], "width": 5,
 		"green": [Vector2(117, 102), 4.0, 3.2, -91.0, 0, Vector2(-0.03, -1.0), 1, 1, 0.5],
-		"bunkers": [[Vector2(107.9, 140.1), 2.2, 1.4, -2.0], [Vector2(113.9, 140.9), 2.2, 1.4, -2.0], [Vector2(117.2, 108.5), 1.2, 2, -91.0]],
-		"trees": [],
+		"bunkers": [[Vector2(106.9, 138.1), 2.2, 1.4, -2], [Vector2(112.7, 138.9), 2.2, 1.4, -2], [Vector2(117.2, 108.5), 1.2, 2, -91], [Vector2(119, 145.6), 1.5, 2.5, -2]],
+		"trees": [[Vector2(112.4, 139.5), 2, 1, -2]],
 		"water": [],
+		"fairway_add": [[Vector2(107.9, 143.3), 8, 1.8, -2]],
 	},
 	{
 		# Royal Lytham's 17th: left round the bunkers in the corner.
@@ -115,9 +125,10 @@ const BACK: Array = [
 		"tee": Vector2i(126, 9), "cup": Vector2i(183, 15), "tee_lift": 1,
 		"fairway": [Vector2(130.1, 11.9), Vector2(167.2, 38.1), Vector2(179.9, 19.6)], "width": 5,
 		"green": [Vector2(183, 15), 4.0, 3.2, -56.0, 0, Vector2(0.56, -0.83), 1, 1, 0.5],
-		"bunkers": [[Vector2(164.8, 29.4), 4, 2, 35.0], [Vector2(179.3, 20.3), 1.2, 2, -56.0]],
+		"bunkers": [[Vector2(164.8, 29.4), 4, 2, 35], [Vector2(179.3, 20.3), 1.2, 2, -56], [Vector2(165.7, 39), 1.2, 2, 35]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(158.4, 29.5), 8, 1.8, 35]],
 	},
 	{
 		# Muirfield's 8th: right round a cluster of bunkers in the corner.
@@ -125,19 +136,21 @@ const BACK: Array = [
 		"tee": Vector2i(182, 36), "cup": Vector2i(142, 89), "tee_lift": 1,
 		"fairway": [Vector2(182.0, 41.0), Vector2(182.0, 86.7), Vector2(147.5, 88.7)], "width": 5,
 		"green": [Vector2(142, 89), 4.0, 3.2, 177.0, 0, Vector2(-1.0, 0.06), 1, 1, 0.5],
-		"bunkers": [[Vector2(176.9, 76.7), 2.2, 1.4, 90.0], [Vector2(177.9, 82.7), 2.2, 1.4, 90.0], [Vector2(148.5, 88.9), 1.2, 2, 177.0]],
+		"bunkers": [[Vector2(174.8, 75.6), 2.2, 1.4, 90], [Vector2(175.8, 81.6), 2.2, 1.4, 90], [Vector2(148.5, 88.9), 1.2, 2, 177], [Vector2(182.8, 88), 1.5, 2.5, 90]],
 		"trees": [],
 		"water": [],
+		"fairway_add": [[Vector2(180, 77), 8, 1.8, 90]],
 	},
 	{
 		# Bay Hill's 6th, the bending par 5: right, wrapping round a lake.
-		"n": 17, "name": "Wraparound", "par": 5, "yd": 553, "turn": "right",
+		"n": 17, "name": "Wraparound", "par": 5, "yd": 551, "turn": "right",
 		"tee": Vector2i(134, 98), "cup": Vector2i(179, 176), "tee_lift": 1,
 		"fairway": [Vector2(138.7, 99.6), Vector2(182.0, 114.0), Vector2(179.3, 170.5)], "width": 6,
 		"green": [Vector2(179, 176), 4.0, 3.2, 93.0, 0, Vector2(-0.05, 1.0), 1, 1, 0.5],
-		"bunkers": [[Vector2(180.5, 169.7), 1.2, 2, 93.0]],
+		"bunkers": [[Vector2(180.5, 169.7), 1.2, 2, 93], [Vector2(183.4, 113.1), 1.5, 2, 19]],
 		"trees": [],
-		"water": [[Vector2(172.8, 119.4), 7, 3.5, 18.0]],
+		"water": [[Vector2(171.2, 121), 7, 3.5, 18]],
+		"fairway_add": [[Vector2(172.2, 113.1), 8, 1.8, 19]],
 	},
 	{
 		# Hazeltine's 16th: right round a pond in the corner, home to the clubhouse.

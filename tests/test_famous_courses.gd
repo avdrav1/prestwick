@@ -134,6 +134,22 @@ func test_an_older_version_gets_the_newer_note() -> void:
 	assert_eq(FamousCourses.newer_note(other), "", "an id this game does not know")
 
 
+## E20-S3: the dogleg courses' version 1 (before the retouch for shot shape, kept in OLD) loads
+## as saved, and a game on it hears that the retouched version 2 ships.
+func test_the_dogleg_courses_before_the_retouch_get_the_newer_note() -> void:
+	for pair: Array in [["dogleg_hollow", "Dogleg Hollow"],
+			["dogleg_hollow_championship", "Dogleg Hollow (Championship)"]]:
+		var id: String = pair[0]
+		var errors: Array[String] = []
+		var old := CourseSave.load_file(OLD.path_join(id + "_v1.json"), errors)
+		assert_eq(errors, [] as Array[String], "%s version 1 loads" % id)
+		assert_eq([old.course_id, old.course_version], [id, 1])
+		assert_eq(FamousCourses.latest_version(id), 2, "%s: the retouch is version 2" % id)
+		assert_eq(FamousCourses.newer_note(old), "A newer version of %s is available." % pair[1])
+		assert_eq(FamousCourses.newer_note(FamousCourses.load_course(id)), "", "the shipped one has none")
+		assert_ne(old.packed_tiles(), FamousCourses.load_course(id).packed_tiles(), "the corners moved")
+
+
 func test_an_export_is_the_players_course_with_no_id() -> void:
 	var c := FamousCourses.load_course("cliffside")
 	var data: Dictionary = JSON.parse_string(CourseExport.export_json(c))
@@ -146,7 +162,7 @@ func test_an_export_is_the_players_course_with_no_id() -> void:
 
 func test_the_shipped_hashes_hold_every_old_copy() -> void:
 	for f: String in ["cliffside_rc8.json", "harbor_links_rc9.json", "old_grey_links_rc10.json",
-			"pine_ridge_rc8.json"]:
+			"pine_ridge_rc8.json", "dogleg_hollow_v1.json", "dogleg_hollow_championship_v1.json"]:
 		var id: String = f.left(f.rfind("_"))
 		assert_has(FamousCourses.shipped_hashes(id), FileAccess.get_sha256(OLD.path_join(f)), f)
 	for id: String in FamousCourses.ids():
@@ -294,7 +310,7 @@ func test_the_menu_lists_the_famous_courses_and_esc_comes_back_to_the_button() -
 		texts.append(b.text.get_slice("\n", 0))
 		assert_eq(b.focus_mode, Control.FOCUS_ALL)
 	assert_eq(texts, ["Old Grey Links (Championship): 18 holes, par 70, 6,533 yd",
-			"Dogleg Hollow (Championship): 18 holes, par 74, 7,552 yd",
+			"Dogleg Hollow (Championship): 18 holes, par 74, 7,550 yd",
 			"Harbor Links: 9 holes, par 35, 3,200 yd",
 			"Old Grey Links: 9 holes, par 34, 3,023 yd", "Pine Ridge: 9 holes, par 34, 2,935 yd",
 			"Cliffside: 9 holes, par 36, 3,353 yd",
@@ -504,7 +520,7 @@ func test_the_dogleg_eighteen_starts_from_the_page() -> void:
 	for h: HoleData in m.course.holes:
 		assert_true(h.open, "hole %d open" % h.number)
 	assert_string_starts_with(m.save_notice.label.text,
-			"New game on \"Dogleg Hollow (Championship)\" by Prestwick: 18 holes, par 74, 7,552 yd.")
+			"New game on \"Dogleg Hollow (Championship)\" by Prestwick: 18 holes, par 74, 7,550 yd.")
 
 
 func test_a_save_on_an_older_version_loads_as_saved_and_both_pages_say_a_newer_one_ships() -> void:

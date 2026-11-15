@@ -84,6 +84,7 @@ const COURSES: Array[Dictionary] = [
 		"style": "Nine famous doglegs: every hole bends round a lake, woods or sand.",
 		"versions": [
 			"80d73c51fd0bdd969988a12a50c2e1156df83692217a72ac9a0b9e4d17f91cdf",  # 1: rc12
+			"a7a254be2a5f17cf461352b2560b0f2da14a0ad44eb6c334dc15c0faac81c3c8",  # 2: 0.8.0, shot shape
 		],
 	},
 	{
@@ -106,6 +107,7 @@ const COURSES: Array[Dictionary] = [
 		"style": "Eighteen famous doglegs: Dogleg Hollow out, nine more bends home.",
 		"versions": [
 			"e2e2d161e658b212b0dff746248ede0493662454cb0022a5bfdc04c3c7f992fe",  # 1: 0.7.1
+			"2f08232844d1c4879685f432ec558caec71ddffda293b0793d5af4659edebe84",  # 2: 0.8.0, shot shape
 		],
 	},
 ]

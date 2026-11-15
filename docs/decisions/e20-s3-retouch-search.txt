@@ -1,0 +1,68 @@
+E20-S3: how the retouch was found. Scratch probe (not kept): each layout built in memory from the
+fixtures with one hole's spec changed, then that hole played by 50 guests a skill, skills 7 to 10,
+alone through GuestHole, shaping on against the same seeds with shaping off (scripts/shape_gain.gd's
+measure); the final pick re-measured at 100 a skill. Positions are in the hole's own frame at its
+turn T (D47): "along" yards past T on the tee-to-turn line, "inside" yards toward the inside of the
+bend. Measured 2026-11-15 on main after E20-S2.
+
+Why shaping lost on the old layouts (E20-S2's finding, re-read here):
+- A guest's straight plan (D54) aims at T with the power that rests there; its shaped plan keeps
+  the club and power and finishes `cut` of the bend inside T. So a shaped drive can only finish a
+  draw's bend (11 yd at 92% power) nearer the cup; it never goes farther.
+- Its misses land where the old corners put trouble: the 90%-power miss lands 50 to 58 yd short
+  of T and 5 to 10 yd inside (the guest's landing pre-check reads 58), the 2-degree pull 13 to 18
+  yd inside at 30 yd short, and each pond, lake, sand or tree corner sat 17 to 25 yd inside.
+- A shaped swing's narrower zone doubles shanks (about 3 more in 100 tee shots), worth about
+  0.03 to 0.04 strokes, as much as the 11 yd it gains.
+So shaping pays only where a straight drive costs something a shaped one does not. On a real
+dogleg that is the run-through: a straight ball hit long runs on through the corner, a ball
+curving with the hole holds it.
+
+Pieces tried (each hole, 50 a skill; gain = straight less shaped, strokes a hole):
+- p: the corner hazard moved 10 yd further inside and 5 yd back (only hazards between 90 yd
+  short and 20 yd past T and under 60 yd inside, so no greenside bunker moves).
+- a: the first leg's fairway widened on the inside short of the corner: an ellipse 40 yd long
+  and 9 yd across centred 35 yd short of T and 10 yd inside (`fairway_add`).
+- r: a run-through bunker past the corner on its outside, 20 yd past T and 4 yd outside, 15 x 25
+  yd (or as named: along, inside, half lengths in tiles).
+  Hole 2, Willow Pond: none +0.000 (no shape chosen); a -0.040; r +0.000 (none chosen); pa -0.020
+  (100% fade); par +0.090 (100% fade). An open landing area alone (no pond, a fairway 80 x 70 yd
+  round T) chose the slice 25% of tee shots and lost 0.035: the yards alone do not pay.
+- Every hole, par (one recipe): +0.069 a hole over all 18, shaped on 16 of 18; 5, 8, 14 negative,
+  18 never shaped (a 40 degree bend).
+- Then per hole, the run-through bunker at (20,-4), (22,-8), (26,-6), (18,-8), (24,-2), (30,-4)
+  with p, a, both or neither; holes 6 and 14 with 20 more (other pushes and aprons, bunkers at
+  (16,-6) to (28,-10)). Holes 6 (best +0.015, every layout within its noise or worse: its narrow
+  second leg between the trees punishes the shaped ball's curving roll), 8 (best +0.025, a 35
+  degree bend) and 14 (+0.08 at 50 a skill, -0.010 at 100) are left as they were, and 18
+  (never shaped).
+- The player's side (tests/test_example_courses.gd): on the 13th the best straight drive cut the
+  corner at the second leg's inside edge, 4 yd nearer than any hook; a small stand of trees behind
+  its two bunkers (12 yd short of T, 28 inside, 10 x 5 yd) shuts that line and gives +3.9 yd to the
+  hook (trees nearer the hook's line cost the guests; on the 15th the push shut the hook's line,
+  so its elbow bunker stays put).
+
+The pick (scripts/shape_gain.gd --runs 100 on the shipped files, e20-s3-shape-gain.txt):
+  hole  pieces                     gain    (old layout, E20-S2)
+  1     p a r                      +0.110  (+0.000, never shaped)
+  2     p a r                      +0.033  (+0.000, never shaped)
+  3     p a r                      +0.120  (+0.000, never shaped)
+  4     p a r                      +0.033  (+0.000, never shaped)
+  5     a r                        +0.070  (+0.000, never shaped)
+  7     p a r                      +0.175  (+0.010)
+  9     p a r                      +0.163  (+0.003)
+  10    p a r(26,-6)               +0.065  (-0.018)
+  11    p a r(26,-6)               +0.087  (-0.043)
+  12    p a r(22,-8, 6 x 10 yd)    +0.062  (-0.035)
+  13    p a r, trees               +0.085  (-0.043)
+  15    a r(22,-8, 6 x 10 yd)      +0.022  (-0.013)
+  16    p a r                      +0.092  (-0.007)
+  17    p a r(18,-8, 7.5 x 10 yd)  +0.095  (-0.048)
+  Mean over the 14 retouched: +0.087 a hole, every one shaped on most tee shots (83% on the 15th,
+  100% on the rest).
+
+Cost: the run-through bunker makes the corner harder for everyone who plays it straight (skills
+7 to 10 straight, 100 a skill: +0.07 to +0.28 a hole, the 9th most), and a shaping guest scores
+0.03 better to 0.18 worse a hole than the old layout's straight, so the courses play a little
+harder (about 0.08 a retouched hole for skilled guests).
+The ratings do not move beyond their noise (e20-s3-ratings.txt).

@@ -168,17 +168,17 @@ water or sand, so the bold line over it is a gamble. The clubhouse stands on the
 1st tee. There is no par 3: a hole under 240 yd on the straight line never turns (D47), so the
 nine is eight par 4s and a par 5.
 
-| Hole | Name | Par | Yards | Turn | Modelled on | Signature here |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Bite Off | 4 | 434 | 75 left | Mid Ocean Club 5th, "Cape", par 4, about 433 yd (approximate), dogleg left over a lake | A lake fills the inside of the bend along the first leg; the more of it the tee shot bites off, the shorter the approach. |
-| 2 | Willow Pond | 4 | 408 | 81 right | Oakland Hills (South) 16th, par 4, about 405 yd (approximate), dogleg right round a pond | Sharp right round a pond in the corner, trees (the willows) on its inside. |
-| 3 | Sand Sea | 4 | 324 | 70 left | Royal Melbourne (West) 10th, par 4, about 305 yd (approximate), short dogleg left round a great bunker | Short and left round one big bunker that a long drive carries toward the green. |
-| 4 | Shoulder | 4 | 429 | 73 right | Royal Melbourne (West) 6th, par 4, about 428 yd (approximate), dogleg right | Right round bunkers on the shoulder of the corner to a contoured green. |
-| 5 | Chalk Bend | 4 | 373 | 71 right | Royal Portrush (Dunluce) 5th, "White Rocks", par 4, about 374 yd (approximate), dogleg right | Right round bunkers on the corner to a green set out on its own between two more. |
-| 6 | Plank Bunker | 4 | 372 | 69 left | Harbour Town 13th, par 4, about 373 yd (approximate), dogleg left | Left round tall trees to a small green held in a horseshoe of sand. |
-| 7 | Brave Line | 4 | 324 | 71 left | The Belfry (Brabazon) 10th, par 4, about 311 yd (approximate), short dogleg left, drivable over trees and water | Left round a stand of trees; the straight line at the green crosses them and a pond short of the green. |
-| 8 | Twin Elbows | 5 | 519 | 35 right, then left | TPC Sawgrass (Stadium) 11th, par 5, about 558 yd (approximate; its shape too), double dogleg | Right round a waste bunker at the tee shot's bend, then back left past a pond to the green. |
-| 9 | Dune Elbow | 4 | 362 | 51 right | Cypress Point 8th, par 4, about 363 yd (approximate), dogleg right over sand dunes | Right over sand on the corner to a green between two bunkers. |
+| Hole | Name | Par | Yards | Turn | Shape | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Bite Off | 4 | 434 | 75 left | Draw (hook) | Mid Ocean Club 5th, "Cape", par 4, about 433 yd (approximate), dogleg left over a lake | A lake fills the inside of the bend along the first leg; the more of it the tee shot bites off, the shorter the approach. |
+| 2 | Willow Pond | 4 | 408 | 81 right | Fade (slice) | Oakland Hills (South) 16th, par 4, about 405 yd (approximate), dogleg right round a pond | Sharp right round a pond in the corner, trees (the willows) on its inside. |
+| 3 | Sand Sea | 4 | 324 | 70 left | Draw (hook) | Royal Melbourne (West) 10th, par 4, about 305 yd (approximate), short dogleg left round a great bunker | Short and left round one big bunker that a long drive carries toward the green. |
+| 4 | Shoulder | 4 | 429 | 73 right | Fade (slice) | Royal Melbourne (West) 6th, par 4, about 428 yd (approximate), dogleg right | Right round bunkers on the shoulder of the corner to a contoured green. |
+| 5 | Chalk Bend | 4 | 373 | 71 right | Fade (slice) | Royal Portrush (Dunluce) 5th, "White Rocks", par 4, about 374 yd (approximate), dogleg right | Right round bunkers on the corner to a green set out on its own between two more. |
+| 6 | Plank Bunker | 4 | 372 | 69 left | Straight | Harbour Town 13th, par 4, about 373 yd (approximate), dogleg left | Left round tall trees to a small green held in a horseshoe of sand. |
+| 7 | Brave Line | 4 | 324 | 71 left | Draw (hook) | The Belfry (Brabazon) 10th, par 4, about 311 yd (approximate), short dogleg left, drivable over trees and water | Left round a stand of trees; the straight line at the green crosses them and a pond short of the green. |
+| 8 | Twin Elbows | 5 | 519 | 35 right, then left | Straight | TPC Sawgrass (Stadium) 11th, par 5, about 558 yd (approximate; its shape too), double dogleg | Right round a waste bunker at the tee shot's bend, then back left past a pond to the green. |
+| 9 | Dune Elbow | 4 | 362 | 51 right | Fade (slice) | Cypress Point 8th, par 4, about 363 yd (approximate), dogleg right over sand dunes | Right over sand on the corner to a green between two bunkers. |
 
 Yards are the line of play the validator measures (rule 4, D47: tee to the turn 240 yd out, then
 to the cup), each within 3 yd of the real hole's but three: the 3rd and the 7th are set up to 324
@@ -189,6 +189,28 @@ turn). Turn is the angle between tee to turn and turn to cup (`DoglegHollow.turn
 least 30 degrees on every hole (`tests/test_example_courses.gd`). The bends were placed so rule 4's
 disc on the straight line holds no fairway and the ring 240 yd out meets each first leg just
 short of its bend, so every hole is measured round its turn and guests aim at the corner (D54).
+
+Shape (E20-S3, D74, D75) is the shot shape the hole rewards from the tee, the gentle one first
+and the strong one (hook or slice, which bends most and holds the narrowest zone) in brackets.
+Seven of the nine are retouched for it, each the same way: a run-through bunker past the corner
+on its outside, about 20 yd beyond the turn, where a straight drive aimed at the turn finishes
+when it runs on; the first leg's fairway widened by about 9 yd on the inside of the corner over
+its last 40 yd (`fairway_add`), where a ball shaped round the bend lands and where its short and
+pulled misses fall; and the corner's own hazard moved about 10 yd further inside and 5 yd back
+(the 1st's lake, the 2nd's pond, the 3rd's great bunker, the 4th's shoulder bunker, the 7th's
+stand of trees, the 9th's dune bunker; the 5th's corner bunkers stay where they were), so the
+carry over the corner is still the bold line. A shaped drive curves with the hole and holds the
+corner short of the run-through; a straight one aimed at the turn runs on into it when it is
+struck long. So a skilled guest (D75) draws or fades its drive there and scores better for it,
+and a player's best shaped drive finishes nearer the cup than any straight one
+(`tests/test_example_courses.gd`, `SHAPED_LINES`; `docs/decisions/e20-s3-*.txt`). Tees, cups,
+pars, turns and yardages are unchanged. Not retouched: the 6th, whose narrow second leg between
+the trees made every corner layout tried play worse shaped than straight, and the 8th, whose
+35 degree first bend a straight drive plays. Skill 7 to 10 guests now shape 91% of their tee
+shots on the nine's bends and gain 0.07 strokes a hole by it (`scripts/shape_gain.gd`; before,
+24% and -0.006); the corners cost a straight drive 0.1 to 0.28 strokes, so the nine plays a
+little harder. At 24 arrivals, five days, its rating is 4.43 (4.46 before, inside the rating's
+noise: 4.52 against 4.52 over fifteen more days), 4.5 stars, every group finishing nine.
 
 Walks: five are longer than the least patient guest walks and follow cart paths (2-3, 3-4, 6-7,
 7-8, 8-9); three of those cross another hole's fairway on a 45 degree diagonal, which leaves that
@@ -269,7 +291,7 @@ the Old Course's shared fairways and double greens.
 `courses/dogleg_hollow_championship.json`, built by `tests/fixtures/dogleg_championship.gd`
 (DoglegChampionship) and saved by `scripts/save_dogleg_championship.gd`. The second famous
 eighteen (the user, 2026-11-14: "what about 18 holes with dog legs? All the holes on the current
-18 holes are dead straight."), on D71's 192 x 192 map with every parcel owned: par 74, 7,552 yd,
+18 holes are dead straight."), on D71's 192 x 192 map with every parcel owned: par 74, 7,550 yd,
 and every one of the eighteen bends. Dogleg Hollow's nine is the front nine (Out), hole for hole
 where it lies on its own course (the same tees, cups, pars, yardages, cart paths and parkland),
 and nine more famous real doglegs are the back nine (In), laid with the same pieces
@@ -299,20 +321,33 @@ yd, past a 240 yd tee shot (about a 300 to 319 yd par 3 turning 30 degrees, with
 80 yd short of the green): the rules allow it, but no real par 3 is played so, so the back nine
 is par 4s and a par 5, as the front is.
 
-| Hole | Name | Par | Yards | Turn | Modelled on | Signature here |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 to 9 | Dogleg Hollow's nine | 37 | 3,545 | See Dogleg Hollow above | | As there. |
-| 10 | Long Sand | 4 | 441 | 84 right | Augusta National 1st, "Tea Olive", par 4, 445 yd, dogleg right | A long bunker on the inside of the corner, where the big hitter's line cuts it. |
-| 11 | Sound Side | 4 | 460 | 65 left | Harbour Town 18th, par 4, about 460 yd from the middle tees (approximate; 472 from the back), bending left along Calibogue Sound | Water down the inside of the bend left; the bold line flies it. |
-| 12 | Beach Carry | 4 | 431 | 85 left | Machrihanish 1st, "Battery", par 4, about 428 yd (approximate), the drive across the beach | Water (the beach and sea) filling the inside of the bend left; the more the drive carries, the shorter the approach. |
-| 13 | Deep Corner | 4 | 455 | 85 left | Augusta National 5th, "Magnolia", par 4, 455 yd (before its 2019 lengthening to 495), dogleg left | Two deep bunkers on the inside of the corner left; the green beside the clubhouse. |
-| 14 | Mashie Shot | 4 | 451 | 84 left | Royal Lytham & St Annes 17th, par 4, about 453 yd (approximate), dogleg left | Bunkers in the corner left, the sand Bobby Jones played his mashie from in 1926. |
-| 15 | The Elbow | 4 | 369 | 81 left | The Country Club (Brookline) 17th, par 4, about 373 yd (approximate), dogleg left | One bunker in the elbow of the bend left. |
-| 16 | Corner Cluster | 4 | 442 | 83 right | Muirfield 8th, par 4, about 441 yd (approximate), dogleg right | A cluster of bunkers in the corner right. |
-| 17 | Wraparound | 5 | 553 | 72 right | Bay Hill 6th, par 5, about 555 yd (approximate), wrapping right round a lake | The bending par 5: a lake inside the bend right; the bolder the line over it, the nearer the green in two. |
-| 18 | Lakeside | 4 | 405 | 40 right | Hazeltine National 16th, par 4, about 402 yd (approximate), bending right along Lake Hazeltine | A pond in the corner right. |
+| Hole | Name | Par | Yards | Turn | Shape | Modelled on | Signature here |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 to 9 | Dogleg Hollow's nine | 37 | 3,545 | See Dogleg Hollow above | As there | | As there. |
+| 10 | Long Sand | 4 | 441 | 84 right | Fade (slice) | Augusta National 1st, "Tea Olive", par 4, 445 yd, dogleg right | A long bunker on the inside of the corner, where the big hitter's line cuts it. |
+| 11 | Sound Side | 4 | 460 | 65 left | Draw (hook) | Harbour Town 18th, par 4, about 460 yd from the middle tees (approximate; 472 from the back), bending left along Calibogue Sound | Water down the inside of the bend left; the bold line flies it. |
+| 12 | Beach Carry | 4 | 431 | 85 left | Draw (hook) | Machrihanish 1st, "Battery", par 4, about 428 yd (approximate), the drive across the beach | Water (the beach and sea) filling the inside of the bend left; the more the drive carries, the shorter the approach. |
+| 13 | Deep Corner | 4 | 455 | 85 left | Draw (hook) | Augusta National 5th, "Magnolia", par 4, 455 yd (before its 2019 lengthening to 495), dogleg left | Two deep bunkers on the inside of the corner left; the green beside the clubhouse. |
+| 14 | Mashie Shot | 4 | 451 | 84 left | Straight | Royal Lytham & St Annes 17th, par 4, about 453 yd (approximate), dogleg left | Bunkers in the corner left, the sand Bobby Jones played his mashie from in 1926. |
+| 15 | The Elbow | 4 | 369 | 81 left | Draw (hook) | The Country Club (Brookline) 17th, par 4, about 373 yd (approximate), dogleg left | One bunker in the elbow of the bend left. |
+| 16 | Corner Cluster | 4 | 442 | 83 right | Fade (slice) | Muirfield 8th, par 4, about 441 yd (approximate), dogleg right | A cluster of bunkers in the corner right. |
+| 17 | Wraparound | 5 | 551 | 72 right | Fade (slice) | Bay Hill 6th, par 5, about 555 yd (approximate), wrapping right round a lake | The bending par 5: a lake inside the bend right; the bolder the line over it, the nearer the green in two. |
+| 18 | Lakeside | 4 | 405 | 40 right | Straight | Hazeltine National 16th, par 4, about 402 yd (approximate), bending right along Lake Hazeltine | A pond in the corner right. |
 
-The back nine is par 37, 4,007 yd. Yards are the line of play the validator measures (rule 4,
+Shape: as on Dogleg Hollow (above). Seven of the back nine are retouched the same way (E20-S3):
+a run-through bunker past the corner's outside (26 yd past the turn on the 10th and 11th, a
+smaller one on the 12th, 15th and 17th), the first leg wider on the inside short of the corner,
+and the corner's hazard moved about 10 yd further inside (the 10th's long bunker, the 11th's and
+17th's water, the 12th's beach, the 13th's and 16th's bunkers; the 15th's elbow bunker stays).
+On the 13th a small stand of trees behind its two bunkers shuts the straight line over the
+corner that a hook still bends round. The 17th measures 551 yd (553 before; its wider landing
+moved the turn). Not retouched: the 14th, where no corner layout tried made a shape pay for
+guests, and the 18th, a 40 degree bend a straight drive plays. Skill 7 to 10 guests shape 84% of
+their tee shots on the eighteen's bends and gain 0.064 strokes a hole (before, 41% and -0.014);
+the rating is 4.59 at 24 arrivals over five days (4.60 before), 4.5 stars, every group finishing
+its round.
+
+The back nine is par 37, 4,005 yd. Yards are the line of play the validator measures (rule 4,
 D47), each within 4 yd of the real hole's; turn is the angle tee to turn against turn to cup
 (`DoglegHollow.turn_angle`), at least 30 degrees on every one of the eighteen
 (`tests/test_example_courses.gd`). None of the back nine repeats a hole Dogleg Hollow or Pine

@@ -6,6 +6,7 @@ extends Node2D
 ## the trees past the corner, with the shot shape SHAPE_ID (default fade; "straight" for the
 ## same aim flown straight). SHAPE_ZOOM (0.5 or 1) centres between tee and landing at that zoom; unset, Play frames it. SHAPE_SWING=1 freezes a swing at 90%
 ## after click 2 so the live landing marker shows over the faded 100% one.
+## E20-S3: SHAPE_COURSE=championship plays Dogleg Hollow (Championship) instead (its back nine).
 ##   SHAPE_ID=straight scripts/screenshot.sh tests/fixtures/shape_shot.tscn out.png
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
@@ -13,7 +14,8 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 
 func _ready() -> void:
 	var main := MAIN_SCENE.instantiate() as Main
-	main.course_path = DoglegHollow.PATH
+	main.course_path = DoglegChampionship.PATH if OS.get_environment("SHAPE_COURSE") == "championship" \
+			else DoglegHollow.PATH
 	add_child(main)
 	var n := _env_int("SHAPE_HOLE", 2)
 	var k := _env_float("SHAPE_AIM", 11.0)

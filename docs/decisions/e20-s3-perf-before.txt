@@ -1,0 +1,33 @@
+E20-S3: skip to morning (D52) before the retouch, 2026-11-15, headless, XDG_DATA_HOME=$(mktemp -d).
+The D52 runs on the playtest nine and the eighteen fixture do not read the dogleg courses: before is
+e20-s2-perf-after.txt (best 1.87 s nine, 2.16 s eighteen). Here the dogleg courses' version 1 files.
+
+== before: scripts/skip_perf.gd -- --runs 3 --course <worktree>/tests/fixtures/famous_old/dogleg_hollow_v1.json (headless)
+
+skip perf: /home/av/Projects/prestwick/.claude/worktrees/agent-afb8baea67857bda6/tests/fixtures/famous_old/dogleg_hollow_v1.json, seed 1, 24 guests, Build mode, headless, load 1.99
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 793800 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 1.88 real s, 72 frames, longest frame 33.4 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:18 / 9:00  skipping | Day 1  1:57 / 9:00  skipping | Day 1  3:03 / 9:00  skipping | Day 1  4:09 / 9:00  skipping | Day 1  5:35 / 9:00  skipping
+  run 2: day 1 skipped in 1.96 real s, 73 frames, longest frame 32.1 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:16 / 9:00  skipping | Day 1  1:56 / 9:00  skipping | Day 1  2:57 / 9:00  skipping | Day 1  4:01 / 9:00  skipping | Day 1  5:27 / 9:00  skipping
+  run 3: day 1 skipped in 1.92 real s, 72 frames, longest frame 32.2 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:17 / 9:00  skipping | Day 1  1:57 / 9:00  skipping | Day 1  3:05 / 9:00  skipping | Day 1  4:09 / 9:00  skipping | Day 1  5:34 / 9:00  skipping
+  the same day run by the brain alone: 3.43 s, 793800 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 1.88 s (target under 3.0 s); load 2.58
+
+== before: scripts/skip_perf.gd -- --runs 3 --course <worktree>/tests/fixtures/famous_old/dogleg_hollow_championship_v1.json --max-holes 18 (headless)
+
+skip perf: /home/av/Projects/prestwick/.claude/worktrees/agent-afb8baea67857bda6/tests/fixtures/famous_old/dogleg_hollow_championship_v1.json, seed 1, 24 guests, Build mode, headless, load 2.58
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 1037609 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 2.77 real s, 109 frames, longest frame 33.8 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:16 / 17:00  skipping | Day 1  1:42 / 17:00  skipping | Day 1  2:33 / 17:00  skipping | Day 1  3:26 / 17:00  skipping | Day 1  4:21 / 17:00  skipping | Day 1  5:48 / 17:00  skipping | Day 1  7:54 / 17:00  skipping | Day 1  14:23 / 17:00  skipping
+  run 2: day 1 skipped in 2.82 real s, 110 frames, longest frame 35.1 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:16 / 17:00  skipping | Day 1  1:45 / 17:00  skipping | Day 1  2:36 / 17:00  skipping | Day 1  3:28 / 17:00  skipping | Day 1  4:20 / 17:00  skipping | Day 1  5:37 / 17:00  skipping | Day 1  7:48 / 17:00  skipping | Day 1  13:29 / 17:00  skipping
+  run 3: day 1 skipped in 2.80 real s, 109 frames, longest frame 35.8 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:16 / 17:00  skipping | Day 1  1:42 / 17:00  skipping | Day 1  2:32 / 17:00  skipping | Day 1  3:23 / 17:00  skipping | Day 1  4:17 / 17:00  skipping | Day 1  5:48 / 17:00  skipping | Day 1  8:00 / 17:00  skipping | Day 1  14:25 / 17:00  skipping
+  the same day run by the brain alone: 4.45 s, 1037609 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.77 s (target under 3.0 s); load 2.38
