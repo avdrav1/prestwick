@@ -21,6 +21,10 @@ extends RefCounted
 ##     would have failed (GuestWalk.bare_s), is named in the hole's praise: the path made it
 ##     quick.
 ##
+## E20-S2 (D75): a praise on a hole where the guest's chosen shape cut the dogleg's corner
+## (HoleRecord.shape_cut) says so, the risk and reward of the shot: "loved it, 4 on a par 4, and
+## the draw round the corner was worth the risk." The checks are unchanged.
+##
 ## Praise when `praise_passes` checks pass (all five); complaint when the failed checks,
 ## a doubled one counting `doubled_check_weight` (the walk `walk_check_weight`), reach
 ## `complaint_fails`; else neutral. Every number is in data/guests.json (GuestTuning).
@@ -68,6 +72,8 @@ var from_clubhouse: bool = false
 var walk_from_hole: int = 0
 var walk_on_path: bool = false
 var path_made_quick: bool = false
+## E20-S2: the shape (id) that cut the dogleg's corner on this hole, "" for none.
+var shape_cut: String = ""
 ## E12-S1 (D68): why no cart path served the walk (GuestWalk.why), when it could be long; null
 ## otherwise (a failed walk with none reads as "no cart path").
 var walk_reason: GuestWalk.Reason = null
@@ -103,6 +109,7 @@ static func judge(guest: Guest, record: Guest.HoleRecord, statics: HoleChecks.St
 	r.walk_limit_s = walk_limit(guest.patience, tuning)
 	r.walk_on_path = record.walk_s >= 0.0 and record.walk_on_path
 	r.walk_reason = record.walk_reason
+	r.shape_cut = record.shape_cut
 	r.path_made_quick = r.walk_on_path and record.walk_s <= r.walk_limit_s + EPS \
 			and record.walk_bare_s > r.walk_limit_s + EPS
 	r.passed[Check.FAIR] = statics.fair()
@@ -226,12 +233,17 @@ func failed_line() -> String:
 func _line() -> String:
 	_rest = ""
 	if kind == Kind.PRAISE:
+		var why := PackedStringArray()
+		if not shape_cut.is_empty():
+			# E20-S2: the shaped ball that cut the corner, the hole's risk and reward.
+			why.append("the %s round the corner was worth the risk" % shape_cut)
 		if path_made_quick:
 			# E9-S2: the path turned what would have been a long walk into a quick one.
-			_lead = "loved it, %d on a par %d, and the cart path %s made the walk quick." % [
-					score, par, _walk_from()]
-		else:
-			_lead = "loved it, %d on a par %d." % [score, par]
+			why.append("the cart path %s made the walk quick" % _walk_from())
+		_lead = "loved it, %d on a par %d" % [score, par]
+		for w: String in why:
+			_lead += ", and " + w
+		_lead += "."
 	elif kind == Kind.NEUTRAL:
 		_lead = "fine, but %s." % _reason(lead_check())
 	else:
@@ -365,7 +377,7 @@ func to_save() -> Dictionary:
 		"wait_limit_s": wait_limit_s, "walk_yd": walk_yd, "walk_s": walk_s,
 		"walk_limit_s": walk_limit_s,
 		"from_clubhouse": from_clubhouse, "walk_from_hole": walk_from_hole,
-		"walk_on_path": walk_on_path, "path_made_quick": path_made_quick,
+		"walk_on_path": walk_on_path, "path_made_quick": path_made_quick, "shape_cut": shape_cut,
 		"walk_reason": walk_reason.to_save() if walk_reason != null else null,
 		"text": text, "lead": _lead, "rest": _rest,
 	}
@@ -414,6 +426,7 @@ static func from_save(d: Variant, errors: Array[String], context: String = "reac
 	r.walk_from_hole = int(data.get("walk_from_hole", 0))  # E9-S2; 0 in older saves
 	r.walk_on_path = bool(data.get("walk_on_path", false))
 	r.path_made_quick = bool(data.get("path_made_quick", false))
+	r.shape_cut = str(data.get("shape_cut", ""))  # E20-S2; "" in older saves
 	r.walk_reason = GuestWalk.Reason.from_save(data.get("walk_reason"))  # E12-S1; null in older saves
 	r.text = str(data.get("text", ""))
 	r._lead = str(data.get("lead", ""))

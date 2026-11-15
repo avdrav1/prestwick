@@ -13,6 +13,14 @@ extends RefCounted
 ## Gaussian in bar units with the sigma GuestTuning gives the guest's skill, so a shank is an
 ## accuracy outside the zone (30 degrees, half power) exactly as for the player.
 ##
+## Shot shape (E20-S2, D75): a skilled guest's plan may carry a shape (GuestPlan), swung with
+## it (Swing.shape: the zone narrows, a shank flies straight). A guest of miss_shape_skill_max
+## or less sometimes curves a long club (miss_shape_scale_min) it planned straight, a slice more often than a hook
+## (GuestTuning.miss_shape_chance, miss_slice_share): the draw comes from its own stream, seeded
+## by the stroke (`miss_seed`), so the click noise and every other stroke stay as they were. A
+## shaped stroke the guest chose that rests clear past the corner, nearer the cup than the turn,
+## on fairway or green, with no penalty, cut the corner (StrokeRecord.cut_corner, `shape_cut`).
+##
 ## Ball work (E3-S1): every tick stepped (predictions, the putt solve, the guest's own ball)
 ## goes through `advance(max_ticks)`, which never steps more than `max_ticks` in one call; the
 ## work goes on next call from where it stopped. Every random number comes from `rng_seed`,
@@ -99,6 +107,13 @@ class StrokeRecord:
 	## The plan aimed at the dogleg's turn, not the cup (D54).
 	var at_turn: bool = false
 	var safe_plan: bool = true
+	## E20-S2: the shape the ball was struck with ("" straight, or a shank), whether the guest
+	## did not choose it (a miss), and whether a chosen shape cut the dogleg's corner.
+	var shape_id: String = ""
+	## The shape the plan chose ("" straight), kept when a shank loses it.
+	var planned_shape: String = ""
+	var unwanted_shape: bool = false
+	var cut_corner: bool = false
 	## The swing's locked power and accuracy, noise included (Swing.set_result).
 	var power: float = 0.0
 	var accuracy: float = 0.0
@@ -242,6 +257,9 @@ func strike() -> void:
 	r.plan_ticks = plan.ticks
 	r.start = ball_at
 	var swing := Swing.new(_swing_tuning)
+	swing.shape = plan.shape
+	r.planned_shape = plan.shape.id if plan.shape != null else ""
+	var miss: ShotShape = null
 	if plan.is_putt():
 		var p_err := _rng.randfn(0.0, tuning.putt_power_sigma(skill))
 		var a_err := _rng.randfn(0.0, tuning.putt_aim_sigma(skill))
@@ -252,10 +270,22 @@ func strike() -> void:
 		var a_err := _rng.randfn(0.0, sigma)
 		# A short chip's few % plus the error would often lock 0% and whiff: floor it.
 		swing.set_result(maxf(plan.power + p_err, tuning.guest_min_power), a_err)
+		if plan.shape == null and plan.club.shape_scale >= tuning.miss_shape_scale_min:
+			miss = _miss_shape(strokes.size() + 1)
 	r.power = swing.power
 	r.accuracy = swing.accuracy
 	r.shank = swing.is_shank()
-	var shot := swing.launch(model, field, plan.club, Vector2(ball_at.x, ball_at.y), plan.aim_deg)
+	var at := Vector2(ball_at.x, ball_at.y)
+	var shot: ShotLaunch
+	if miss != null and not r.shank:
+		# An unwanted curve: the zone the guest swung at is the straight one's.
+		shot = model.full(field, plan.club, swing.effective_power(), at, plan.aim_deg,
+				swing.offset_deg(), true, miss)
+	else:
+		shot = swing.launch(model, field, plan.club, at, plan.aim_deg)
+	if shot.shape != null:
+		r.shape_id = shot.shape.id
+		r.unwanted_shape = miss != null
 	ball = Ball.new(course, stroke_seed(strokes.size() + 1), model.params)
 	ball.record_path = true
 	ball.set_cup(hole.cup)
@@ -263,6 +293,34 @@ func strike() -> void:
 	strokes.append(r)
 	plan = null
 	state = State.FLYING
+
+
+## E20-S2: the shape a guest who planned stroke `n` straight curves it with by mistake, or
+## null: drawn from `miss_seed(n)` alone, never from the click noise's stream.
+func _miss_shape(n: int) -> ShotShape:
+	var chance := tuning.miss_shape_chance(skill)
+	if chance <= 0.0:
+		return null
+	var rng := RandomNumberGenerator.new()
+	rng.seed = miss_seed(n)
+	if rng.randf() >= chance:
+		return null
+	var side := 1 if rng.randf() < tuning.miss_slice_share else -1
+	var bending := model.shapes.bending(side)
+	return bending[-1] if not bending.is_empty() else null
+
+
+## E20-S2: the seed of stroke `n`'s miss draw, apart from its Ball's (stroke_seed).
+func miss_seed(n: int) -> int:
+	return (_seed * 1000 + n) * 31 + 17
+
+
+## E20-S2: the shape (id) of the first stroke that cut the dogleg's corner, "" for none.
+func shape_cut() -> String:
+	for r: StrokeRecord in strokes:
+		if r.cut_corner:
+			return r.shape_id
+	return ""
 
 
 ## The Ball seed of stroke `n` (1 for the first), from the guest's seed: the plan's
@@ -306,6 +364,13 @@ func _ball_rested() -> void:
 	r.hazard = ball.hazard
 	r.hazard_position = ball.hazard_position
 	r.holed = ball.holed
+	if r.at_turn and r.shape_id != "" and not r.unwanted_shape and ball.penalty_strokes == 0 \
+			and turn != null:
+		var rest := Vector2(ball.position.x, ball.position.y)
+		var cup := field.tile_center(hole.cup)
+		var surface := field.surface_at(rest.x, rest.y)
+		r.cut_corner = rest.distance_to(cup) < (turn as Vector2).distance_to(cup) \
+				and (surface == Surface.Type.FAIRWAY or surface == Surface.Type.GREEN or ball.holed)
 	ball_at = ball.position
 	score.record_stroke(ball.penalty_strokes, ball.holed)
 	ball = null
@@ -318,5 +383,5 @@ func _ball_rested() -> void:
 func _begin_plan() -> void:
 	plan = GuestPlan.begin(course, field, model, tuning, _putt_tuning,
 			Vector2(ball_at.x, ball_at.y), hole.cup, strokes.is_empty(),
-			stroke_seed(strokes.size() + 1), turn)
+			stroke_seed(strokes.size() + 1), turn, skill)
 	state = State.PLANNING

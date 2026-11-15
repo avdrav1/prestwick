@@ -150,6 +150,9 @@ class HoleRecord:
 	## when it did not and could be long, why not (GuestWalk.why; null otherwise).
 	var walk_on_path: bool = false
 	var walk_reason: GuestWalk.Reason = null
+	## E20-S2 (D75): the shape (id) of a stroke the guest chose that cut the dogleg's corner
+	## (GuestHole.shape_cut), "" for none.
+	var shape_cut: String = ""
 	## E5-S11: `walk_yd` was the walk from the clubhouse door.
 	var walk_from_clubhouse: bool = false
 	## Simulated seconds of the day it teed off and holed out.

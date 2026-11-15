@@ -1,0 +1,62 @@
+== scripts/skip_perf.gd -- --runs 3 (headless)
+skip perf: res://courses/playtest_nine.json, seed 1, 24 guests, Build mode, headless, load 0.70
+  the course: 128 x 128, 9 holes
+    day 1: 540 s simulated (a nine-hole day), 24 guests, 822599 Ball ticks, 216 reactions in the feed
+  run 1: day 1 skipped in 1.85 real s, 69 frames, longest frame 32.7 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:18 / 9:00  skipping | Day 1  2:03 / 9:00  skipping | Day 1  3:35 / 9:00  skipping | Day 1  5:02 / 9:00  skipping | Day 1  6:59 / 9:00  skipping
+  run 2: day 1 skipped in 1.88 real s, 70 frames, longest frame 30.9 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:16 / 9:00  skipping | Day 1  2:04 / 9:00  skipping | Day 1  3:31 / 9:00  skipping | Day 1  4:55 / 9:00  skipping | Day 1  6:50 / 9:00  skipping
+  run 3: day 1 skipped in 1.86 real s, 69 frames, longest frame 31.2 ms, now "Day 2  0:00 / 9:00  0 guests out"
+    status line on the way: Day 1  0:18 / 9:00  skipping | Day 1  2:06 / 9:00  skipping | Day 1  3:32 / 9:00  skipping | Day 1  4:59 / 9:00  skipping | Day 1  6:58 / 9:00  skipping
+  the same day run by the brain alone: 3.52 s, 822599 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 1.85 s (target under 3.0 s); load 0.89
+== scripts/skip_perf.gd -- --runs 3 --fixture eighteen (headless)
+skip perf: /tmp/prestwick_skip_perf_eighteen.json, seed 1, 24 guests, Build mode, headless, load 0.90
+  the course: 192 x 192, 18 holes
+    day 1: 1020 s simulated (an eighteen-hole day), 24 guests, 844149 Ball ticks, 261 reactions in the feed
+  run 1: day 1 skipped in 2.13 real s, 85 frames, longest frame 33.5 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:21 / 17:00  skipping | Day 1  1:56 / 17:00  skipping | Day 1  2:59 / 17:00  skipping | Day 1  3:58 / 17:00  skipping | Day 1  5:49 / 17:00  skipping | Day 1  9:37 / 17:00  skipping
+  run 2: day 1 skipped in 2.12 real s, 84 frames, longest frame 36.9 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:21 / 17:00  skipping | Day 1  1:57 / 17:00  skipping | Day 1  2:59 / 17:00  skipping | Day 1  4:04 / 17:00  skipping | Day 1  6:00 / 17:00  skipping | Day 1  9:59 / 17:00  skipping
+  run 3: day 1 skipped in 2.16 real s, 85 frames, longest frame 34.3 ms, now "Day 2  0:00 / 17:00  0 guests out"
+    status line on the way: Day 1  0:21 / 17:00  skipping | Day 1  1:57 / 17:00  skipping | Day 1  2:58 / 17:00  skipping | Day 1  3:58 / 17:00  skipping | Day 1  5:49 / 17:00  skipping | Day 1  9:17 / 17:00  skipping
+  the same day run by the brain alone: 3.67 s, 844149 Ball ticks
+  PASS: the skipped day ends as the day run alone (every guest's records and ticks)
+  best of 3: 2.12 s (target under 3.0 s); load 1.43
+== scripts/nine_holes_perf.gd (headless)
+load average at the start: 1.43, 3.04, 3.71 (1, 5, 15 minutes; 24 logical cores)
+map 128 x 128, 9 holes (E18-S1)
+nine holes (fixture nine): 9 open [1, 2, 3, 4, 5, 6, 7, 8, 9], issues {  }; click edits paint [(64, 100), (30, 110), (100, 96)]
+  statics hole 1 (par 4, 380 yd): 0.54 ms median, worst 0.69; blind true, hazard on the line false, safe route false
+  statics hole 2 (par 3, 150 yd): 0.39 ms median, worst 0.40; blind false, hazard on the line false, safe route false
+  statics hole 3 (par 5, 520 yd): 0.67 ms median, worst 0.67; blind false, hazard on the line false, safe route false
+  statics hole 4 (par 3, 160 yd): 0.42 ms median, worst 0.43; blind false, hazard on the line false, safe route false
+  statics hole 5 (par 4, 360 yd): 0.65 ms median, worst 0.66; blind false, hazard on the line false, safe route false
+  statics hole 6 (par 4, 380 yd): 0.66 ms median, worst 0.67; blind false, hazard on the line false, safe route false
+  statics hole 7 (par 3, 140 yd): 0.38 ms median, worst 0.38; blind false, hazard on the line false, safe route false
+  statics hole 8 (par 5, 520 yd): 0.68 ms median, worst 0.69; blind false, hazard on the line false, safe route false
+  statics hole 9 (par 4, 380 yd): 0.66 ms median, worst 0.68; blind false, hazard on the line false, safe route false
+statics per hole (fixture nine): median 0.65 ms, mean 0.56, p95 0.68, worst 0.68 (n 9)
+check_course, 9 holes: median 1.07 ms, mean 1.08, p95 1.13, worst 1.20 (n 40)
+click edit (paint 1 tile, validator rerun), 9 holes: median 0.41 ms, mean 0.40, p95 0.42, worst 0.44 (n 40); 9 holes still open
+drag breaking every hole (528 tiles of rough through 9 cups, 9 holes failing): stroke with its validator rerun median 11.54 ms, mean 11.71, p95 12.07, worst 16.17 (n 40)
+check_course, every hole failing: median 1.11 ms, mean 1.11, p95 1.16, worst 1.17 (n 40)
+undo of that drag, validator rerun: median 1.07 ms, mean 1.08, p95 1.15, worst 1.23 (n 40); 9 holes open after
+E3-S15 cart path lattice: 7724 path tiles (x or y a multiple of 3, painted before the holes), 9 holes open
+E3-S15 cart path lattice: the path grid, read once per course revision: median 1.23 ms, mean 1.24, p95 1.28, worst 1.28 (n 10)
+E3-S15 cart path lattice: one walk's route alone (median of 10 runs each; 44 walks, 30 on the path): median 0.37 ms, mean 0.70, p95 2.41, worst 3.85 (n 44); the same searches with no bound (44 with path tiles at both ends) median 0.33 ms, mean 0.67, p95 2.23, worst 3.33 (n 44)
+E3-S15 cart path lattice, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.06 ms, mean 0.22, p95 0.72, worst 5.08 (n 10815); frames that ran a step median 0.48 ms, mean 0.69, p95 2.15, worst 5.08 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.32 ms, mean 1.64, p95 4.53, worst 4.53 (n 9); 144 reactions; 319 path searches kept at dusk
+E3-S15 cart path lattice, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.10 ms, mean 0.21, p95 0.70, worst 4.66 (n 10813); frames that ran a step median 0.49 ms, mean 0.68, p95 2.20, worst 4.66 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.76 ms, mean 1.89, p95 4.53, worst 4.53 (n 9); 144 reactions; 321 path searches kept at dusk
+E3-S15 flooded map: trees walls at x [37, 106], gap at row 127, 9 holes open
+E3-S15 flooded map: one hole's statics measured afresh (hazard grid, its parts and safe route; median of 10 runs each; 9 holes, 8 with a hazard on the line): median 2.84 ms, mean 2.68, p95 3.31, worst 3.31 (n 9)
+E3-S34 flooded map: hazard grid median 1.90 ms, mean 1.90, p95 1.95, worst 1.95 (n 10); its parts labelled median 0.71 ms, mean 0.71, p95 0.76, worst 0.76 (n 10); each hole's statics after (the first of a terrain labels the parts) median 0.38 ms, mean 0.64, p95 3.04, worst 3.10 (n 90); the breadth-first safe route a hole, as before median 3.07 ms, mean 2.26, p95 3.75, worst 3.91 (n 90)
+E3-S15 flooded map, guest day 1 at 3x, 60 fps, 180 click edits: guest work a frame median 0.19 ms, mean 0.29, p95 0.83, worst 5.38 (n 10813); frames that ran a step median 0.40 ms, mean 0.53, p95 1.12, worst 5.38 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.07 ms, mean 1.67, p95 4.62, worst 4.62 (n 9); 144 reactions; 0 path searches kept at dusk
+E3-S15 flooded map, guest day 2 at 3x, 60 fps, 180 click edits: guest work a frame median 0.21 ms, mean 0.27, p95 0.75, worst 5.23 (n 10803); frames that ran a step median 0.38 ms, mean 0.53, p95 1.24, worst 5.23 (n 541); 0 frames over 16.7 ms, 0 over frame_guest_ms_max 10.0 ms (0 of them measuring a hole); 9 holes' statics measured, in frames median 1.12 ms, mean 1.75, p95 4.68, worst 4.68 (n 9); 142 reactions; 0 path searches kept at dusk
+E3-S15 3x guest frames over 10.0 ms: cart path lattice 0, flooded map 0 (gated, D52)
+guest day 1 at 3x, 60 fps: guest work a frame median 0.09 ms, mean 0.21, p95 0.69, worst 4.21 (n 10806); ticks a frame median 24, p95 200, worst 200 (the frame's budget 200); 0 frames over 10.0 ms (0 over 10.0 ms, the same share of the frame); 10806 frames, 10820 on time (5 a step waited, -0.1% late)
+guest day 2 at 3x, 60 fps: guest work a frame median 0.08 ms, mean 0.20, p95 0.68, worst 3.99 (n 10812); ticks a frame median 9, p95 200, worst 200 (the frame's budget 200); 0 frames over 10.0 ms (0 over 10.0 ms, the same share of the frame); 10812 frames, 10820 on time (11 a step waited, -0.1% late)
+guest day 1 at 3x, 30 fps: guest work a frame median 0.23 ms, mean 0.41, p95 1.32, worst 4.03 (n 5406); ticks a frame median 48, p95 399, worst 400 (the frame's budget 400); 0 frames over 10.0 ms (0 over 20.0 ms, the same share of the frame); 5406 frames, 5410 on time (5 a step waited, -0.1% late)
+guest day 2 at 3x, 30 fps: guest work a frame median 0.22 ms, mean 0.40, p95 1.29, worst 3.97 (n 5406); ticks a frame median 47, p95 384, worst 400 (the frame's budget 400); 0 frames over 10.0 ms (0 over 20.0 ms, the same share of the frame); 5406 frames, 5410 on time (5 a step waited, -0.1% late)
+load average at the end: 1.28, 2.88, 3.64 (1, 5, 15 minutes; 24 logical cores)
+gate (D52): 0 gated guest frames past 10.0 ms, worst 0.00; it fails at 3 or at one past 12.5 ms

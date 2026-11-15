@@ -70,6 +70,19 @@ func step(from: ShotShape, dir: int) -> ShotShape:
 	return shapes[clampi(i + dir, 0, shapes.size() - 1)]
 
 
+## E20-S2: the shapes that bend toward `side` (-1 left, +1 right), the gentlest first (a draw
+## before a hook); empty for side 0.
+func bending(side: int) -> Array[ShotShape]:
+	var out: Array[ShotShape] = []
+	if side == 0:
+		return out
+	for s in shapes:
+		if s != null and s.side == side and s.bends():
+			out.append(s)
+	out.sort_custom(func(a: ShotShape, b: ShotShape) -> bool: return a.bend_yd < b.bend_yd)
+	return out
+
+
 ## The club's bend at its own carry, yards: 0 for the putter and for Straight.
 static func bend_of(club: Club, s: ShotShape) -> float:
 	if club == null or s == null or club.is_putter() or not s.bends():

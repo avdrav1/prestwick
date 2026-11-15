@@ -108,6 +108,37 @@ var aim_offsets_deg: PackedFloat32Array = PackedFloat32Array()
 ## this many yards farther from the cup than the turn does (the corner is still ahead) and the
 ## longest legal club reaches it; else at the cup.
 var turn_ahead_yd: float = 0.0
+## E20-S2 (D75, amends D54): shot shape on a dogleg. While a full shot aims at the turn, a guest
+## of `shape_skill_min` or more (over skill_max: nobody) also plans the shape that bends with
+## the hole, a draw on a left turn and a fade on a right (from `strong_shape_skill_min` the hook
+## or slice too), when the corner turns `shape_turn_min_deg` or more at the turn. Each shape is
+## aimed to finish each of `shape_cut_shares` of its bend inside the turn (1 cuts the corner by
+## the bend, 0 finishes on the line to the turn). The shaped ball that rests nearest the cup is
+## played when it is safe (no penalty, not blocked, clear of the trees), rests on a lie at least
+## as good as the straight plan's, and either rests `shape_gain_yd` nearer the cup, on a better
+## lie, or the straight plan was not clear (unsafe, or into the trees) (GuestPlan).
+var shape_skill_min: int = 0
+var strong_shape_skill_min: int = 0
+var shape_turn_min_deg: float = 0.0
+var shape_cut_shares: PackedFloat32Array = PackedFloat32Array()
+var shape_gain_yd: float = 0.0
+## E20-S2: the misses a guest checks before it takes a shaped plan, each [power share, degrees
+## to the inside of the corner] of the shaped plan's power and aim: every one must stay clear
+## (no penalty, not blocked, not in the trees) and rest on a lie as good as the straight plan's,
+## so a shape that cuts the corner only when it is struck perfectly is not taken.
+var shape_miss_checks: PackedVector2Array = PackedVector2Array()
+## E20-S2: a guest of `miss_shape_skill_max` or less sometimes curves a full shot it planned
+## straight: the chance is `miss_shape_share_worst` at skill_min, falling linearly by skill to
+## `miss_shape_share_worst / (miss_shape_skill_max - skill_min + 1)` at miss_shape_skill_max
+## (miss_shape_chance), and `miss_slice_share` of those misses are slices, the rest hooks
+## (a right-hander's miss is more often the slice). Drawn from its own stream (GuestHole), so
+## the click noise of every stroke is the same as without it.
+var miss_shape_skill_max: int = 0
+var miss_shape_share_worst: float = 0.0
+var miss_slice_share: float = 0.0
+## E20-S2: misses come only with the long clubs, those whose `shape_scale` (golf/clubs.tres) is
+## at least this (the driver and 3-wood at 0.9): a slice is a long club's miss.
+var miss_shape_scale_min: float = 0.0
 
 ## Guest Ball work: Ball ticks a guest may spend per simulated second, and the whole sim.
 var guest_ticks_per_s: int = 0
@@ -246,6 +277,35 @@ static func from_dict(d: Dictionary, errors: Array[String]) -> GuestTuning:
 	t.guest_min_power = _float(d, "guest_min_power", errors)
 	t.over_par_worst = _float(d, "over_par_worst", errors)
 	t.turn_ahead_yd = _float(d, "turn_ahead_yd", errors)
+	t.shape_skill_min = CourseData.read_int(d, "shape_skill_min", errors)
+	t.strong_shape_skill_min = CourseData.read_int(d, "strong_shape_skill_min", errors)
+	t.shape_turn_min_deg = _float(d, "shape_turn_min_deg", errors)
+	var cuts: Variant = d.get("shape_cut_shares")
+	if typeof(cuts) == TYPE_ARRAY:
+		for v: Variant in cuts:
+			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+				t.shape_cut_shares.append(float(v))
+			else:
+				errors.append("shape_cut_shares must hold numbers")
+	else:
+		errors.append("shape_cut_shares must be a list of shares of the bend")
+	t.shape_gain_yd = _float(d, "shape_gain_yd", errors)
+	var misses: Variant = d.get("shape_miss_checks")
+	if typeof(misses) == TYPE_ARRAY:
+		for v: Variant in misses:
+			if typeof(v) == TYPE_ARRAY and (v as Array).size() == 2 \
+					and (typeof(v[0]) == TYPE_FLOAT or typeof(v[0]) == TYPE_INT) \
+					and (typeof(v[1]) == TYPE_FLOAT or typeof(v[1]) == TYPE_INT):
+				t.shape_miss_checks.append(Vector2(float(v[0]), float(v[1])))
+			else:
+				errors.append("shape_miss_checks must hold [power share, degrees] pairs")
+				break
+	else:
+		errors.append("shape_miss_checks must be a list of [power share, degrees] pairs")
+	t.miss_shape_skill_max = CourseData.read_int(d, "miss_shape_skill_max", errors)
+	t.miss_shape_share_worst = _float(d, "miss_shape_share_worst", errors)
+	t.miss_slice_share = _float(d, "miss_slice_share", errors)
+	t.miss_shape_scale_min = _float(d, "miss_shape_scale_min", errors)
 	var offsets: Variant = d.get("aim_offsets_deg")
 	if typeof(offsets) == TYPE_ARRAY:
 		for v: Variant in offsets:
@@ -306,6 +366,21 @@ func putt_aim_sigma(skill: int) -> float:
 
 func putt_power_sigma(skill: int) -> float:
 	return lerpf(putt_power_sigma_best, putt_power_sigma_worst, skill_share(skill))
+
+
+## E20-S2 (D75): true when a guest of `skill` plans a shot shape on a dogleg; `strong` asks
+## for the hook or slice as well as the draw or fade.
+func shapes_for(skill: int, strong: bool = false) -> bool:
+	return skill >= shape_skill_min and (not strong or skill >= strong_shape_skill_min)
+
+
+## E20-S2: the chance a guest of `skill` curves a full shot it planned straight (0 above
+## miss_shape_skill_max).
+func miss_shape_chance(skill: int) -> float:
+	if skill > miss_shape_skill_max:
+		return 0.0
+	var span := miss_shape_skill_max - skill_min + 1
+	return miss_shape_share_worst * float(miss_shape_skill_max - maxi(skill, skill_min) + 1) / float(span)
 
 
 ## D40: the score a guest of `skill` expects on a hole of `par`.
@@ -421,6 +496,39 @@ static func _check_ranges(t: GuestTuning, d: Dictionary, errors: Array[String]) 
 	_positive(errors, "eye_height_yd", t.eye_height_yd)
 	_at_least(errors, "mark_height_yd", t.mark_height_yd, 0.0)
 	_at_least(errors, "rating_window", t.rating_window, 1)
+	# E20-S2 (D75): shot shape. A skill over skill_max turns shaping off; the miss's skill may
+	# sit below skill_min (nobody misses) but not past skill_max. Skill bounds are judged only
+	# once skill_min and skill_max themselves hold.
+	if t.skill_max > t.skill_min and (t.shape_skill_min < t.skill_min
+			or t.shape_skill_min > t.skill_max + 1):
+		errors.append("shape_skill_min (%s) must be skill_min to skill_max + 1 (%s to %s; over skill_max turns it off)"
+				% [t.shape_skill_min, t.skill_min, t.skill_max + 1])
+	if t.skill_max > t.skill_min and (t.strong_shape_skill_min < t.shape_skill_min
+			or t.strong_shape_skill_min > t.skill_max + 1):
+		errors.append("strong_shape_skill_min (%s) must be shape_skill_min to skill_max + 1 (%s to %s)"
+				% [t.strong_shape_skill_min, t.shape_skill_min, t.skill_max + 1])
+	if t.shape_turn_min_deg < 0.0 or t.shape_turn_min_deg > 180.0:
+		errors.append("shape_turn_min_deg (%s) must be 0 to 180" % t.shape_turn_min_deg)
+	if t.shape_cut_shares.is_empty():
+		errors.append("shape_cut_shares must list at least one share")
+	for c: float in t.shape_cut_shares:
+		if c < 0.0 or c > 2.0:
+			errors.append("shape_cut_shares (%s) must each be 0 to 2" % c)
+			break
+	_at_least(errors, "shape_gain_yd", t.shape_gain_yd, 0.0)
+	for m: Vector2 in t.shape_miss_checks:
+		if m.x <= 0.0 or m.x > 1.0 or absf(m.y) > 45.0:
+			errors.append("shape_miss_checks (%s) must each be a power share above 0 and at most 1 and at most 45 degrees" % m)
+			break
+	if t.skill_max > t.skill_min and (t.miss_shape_skill_max < t.skill_min - 1
+			or t.miss_shape_skill_max > t.skill_max):
+		errors.append("miss_shape_skill_max (%s) must be skill_min - 1 to skill_max (%s to %s; below skill_min nobody misses)"
+				% [t.miss_shape_skill_max, t.skill_min - 1, t.skill_max])
+	if t.miss_shape_share_worst < 0.0 or t.miss_shape_share_worst > 1.0:
+		errors.append("miss_shape_share_worst (%s) must be 0 to 1" % t.miss_shape_share_worst)
+	if t.miss_slice_share < 0.0 or t.miss_slice_share > 1.0:
+		errors.append("miss_slice_share (%s) must be 0 to 1" % t.miss_slice_share)
+	_at_least(errors, "miss_shape_scale_min", t.miss_shape_scale_min, 0.0)
 
 
 ## E9-S1 (D65): a guest's walking speed on `surface`, yards a simulated second.

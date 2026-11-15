@@ -1,0 +1,24 @@
+E20-S2 (D75): Dogleg Hollow's nine played by 80 skill-10 guests a hole (alone, GuestHole, shaping
+off in the tuning), each tee shot forced: Straight (the D54 plan, aimed at the turn), or the shape
+that bends with the hole aimed to finish 0, 0.5 or 1 of its bend inside the turn (the D54 plan's
+club and power). Mean score a hole and, in brackets, the share of tee shots resting on fairway.
+Scratch script (not kept): the plan made, its shape and aim replaced, then struck and played out.
+Measured 2026-11-15 on main after E20-S1 with this story's code.
+
+hole 1:  straight 3.91 (fw 63%)  draw 0.0 3.95 (fw 56%)  draw 0.5 4.05 (fw 40%)  draw 1.0 4.45 (fw 27%)  hook 0.0 3.90 (fw 32%)  hook 0.5 4.90 (fw 27%)
+hole 2:  straight 3.60 (fw 82%)  fade 0.0 3.89 (fw 77%)  fade 0.5 4.01 (fw 63%)  fade 1.0 4.19 (fw 46%)  slice 0.0 4.03 (fw 67%)  slice 0.5 5.04 (fw 12%)
+hole 3:  straight 3.69 (fw 62%)  draw 0.0 3.70 (fw 50%)  draw 0.5 3.75 (fw 33%)  draw 1.0 3.85 (fw 35%)  hook 0.0 3.71 (fw 33%)  hook 0.5 4.25 (fw 22%)
+hole 4:  straight 4.15 (fw 60%)  fade 0.0 4.29 (fw 57%)  fade 0.5 4.44 (fw 46%)  fade 1.0 4.81 (fw 36%)  slice 0.0 4.58 (fw 36%)  slice 0.5 5.55 (fw 21%)
+hole 5:  straight 3.61 (fw 57%)  fade 0.0 3.64 (fw 57%)  fade 0.5 3.71 (fw 38%)  fade 1.0 3.91 (fw 30%)  slice 0.0 3.77 (fw 42%)  slice 0.5 4.54 (fw 20%)
+hole 6:  straight 3.52 (fw 61%)  draw 0.0 3.54 (fw 55%)  draw 0.5 3.77 (fw 46%)  draw 1.0 4.71 (fw 42%)  hook 0.0 3.60 (fw 41%)  hook 0.5 5.91 (fw 30%)
+hole 7:  straight 3.64 (fw 75%)  draw 0.0 3.71 (fw 67%)  draw 0.5 4.11 (fw 68%)  draw 1.0 5.20 (fw 63%)  hook 0.0 3.73 (fw 57%)  hook 0.5 6.46 (fw 55%)
+hole 8:  straight 4.66 (fw 77%)  fade 0.0 4.66 (fw 83%)  fade 0.5 4.59 (fw 78%)  fade 1.0 4.66 (fw 66%)  slice 0.0 4.67 (fw 78%)  slice 0.5 4.88 (fw 32%)
+hole 9:  straight 3.44 (fw 71%)  fade 0.0 3.45 (fw 71%)  fade 0.5 3.45 (fw 61%)  fade 1.0 3.52 (fw 50%)  slice 0.0 3.58 (fw 63%)  slice 0.5 3.91 (fw 25%)
+
+Reading: with guests' click noise no fixed shape and cut beats the straight D54 line on any hole
+of today's Dogleg Hollow (hole 8's fade at 0.5, 4.59 against 4.66, is inside the noise). The same
+plans noise-free (skill 10 with every sigma 0, `scripts/shape_gain.gd --set`) shape 7 of 9 holes
+and gain 0.11 strokes a hole: a shaped ball lands nearer the cup, but its misses (short ones into
+the inside rough, a curved roll off the fairway's edge) and the narrower zone's extra shanks
+(skill 10: 2.3% against 0.8%) cost more than the yards. The fairways' elbows are where the
+straight line ends; E20-S3 is the story that moves trees so a straight ball must aim wide.

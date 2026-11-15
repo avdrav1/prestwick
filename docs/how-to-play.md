@@ -41,6 +41,7 @@ How far each club goes with a perfect swing from flat fairway, in yards:
 
 - Each morning guests arrive at the clubhouse, pay at the first tee and play your open holes. If none is open yet they go home, and come back as soon as your first hole opens, while the day has time for a round. Each open hole costs $5 a day to keep up.
 - When guests finish a hole they say what they thought: the feed on the left and the tags on the map show it. Click one to jump to that hole. Complaints name what to fix (a blind tee shot, a dull hole, a slow wait, or a long walk from one green to the next tee that no cart path serves, with why, which alone is enough for a complaint). A cart path that turns a long walk into a quick one can earn a word of praise.
+- Good golfers shape the ball round a dogleg: when a draw (on a hole turning left) or a fade (turning right) gives them a shorter line round the corner that still holds the fairway if they miss it a little, they curve the tee shot round it, and the best of them try a hook or a slice too. A shape that cuts the corner can earn a word in the praise ("the draw round the corner was worth the risk"). Weaker golfers sometimes slice a driver or 3-wood they meant to hit straight (now and then a hook). Where trees crowd the inside of a corner, a curved tee shot is the way round them.
 - At dusk their verdicts set your stars (1 to 5). More stars bring more guests and a higher fee ceiling.
 - **P** pauses, **1** and **3** run the day at 1x and 3x, **M** skips to the next morning.
 

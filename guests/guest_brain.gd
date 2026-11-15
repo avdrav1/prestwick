@@ -1199,6 +1199,7 @@ func _record(guest: Guest, g: GuestGroup, t: int) -> void:
 	r.start_s = g.start_s
 	r.end_s = t
 	r.play = guest.hole
+	r.shape_cut = guest.hole.shape_cut()
 	if _terrain_key == "":
 		_terrain_key = HoleChecks.terrain_key(course)
 	r.reaction = GuestReaction.judge(guest, r, checks.statics(course, guest.hole.hole, _terrain_key),
