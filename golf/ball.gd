@@ -11,6 +11,11 @@ extends RefCounted
 ## comes only from this ball's own generator, so the same seed and inputs give the same
 ## result bit for bit.
 ##
+## Shot shape (D74, E20-S1): a shaped flight (launch's `p_curve`, from ShotShapes.flight) is
+## also pushed sideways each tick by `curve`, held over the tick and decayed after it, until its
+## first touchdown. A straight flight has no curve and takes none of that arithmetic, so it is
+## the flight it was before D74 bit for bit.
+##
 ## Cup and hazards (D15, E2-S6; docs/design.md Ball, Cup and hazards): the cup (set_cup)
 ## captures a slow ball at the end of a rolling tick. A ball that stops on water or OB
 ## (an `oob` tile, off the map, or land the player does not own, D29) is dropped, at rest, with one penalty stroke, and reports
@@ -53,6 +58,12 @@ var path: PackedVector3Array = PackedVector3Array()
 ## The club's roll factor (D14, golf/clubs.tres): multiplies the ground speed kept after the
 ## first touchdown, after the surface's bounce friction. 1.0 changes nothing. Set before launch.
 var roll_factor: float = 1.0
+## D74 (E20-S1): a shaped flight's lateral acceleration now, yd/s², on the ground plane
+## (ShotShapes.flight); held over each tick, then multiplied by `curve_decay` (the sidespin
+## decays). Zero for a straight flight, which then steps exactly as before D74. Given at
+## launch; the first touchdown or a tree scatter ends it.
+var curve: Vector2 = Vector2.ZERO
+var curve_decay: float = 1.0
 ## The cup's tile (D15: it sits at the tile's centre), or NO_CUP. Set before launch; a new
 ## stroke keeps it.
 var cup_tile: Vector2i = NO_CUP
@@ -151,10 +162,14 @@ static func launch_velocity(speed: float, launch_deg: float, heading_deg: float)
 	return Vector3(flat * cos(around), flat * sin(around), speed * sin(up))
 
 
-## Starts a flight from `start` (yards; a z below the ground is lifted onto it).
-func launch(start: Vector3, p_velocity: Vector3) -> void:
+## Starts a flight from `start` (yards; a z below the ground is lifted onto it). `p_curve`
+## and `p_curve_decay` shape it (D74: `curve`); the defaults fly it straight.
+func launch(start: Vector3, p_velocity: Vector3, p_curve: Vector2 = Vector2.ZERO,
+		p_curve_decay: float = 1.0) -> void:
 	_reset(start)
 	velocity = p_velocity
+	curve = p_curve
+	curve_decay = p_curve_decay
 	state = State.FLYING
 
 
@@ -492,6 +507,11 @@ func run(max_ticks: int = -1) -> int:
 			var hi := -1.0
 			var s := 0.5 * DT
 			var half := position + velocity * s + Vector3(0.0, 0.0, -0.5 * gravity * s * s)
+			# D74: a shaped flight's sideways push, held over the tick. A straight flight skips
+			# it, so it steps exactly as before.
+			var curving := curve != Vector2.ZERO
+			if curving:
+				half += Vector3(curve.x, curve.y, 0.0) * (0.5 * s * s)
 			var whole := Vector3.ZERO
 			var below := false
 			if half.z < top:
@@ -514,6 +534,8 @@ func run(max_ticks: int = -1) -> int:
 			else:
 				s = 1.0 * DT
 				whole = position + velocity * s + Vector3(0.0, 0.0, -0.5 * gravity * s * s)
+				if curving:
+					whole += Vector3(curve.x, curve.y, 0.0) * (0.5 * s * s)
 				if whole.z < top:
 					var wux := whole.x / ypt - 0.5
 					var wuy := whole.y / ypt - 0.5
@@ -551,6 +573,10 @@ func run(max_ticks: int = -1) -> int:
 				if not scattered_now:
 					position = whole
 					velocity.z -= gravity * DT
+					if curving:
+						velocity.x += curve.x * DT
+						velocity.y += curve.y * DT
+						curve *= curve_decay
 		steps += 1
 		n += 1
 		if state != State.AT_REST and steps >= _max_steps:
@@ -645,6 +671,8 @@ func _reset(start: Vector3) -> void:
 	scatter_from = Vector3.ZERO
 	stop_point = position
 	stop_velocity = Vector3.ZERO
+	curve = Vector2.ZERO
+	curve_decay = 1.0
 	_start = position
 	_track = PackedVector2Array([Vector2(position.x, position.y)])
 	_track_in_path = record_path
@@ -656,6 +684,9 @@ func _reset(start: Vector3) -> void:
 ## Flight position `t` of the way through the current tick (0 to 1).
 func _flight_at(t: float) -> Vector3:
 	var s := t * DT
+	if curve != Vector2.ZERO:
+		return position + velocity * s + Vector3(0.5 * curve.x * s * s, 0.5 * curve.y * s * s,
+				-0.5 * _gravity * s * s)
 	return position + velocity * s + Vector3(0.0, 0.0, -0.5 * _gravity * s * s)
 
 
@@ -678,6 +709,8 @@ func _flight_contact(lo: float, hi: float) -> void:
 		return
 	var hit := _flight_at(hi)
 	var hit_velocity := velocity + Vector3(0.0, 0.0, -params.gravity * hi * DT)
+	if curve != Vector2.ZERO:
+		hit_velocity += Vector3(curve.x, curve.y, 0.0) * (hi * DT)
 	_touch_down(Vector3(hit.x, hit.y, field.height_at(hit.x, hit.y)), hit_velocity)
 
 
@@ -722,6 +755,7 @@ func _blocks(p: Vector3) -> bool:
 func _scatter(from: Vector3, v: Vector3) -> void:
 	scattered = true
 	scatter_from = from
+	curve = Vector2.ZERO
 	if not has_landed:
 		stop_point = from
 		stop_velocity = v
@@ -814,6 +848,7 @@ func _last_resort() -> Vector2:
 
 func _touch_down(at: Vector3, v: Vector3) -> void:
 	position = at
+	curve = Vector2.ZERO  # D74: the sidespin ends at the first touchdown
 	var first := not has_landed
 	if first:
 		has_landed = true

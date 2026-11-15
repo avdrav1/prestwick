@@ -5,7 +5,12 @@ extends Node2D
 ##
 ## A full club: dots on the straight chord, as the screen shows it, from the drawn ball to
 ## the predicted first touchdown of a perfect swing (the ball flies straight, D14), and the
-## marker there. So from a raised tee the line starts at the ball and does not hug the hill.
+## marker there. A shaped shot (D74, E20-S1: a draw, fade, hook or slice bends in flight) draws
+## its dots along the predicted flight's ground track instead, lifted off the ground as the
+## chord is, so the arc the ball will fly is the arc the player sees: it leaves to one side of
+## the aim and bends back across it to the marker. A faint straight guide (guide_dots, at
+## guide_alpha) runs along the aim itself to the same distance, so the bend reads against the
+## line the player aimed: aim at the trees past the corner and watch the arc bend off it. So from a raised tee the line starts at the ball and does not hug the hill.
 ## The putter: dots along the predicted roll on the drawn ground (the bilinear ground the ball
 ## rolls on), so the break shows smoothly; the marker sits at the predicted rest point.
 ##
@@ -74,6 +79,10 @@ extends Node2D
 @export var splash_color: Color = Color8(240, 236, 224)
 ## E10-S3: the perfect swing's marker is drawn at this alpha while the live marker shows.
 @export var reference_alpha: float = 0.4
+## E20-S1: a shaped shot's straight aim guide, chalk dots (not the flight's sun_yellow) at this
+## alpha and this share of the flight's dot radius.
+@export var guide_alpha: float = 0.7
+@export var guide_dot_scale: float = 0.75
 
 ## The prediction drawn, or null.
 var prediction: ShotPrediction
@@ -81,6 +90,10 @@ var prediction: ShotPrediction
 var is_putt: bool = false
 ## True when the club is blocked (D20): the marker is the struck-through ring.
 var blocked: bool = false
+## D74: true when the shot is shaped, so its dots follow the curved track (_track_dots).
+var curved: bool = false
+## D74: a shaped shot's straight aim guide (screen points), empty when straight.
+var guide_dots: PackedVector2Array = PackedVector2Array()
 ## Screen points of the dots, in the CourseView's space.
 var dots: PackedVector2Array = PackedVector2Array()
 ## The marker's point in yards (the first touchdown, the putt's rest point, or for a
@@ -133,12 +146,14 @@ func _init() -> void:
 
 ## Shows the aim for `p_prediction` of a shot struck from `start` (yards) over `field`.
 ## `p_blocked` is ClubSet.is_blocked for the shot (D20).
+## `p_curved` is ShotLaunch.is_shaped (D74); `aim_deg` the aim, for its straight guide.
 func show_prediction(field: HeightField, p_prediction: ShotPrediction, putt: bool, start: Vector3,
-		p_blocked: bool = false) -> void:
+		p_blocked: bool = false, p_curved: bool = false, aim_deg: float = NAN) -> void:
 	_field = field
 	prediction = p_prediction
 	is_putt = putt
 	blocked = p_blocked
+	curved = p_curved and not putt
 	hazard_cue = Ball.Hazard.NONE
 	show_ring = not blocked
 	if prediction.penalty_strokes > 0 and not blocked:
@@ -157,8 +172,16 @@ func show_prediction(field: HeightField, p_prediction: ShotPrediction, putt: boo
 	dots = PackedVector2Array()
 	if putt:
 		_dots_along_roll(prediction.path)
+	elif not blocked and curved:
+		dots = _track_dots(start, marker_point, marker_screen, prediction.path)
 	elif not blocked:
 		_dots_along_chord(start, marker_point)
+	guide_dots = PackedVector2Array()
+	if curved and not blocked and not is_nan(aim_deg):
+		var reach := Vector2(start.x, start.y).distance_to(Vector2(marker_point.x, marker_point.y))
+		var g := Vector2(start.x, start.y) + Vector2.from_angle(deg_to_rad(aim_deg)) * reach
+		var end := Vector3(g.x, g.y, 0.0)
+		guide_dots = _chord_dots(start, end, ground_screen(end))
 	_build_land_line(field.course)
 	visible = true
 	queue_redraw()
@@ -167,7 +190,7 @@ func show_prediction(field: HeightField, p_prediction: ShotPrediction, putt: boo
 ## E10-S3: shows the live landing marker for `p_prediction`, a full club's shot from `start`
 ## (yards) at the swing's power; `p_blocked` is ClubSet.is_blocked for it. Over the aim shown.
 func show_preview(field: HeightField, p_prediction: ShotPrediction, start: Vector3,
-		p_blocked: bool = false) -> void:
+		p_blocked: bool = false, p_curved: bool = false) -> void:
 	_field = field
 	preview = p_prediction
 	preview_blocked = p_blocked
@@ -182,7 +205,9 @@ func show_preview(field: HeightField, p_prediction: ShotPrediction, start: Vecto
 	preview_point = preview.stop_point if p_blocked else preview.landing
 	preview_screen = ground_screen(preview_point)
 	preview_dots = PackedVector2Array()
-	if not p_blocked:
+	if not p_blocked and p_curved:
+		preview_dots = _track_dots(start, preview_point, preview_screen, preview.path)
+	elif not p_blocked:
 		preview_dots = _chord_dots(start, preview_point, preview_screen)
 	queue_redraw()
 
@@ -212,6 +237,7 @@ func clear_aim() -> void:
 	prediction = null
 	blocked = false
 	dots = PackedVector2Array()
+	guide_dots = PackedVector2Array()
 	hazard_cue = Ball.Hazard.NONE
 	visible = not land_line.is_empty()
 	queue_redraw()
@@ -223,6 +249,7 @@ func clear() -> void:
 	prediction = null
 	blocked = false
 	dots = PackedVector2Array()
+	guide_dots = PackedVector2Array()
 	land_line = PackedVector2Array()
 	land_ticks = PackedVector2Array()
 	land_hidden = []
@@ -283,6 +310,40 @@ func _chord_dots(start: Vector3, end: Vector3, to: Vector2) -> PackedVector2Arra
 	return out
 
 
+## D74: a shaped flight's dots from the drawn ball under `start` to `to` (the screen point of
+## `end`, the marker): every `dot_spacing_yd` along the ground track of `path` (the predicted
+## ticks) up to the tick that reaches `end`, each lifted as the chord would be at that share of
+## the way (the chord's screen point there plus the track's sideways ground offset from the
+## chord, projected). A track that runs along the chord gives the chord's own dots.
+func _track_dots(start: Vector3, end: Vector3, to: Vector2,
+		path: PackedVector3Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var a := Vector2(start.x, start.y)
+	var b := Vector2(end.x, end.y)
+	var length := a.distance_to(b)
+	if length <= 0.0 or path.size() < 2:
+		return out
+	var dir := (b - a) / length
+	var from := ground_screen(start)
+	var origin := Iso.tile_to_screen(Vector2.ZERO, 0.0)
+	var ypt := _field.yards_per_tile
+	var carry := dot_spacing_yd
+	for i in range(1, path.size()):
+		var p0 := Vector2(path[i - 1].x, path[i - 1].y)
+		var p1 := Vector2(path[i].x, path[i].y)
+		var seg := p0.distance_to(p1)
+		while seg > 0.0 and carry <= seg:
+			var q := p0.lerp(p1, carry / seg)
+			var f := clampf((q - a).dot(dir) / length, 0.0, 1.0)
+			var side := q - a.lerp(b, f)
+			out.append(from.lerp(to, f) + Iso.tile_to_screen(side / ypt, 0.0) - origin)
+			carry += dot_spacing_yd
+		carry -= seg
+		if p1.distance_squared_to(b) < 1e-6:
+			break
+	return out
+
+
 ## A putt: dots every `dot_spacing_yd` along the predicted roll `points`, each at the roll's
 ## own ground height (bilinear), so the break reads as a smooth curve.
 func _dots_along_roll(points: PackedVector3Array) -> void:
@@ -322,6 +383,9 @@ func _draw() -> void:
 	if prediction == null:
 		return
 	var r := marker_radius * k
+	for d in guide_dots:
+		draw_circle(d, (dot_radius * guide_dot_scale + 1.0) * k, Color(outline_color, guide_alpha))
+		draw_circle(d, dot_radius * guide_dot_scale * k, Color(splash_color, guide_alpha))
 	if preview == null:
 		_draw_dots(dots, k, 1.0)
 		_draw_marker(marker_screen, blocked, hazard_cue, hazard_screen, show_ring, r, k, 1.0)

@@ -11,6 +11,7 @@ carry_yd = 235.0
 total_yd = 282.0
 launch_deg = 14.0
 roll_factor = 1.0
+shape_scale = 1.0
 
 [sub_resource type="Resource" id="Club_3w"]
 script = ExtResource("1_club")
@@ -19,6 +20,7 @@ carry_yd = 220.0
 total_yd = 261.0
 launch_deg = 16.0
 roll_factor = 0.95
+shape_scale = 0.95
 
 [sub_resource type="Resource" id="Club_3i"]
 script = ExtResource("1_club")
@@ -27,6 +29,7 @@ carry_yd = 190.0
 total_yd = 223.0
 launch_deg = 18.0
 roll_factor = 0.9
+shape_scale = 0.85
 
 [sub_resource type="Resource" id="Club_4i"]
 script = ExtResource("1_club")
@@ -35,6 +38,7 @@ carry_yd = 179.0
 total_yd = 208.0
 launch_deg = 20.0
 roll_factor = 0.85
+shape_scale = 0.8
 
 [sub_resource type="Resource" id="Club_5i"]
 script = ExtResource("1_club")
@@ -43,6 +47,7 @@ carry_yd = 168.0
 total_yd = 193.0
 launch_deg = 22.0
 roll_factor = 0.8
+shape_scale = 0.75
 
 [sub_resource type="Resource" id="Club_6i"]
 script = ExtResource("1_club")
@@ -51,6 +56,7 @@ carry_yd = 157.0
 total_yd = 178.0
 launch_deg = 24.0
 roll_factor = 0.75
+shape_scale = 0.7
 
 [sub_resource type="Resource" id="Club_7i"]
 script = ExtResource("1_club")
@@ -59,6 +65,7 @@ carry_yd = 146.0
 total_yd = 164.0
 launch_deg = 27.0
 roll_factor = 0.7
+shape_scale = 0.65
 
 [sub_resource type="Resource" id="Club_8i"]
 script = ExtResource("1_club")
@@ -67,6 +74,7 @@ carry_yd = 135.0
 total_yd = 150.0
 launch_deg = 30.0
 roll_factor = 0.65
+shape_scale = 0.6
 
 [sub_resource type="Resource" id="Club_9i"]
 script = ExtResource("1_club")
@@ -75,6 +83,7 @@ carry_yd = 124.0
 total_yd = 136.0
 launch_deg = 33.0
 roll_factor = 0.6
+shape_scale = 0.55
 
 [sub_resource type="Resource" id="Club_pw"]
 script = ExtResource("1_club")
@@ -83,6 +92,7 @@ carry_yd = 113.0
 total_yd = 123.0
 launch_deg = 37.0
 roll_factor = 0.55
+shape_scale = 0.5
 
 [sub_resource type="Resource" id="Club_sw"]
 script = ExtResource("1_club")
@@ -92,6 +102,7 @@ carry_yd = 102.0
 total_yd = 110.0
 launch_deg = 40.0
 roll_factor = 0.5
+shape_scale = 0.45
 
 [sub_resource type="Resource" id="Club_putter"]
 script = ExtResource("1_club")
@@ -100,6 +111,7 @@ kind = 3
 carry_yd = 0.0
 launch_deg = 0.0
 roll_factor = 1.0
+shape_scale = 0.0
 putt_min_speed = 1.0
 putt_max_speed = 18.0
 putt_bar_curve = 0.9

@@ -14,10 +14,18 @@ extends PanelContainer
 ## practice hint above the panel (hint_panel) until a swing strikes; then it is saved as seen in
 ## user settings (HintSettings, user://, not the save) and never shows again. The hint is the
 ## panel's top row while it shows and takes no clicks.
+##
+## E20-S1 (D74), the shape picker: "< Shape: Draw >" at the bottom left steps the shot shape
+## (Q and E), with its bend at the selected club's carry in the tooltip; with the putter it says
+## the putter does not shape.
 
 var club_label: Label
 var prev_button: Button
 var next_button: Button
+## E20-S1: the shot shape picker.
+var shape_label: Label
+var shape_prev_button: Button
+var shape_next_button: Button
 var bar: SwingBar
 var speed_slider: HSlider
 var speed_label: Label
@@ -76,10 +84,24 @@ func _ready() -> void:
 	row.add_child(speed_label)
 	bar = SwingBar.new()
 	box.add_child(bar)
+	# E20-S1: the shape picker leads the bottom row, before the key hint, so the panel keeps
+	# its width (the feed and the hole list sit either side of it).
+	var low := HBoxContainer.new()
+	box.add_child(low)
+	shape_prev_button = _button("<", "Bend more left (Q)", func() -> void: _control.cycle_shape(-1))
+	low.add_child(shape_prev_button)
+	shape_label = Label.new()
+	shape_label.custom_minimum_size = Vector2(140, 0)
+	shape_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	shape_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	low.add_child(shape_label)
+	shape_next_button = _button(">", "Bend more right (E)", func() -> void: _control.cycle_shape(1))
+	low.add_child(shape_next_button)
 	hint_label = Label.new()
-	hint_label.text = "Space or click: start, power, accuracy.  Mouse or Left/Right: aim.  WASD: pan, C: back to ball."
+	hint_label.text = " Space or click: swing.  Mouse or Left/Right: aim.  C: ball."
 	hint_label.add_theme_font_size_override("font_size", 12)
-	box.add_child(hint_label)
+	hint_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	low.add_child(hint_label)
 	_build_practice_hint(box)
 
 
@@ -158,9 +180,40 @@ func refresh() -> void:
 	prev_button.disabled = busy or i <= 0
 	next_button.disabled = busy or i < 0 or i >= _control.legal.size() - 1
 	speed_label.text = "%.2fx" % _control.swing.bar_speed
+	_refresh_shape(busy)
 	_refresh_marks()
 	refresh_readout()
 	bar.queue_redraw()
+
+
+## E20-S1: the shape picker as the control has it: the shape's name, or that the putter does
+## not shape; its bend at this club's carry in the tooltip; the steps disabled at the ends and
+## during a swing.
+func _refresh_shape(busy: bool) -> void:
+	var s := _control.shape
+	var shapes := _control.model.shapes
+	var i := shapes.shapes.find(s)
+	var applies := _control.shape_applies()
+	shape_label.text = "Shape: %s" % (s.title if applies else "none (putter)")
+	shape_label.tooltip_text = shape_tip(_control.club, s)
+	if applies and s.bends():
+		shape_label.add_theme_color_override("font_color", live_color)
+	else:
+		shape_label.remove_theme_color_override("font_color")
+	shape_prev_button.disabled = busy or not applies or i <= 0
+	shape_next_button.disabled = busy or not applies or i < 0 or i >= shapes.shapes.size() - 1
+
+
+## E20-S1: what shape `s` does with `club`, for the picker's tooltip.
+static func shape_tip(club: Club, s: ShotShape) -> String:
+	if club == null or club.is_putter():
+		return "The putter never shapes the ball. Q / E pick a shape for the next full club."
+	if s == null or not s.bends():
+		return "Straight: no bend. Q bends the ball left (draw, hook), E right (fade, slice)."
+	var away := "right" if s.side < 0 else "left"
+	var toward := "left" if s.side < 0 else "right"
+	return "%s: starts %s of the aim and bends about %d yd %s by the %s's carry." % [s.title, away,
+			roundi(ShotShapes.bend_of(club, s)), toward, _club_name(club)]
 
 
 ## E10-S3: the bar's yard marks for the selected club from where the ball lies (none for the

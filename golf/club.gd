@@ -27,6 +27,10 @@ const POWER_FOR_STEPS: int = 24
 ## Multiplies the ground speed the ball keeps after its first touchdown, after the surface's
 ## bounce friction (D14). Nothing else: the surface's Roll and friction stay as they are.
 @export var roll_factor: float = 1.0
+## D74 (E20-S1): the share of a shot shape's bend this club gives at its own carry
+## (ShotShape.bend_yd is the driver's, 1.0): a short iron's backspin outweighs its sidespin,
+## so it bends less. 0 for the putter, which never shapes.
+@export var shape_scale: float = 1.0
 ## Putter only: the slowest and fastest starting ground speed a putt can have, yd/s. The
 ## bar maps across this range (E2-S7). A full putt (putt_max_speed) on a flat green rolls
 ## at most ClubSet.full_putt_max_yd.

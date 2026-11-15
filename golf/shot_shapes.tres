@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="ShotShapes" format=3]
+
+[ext_resource type="Script" path="res://golf/shot_shape.gd" id="1_shape"]
+[ext_resource type="Script" path="res://golf/shot_shapes.gd" id="2_shapes"]
+
+[sub_resource type="Resource" id="Shape_hook"]
+script = ExtResource("1_shape")
+id = "hook"
+title = "Hook"
+side = -1
+bend_yd = 35.0
+roll_scale = 1.12
+zone_scale = 0.7
+
+[sub_resource type="Resource" id="Shape_draw"]
+script = ExtResource("1_shape")
+id = "draw"
+title = "Draw"
+side = -1
+bend_yd = 12.0
+roll_scale = 1.05
+zone_scale = 0.85
+
+[sub_resource type="Resource" id="Shape_straight"]
+script = ExtResource("1_shape")
+id = "straight"
+title = "Straight"
+side = 0
+bend_yd = 0.0
+roll_scale = 1.0
+zone_scale = 1.0
+
+[sub_resource type="Resource" id="Shape_fade"]
+script = ExtResource("1_shape")
+id = "fade"
+title = "Fade"
+side = 1
+bend_yd = 12.0
+roll_scale = 0.95
+zone_scale = 0.85
+
+[sub_resource type="Resource" id="Shape_slice"]
+script = ExtResource("1_shape")
+id = "slice"
+title = "Slice"
+side = 1
+bend_yd = 35.0
+roll_scale = 0.88
+zone_scale = 0.7
+
+[resource]
+script = ExtResource("2_shapes")
+shapes = Array[ExtResource("1_shape")]([SubResource("Shape_hook"), SubResource("Shape_draw"), SubResource("Shape_straight"), SubResource("Shape_fade"), SubResource("Shape_slice")])
+start_share = 0.5
+spin_decay_per_s = 0.35

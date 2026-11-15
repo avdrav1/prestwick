@@ -50,6 +50,7 @@ How far each club goes with a perfect swing from flat fairway, in yards:
 - Aim with the mouse or Left/Right, change club with Up/Down.
 - Swing with Space or a click: press once to start, again to set power, again to set accuracy (hit the mark).
 - The bar shows how far your club carries from this lie at 50%, 100% and max, and while you set the power the readout says the yards and the landing marker moves with it. Stop the bar on its way back inside the green accuracy zone to hit it straight; outside it, the shot shanks.
+- **Shape the ball** before you swing: **Q** and **E** step through Hook, Draw, Straight, Fade and Slice (shown at the bottom left of the swing panel; named for a right-hander). A draw starts right of where you aim and curves back left; a hook does the same, harder. A fade and a slice are the mirror. The aim line draws the curve the ball will fly, with a faint straight line along your aim, so you can aim at the trees past a dogleg's corner and watch the arc bend round them onto the fairway. With a driver a draw or fade bends about 12 yd and a hook or slice about 35 yd; shorter clubs bend less, and the putter never shapes. Draws and hooks run on after landing, fades and slices sit down. A shaped shot narrows the green accuracy zone (a hook or slice more), and a mistimed click still turns the shot as it does a straight one; a shank flies straight.
 - On the green, the green view shows the slope (G hides it for this green), and the tick on the bar is the power the aim marker's putt needs. **T** shows contour lines.
 
 ## Saving
@@ -62,7 +63,7 @@ The game also saves itself each morning, keeping the last 3 mornings apart from 
 
 ## Keys
 
-**F1** shows every key. **F2** sets the volumes. With **F6** every button can be reached from the keyboard; the arrow keys move a build cursor, and Space or Enter uses the tool.
+**F1** shows every key, and how far each club and each shot shape goes. In Play, **Q** and **E** pick the shot shape. **F2** sets the volumes. With **F6** every button can be reached from the keyboard; the arrow keys move a build cursor, and Space or Enter uses the tool.
 
 ## Eighteen holes
 

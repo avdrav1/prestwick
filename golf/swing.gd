@@ -14,7 +14,12 @@ extends RefCounted
 ## penalty) the shot turns `deg_per_10pct` degrees per 10% off centre: early to the right
 ## (+heading, a slice for a right-hander), late to the left (a hook). Outside it the shot
 ## shanks: `shank_deg` toward the side of the miss at `shank_power` of the power. The turn is
-## a heading offset at launch (D14); the ball then flies straight.
+## a heading offset at launch (D14).
+##
+## Shot shape (D74, E20-S1): `shape` is the shape the player picked before the swing (null or
+## Straight for none). A full club's stroke then bends (ShotShapes.flight) on top of the
+## accuracy's heading offset, and the zone narrows by the shape's zone_scale. A shank keeps
+## D14's shank and flies straight: the shape is lost with the strike.
 
 enum Phase { IDLE, POWER, ACCURACY, DONE }
 
@@ -27,6 +32,9 @@ var power: float = 0.0
 ## The locked accuracy: the bar's position at the third click, valid once DONE.
 var accuracy: float = 0.0
 ## The bar speed setting (accessibility), clamped to the tuning's range.
+## D74: the shot shape for the next stroke, or null (Straight). The caller clears it for the
+## putter, which never shapes.
+var shape: ShotShape
 var bar_speed: float = 1.0:
 	set(value):
 		bar_speed = value if tuning == null \
@@ -93,12 +101,16 @@ func fill_seconds() -> float:
 
 
 ## Half the accuracy zone's width for a swing locked at `p_power`: `zone_half` up to 100%,
-## narrowing linearly to `overswing_zone_scale` of it at `max_power` (the overswing penalty).
+## narrowing linearly to `overswing_zone_scale` of it at `max_power` (the overswing penalty),
+## and by the shot shape's zone_scale (D74).
 func zone_half_at(p_power: float) -> float:
 	var over := 0.0
 	if tuning.max_power > 1.0:
 		over = clampf((p_power - 1.0) / (tuning.max_power - 1.0), 0.0, 1.0)
-	return tuning.zone_half * lerpf(1.0, tuning.overswing_zone_scale, over)
+	var half := tuning.zone_half * lerpf(1.0, tuning.overswing_zone_scale, over)
+	if shape != null and shape.zone_scale != 1.0:
+		half *= shape.zone_scale
+	return half
 
 
 ## The zone for this swing: at the locked power once it is locked, else at the bar.
@@ -148,13 +160,15 @@ func putt_speed(putter: Club) -> float:
 func launch(model: ShotModel, field: HeightField, club: Club, at: Vector2, aim_deg: float) -> ShotLaunch:
 	if club.is_putter():
 		return model.putt(field, club, putt_speed(club), at, aim_deg, offset_deg())
-	return model.full(field, club, effective_power(), at, aim_deg, offset_deg())
+	return model.full(field, club, effective_power(), at, aim_deg, offset_deg(), true,
+			null if is_shank() else shape)
 
 
 ## The stroke a perfect swing makes (the aim marker's), whatever this swing's state.
 func perfect_launch(model: ShotModel, field: HeightField, club: Club, at: Vector2,
 		aim_deg: float) -> ShotLaunch:
 	var s := Swing.new(tuning)
+	s.shape = shape
 	s.set_perfect()
 	return s.launch(model, field, club, at, aim_deg)
 

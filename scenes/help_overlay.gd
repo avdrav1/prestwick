@@ -5,7 +5,8 @@ extends Control
 ## Play, and F1 or Esc closes it. The keys are read from the InputMap (key_text), so the panel
 ## says what project.godot binds, never a copy of it; SECTIONS says what each action does.
 ## E8-S5: under the keys, how far each club goes (club_text, from golf/clubs.tres), so a player
-## can size a hole.
+## can size a hole. E20-S1 (D74): under them, the shot shapes and how far each bends
+## (shape_text, from golf/shot_shapes.tres and the clubs' shape_scale).
 
 const TOGGLE_ACTION: StringName = &"help_toggle"
 const CLOSE_ACTION: StringName = &"ui_cancel"
@@ -39,10 +40,16 @@ const SECTIONS: Array = [
 		[[&"swing"], "Swing: start, power, accuracy"],
 		[[&"aim_left", &"aim_right"], "Aim left / right"],
 		[[&"club_prev", &"club_next"], "Longer / shorter club"],
+		[[&"shape_prev", &"shape_next"], "Shot shape: bend more left / more right (Hook, Draw, Straight, Fade, Slice), before the swing"],
 		[[&"toggle_green_view"], "Green view"],
 		[[&"toggle_topo"], "Contours on / off"],
 	]],
 ]
+
+## E20-S1: the two columns' widths, px: the keys, what they do, and the gap between columns.
+const KEYS_WIDTH: float = 170.0
+const WHAT_WIDTH: float = 340.0
+const COLUMN_GAP: int = 28
 
 ## Godot's key names a player would not read as the key cap, and what the panel says instead.
 const KEY_NAMES: Dictionary = {
@@ -58,6 +65,8 @@ var hint_label: Label
 var lines: Array[PackedStringArray] = []
 ## E8-S5: the club line as shown (club_text).
 var clubs_label: Label
+## E20-S1: the shot shape line as shown (shape_text).
+var shapes_label: Label
 
 
 func _ready() -> void:
@@ -89,12 +98,20 @@ func _ready() -> void:
 	add_child(panel)
 	var box := VBoxContainer.new()
 	panel.add_child(box)
-	# One grid for every section, so the keys and what they do line up down the panel.
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 16)
-	box.add_child(grid)
-	for section: Array in SECTIONS:
+	# E20-S1: two columns, Anywhere on the left and Build then Play on the right, each one grid
+	# so its keys and what they do line up, so the map and its notes fit a 1280 x 720 window
+	# (one column of every section ran past its foot once the clubs and shapes were added).
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", COLUMN_GAP)
+	box.add_child(columns)
+	var grid: GridContainer = null
+	for i: int in SECTIONS.size():
+		var section: Array = SECTIONS[i]
+		if i == 0 or i == 1:
+			grid = GridContainer.new()
+			grid.columns = 2
+			grid.add_theme_constant_override("h_separation", 12)
+			columns.add_child(grid)
 		var title := Label.new()
 		title.text = section[0]
 		title.add_theme_color_override("font_color", Color8(240, 200, 58))
@@ -106,27 +123,36 @@ func _ready() -> void:
 				keys.append(key_text(action))
 			var k := Label.new()
 			k.text = " / ".join(keys)
+			k.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			k.custom_minimum_size = Vector2(KEYS_WIDTH, 0)
 			k.add_theme_font_size_override("font_size", 13)
 			grid.add_child(k)
 			var what := Label.new()
 			what.text = row[1]
 			what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			what.custom_minimum_size = Vector2(520, 0)
+			what.custom_minimum_size = Vector2(WHAT_WIDTH, 0)
 			what.add_theme_font_size_override("font_size", 13)
 			grid.add_child(what)
 			lines.append(PackedStringArray([k.text, what.text]))
+	var notes_width := 2.0 * (KEYS_WIDTH + 12.0 + WHAT_WIDTH) + COLUMN_GAP
 	var mouse := Label.new()
 	mouse.text = "The hole list, its par, Open, Play and tag buttons, the fee slider, the speed buttons, the goals and the feed's lines are all reached with F6."
 	mouse.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	mouse.custom_minimum_size = Vector2(640, 0)
+	mouse.custom_minimum_size = Vector2(notes_width, 0)
 	mouse.add_theme_font_size_override("font_size", 13)
 	box.add_child(mouse)
 	clubs_label = Label.new()
 	clubs_label.text = club_text(ClubSet.load_default())
 	clubs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	clubs_label.custom_minimum_size = Vector2(640, 0)
+	clubs_label.custom_minimum_size = Vector2(notes_width, 0)
 	clubs_label.add_theme_font_size_override("font_size", 13)
 	box.add_child(clubs_label)
+	shapes_label = Label.new()
+	shapes_label.text = shape_text(ShotShapes.load_default(), ClubSet.load_default())
+	shapes_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	shapes_label.custom_minimum_size = Vector2(notes_width, 0)
+	shapes_label.add_theme_font_size_override("font_size", 13)
+	box.add_child(shapes_label)
 
 
 ## E8-S5: each full club's carry and total on flat fairway from a perfect swing (Club.carry_yd,
@@ -138,6 +164,34 @@ static func club_text(set: ClubSet) -> String:
 			parts.append("%s %d / %d" % [c.id, roundi(c.carry_yd), roundi(c.total_yd)])
 	return "Clubs, carry / total in yd on flat fairway from a perfect swing: " + ", ".join(parts) \
 			+ ". The Cup tool's ruler measures a hole as you place it."
+
+
+## E20-S1 (D74): the shot shapes in picker order with each one's bend at a driver's carry and
+## at the shortest full club's (ShotShapes.bend_of), named for a right-hander: "Shot shapes
+## (Q / E), bend at a driver's carry: Hook 35 yd left, Draw 12 yd left, Straight, ...".
+static func shape_text(shapes: ShotShapes, set: ClubSet) -> String:
+	var driver: Club = null
+	var shortest: Club = null
+	for c: Club in set.clubs:
+		if c.is_putter():
+			continue
+		if driver == null:
+			driver = c
+		shortest = c
+	var parts := PackedStringArray()
+	for s: ShotShape in shapes.shapes:
+		if not s.bends():
+			parts.append(s.title)
+			continue
+		parts.append("%s %d yd %s" % [s.title, roundi(ShotShapes.bend_of(driver, s)),
+				"left" if s.side < 0 else "right"])
+	var keys := "%s / %s" % [key_text(&"shape_prev"), key_text(&"shape_next")]
+	var short_bends := PackedStringArray()
+	for s: ShotShape in shapes.shapes:
+		if s.bends() and s.side > 0:
+			short_bends.append("%s %d" % [s.title.to_lower(), roundi(ShotShapes.bend_of(shortest, s))])
+	return ("Shot shapes (%s), for a right-hander, bend at a driver's carry: %s. A shaped ball " 			+ "starts to the other side of the aim and curves back across it; shorter clubs bend " 			+ "less (%s yd with the %s), the putter never. Draws run on, fades sit down, and a " 			+ "shape narrows the accuracy zone.") % [keys, ", ".join(parts), ", ".join(short_bends),
+			shortest.id]
 
 
 ## Opens or closes the key map.

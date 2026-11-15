@@ -16,6 +16,19 @@ var heading_deg: float = 0.0
 ## `carry × power × lie` for a full club (yards); 0 for a putt.
 var target_carry: float = 0.0
 var roll_factor: float = 1.0
+## D74 (E20-S1): the shot shape it was struck with, or null (Straight, a putt, a shank).
+var shape: ShotShape
+## A shaped flight's lateral acceleration at launch and its decay per tick (ShotShapes.flight,
+## Ball.curve); zero for a straight flight.
+var curve: Vector2 = Vector2.ZERO
+var curve_decay: float = 1.0
+## The shaped club's bend at its carry, yards; 0 when straight.
+var bend_yd: float = 0.0
+
+
+## True when the flight bends (a shaped full club).
+func is_shaped() -> bool:
+	return curve != Vector2.ZERO
 
 
 func is_putt() -> bool:
@@ -28,4 +41,4 @@ func apply(ball: Ball) -> void:
 	if is_putt():
 		ball.start_roll(Vector2(start.x, start.y), ground_velocity)
 	else:
-		ball.launch(start, velocity)
+		ball.launch(start, velocity, curve, curve_decay)

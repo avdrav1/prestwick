@@ -11,8 +11,12 @@ extends Node2D
 ## progress; `aim_left` and `aim_right` (arrow keys) turn the aim by
 ## SwingTuning.aim_key_step_deg, and after a key turn the mouse takes the aim back only once
 ## it moves SwingTuning.mouse_reaim_px from where it was; `club_prev` and
-## `club_next` (up and down) step through the clubs the lie and stroke allow (D13). Sits at
-## the CourseView's origin, so local points are course screen space.
+## `club_next` (up and down) step through the clubs the lie and stroke allow (D13);
+## `shape_prev` and `shape_next` (Q and E, E20-S1, D74) step the shot shape along Hook, Draw,
+## Straight, Fade, Slice (golf/shot_shapes.tres) before the swing. The shape stays picked from
+## stroke to stroke and goes back to Straight on a new hole; the putter never shapes (the pick
+## is kept for the next full club). Sits at the CourseView's origin, so local points are course
+## screen space.
 ##
 ## The hole (E2-S8): the ball and the aim know the played hole's cup (hole 1, or since E3-S2
 ## the hole picked in the list, hole_to_play), so a ball can be holed, and a
@@ -35,6 +39,8 @@ const AIM_LEFT: StringName = &"aim_left"
 const AIM_RIGHT: StringName = &"aim_right"
 const CLUB_PREV: StringName = &"club_prev"
 const CLUB_NEXT: StringName = &"club_next"
+const SHAPE_PREV: StringName = &"shape_prev"
+const SHAPE_NEXT: StringName = &"shape_next"
 
 ## golf/swing_tuning.tres.
 var tuning: SwingTuning
@@ -51,6 +57,9 @@ var ball_at: Vector2 = Vector2.ZERO
 var aim_deg: float = 0.0
 ## The selected club, always one of `legal`.
 var club: Club
+## D74: the shot shape picked for the next stroke (ShotShapes; Straight by default). The swing
+## strikes with it unless the club is the putter (`swing.shape`, kept in step by _sync_shape).
+var shape: ShotShape
 ## The clubs this stroke may use (ClubSet.legal), in bag order.
 var legal: Array[Club] = []
 ## Swings struck since the ball was set on the tee (begin).
@@ -107,6 +116,7 @@ func _init() -> void:
 	readout_tuning = SwingReadoutTuning.load_default()
 	swing = Swing.new(tuning)
 	model = ShotModel.new()
+	shape = model.shapes.straight()
 
 
 ## Draws through these views from now on.
@@ -127,6 +137,7 @@ func begin(c: CourseData, fallback_tile: Vector2i, fallback_aim_deg: float, numb
 	strokes = 0
 	_own_shot = false
 	swing.reset()
+	shape = model.shapes.straight()
 	if _aim_view != null:
 		_aim_view.clear()  # a new course: no land line of the last one lingers (E6-S16)
 	hole = hole_to_play(c, number)
@@ -172,8 +183,35 @@ func select_club(c: Club) -> void:
 	if c == null or not legal.has(c) or swing.in_progress():
 		return
 	club = c
+	_sync_shape()
 	_aim_dirty = true
 	changed.emit()
+
+
+## D74: picks the shot shape `s` for the next stroke (not while a swing is in progress).
+func select_shape(s: ShotShape) -> void:
+	if s == null or swing.in_progress() or not model.shapes.shapes.has(s):
+		return
+	shape = s
+	_sync_shape()
+	_aim_dirty = true
+	changed.emit()
+
+
+## D74: steps the shot shape `dir` along the picker (-1 toward Hook, +1 toward Slice),
+## stopping at the ends.
+func cycle_shape(dir: int) -> void:
+	select_shape(model.shapes.step(shape, dir))
+
+
+## D74: true when the selected club can take a shape (any full club, not the putter).
+func shape_applies() -> bool:
+	return club != null and not club.is_putter()
+
+
+## Gives the swing the picked shape when the club takes one; none for the putter or Straight.
+func _sync_shape() -> void:
+	swing.shape = shape if shape_applies() and shape != null and shape.bends() else null
 
 
 ## Steps `dir` (+1 shorter, -1 longer) through the legal clubs, stopping at the ends.
@@ -298,9 +336,10 @@ func refresh_preview() -> void:
 			return
 	_preview_power = p
 	_preview_locked = locked
-	var shot := model.full(field, club, p, ball_at, aim_deg)
+	var shot := model.full(field, club, p, ball_at, aim_deg, 0.0, true, swing.shape)
 	var prediction := ShotPrediction.run_launch(course, next_seed(), shot, null, null, cup_tile())
-	_aim_view.show_preview(field, prediction, shot.start, model.clubs.is_blocked(shot, prediction))
+	_aim_view.show_preview(field, prediction, shot.start, model.clubs.is_blocked(shot, prediction),
+			shot.is_shaped())
 
 
 ## The stroke a perfect swing would make now (100% power, accuracy at the centre). The
@@ -389,6 +428,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed(CLUB_NEXT):
 		cycle_club(1)
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(SHAPE_PREV):
+		cycle_shape(-1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed(SHAPE_NEXT):
+		cycle_shape(1)
+		get_viewport().set_input_as_handled()
 
 
 ## True when mouse motion to `mouse` (viewport px) should aim: always, unless an aim key
@@ -463,6 +508,7 @@ func _refresh_legal() -> void:
 	legal = model.clubs.legal(lie_surface(), driver_stroke)
 	if club == null or not legal.has(club):
 		club = legal[0] if not legal.is_empty() else null
+	_sync_shape()
 	changed.emit()
 
 
@@ -502,7 +548,8 @@ func _show_aim(shot: ShotLaunch, prediction: ShotPrediction, along_deg: float) -
 	var was_blocked := aim_blocked
 	aim_blocked = model.clubs.is_blocked(shot, aim_prediction)
 	if _aim_view != null:
-		_aim_view.show_prediction(field, aim_prediction, shot.is_putt(), shot.start, aim_blocked)
+		_aim_view.show_prediction(field, aim_prediction, shot.is_putt(), shot.start, aim_blocked,
+				shot.is_shaped(), along_deg)
 	if aim_blocked != was_blocked:
 		changed.emit()
 
