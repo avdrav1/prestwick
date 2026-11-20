@@ -1695,6 +1695,21 @@ Done when: a shaped shot curves round a dogleg's corner in Play, guests shape on
   - Touches: `docs/`
   - Done 2026-11-15: `/ship-it` cut 0.8.0 (tag `v0.8.0`) with E19-S3 and E20-S1 to S3: tests 1446/1446, playtest smoke, the shirt render check and `scripts/e4_playtest.sh --seed 1` pass; `check_build.sh` boots the Linux build. GitHub release (latest), itch channels linux and windows, the download page; `docs/itch-page.md` and `docs/itch-devlog-04.md` describe shot shape.
 
+## E21: Opening flyover — active
+
+From the user (2026-11-20): "Would it be possible to build a 'cutscene' in the beginning of prestwick?" The user chose an in-engine flyover (no new art) that plays on first launch, with a Watch intro button in the menu to replay it. Ships as 0.9.0.
+
+Done when: a new player sees the flyover on first launch, can skip it, can replay it from the menu, and 0.9.0 ships.
+
+- [ ] E21-S1 Play an opening flyover on first launch.
+  - Note: `/decision` D77 (new scope: an intro; the MVP's Out list does not name it). 20 to 30 s, built from the game's own world on a famous course (Dogleg Hollow (Championship) suits: a dogleg and a shaped drive show off D74), using the main scene's states, not a separate scene (CLAUDE.md: Build and Play are states on one main scene; the intro is a third state or an overlay). Beats: dawn over the course (a warm tint easing to day), the camera gliding down a fairway, a guest walking out of the clubhouse to the 1st tee, a drawn or faded drive bending round the corner with the curved flight, the ball landing and rolling on, then the title "Prestwick" and the short description fading in, then the main menu. Music: "Scaffold" (or "Progress"). The guest and the ball are real: a scripted guest and `Ball` stepped as in play, deterministic. Any key or click skips straight to the menu. Played once: a flag in the user settings file (not the save) records it; the main menu gets a **Watch intro** button. The camera path and timings live in a `.tres`. Does not touch the player's course or save: the intro loads its course into a separate CourseData and restores the menu's state after.
+  - Accept: first launch with no settings plays it, then the menu; a second launch goes straight to the menu; Watch intro replays it; any key skips at any moment and leaves the menu exactly as without the intro; the user's saved game is untouched; frame p95 under 16.7 ms throughout; works from keyboard alone.
+  - Test: GUT tests for the first-launch flag, skip at several moments, Watch intro, and the save untouched; a frame-time run over the whole intro; screenshots of four beats looked at critically; a short GIF or frame sequence of the drive.
+  - Touches: `scenes/`, `golf/` (read only), `data/` or a `.tres`, `tests/`, `docs/`
+- [ ] E21-S2 Ship 0.9.0.
+  - Accept: `/ship-it` with itch; how-to-play, itch page and a devlog mention the intro and Watch intro.
+  - Touches: `docs/`
+
 ## Icebox
 
 Things worth doing that are out of the MVP. Promote only through `/decision`, which must say what it delays to pay for them. Feel problems from playtests go at the top with the pillar named.
