@@ -115,6 +115,19 @@ var _sound_from_menu: bool = false
 @onready var help_overlay: HelpOverlay = $HUD/HelpOverlay
 ## E10-S1: the New course goal checklist, in Build's left column under the fee.
 @onready var goals_panel: GoalsPanel = $HUD/GoalsPanel
+## E21-S1 (D77): the HUD's layer, hidden while the intro plays.
+@onready var hud: CanvasLayer = $HUD
+## E21-S1 (D77): the opening flyover, the third state: Main's last child, so it takes every
+## input event first while it plays.
+@onready var intro: OpeningFlyover = $Intro
+
+## E21-S1: where the intro's played flag is kept (HintSettings); tests point it at a file of
+## their own.
+var intro_settings_path: String = HintSettings.PATH
+## E21-S1: the intro was asked for from the menu's Watch intro (the menu comes back on it).
+var _intro_from_menu: bool = false
+## E21-S1: Main's map nodes the intro hides while it plays, with whether each was visible.
+var _hidden_for_intro: Dictionary = {}
 
 ## E10-S1: the goals of a New course (and of a save that has them); null in a sandbox or an import.
 var goals: GoalList
@@ -183,6 +196,10 @@ func _ready() -> void:
 	audio_panel.bind(game_audio)
 	main_menu.sound_requested.connect(open_sound_from_menu)
 	main_menu.goals_requested.connect(open_goals)
+	# E21-S1 (D77): the opening flyover, and the menu's Watch intro.
+	intro.audio = game_audio
+	intro.finished.connect(_on_intro_finished)
+	main_menu.intro_requested.connect(func() -> void: play_intro(true))
 	# E5-S6: F6's stops, in order, and the camera following the Build cursor.
 	hud_focus.bind([build_palette, swing_panel, hole_panel, land_panel, feed_panel, mode_button,
 			new_course_button, new_sandbox_button, sim_speed_panel, fee_panel, goals_panel,
@@ -208,9 +225,65 @@ func _ready() -> void:
 	if not errors.is_empty():
 		push_warning("main: %s" % "; ".join(errors))
 	new_course(start_seed)
-	# The game opens on the menu; a test or playtest that adds Main to its own tree does not.
+	# The game opens on the menu (E21-S1: after the intro on first launch); a test or playtest
+	# that adds Main to its own tree does neither.
 	if get_tree().current_scene == self:
-		open_menu()
+		open_at_start()
+
+
+## E21-S1 (D77): what the game shows at launch: the opening flyover when it has never played
+## (should_play_intro), then the menu; else the menu at once.
+func open_at_start() -> void:
+	if should_play_intro() and play_intro():
+		return
+	open_menu()
+
+
+## E21-S1: true when the intro's flag is unseen in the hints file and nothing asked to skip it
+## (OpeningFlyover.skip_requested: PRESTWICK_SKIP_INTRO=1 or --skip-intro, the wrappers').
+func should_play_intro() -> bool:
+	return not OpeningFlyover.skip_requested() \
+			and not HintSettings.load_from(intro_settings_path).intro_seen
+
+
+## E21-S1 (D77): plays the opening flyover over the game: Main's map, camera and HUD hide, the
+## guests' day holds, Scaffold plays, and the flag is written (so the next launch goes straight to
+## the menu). `from_menu` (Watch intro) brings the menu back on Watch intro when it ends. False,
+## changing nothing, when the intro cannot play.
+func play_intro(from_menu: bool = false) -> bool:
+	if intro.playing:
+		return true
+	if not intro.play():
+		return false
+	_intro_from_menu = from_menu
+	HintSettings.mark_intro_seen(intro_settings_path)
+	_hidden_for_intro.clear()
+	for n: CanvasItem in [course_view, build_tool, aim_view, swing_control] as Array[CanvasItem]:
+		_hidden_for_intro[n] = n.visible
+		n.visible = false
+	_hidden_for_intro[hud] = hud.visible
+	hud.visible = false
+	main_menu.close()
+	_on_menu_visibility_changed()
+	game_audio.set_music(GameAudio.Track.BUILD)
+	return true
+
+
+## E21-S1: the intro ended (played out or skipped): Main's map, camera, HUD and music come back
+## as they were, and the menu opens as at launch (on Watch intro when it came from there).
+func _on_intro_finished(_skipped: bool) -> void:
+	for n: Variant in _hidden_for_intro:
+		if n is CanvasLayer:
+			(n as CanvasLayer).visible = _hidden_for_intro[n]
+		elif n is CanvasItem:
+			(n as CanvasItem).visible = _hidden_for_intro[n]
+	_hidden_for_intro.clear()
+	camera.make_current()
+	game_audio.set_music(_music_track())
+	open_menu()
+	if _intro_from_menu:
+		main_menu.show_main(MainMenu.WATCH_INTRO_INDEX)
+	_intro_from_menu = false
 
 
 ## Shows `c`, frames the camera on it and hands it to a fresh builder (empty undo stack).
@@ -763,15 +836,15 @@ func open_sound_from_menu() -> void:
 
 
 func _on_menu_visibility_changed() -> void:
-	camera.set_process(not main_menu.visible and not confirm_dialog.visible)
+	camera.set_process(not main_menu.visible and not confirm_dialog.visible and not intro.playing)
 	_hold_day_for_menu()
 
 
 ## 2026-11-10: pauses the guests' day as the menu path opens (the menu, or the sound panel
-## opened from it, or E8-S4's save or load question) and puts back the speed the player had when
-## it is fully closed; a day the player had paused stays paused.
+## opened from it, or E8-S4's save or load question, or E21-S1's intro) and puts back the speed
+## the player had when it is fully closed; a day the player had paused stays paused.
 func _hold_day_for_menu() -> void:
-	var open := main_menu.visible or _sound_from_menu or confirm_dialog.visible
+	var open := main_menu.visible or _sound_from_menu or confirm_dialog.visible or intro.playing
 	if open and not _menu_holds_day:
 		_menu_holds_day = true
 		_speed_under_menu = guest_sim.speed

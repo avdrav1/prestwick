@@ -21,6 +21,8 @@ frames="${2:-300}"
 # start, and its autosave writes there too; neither may touch the player's own folder.
 BUILD_DATA="$(mktemp -d)"
 trap 'rm -rf "$BUILD_DATA"' EXIT
+# E21-S1 (D77): boot straight to the menu, as a second launch does (the intro has its own tests).
+export PRESTWICK_SKIP_INTRO=1
 export XDG_DATA_HOME="$BUILD_DATA"
 
 status=0

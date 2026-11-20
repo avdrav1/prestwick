@@ -10,5 +10,7 @@ if [ -x .bin/godot ]; then GODOT=.bin/godot; fi
 DATA="$(mktemp -d)"
 trap 'rm -rf "$DATA"' EXIT
 export XDG_DATA_HOME="$DATA"
+# E21-S1 (D77): a fresh user:// has never seen the opening flyover; never play it here.
+export PRESTWICK_SKIP_INTRO=1
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || { echo "import failed" >&2; exit 1; }
 exec "$GODOT" --headless --path . --fixed-fps 60 -s res://scripts/e4_playtest.gd -- "$@"

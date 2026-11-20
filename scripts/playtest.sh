@@ -21,6 +21,8 @@ fi
 PLAYTEST_DATA="$(mktemp -d)"
 trap 'rm -rf "$PLAYTEST_DATA"' EXIT
 export XDG_DATA_HOME="$PLAYTEST_DATA"
+# E21-S1 (D77): a fresh user:// has never seen the opening flyover; never play it here.
+export PRESTWICK_SKIP_INTRO=1
 cmd=("$GODOT" --headless --path . --fixed-fps 60 -s res://scripts/playtest.gd)
 
 status=0

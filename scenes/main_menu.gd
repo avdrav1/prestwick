@@ -2,7 +2,8 @@ class_name MainMenu
 extends Control
 ## The main menu (E5-S5): Back to the course, New course, Famous courses (E15-S1), Load game, Save game, Import course,
 ## Export course, Sound settings (E5-S4: Main opens the AudioPanel and comes back here when it
-## closes), Goals (E10-S1, on a game with the goal checklist), Quit, over a dimmed course. Main opens it at start when it is the running
+## closes), Goals (E10-S1, on a game with the goal checklist), Watch intro (E21-S1, D77: Main
+## plays the opening flyover and comes back here when it ends), Quit, over a dimmed course. Main opens it at start when it is the running
 ## scene and on Esc (`menu`); Esc on a page goes back to the menu, on the menu closes it. Every
 ## control takes keyboard focus (arrows or Tab move it, Enter or Space presses) and the focused
 ## one draws a thick outline. The menu only asks: Main does each action (its signals) and the
@@ -44,6 +45,8 @@ signal quit_requested
 signal sound_requested
 ## E10-S1: Goals, shown while the game has the New course goal checklist (set_goals).
 signal goals_requested
+## E21-S1 (D77): Watch intro.
+signal intro_requested
 
 ## The same key as LandPanel's buy_cancel (Esc): a pending buy takes it first.
 const MENU_ACTION: StringName = &"menu"
@@ -82,6 +85,8 @@ const IMPORT_INDEX: int = 5
 const EXPORT_INDEX: int = 6
 ## The Sound settings button's place.
 const SOUND_INDEX: int = 7
+## E21-S1: the Watch intro button's place, after Goals and before Quit.
+const WATCH_INTRO_INDEX: int = 9
 
 ## E8-S4: where the Load page reads the saves (Main sets them to its own).
 var save_path: String = GameSave.PATH
@@ -191,6 +196,11 @@ func _build_main(parent: Control) -> void:
 	goals_button = _button(main_page, "Goals", func() -> void: _do(goals_requested))
 	goals_button.tooltip_text = "Open the goal checklist: what to do next and how"
 	goals_button.visible = false
+	# E21-S1 (D77): asks before it closes, as Sound settings, so Main holds the day throughout.
+	var intro := _button(main_page, "Watch intro", func() -> void:
+		intro_requested.emit()
+		close())
+	intro.tooltip_text = "Play the opening flyover again (any key skips it)"
 	_button(main_page, "Quit", func() -> void: _do(quit_requested))
 	for c: Node in main_page.get_children():
 		_main_buttons.append(c as Button)

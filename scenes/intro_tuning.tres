@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="IntroTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/intro_tuning.gd" id="1_tuning"]
+
+[resource]
+script = ExtResource("1_tuning")
+course_id = "dogleg_hollow_championship"
+hole_number = 1
+club_id = "driver"
+shape_id = "hook"
+power = 0.95
+aim_offset_deg = -14.5
+rng_seed = 7
+shirt = 2
+fade_in_s = 1.2
+dawn_colors = PackedColorArray(0.42, 0.34, 0.5, 1, 1, 0.72, 0.5, 1, 1, 1, 1, 1)
+dawn_times = PackedFloat32Array(0, 3.5, 9.5)
+dawn_s = 3.5
+path_times = PackedFloat32Array(0, 3.5, 7, 9.5)
+path_anchors = PackedStringArray("tee", "turn", "tee", "walk")
+path_offsets = PackedVector2Array(0, 60, 0, 0, 0, 0, 0, 0)
+path_zooms = PackedFloat32Array(0.26, 0.85, 0.8, 0.62)
+walk_s = 4.5
+follow_time_s = 0.5
+walk_zoom = 0.75
+zoom_time_s = 0.9
+address_s = 0.5
+swing_s = 1.2
+ball_speed = 1.0
+flight_zoom = 0.6
+settle_margin_px = 90.0
+title_band_px = 190.0
+track_width_px = 3.0
+guide_dot_px = 2.5
+guide_gap_px = 12.0
+guide_alpha = 0.8
+title_delay_s = 0.4
+title_in_s = 1.0
+title_hold_s = 2.4
+fade_out_s = 0.8
+menu_fade_s = 0.5
+title = "Prestwick"
+tagline = "Build a golf course, then play it."
+title_size = 72
+tagline_size = 24
+max_step_s = 0.05
