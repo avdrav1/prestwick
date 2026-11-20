@@ -3,8 +3,9 @@ extends Node2D
 ## Screenshot fixture for E21-S1 (D77): the opening flyover at a moment of its clock. The main
 ## scene (a small fixture course; the intro shows its own) plays the intro and steps it to
 ## INTRO_AT seconds (default 2), or to a moment named by INTRO_BEAT: "strike" (the ball's
-## launch) plus INTRO_AFTER seconds, "rest" (the ball resting) plus INTRO_AFTER, or "title"
-## plus INTRO_AFTER. The clock is run ahead at once to just short of the moment, then a frame
+## launch) plus INTRO_AFTER seconds, "apex" (the slowest of the slow motion, past the flight's
+## apex), "land" (its first touchdown), "rest" (the ball resting) or "title", each plus
+## INTRO_AFTER. The clock is run ahead at once to just short of the moment, then a frame
 ## at a time for its last LAST_FRAMES steps so the camera and the sprites have drawn it, and
 ## then it holds.
 ##   INTRO_BEAT=strike INTRO_AFTER=3 scripts/screenshot.sh tests/fixtures/intro_shot.tscn out.png 40
@@ -23,12 +24,17 @@ func _ready() -> void:
 	_main.intro_settings_path = "user://intro_shot_hints.cfg"
 	add_child(_main)
 	_main.intro.auto_advance = false
+	_main.intro.tuning = _tuned(IntroTuning.load_default())
 	_main.play_intro()
 	var intro := _main.intro
 	var after := _env_float("INTRO_AFTER", 0.0)
 	match OS.get_environment("INTRO_BEAT"):
 		"strike":
 			_at = intro.strike_time() + after
+		"apex":
+			_at = intro.time_of_tick(roundi(intro.apex_tick() + intro.tuning.slow_center_s * Ball.TICK_HZ)) + after
+		"land":
+			_at = intro.time_of_tick(intro.land_tick()) + after
 		"rest":
 			_at = intro.rest_time() + after
 		"title":
@@ -50,6 +56,21 @@ func _process(_delta: float) -> void:
 					OpeningFlyover.Beat.keys()[intro.beat()],
 					intro.camera.zoom.x if intro.camera != null else 0.0,
 					intro.trail.bend_yd() if intro.trail != null else 0.0])
+
+
+## The tuning with the drive overridden from the environment (INTRO_COURSE, INTRO_HOLE,
+## INTRO_SHAPE, INTRO_POWER, INTRO_AIM), to look at another hole or line.
+static func _tuned(base: IntroTuning) -> IntroTuning:
+	var t := base.duplicate() as IntroTuning
+	if OS.get_environment("INTRO_COURSE") != "":
+		t.course_id = OS.get_environment("INTRO_COURSE")
+	if OS.get_environment("INTRO_HOLE") != "":
+		t.hole_number = OS.get_environment("INTRO_HOLE").to_int()
+	if OS.get_environment("INTRO_SHAPE") != "":
+		t.shape_id = OS.get_environment("INTRO_SHAPE")
+	t.power = _env_float("INTRO_POWER", t.power)
+	t.aim_offset_deg = _env_float("INTRO_AIM", t.aim_offset_deg)
+	return t
 
 
 static func _env_float(name: String, fallback: float) -> float:

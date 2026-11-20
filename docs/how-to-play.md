@@ -4,7 +4,7 @@ Prestwick is a golf course you build, then play. Guests play it too, pay a green
 
 ## Start
 
-The first time you run the game it plays a short intro, about 25 seconds: dawn over Dogleg Hollow (Championship), a glide down the 1st fairway, a guest walking out of the clubhouse to the 1st tee and hooking a drive round the corner (the yellow line is the ball's track, the white dots the line it started on). Any key or click skips it. It plays only once; the menu's **Watch intro** plays it again.
+The first time you run the game it plays a short intro, under 30 seconds: dawn over Dogleg Hollow (Championship), a glide down the 18th, a guest walking off the 17th green to the 18th tee, aiming at the trees and slicing a drive round the corner in slow motion (the yellow line is the ball's track on the ground, the white dots the line it started on). Any key or click skips it. It plays only once; the menu's **Watch intro** plays it again.
 
 Run the game. The menu opens: choose **New course**, **Famous courses** to start on one of the six courses built into the game, or **Import course** to open a course a friend sent you (a course file goes in the folder the Import page's **Open folder** shows). Esc opens the menu at any time and pauses the guests' day.
 

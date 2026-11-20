@@ -3,7 +3,9 @@ extends GutTest
 ## file), then the menu; a second launch goes straight to the menu; the menu's Watch intro
 ## replays it; any key, click or pad button skips it at any moment and leaves the menu exactly
 ## as without it; the player's course and save are never touched; it works from the keyboard
-## alone. The drive is a real shaped ball (ShotModel.full with the draw, Ball at 60 Hz).
+## alone. The drive is a real shaped ball (ShotModel.full with the slice, Ball at 60 Hz), aimed at
+## the trees and bending round onto the fairway past the corner, played back with a slow motion
+## through its bend while the camera leads it.
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
 const HINTS := "user://test_intro_hints.cfg"
@@ -156,7 +158,7 @@ func test_a_second_launch_goes_straight_to_the_menu() -> void:
 	assert_same(m.get_viewport().gui_get_focus_owner(), m.main_menu.main_buttons()[0])
 
 
-func test_the_intro_runs_twenty_to_thirty_seconds_through_its_beats_in_order() -> void:
+func test_the_intro_runs_twenty_eight_to_thirty_two_seconds_through_its_beats_in_order() -> void:
 	var m := _main()
 	m.play_intro()
 	var seen: Array[int] = []
@@ -168,9 +170,9 @@ func test_the_intro_runs_twenty_to_thirty_seconds_through_its_beats_in_order() -
 		m.intro.advance(STEP)
 		guard += 1
 	var B := OpeningFlyover.Beat
-	assert_eq(seen, [B.DAWN, B.GLIDE, B.WALK, B.SWING, B.FLIGHT, B.TITLE] as Array[int])
+	assert_eq(seen, [B.DAWN, B.GLIDE, B.WALK, B.AIM, B.SWING, B.FLIGHT, B.TITLE] as Array[int])
 	var total: float = guard * STEP
-	assert_between(total, 20.0, 30.0, "%.1f s" % total)
+	assert_between(total, 27.5, 32.0, "%.1f s" % total)
 
 
 # --- the drive ---
@@ -210,7 +212,7 @@ func test_the_drive_bends_the_way_the_hole_turns() -> void:
 	var turn: Vector2 = GuestHole.turn_of(m.intro.course, h)
 	var cup := field.tile_center(h.cup)
 	var hole_side := signf((turn - tee).angle_to(cup - turn))
-	assert_eq(m.intro.launch.shape.side, int(hole_side), "a draw on a left-turning corner")
+	assert_eq(m.intro.launch.shape.side, int(hole_side), "the shape bends the way the corner turns")
 	# The track drawn on screen bends off its start line by about the shape's bend.
 	var off: float = m.intro.trail.bend_yd()
 	assert_gt(off, m.intro.launch.bend_yd * 0.5, "the drawn track leaves its start line")
@@ -226,6 +228,99 @@ func test_the_strike_and_the_landing_are_heard() -> void:
 	var surface: int = m.intro.shot_view.ball.field.surface_at(land.x, land.y)
 	assert_has(m.game_audio.history, GameAudio.LAND[surface], "the landing says its surface")
 	assert_eq(m.game_audio.music_track, GameAudio.Track.BUILD, "Scaffold plays")
+
+
+func test_the_drive_is_aimed_at_the_trees_and_rests_on_the_fairway_past_the_corner() -> void:
+	var m := _main()
+	m.play_intro()
+	var intro := m.intro
+	var field: HeightField = intro.shot_view.ball.field
+	var h: HoleData = intro.hole
+	var end: Vector2 = OpeningFlyover.Trail.guide_end_of(intro.launch)
+	assert_eq(field.surface_at(end.x, end.y), Surface.Type.TREES, "the start line runs into the trees")
+	_run_to(m, intro.title_time())
+	var rest := Vector2(intro.shot_view.ball.position.x, intro.shot_view.ball.position.y)
+	var turn: Vector2 = GuestHole.turn_of(intro.course, h)
+	var cup := field.tile_center(h.cup)
+	assert_eq(field.surface_at(rest.x, rest.y), Surface.Type.FAIRWAY)
+	assert_lt(rest.distance_to(cup), turn.distance_to(cup), "past the turn")
+
+
+func test_the_slow_motion_eases_the_playback_not_the_ball() -> void:
+	var m := _main()
+	m.play_intro()
+	var intro := m.intro
+	var t := intro.tuning
+	var predicted := ShotPrediction.run_launch(intro.course, t.rng_seed, intro.launch, null, null,
+			intro.hole.cup)
+	var flight_s: float = intro.time_of_tick(intro.land_tick()) - intro.strike_time()
+	assert_gt(flight_s, float(intro.land_tick()) / Ball.TICK_HZ + 1.0,
+			"the flight plays back over a second longer than its ticks")
+	assert_almost_eq(intro.slow_rate_at(0.0), 1.0, 0.001, "full speed off the tee")
+	var centre: float = float(intro.apex_tick()) / Ball.TICK_HZ + t.slow_center_s
+	assert_almost_eq(intro.slow_rate_at(centre), t.slow_rate, 0.001, "slowest just past the apex")
+	assert_almost_eq(intro.slow_rate_at(float(predicted.ticks) / Ball.TICK_HZ), t.roll_rate, 0.001,
+			"a little quicker on the roll out")
+	# At the slowest, a frame moves the ball slow_rate of a tick.
+	var at := intro.time_of_tick(roundi(centre * Ball.TICK_HZ))
+	_run_to(m, at)
+	var before: float = intro.ball_tick()
+	intro.advance(STEP)
+	assert_almost_eq(intro.ball_tick() - before, t.slow_rate, 0.03)
+	# The live ball steps whole ticks, the same as the prediction's.
+	assert_eq(intro.shot_view.ball.steps, floori(intro.ball_tick() + 1e-4))
+
+
+func test_the_drawn_track_and_start_line_leave_the_raised_tee_without_a_step() -> void:
+	var m := _main()
+	m.play_intro()
+	var intro := m.intro
+	var field: HeightField = intro.shot_view.ball.field
+	var tee := field.tile_center(intro.hole.tee)
+	assert_gt(field.height_at(tee.x, tee.y), field.height_at(tee.x, tee.y - 15.0),
+			"the tee stands above the ground in front of it")
+	_run_to(m, intro.title_time())
+	for line: PackedVector2Array in [intro.track_world().slice(0, intro.land_tick()), intro.guide_world()]:
+		assert_gt(line.size(), 100)
+		var worst := 0.0
+		for i: int in range(1, line.size() - 1):
+			worst = maxf(worst, (line[i + 1] - 2.0 * line[i] + line[i - 1]).length())
+		gut.p("worst bend %.3f px" % worst)
+		# A step down off the tee (Iso.STEP_PX a height step) would bend it by about that.
+		assert_lt(worst, 1.0, "no kink: worst bend %.2f px a point" % worst)
+	var start := Iso.point_to_screen(field.iso_point(intro.launch.start))
+	assert_almost_eq(intro.track_world()[0], start, Vector2.ONE * 0.01, "from the ball on the tee")
+	assert_almost_eq(intro.guide_world()[0], start, Vector2.ONE * 0.01)
+
+
+func test_the_camera_frames_the_corner_then_leads_the_ball() -> void:
+	var m := _main()
+	m.play_intro()
+	var intro := m.intro
+	var field: HeightField = intro.shot_view.ball.field
+	_run_to(m, intro.strike_time() - STEP)
+	var cam: Camera2D = intro.camera
+	var size := cam.get_viewport_rect().size / cam.zoom
+	var view := Rect2(cam.position - size * 0.5, size)
+	var turn: Vector2 = GuestHole.turn_of(intro.course, intro.hole)
+	var end: Vector2 = OpeningFlyover.Trail.guide_end_of(intro.launch)
+	var rest := ShotPrediction.run_launch(intro.course, intro.tuning.rng_seed, intro.launch, null,
+			null, intro.hole.cup).rest
+	for p: Vector2 in [field.tile_center(intro.hole.tee), turn, end, Vector2(rest.x, rest.y)]:
+		assert_true(view.has_point(intro.world_point(p)), "the swing's frame shows %s" % p)
+	# In flight the camera looks ahead of the ball down the line, never behind it.
+	var line := intro.guide_world()
+	var u := (line[-1] - line[0]).normalized()
+	var t := intro.strike_time() + 0.5
+	var land := intro.time_of_tick(intro.land_tick())
+	var behind := 0
+	while t < land:
+		_run_to(m, t)
+		if (cam.position - intro.shadow_world()).dot(u) <= 0.0:
+			behind += 1
+		t += 0.25
+	assert_eq(behind, 0, "the camera leads the ball through its flight")
+	assert_gt(cam.zoom.x, intro.aim_frame()[1], "nearer in flight than the corner frame")
 
 
 # --- skipping ---
